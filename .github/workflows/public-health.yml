@@ -1,0 +1,46 @@
+name: Public Fuckball health
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/public-health.yml']
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  external-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Probe public web and server from GitHub-hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 12 --retry 3 --retry-delay 3 'http://198.244.191.182:3417/health' | tee /tmp/fuckball-health.json
+          grep -q '"ok":true' /tmp/fuckball-health.json
+          curl --fail --show-error --silent --max-time 12 'http://198.244.191.182:3417/' | grep -q '<canvas'
+      - name: Probe WebSocket room creation from the internet
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Create multiplayer room via external WebSocket
+        shell: bash
+        run: |
+          node <<'NODE'
+          const ws = new WebSocket('ws://198.244.191.182:3417/');
+          const timer=setTimeout(()=>{console.error('WebSocket timeout');process.exit(1)},12000);
+          ws.addEventListener('open',()=>ws.send(JSON.stringify({type:'create',name:'External smoke test'})));
+          ws.addEventListener('message',e=>{
+            const m=JSON.parse(e.data);
+            if(m.type==='joined' && /^[A-Z0-9]{6}$/.test(m.code||'')){
+              console.log('Room created:',m.code);
+              clearTimeout(timer);ws.close();process.exit(0);
+            }
+            if(m.type==='error'){console.error(m);process.exit(1)}
+          });
+          ws.addEventListener('error',e=>{console.error('WebSocket failed',e.message);process.exit(1)});
+          NODE
