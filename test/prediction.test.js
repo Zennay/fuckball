@@ -106,3 +106,18 @@ test('visual extrapolation preserves remote held-kick indicator without inventin
   P.setInput(p,{kick:false});P.tick(g);
   assert.equal(predictView(P.snapshot(g),100).players[0].kicking,false);
 });
+test('visual extrapolation rolls back a wrong forecast without changing match physics',()=>{
+  const Prediction=require('../shared/prediction');
+  const s=state(),authoritative=JSON.stringify(s);
+  const previouslyPredicted=JSON.parse(JSON.stringify(s));
+  previouslyPredicted.ball.x+=30;
+  const recovered=Prediction.reconcileVisual(previouslyPredicted,s,1000/144,135);
+  assert.ok(recovered.ball.x<s.ball.x+30&&recovered.ball.x>s.ball.x,
+    'prediction correction should visually move toward authoritative ball');
+  assert.equal(JSON.stringify(s),authoritative);
+  const zero=Prediction.reconcileVisual(previouslyPredicted,s,1000/144,0);
+  assert.equal(zero,s,'zero extrapolation needs no artificial delay');
+  const large=JSON.parse(JSON.stringify(previouslyPredicted));large.ball.x+=100;
+  assert.equal(Prediction.reconcileVisual(large,s,16,135),s,
+    'large disagreement should snap safely rather than drawing a ghost');
+});
