@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-function runPage(){
+function runPage({savedExtrapolation=null}={}){
   const html=fs.readFileSync(path.join(__dirname,'../dist/Pulseball-BFF-Big-v4-Play-Solo.html'),'utf8');
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   const elements={};let offscreenStrokes=0,framesDrawn=0;
@@ -25,10 +25,19 @@ function runPage(){
   class Element{
     constructor(id=''){
       this.id=id;this.value='';this.textContent='';this.disabled=false;
-      this.children=[];this.listeners={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
+      this.children=[];this.listeners={};this.dataset={};
+      const classes=new Set();
+      this.classList={add:(name)=>classes.add(name),remove:(name)=>classes.delete(name),
+        toggle:(name,force)=>{const next=force===undefined?!classes.has(name):!!force;
+          if(next)classes.add(name);else classes.delete(name);return next;},
+        contains:(name)=>classes.has(name)};
       this.style={};this.attrs={};this.width=1700;this.height=800;
     }
     setAttribute(key,value){this.attrs[key]=String(value);}
+    getAttribute(key){return this.attrs[key]??null;}
+    focus(){this.focused=true;}
+    blur(){this.focused=false;}
+    click(){this.fire('click');}
     getContext(){return this.id==='pitch'?mainCtx:offCtx;}
     getBoundingClientRect(){return {width:850,height:400};}
     addEventListener(type,handler){(this.listeners[type]??=[]).push(handler);}
@@ -43,11 +52,12 @@ function runPage(){
   for(const [id,value] of [['scoreLimit','3'],['timeLimit','3'],['ballRebound','0.412'],['extrapolation','0'],['nickname','Test']])elements[id].value=value;
   const callbacks=[],winListeners={};
   const document={getElementById:id=>elements[id],createElement:tag=>new Element(tag),
+    createTextNode:text=>({textContent:text}),
     querySelectorAll:()=>[],activeElement:new Element()};
   const window={addEventListener:(name,fn)=>(winListeners[name]??=[]).push(fn)};
   const ctx=vm.createContext({document,window,performance:{now:()=>0},location:{search:'',protocol:'file:'},
     URLSearchParams,devicePixelRatio:2,requestAnimationFrame:fn=>callbacks.push(fn),
-    setInterval:()=>1,localStorage:{getItem:()=>null,setItem(){}},
+    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:null,setItem(){}},
     console,WebSocket:undefined});
   const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
   for(const source of scripts)vm.runInContext(source,ctx,{timeout:1000});
@@ -76,7 +86,7 @@ test('keyboard input and 0ms extrapolation continue to render at high refresh ra
   app.events.keyup[0]({code:'KeyD'});
   assert.equal(app.counts().framesDrawn,288);
   assert.match(app.fields.fpsMeter.textContent,/\b144 FPS\b/);
-  assert.equal(app.fields.extrapValue.textContent,'0 ms');
+  assert.equal(app.fields.extrapValue.textContent,'135 ms');
 });
 
 // Verify the exact paint operations, not just that 'something bright' was drawn.
@@ -139,7 +149,9 @@ test('fullscreen game defaults to viewport-filling arena with controls available
   canvas.parentElement={getBoundingClientRect:()=>({width:1600,height:650})};
   app.draw(1000/144);
   assert.equal(canvas.style.height,'650.00px');
-  assert.ok(Math.abs(canvas.width/canvas.height-1700/800)<0.01,'viewport must not stretch game geometry');
+  assert.equal(canvas.style.width,'1600.00px');
+  assert.equal(canvas.width,1600);
+  assert.equal(canvas.height,650);
   assert.equal(app.fields.lobbyToggle.attrs['aria-expanded'],undefined);
   app.fields.lobbyToggle.fire('click');
   assert.equal(app.fields.lobbyToggle.attrs['aria-expanded'],'true','room and multiplayer controls must stay reachable');
@@ -164,4 +176,54 @@ test('render resolution defaults to fast 1x and can be raised without changing s
   assert.equal(canvas.height,1600);
   for(let i=3;i<=480;i++)app.draw(i*1000/240);
   assert.match(app.fields.fpsMeter.textContent,/240 FPS/);
+});
+
+test('135 ms is the default and previous client extrapolation preference is respected',()=>{
+  const fresh=runPage();
+  assert.equal(fresh.fields.extrapValue.textContent,'135 ms');
+  assert.equal(fresh.fields.extrapolation.value,'135');
+  assert.equal(fresh.fields.extrapNumber.value,'135');
+  const saved=runPage({savedExtrapolation:'45'});
+  assert.equal(saved.fields.extrapValue.textContent,'45 ms');
+  saved.fields.extrapNumber.value='185';saved.fields.extrapNumber.fire('input');
+  assert.equal(saved.fields.extrapValue.textContent,'185 ms');
+  assert.equal(saved.fields.extrapolation.value,'185');
+});
+test('Escape opens and closes options and movement input does not leak through the overlay',()=>{
+  const app=runPage();
+  for(const fn of app.events.keydown)fn({code:'Escape',preventDefault(){}});
+  assert.equal(app.fields.optionsScreen.attrs['aria-hidden'],'false');
+  assert.equal(app.fields.optionsToggle.attrs['aria-expanded'],'true');
+  app.fields.closeOptions.fire('click');
+  assert.equal(app.fields.optionsScreen.attrs['aria-hidden'],'true');
+  app.fields.optionsToggle.fire('click');
+  assert.equal(app.fields.optionsScreen.attrs['aria-hidden'],'false');
+  app.fields.resumeGame.fire('click');
+  assert.equal(app.fields.optionsScreen.attrs['aria-hidden'],'true');
+});
+test('solo bot chat answers questions and /extrapolation commands work without multiplayer',()=>{
+  const app=runPage();
+  assert.equal(app.fields.chatText.disabled,false,'chat must work in solo practice');
+  app.fields.chatText.value='/extrapolation 175';app.fields.chatForm.fire('submit');
+  assert.equal(app.fields.extrapValue.textContent,'175 ms');
+  assert.equal(app.fields.extrapNumber.value,'175');
+  const messages=app.fields.chatlog.children.length;
+  app.fields.chatText.value='how do I shoot?';app.fields.chatForm.fire('submit');
+  assert.equal(app.fields.chatlog.children.length,messages+2,'human and bot both appear in chat');
+  const reply=app.fields.chatlog.children.at(-1);
+  assert.match(reply.children.at(-1).textContent,/Space/);
+  app.fields.chatText.value='/e 999';app.fields.chatForm.fire('submit');
+  assert.equal(app.fields.extrapValue.textContent,'175 ms','invalid values must not change prediction');
+  app.fields.chatText.value='/extrapolation 0';app.fields.chatForm.fire('submit');
+  assert.equal(app.fields.extrapValue.textContent,'0 ms');
+});
+test('the full-viewport game retains custom BFF map and fullscreen affordance',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8');
+  assert.match(html,/\.playfield\{display:block;background:/);
+  assert.match(html,/\.options-screen\{display:none/);
+  assert.match(html,/id="fullscreenHint"/);
+  assert.match(html,/id="optionsScreen"/);
+  assert.match(html,/id="chatDock"/);
+  assert.match(html,/function cameraTransform\(state,dt\)/);
+  assert.match(html,/const scale=Math.max\(canvas.width\/P.W,canvas.height\/P.H\)/);
 });
