@@ -42,6 +42,14 @@ async function waitForServer(){
     await page.locator('#chatText').fill('how do I shoot?');
     await page.locator('#sendChat').click();
     assert.match(await page.locator('#chatlog').innerText(),/RIVAL AI:.*Space/s);
+    // Every offline match size must be selectable in the actual browser.
+    await page.locator('#lobbyToggle').click();
+    await page.locator('#soloTeams').selectOption('0');
+    assert.equal(await page.locator('#roster .playerrow').count(),1,'free training has no AI');
+    await page.locator('#soloTeams').selectOption('4');
+    assert.equal(await page.locator('#roster .playerrow').count(),8,'4v4 has seven AI players');
+    assert.match(await page.locator('#modeTag').textContent(),/4v4/);
+    await page.locator('#lobbyToggle').click();
     await page.locator('#fullscreenHint').click();
     const fullscreen=await page.evaluate(()=>Boolean(document.fullscreenElement)||document.getElementById('appShell').classList.contains('is-maximized'));
     assert.equal(fullscreen,true,'fullscreen requires a click and should then activate');
@@ -58,7 +66,7 @@ async function waitForServer(){
       'mobile layout should not scroll sideways');
     await page.screenshot({path:'fuckball-mobile-smoke.png'});
     assert.deepEqual(errors,[],'no browser errors on desktop or mobile');
-    console.log('PASS: desktop 1440x900 + mobile 390x844, Escape options, extrapolation, bot chat, fullscreen');
+    console.log('PASS: desktop 1440x900 + mobile 390x844, Escape options, extrapolation, bot chat, 0/1/2/4 bots, fullscreen');
   }finally{
     if(browser)await browser.close();
     server.kill('SIGTERM');
