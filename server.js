@@ -3,8 +3,10 @@ const http=require('node:http');
 const path=require('node:path');
 const fs=require('node:fs');
 const crypto=require('node:crypto');
+const {performance}=require('node:perf_hooks');
 const {WebSocketServer,WebSocket}=require('./shared/websocket');
 const P=require('./shared/physics');
+const {advanceFixed}=require('./shared/prediction');
 const PORT=Number(process.env.PORT)||3000;
 const rooms=new Map();
 const peers=new Map();
@@ -119,13 +121,22 @@ wss.on('connection',(ws)=>{
   });
   ws.on('close',()=>{leave(ws);peers.delete(ws);});
 });
-let ticks=0;
+// Node timers truncate fractional delays on some runtimes. Calling P.tick()
+// once per setInterval(1000/60) callback can actually run at ~62.5 Hz,
+// desynchronizing movement against the browser's fixed 60 Hz simulation.
+// Measure monotonic wall time and advance exactly one physics step per 1/60s.
+let ticks=0,physicsAccumulator=0,lastPhysicsTime=performance.now();
 setInterval(()=>{
-  ticks++;
-  for(const room of rooms.values()){
-    const oldPhase=room.game.phase;P.tick(room.game);
-    if(oldPhase!==room.game.phase)announceLobby(room);
-    if(ticks%2===0)sendState(room);
-  }
-},1000/60);
+  const now=performance.now();
+  const frame=advanceFixed(physicsAccumulator,now-lastPhysicsTime,()=>{
+    ticks++;
+    for(const room of rooms.values()){
+      const oldPhase=room.game.phase;P.tick(room.game);
+      if(oldPhase!==room.game.phase)announceLobby(room);
+      if(ticks%2===0)sendState(room);
+    }
+  });
+  physicsAccumulator=frame.accumulator;
+  lastPhysicsTime=now;
+},8);
 server.listen(PORT,'0.0.0.0',()=>console.log(`Pulseball running on http://localhost:${PORT}`));

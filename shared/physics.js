@@ -251,7 +251,11 @@
   }
   function snapshot(g){return {tick:g.tick,elapsedTicks:g.elapsedTicks,timeLimit:g.timeLimit,scoreLimit:g.scoreLimit,rebound:g.rebound,
     ball:{x:g.ball.x,y:g.ball.y,vx:g.ball.vx,vy:g.ball.vy},
-    players:g.players.filter(p=>p.team===1||p.team===2).map(p=>({id:p.id,name:p.name,team:p.team,x:p.x,y:p.y,vx:p.vx,vy:p.vy,kicking:p.input?.kick===true,highlight:p.highlight,lastKick:p.lastKick,flashType:p.flashType})),
+    players:g.players.filter(p=>p.team===1||p.team===2).map(p=>({id:p.id,name:p.name,team:p.team,x:p.x,y:p.y,vx:p.vx,vy:p.vy,
+      // Movement intent is needed to extrapolate the next physics tick at 30 Hz.
+      // A remote player otherwise brakes to zero between packets and visibly jitters.
+      inputX:p.input?.x??0,inputY:p.input?.y??0,
+      kicking:p.input?.kick===true,highlight:p.highlight,lastKick:p.lastKick,flashType:p.flashType})),
     score:g.score.slice(),freeze:g.freeze,announcement:g.announcement,eventId:g.eventId,phase:g.phase,
     kickoffTeam:g.kickoffTeam,kickoffActive:g.kickoffActive,gameOverReason:g.gameOverReason};}
   return {STADIUM,W,H,CX,CY,LEFT,RIGHT,TOP,BOTTOM,OUTER_LEFT,OUTER_RIGHT,OUTER_TOP,OUTER_BOTTOM,GOAL_LEFT,GOAL_RIGHT,

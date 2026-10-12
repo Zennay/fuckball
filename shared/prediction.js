@@ -41,6 +41,8 @@
         lastKick:p.lastKick||null,highlight:p.highlight||0};
       if(own?.input)P.setInput(next,own.input);
       else if(local)P.setInput(next,{x:local.x,y:local.y,kick:false});
+      else P.setInput(next,{x:p.inputX??0,y:p.inputY??0,kick:false});
+      // Never simulate a fresh remote kick from a held-kick visual flag.
       return next;
     });
     return game;
