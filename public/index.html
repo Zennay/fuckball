@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#10141b"><title>Fuckball — BFF Big v4</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0c1017;color:#f5f6f8}*{box-sizing:border-box}body{margin:0;min-width:300px;background:radial-gradient(ellipse at 25% -20%,#223747 0%,transparent 45%),#0c1017}button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.4;cursor:default}button:focus-visible,input:focus-visible{outline:2px solid #a3f9ce;outline-offset:3px}.shell{max-width:1460px;margin:auto;padding:22px 26px 40px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:23px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px;font-weight:900;letter-spacing:-.07em;font-size:29px}.logo{height:38px;width:38px;display:grid;place-items:center;background:#d4fb9c;border-radius:13px;transform:rotate(-8deg);font-size:21px;color:#14241b;letter-spacing:0}.brand small{font-size:12px;color:#7c8997;font-weight:700;letter-spacing:.15em;margin-left:13px;vertical-align:middle}.topright{display:flex;gap:12px;align-items:center;color:#a9b6be;font-size:12px;font-weight:700}.live{width:8px;height:8px;border-radius:100%;background:#75e0b0;box-shadow:0 0 12px #75e0b0}.hero{margin:0 0 21px}.hero h1{font-size:clamp(24px,3vw,41px);letter-spacing:-.065em;line-height:1.13;margin:0 0 9px}.hero p{margin:0;color:#8c9ba8;font-size:14px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start}.gamebox,.panel{background:#151d26;border:1px solid #2a3642;border-radius:16px;overflow:hidden}.matchline{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;border-bottom:1px solid #2a3642}.scoreboard{display:flex;align-items:center;gap:13px;font-weight:900;letter-spacing:-.03em;font-size:23px}.teamname{font-size:11px;font-weight:850;letter-spacing:.11em}.teamname.red{color:#f4807a}.teamname.blue{color:#7baeff}.dash{color:#697884;font-weight:450}.matchline .tag{font-size:10px;background:#26343e;color:#91a5b2;padding:7px 10px;border-radius:6px;font-weight:800;letter-spacing:.09em}.playfield{background:#2d654f;position:relative}canvas{display:block;width:100%;aspect-ratio:17/8;touch-action:none}.overlay{position:absolute;top:17px;left:50%;transform:translateX(-50%);pointer-events:none;color:#fff;font-weight:950;letter-spacing:.07em;text-align:center;font-size:clamp(12px,2.6vw,24px);text-shadow:0 3px 14px #07221d;white-space:nowrap}.gamefoot{padding:13px 17px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.key{background:#273544;border-radius:5px;border:1px solid #3c4957;min-width:25px;display:inline-grid;place-items:center;padding:3px 6px;color:#dce8f1;font:700 11px ui-monospace,monospace}.help{display:flex;align-items:center;gap:6px;color:#8498a7;font-size:12px;flex-wrap:wrap}.foot-status{color:#a1edbc;font-size:12px;font-weight:750}.sidebar{display:grid;gap:15px}.panel{padding:19px}.panel h2{font-size:15px;letter-spacing:-.025em;margin:0 0 6px}.subtitle{font-size:12px;color:#889aa8;margin:0 0 17px;line-height:1.5}.label{display:block;color:#aebecb;font-size:11px;letter-spacing:.06em;font-weight:800;margin-bottom:7px;text-transform:uppercase}input{width:100%;background:#0d141d;color:#f7fafb;border:1px solid #354452;padding:12px 13px;border-radius:9px;outline:0;font-size:14px}input::placeholder{color:#687a88}.field{margin:0 0 13px}.buttons{display:flex;gap:9px;margin-bottom:12px}.btn{padding:12px;border-radius:10px;border:0;font-size:13px;font-weight:850;transition:filter .15s}.btn:hover{filter:brightness(1.1)}.btn:active{transform:translateY(1px)}.primary{background:#c7f9a0;color:#1c2c22}.ghost{background:#263441;color:#e3f0f5}.buttons .btn{flex:1}.join{display:flex;gap:9px}.join input{min-width:0;flex:1;text-transform:uppercase;letter-spacing:.12em;font-weight:800}.join button{white-space:nowrap}.notice{margin:12px 0 0;color:#9eafba;font-size:12px;line-height:1.5;min-height:18px}.notice.error{color:#ff9995}.roomhead{display:flex;justify-content:space-between;gap:8px;align-items:center}.code{background:#253440;border:1px dashed #63827b;padding:6px 9px;border-radius:7px;font-weight:850;letter-spacing:.15em;color:#c7f9a0;font-size:12px}.players{display:grid;gap:8px;min-height:46px;margin-top:14px}.playerrow{display:flex;align-items:center;gap:9px;font-size:13px;background:#1d2b35;border-radius:9px;padding:10px}.avatar{height:22px;width:22px;flex:0 0 22px;border-radius:50%;border:2px solid rgba(255,255,255,.5)}.avatar.red{background:#f17471}.avatar.blue{background:#6e9ff4}.avatar.gray{background:#758391}.playerrow strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playerrow em{font-style:normal;font-size:10px;color:#94a6b3;margin-left:auto}.teamselect{display:flex;gap:6px;margin-top:14px}.teamselect button{font-size:11px;padding:9px 7px;flex:1}.chatlog{display:flex;flex-direction:column;gap:8px;height:125px;overflow:auto;font-size:12px;color:#b9c6cd;padding:4px 0 10px;overflow-wrap:anywhere}.chatlog b{color:#d3f9ae}.chatinput{display:flex;gap:7px}.chatinput input{flex:1;min-width:0}.chatinput button{flex:0 0 auto;padding:0 12px}.bottomtip{font-size:11px;line-height:1.6;color:#647886;margin-top:13px}.touchcontrols{display:none;padding:10px 15px 18px;justify-content:space-between;align-items:end;gap:12px;background:#101c22}.pad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:2px}.touchcontrols button{border:1px solid #526a71;background:#263840;color:#fff;border-radius:12px;font-size:19px;font-weight:800;touch-action:none;user-select:none}.touchcontrols .kick{height:75px;width:75px;border-radius:50%;border:2px solid #f3cabd;background:#be6457;font-size:13px;letter-spacing:.08em}.pad [data-dir="up"]{grid-column:2;grid-row:1}.pad [data-dir="left"]{grid-column:1;grid-row:2}.pad [data-dir="down"]{grid-column:2;grid-row:3}.pad [data-dir="right"]{grid-column:3;grid-row:2}.touchcontrols button.pressed{background:#a9eaa2;color:#113127}@media(max-width:1050px){.layout{grid-template-columns:minmax(0,1fr)}.sidebar{grid-template-columns:1fr 1fr}.sidebar .panel:last-child{grid-column:1/-1}}@media(max-width:700px){.shell{padding:15px 10px 30px}.brand{font-size:23px}.brand small{display:none}.hero h1{font-size:26px}.hero p{font-size:12px}.sidebar{grid-template-columns:1fr}.sidebar .panel:last-child{grid-column:auto}.matchline{padding:11px}.teamname{font-size:9px}.scoreboard{gap:8px;font-size:20px}.gamefoot{padding:9px;font-size:11px}.help{display:none}.touchcontrols{display:flex}.topright{font-size:11px}.panel{padding:16px}}
+
+/* Familiar classic pitch presentation, independently drawn using Canvas. */
+.playfield{background:#151A1E} .logo{background:#8eba77}.hero h1{font-size:clamp(22px,2.3vw,32px)}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;margin-top:14px;border-top:1px solid #2a3642;padding-top:14px}
+.settings select{width:100%;background:#0d141d;color:white;border:1px solid #354452;border-radius:8px;padding:10px;font-size:13px}
+.clientSettings{border-top:1px solid #2a3642;margin-top:13px;padding-top:14px}
+.clientSettings input[type="range"]{padding:0;width:100%;accent-color:#c7f9a0;cursor:pointer;min-height:33px;background:transparent;border:0}
+.clientSettings .label{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.clientSettings output{color:#c7f9a0;font-variant-numeric:tabular-nums;text-transform:none}
+.clientSettings small{font-size:11px;line-height:1.5;color:#8c9baa;display:block}
+.settings .label{margin:0} .teamname.red{color:#f07971}.teamname.blue{color:#7f9dff}
+.overlay{top:41%;font-size:clamp(19px,3.6vw,39px);letter-spacing:.015em;text-shadow:2px 3px 0 #24201e,0 0 12px #24201e}
+.gamebox{border-radius:7px}.panel{border-radius:7px}.matchline{background:#352c2b}.code{border-color:#9ba66f}
+</style></head><body><div class="shell">
+<header class="top"><div class="brand"><span class="logo">⚽</span><span>FUCKBALL<small>BFF BIG V4</small></span></div><div class="topright"><span class="live"></span><span>PLAY IN YOUR BROWSER · NO ACCOUNT</span></div></header>
+<section class="hero"><h1>BFF Big v4 · Player rings +10% speed</h1><p>BFF Big v4 with 10% faster players, screenshot-matched player rings, a faster ball and a smarter practice opponent. Play solo or with friends.</p></section>
+<div class="layout"><main class="gamebox">
+<div class="matchline"><span class="tag" id="modeTag">SOLO · PRACTICE</span><div class="scoreboard"><span class="teamname red">RED</span><span id="scoreRed">0</span><span class="dash">:</span><span id="scoreBlue">0</span><span class="teamname blue">BLUE</span></div><span class="tag" id="matchTimer">00:00</span></div>
+<div class="playfield"><canvas id="pitch" width="1700" height="800" aria-label="Top-down football pitch. Move with WASD or arrow keys and kick with space."></canvas><div id="overlay" class="overlay" aria-live="polite"></div></div>
+<div class="gamefoot"><span class="foot-status" id="status">Playing against a practice bot</span><span class="foot-status" id="fpsMeter" title="Rendering follows your display refresh rate; physics stays at 60 Hz">FPS UNLOCKED · PHYSICS 60 Hz</span><div class="help">MOVE <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> OR <span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span> · KICK <span class="key">SPACE</span></div></div>
+<div class="touchcontrols" aria-label="Touch controls"><div class="pad"><span></span><button type="button" data-dir="up" aria-label="Move up">↑</button><span></span><button type="button" data-dir="left" aria-label="Move left">←</button><span></span><button type="button" data-dir="down" aria-label="Move down">↓</button><button type="button" data-dir="right" aria-label="Move right">→</button></div><button type="button" class="kick" data-dir="kick" aria-label="Kick ball">KICK</button></div>
+</main><aside class="sidebar">
+<section class="panel"><h2>Play your way</h2><p class="subtitle">Instant solo practice, or make a private room and send your friend the code.</p>
+<label class="label" for="nickname">Your player name</label><div class="field"><input maxlength="18" id="nickname" value="Player" autocomplete="nickname"></div>
+<div class="buttons"><button class="btn primary" id="practice" type="button">⚽ Practice solo</button><button class="btn ghost" id="create" type="button">+ Create room</button></div>
+<label for="roomInput" class="label">Have a room code?</label><div class="join"><input id="roomInput" type="text" maxlength="6" placeholder="ABC123" aria-label="Room code"><button class="btn ghost" id="join" type="button">Join</button></div><p class="notice" id="notice" role="status">Solo is ready. Multiplayer requires the Node server.</p></section>
+<section class="panel"><div class="roomhead"><h2 style="margin:0">Players</h2><span id="roomCode" class="code">PRACTICE</span></div><div class="players" id="roster"></div><div class="teamselect"><button class="btn ghost" id="redTeam" type="button">Join Red</button><button class="btn ghost" id="blueTeam" type="button">Join Blue</button><button class="btn ghost" id="spectate" type="button">Spectate</button></div><div class="buttons" style="margin:12px 0 0"><button class="btn ghost" id="restart" type="button" style="width:100%">Start match</button><button class="btn ghost" id="stop" type="button" disabled>Stop</button><button class="btn ghost" id="pause" type="button" disabled>Pause</button></div>
+<div class="settings"><label class="label" for="scoreLimit">Score limit</label><select id="scoreLimit"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select><label class="label" for="timeLimit">Time limit</label><select id="timeLimit"><option value="1">1 min</option><option value="3" selected>3 min</option><option value="5">5 min</option><option value="10">10 min</option></select><label class="label" for="ballRebound">Ball rebound</label><select id="ballRebound" aria-label="Ball rebound strength"><option value="0.412" selected>BFF original · 41.2%</option><option value="0.3">Extra soft · 30%</option><option value="0.7">Medium · 70%</option><option value="1">Hard · 100%</option></select></div><div class="clientSettings"><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">0 ms</output></label><input type="range" id="extrapolation" min="0" max="200" step="10" value="0" aria-describedby="extrapHelp"><small id="extrapHelp">Collision-aware prediction (0–200 ms). Visual only: no changes to actual ping or 60 Hz physics. Rendering stays unlocked at your display refresh rate, even at 0 ms.</small></div></section>
+<section class="panel"><h2>Room chat</h2><p class="subtitle">Available when you're in an online room.</p><div class="chatlog" id="chatlog" aria-live="polite"><div>Welcome to Fuckball BFF Big v4!</div></div><form class="chatinput" id="chatForm"><input id="chatText" maxlength="160" placeholder="Say something..." aria-label="Chat message" disabled><button type="submit" class="btn ghost" id="sendChat" disabled>Send</button></form></section>
+</aside></div><p class="bottomtip"><strong>Kick timing:</strong> hold Space / X to keep the player's black outline solid white, even before the ball arrives. Release to return it to black. A well-timed contact produces a full shot, while a long early hold creates a softer baby kick. <strong>Wall boost:</strong> move into a wall as you kick a ball against it to add speed along the wall. Independent remake, not affiliated with HaxBall.</p></div>
+<script src="/shared/stadium.js"></script><script src="/shared/physics.js"></script><script src="/shared/prediction.js"></script><script src="/shared/bot.js"></script><script>
+(()=>{'use strict';
+const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=globalThis.PulseBot;if(!P||!Prediction||!Bot){document.getElementById('status').textContent='Physics engine missing. Open the project through server or keep the shared folder beside public.';return;}
+const $=id=>document.getElementById(id);
+const canvas=$('pitch'),ctx=canvas.getContext('2d');
+const held=new Set(),touchHeld=new Set();
+let extrapMs=0;
+    try{const saved=Number(localStorage.getItem('pulseball.extrapolation'));if(Number.isFinite(saved)&&saved>=0)extrapMs=Math.round(P.clamp(saved,0,200)/10)*10;}catch{}
+    $('extrapolation').value=String(extrapMs);$('extrapValue').textContent=extrapMs+' ms';
+    $('extrapolation').addEventListener('input',()=>{extrapMs=P.clamp(Number($('extrapolation').value)||0,0,200);$('extrapValue').textContent=extrapMs+' ms';try{localStorage.setItem('pulseball.extrapolation',String(extrapMs));}catch{}});
+    let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
+function makeSolo(){
+  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;
+  game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});P.addPlayer(game,P.player('bot','Rival',1));P.addPlayer(game,P.player('solo',cleanName(),2));
+  $('modeTag').textContent='SOLO · PRACTICE';$('status').textContent='BFF Big v4 · 20% faster ball / smart AI';$('roomCode').textContent='PRACTICE';
+  $('chatText').disabled=true;$('sendChat').disabled=true;$('restart').disabled=false;updateMatchControls();
+  drawRoster([{id:'bot',name:'Rival · AI',team:1},{id:'solo',name:cleanName(),team:2}]);
+  setNotice('Practice mode ready. First to three goals wins.');
+}
+function cleanName(){return ($('nickname').value||'Player').trim().slice(0,18)||'Player';}
+function setNotice(message,error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
+function drawRoster(players){
+  const host=$('roster');host.textContent='';
+  if(!players.length){host.textContent='No active players yet.';return;}
+  for(const p of players){
+    const row=document.createElement('div');row.className='playerrow';
+    const icon=document.createElement('span');icon.className='avatar '+(p.team===1?'red':p.team===2?'blue':'gray');
+    const name=document.createElement('strong');name.textContent=p.name||'Player';
+    const badge=document.createElement('em');badge.textContent=p.id===myId?'YOU':p.id===hostId?'HOST':p.team===0?'SPEC':p.team===1?'RED':'BLUE';
+    row.append(icon,name,badge);host.append(row);
+  }
+}
+function send(obj){if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(obj));}
+function disconnect(){const old=socket;socket=null;if(old){old.onclose=null;old.close();}}
+function connect(action){
+  if(location.protocol==='file:'){setNotice('To host an online room, run npm install && npm start, then open localhost:3000.',true);return;}
+  if(typeof WebSocket==='undefined'){setNotice('WebSocket is unavailable in this browser.',true);return;}
+  disconnect();setNotice('Connecting to multiplayer server...');
+  const url=(location.protocol==='https:'?'wss:':'ws:')+'//'+location.host;
+  let ws;try{ws=new WebSocket(url);}catch{setNotice('Unable to start multiplayer connection.',true);return;}
+  socket=ws;
+  ws.onopen=()=>{if(socket===ws)send({type:action,code:$('roomInput').value.toUpperCase().trim(),name:cleanName()});};
+  ws.onmessage=ev=>{if(socket!==ws)return;let msg;try{msg=JSON.parse(ev.data);}catch{return;}
+    if(msg.type==='error'){setNotice(msg.message,true);return;}
+    if(msg.type==='joined'){
+      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;
+      $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;
+      $('chatText').disabled=false;$('sendChat').disabled=false;
+      $('status').textContent='Connected · play with your friends';
+      setNotice('Room '+roomCode+' is live. Join Red or Blue, then the host can start.');
+    }
+    if(msg.type==='lobby'){
+      hostId=msg.hostId;roomCode=msg.code;roster=msg.players;
+      $('scoreLimit').value=String(msg.scoreLimit||3);$('timeLimit').value=String(msg.timeLimit||3);$('ballRebound').value=String(msg.rebound??P.DEFAULT_REBOUND);
+      drawRoster(roster);updateMatchControls();
+    }
+    if(msg.type==='state'){prevGame=lastGame;lastGame=msg.game;lastReceive=performance.now();updateMatchControls();}
+    if(msg.type==='notice'){appendChat('SERVER',msg.message);}
+    if(msg.type==='chat'){appendChat(msg.from,msg.message);}
+  };
+  ws.onerror=()=>{if(socket===ws)setNotice('Could not connect. Start the server with npm start.',true);};
+  ws.onclose=()=>{if(socket!==ws)return;socket=null;makeSolo();setNotice('Disconnected from server. Solo practice resumed.',true);};
+}
+function appendChat(name,message){const line=document.createElement('div');const strong=document.createElement('b');strong.textContent=name+': ';line.append(strong,document.createTextNode(message));const box=$('chatlog');box.append(line);while(box.children.length>40)box.firstElementChild.remove();box.scrollTop=box.scrollHeight;}
+$('practice').addEventListener('click',()=>{disconnect();makeSolo();});
+$('create').addEventListener('click',()=>connect('create'));
+$('join').addEventListener('click',()=>{if($('roomInput').value.trim().length!==6){setNotice('Enter a six-character room code.',true);return;}connect('join');});
+$('roomInput').addEventListener('keydown',e=>{if(e.key==='Enter'){$('join').click();}});
+function updateMatchControls(){
+  const isHost=mode==='solo'||hostId===myId,phase=mode==='solo'?game?.phase:lastGame?.phase;
+  $('restart').textContent=mode==='solo'?'Restart practice':phase==='playing'||phase==='paused'?'Restart match':'Start match';
+  $('restart').disabled=mode==='online'&&!isHost;
+  $('stop').disabled=!isHost||!(phase==='playing'||phase==='paused');
+  $('pause').disabled=!isHost||!(phase==='playing'||phase==='paused');
+  $('pause').textContent=phase==='paused'?'Resume':'Pause';
+  for(const id of ['scoreLimit','timeLimit','ballRebound'])$(id).disabled=!isHost||(mode==='online'&&(phase==='playing'||phase==='paused'));
+}
+$('restart').addEventListener('click',()=>{if(mode==='online'){send({type:'start'});}else{makeSolo();}});
+$('stop').addEventListener('click',()=>send({type:'stop'}));
+$('pause').addEventListener('click',()=>send({type:'pause'}));
+for(const id of ['scoreLimit','timeLimit','ballRebound'])$(id).addEventListener('change',()=>{
+  const settings={type:'settings',scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)};
+  if(mode==='online')send(settings);
+  else if(game){game.scoreLimit=settings.scoreLimit;game.timeLimit=settings.timeLimit;game.rebound=settings.rebound;}
+});
+for(const [id,team] of [['redTeam',1],['blueTeam',2],['spectate',0]])$(''+id).addEventListener('click',()=>{if(mode==='online')send({type:'team',team});else setNotice('Team changes are available in online rooms.');});
+$('chatForm').addEventListener('submit',e=>{e.preventDefault();const v=$('chatText').value.trim();if(v&&mode==='online')send({type:'chat',message:v});$('chatText').value='';});
+const keyMap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',KeyW:'up',KeyS:'down',KeyA:'left',KeyD:'right',Space:'kick',KeyX:'kick'};
+function editing(el){return !!el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName);}
+window.addEventListener('keydown',e=>{if(editing(document.activeElement))return;const k=keyMap[e.code];if(k){e.preventDefault();held.add(k);}}, {passive:false});
+window.addEventListener('keyup',e=>{const k=keyMap[e.code];if(k){held.delete(k);}});
+window.addEventListener('blur',()=>{held.clear();touchHeld.clear();});
+for(const button of document.querySelectorAll('[data-dir]')){
+  const dir=button.dataset.dir;
+  button.addEventListener('pointerdown',e=>{e.preventDefault();touchHeld.add(dir);button.classList.add('pressed');button.setPointerCapture(e.pointerId);});
+  const release=()=>{touchHeld.delete(dir);button.classList.remove('pressed');};
+  button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
+}
+function input(){const yes=k=>held.has(k)||touchHeld.has(k);return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
+setInterval(()=>{if(mode==='online')send({type:'input',...input()});},33);
+function updateSolo(){
+  const me=game.players.find(p=>p.id==='solo'),bot=game.players.find(p=>p.id==='bot');
+  P.setInput(me,input());
+  // Tactics shared with tests: predicted interception, correct approach side,
+  // goal-directed kicks, braking, defense and kickoff positioning.
+  P.setInput(bot,Bot.decide(game,bot));
+  P.tick(game);
+}
+function fitCanvas(){const rect=canvas.getBoundingClientRect();const dpr=Math.min(devicePixelRatio||1,2);const w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h;}}
+function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function stadiumColor(color, fallback='#666'){
+  const hex=String(color||'').replace(/[^a-fA-F0-9]/g,'').padStart(6,'0').slice(-6);
+  return color?'#'+hex:fallback;
+}
+function drawHbsSegment(target,seg){
+  if(seg.vis===false)return;
+  const a=P.STADIUM.vertexes[seg.v0],b=P.STADIUM.vertexes[seg.v1];
+  if(!a||!b)return;
+  const ax=P.CX+a.x,ay=P.CY+a.y,bx=P.CX+b.x,by=P.CY+b.y;
+  target.beginPath();
+  if(seg.curve&&Math.abs(seg.curve)>0.001){
+    const theta=seg.curve*Math.PI/180,dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy);
+    const halfTan=Math.tan(theta/2),h=Math.abs(halfTan)>1e-9?len/(2*halfTan):0;
+    const mx=(ax+bx)/2,my=(ay+by)/2,cx=mx-dy/len*h,cy=my+dx/len*h;
+    const start=Math.atan2(ay-cy,ax-cx),radius=Math.hypot(ax-cx,ay-cy);
+    if(Number.isFinite(radius)&&radius<100000)target.arc(cx,cy,radius,start,start+theta,theta<0);
+    else{target.moveTo(ax,ay);target.lineTo(bx,by);}
+  }else{target.moveTo(ax,ay);target.lineTo(bx,by);}
+  target.lineWidth=1.6;target.strokeStyle=stadiumColor(seg.color,'#454e53');target.stroke();
+}
+function field(target){
+  target.fillStyle='#151A1E';target.fillRect(0,0,P.W,P.H);
+  target.fillStyle=stadiumColor(P.STADIUM.bg.color,'#34414B');
+  target.fillRect(P.LEFT,P.TOP,P.RIGHT-P.LEFT,P.BOTTOM-P.TOP);
+  // Draw all stadium segments, including the true midfield graphics,
+  // curved penalty marks, colored goal lines, and BFF goal net markings.
+  for(const segment of P.STADIUM.segments)drawHbsSegment(target,segment);
+  for(const post of P.STADIUM.discs.slice(1)){
+    const x=P.CX+post.pos[0],y=P.CY+post.pos[1];
+    target.beginPath();target.arc(x,y,post.radius,0,Math.PI*2);
+    target.fillStyle=stadiumColor(post.color,'#031726');target.fill();
+  }
+}
+// The 100+ stadium segments are immutable: paint them once, not 240 times/s.
+// Gameplay physics remains at 60 Hz; rendering follows the browser's refresh rate.
+let stadiumCache=null;
+try{
+  const surface=document.createElement('canvas');surface.width=P.W;surface.height=P.H;
+  const surfaceContext=surface.getContext('2d');
+  if(surfaceContext){field(surfaceContext);stadiumCache=surface;}
+}catch{}
+function drawBall(ball){
+  if(!ball)return;
+  ctx.beginPath();ctx.arc(ball.x,ball.y,P.BALL_R,0,Math.PI*2);
+  ctx.fillStyle=stadiumColor(P.STADIUM.discs[0].color,'#FFF26D');ctx.fill();ctx.lineWidth=1.25;ctx.strokeStyle='#171717';ctx.stroke();
+}
+function drawPlayer(p){
+  const red=p.team===1,number=(Math.max(0,(roster.length?roster:[]).filter(q=>q.team===p.team).findIndex(q=>q.id===p.id))+1)||1;
+  // Match the reference screenshot: the selection ring sits at ~1.67x the
+  // player-disc radius. Its pale translucent stroke is ~2.4 game units wide;
+  // the gap between inner and outer outlines remains completely clear.
+  if(p.id===myId){
+    ctx.beginPath();ctx.arc(p.x,p.y,P.PLAYER_R+10,0,Math.PI*2);
+    ctx.lineWidth=2.4;ctx.strokeStyle='rgba(255,255,255,0.33)';ctx.stroke();
+  }
+  // HaxBall-like kick indicator: replace the existing DARK player border
+  // with solid WHITE for the entire time kick is held. No extra flash ring.
+  // Read local input directly so it responds immediately at 144/240+ FPS,
+  // without waiting for the next 60 Hz simulation or network packet.
+  const kicking=p.id===myId?input().kick:!!p.kicking;
+  ctx.beginPath();ctx.arc(p.x,p.y,P.PLAYER_R,0,Math.PI*2);
+  ctx.fillStyle=red?'#e15a4c':'#527ce7';ctx.fill();
+  // Roughly 5px at reference-screenshot scale: only the disc's own rim flashes.
+  ctx.lineWidth=1.8;ctx.strokeStyle=kicking?'#ffffff':'#1b1b1b';ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='700 14px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(String(number),p.x,p.y+.4);
+  // Keep labels clear of the outer selection ring.
+  ctx.font='16px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.lineWidth=2.6;ctx.strokeStyle='#333';ctx.strokeText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
+  ctx.fillStyle='#eee';ctx.fillText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
+}
+function displayedState(now){
+  // Fractional-tick prediction smooths the 60 Hz physics at 120/144/240+ Hz.
+  if(mode==='solo')return Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
+  if(!lastGame)return null;
+  if(extrapMs>0)return Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
+  if(!prevGame)return lastGame;
+  const t=P.clamp((now-lastReceive)/50,0,1);
+  return Prediction.interpolateView(prevGame,lastGame,t);
+}
+function render(now){
+  // Never throttle rendering to 60 FPS. Only simulation uses fixed 60 Hz steps.
+  const dt=P.clamp(now-frameTs,0,125);frameTs=now;
+  fpsFrames++;
+  if(now-fpsStart>=750){$('fpsMeter').textContent=Math.round(fpsFrames*1000/(now-fpsStart))+' FPS · UNLOCKED / 60 Hz PHYSICS';fpsFrames=0;fpsStart=now;}
+  if(mode==='solo'){
+    accumulator=Prediction.advanceFixed(accumulator,dt,updateSolo).accumulator;
+  } else accumulator=0;
+  fitCanvas();ctx.setTransform(canvas.width/P.W,0,0,canvas.height/P.H,0,0);ctx.clearRect(0,0,P.W,P.H);
+  if(stadiumCache)ctx.drawImage(stadiumCache,0,0,P.W,P.H);
+  else field(ctx);
+  const state=displayedState(now);
+  if(state){for(const p of state.players)drawPlayer(p);drawBall(state.ball);
+    $('scoreRed').textContent=state.score[0];$('scoreBlue').textContent=state.score[1];
+    const secs=Math.max(0,Math.floor((state.elapsedTicks||0)/60));
+    $('matchTimer').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0');
+    $('overlay').textContent=state.announcement||'';
+  }else $('overlay').textContent='CONNECTING...';
+  requestAnimationFrame(render);
+}
+const roomInLink=new URLSearchParams(location.search).get('room');if(roomInLink&&/^[A-Z0-9]{6}$/i.test(roomInLink))$('roomInput').value=roomInLink.toUpperCase();
+makeSolo();updateMatchControls();requestAnimationFrame(render);
+})();
+</script></body></html>
