@@ -82,6 +82,38 @@
     if(rel<0){const impulse=-(1+bCoef)*rel/total;a.vx-=nx*impulse*imA;a.vy-=ny*impulse*imA;b.vx+=nx*impulse*imB;b.vy+=ny*impulse*imB;}
     return true;
   }
+  // Gentle contact: a walking player should be able to carry a slow ball
+  // on the front edge of the disc instead of immediately launching it.
+  // This ONLY modifies low-speed, un-kicked player-to-ball contact.
+  // The ball retains all tangential velocity so glancing contacts can roll away.
+  function collidePlayerBall(g,p,ball){
+    const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy);
+    let controlled=false,nx=0,ny=0;
+    if(d>1e-8 && d<p.r+ball.r && !p.input?.kick){
+      nx=dx/d;ny=dy/d;
+      const playerNormal=p.vx*nx+p.vy*ny;
+      const ballNormal=ball.vx*nx+ball.vy*ny;
+      // Only a player catching a slow ball can cushion it.
+      // Hard incoming passes and shots always use the ordinary rebound solver.
+      controlled=playerNormal>0.15 &&
+        playerNormal-ballNormal*BALL_SPEED_MULTIPLIER>0.12 &&
+        ballNormal>=-0.6 && Math.hypot(ball.vx,ball.vy)<=3.5;
+    }
+    const hit=collide(p,ball,controlled?0:g.rebound);
+    if(hit&&controlled){
+      // The fast-ball multiplier is positional, not an extra kick.
+      // Limit the outgoing NORMAL ball travel to the player's travel;
+      // never alter the tangential component (natural roll-off/dribbling).
+      const playerNormal=Math.max(0,p.vx*nx+p.vy*ny);
+      const ballNormal=ball.vx*nx+ball.vy*ny;
+      const maxBallNormal=playerNormal/BALL_SPEED_MULTIPLIER;
+      if(ballNormal>maxBallNormal){
+        const excess=ballNormal-maxBallNormal;
+        ball.vx-=nx*excess;ball.vy-=ny*excess;
+      }
+    }
+    return hit;
+  }
   function againstStatic(disc,x,y,r,bCoef){
     const obstacle={x,y,vx:0,vy:0,r,invMass:0};
     return collide(obstacle,disc,bCoef);
@@ -223,7 +255,7 @@
     sweepFastBall(g,oldBallX,oldBallY);
     // Physical collisions first; shooting is a separate impulse when kick is held.
     for(const p of g.players)if(p.team){
-      collide(p,ball,g.rebound);
+      collidePlayerBall(g,p,ball);
       const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy);
       if(g.kickoffActive&&p.team===g.kickoffTeam&&d<=PLAYER_R+BALL_R+0.5)g.kickoffActive=false;
       if(p.input?.kick && p.kickCooldown===0 && d<=PLAYER_R+BALL_R+KICK_REACH && (!g.kickoffActive||p.team===g.kickoffTeam)){
