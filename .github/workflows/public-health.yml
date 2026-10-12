@@ -33,6 +33,10 @@ jobs:
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-physics.js 'http://198.244.191.182:3417/shared/physics.js'
           grep -q 'function collidePlayerBall(g,p,ball)' /tmp/fuckball-physics.js
           grep -q 'collidePlayerBall(g,p,ball);' /tmp/fuckball-physics.js
+          grep -q 'BALL_SPEED_MULTIPLIER=1.2' /tmp/fuckball-physics.js
+          grep -q 'WALL_REBOUND_AT_DEFAULT=0.76' /tmp/fuckball-physics.js
+          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-prediction.js 'http://198.244.191.182:3417/shared/prediction.js'
+          grep -q 'const cautious=frames>2' /tmp/fuckball-prediction.js
           echo "Live soft-contact dribbling physics verified"
           grep -q 'id="optionsScreen"' /tmp/fuckball-home.html
           grep -q 'id="chatDock"' /tmp/fuckball-home.html
@@ -41,6 +45,7 @@ jobs:
           grep -q 'function cameraTransform(state,dt)' /tmp/fuckball-home.html
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-bot.js 'http://198.244.191.182:3417/shared/bot.js'
           grep -q 'function reply(message,g,bot)' /tmp/fuckball-bot.js
+          grep -q 'const passOptions=' /tmp/fuckball-bot.js
           echo "Live 135ms extrapolation, immersive HUD and bot chat verified"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
