@@ -218,7 +218,8 @@ let extrapMs=135,renderScale=1;
  let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0,previousVisual=null;
 function makeSolo(){
   mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;previousVisual=null;cameraReady=false;
-  const count=[0,1,2,4].includes(Number($('soloTeams').value))?Number($('soloTeams').value):1;
+  const selected=$('soloTeams').value;
+  const count=selected!==''&&[0,1,2,4].includes(Number(selected))?Number(selected):1;
   game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});
   for(let i=0;i<count;i++)P.addPlayer(game,P.player('bot-red-'+i,'Red AI '+(i+1),1));
   P.addPlayer(game,P.player('solo',cleanName(),2));
