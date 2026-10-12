@@ -24,6 +24,10 @@ jobs:
           grep -q '"ok":true' /tmp/fuckball-health.json
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-home.html 'http://198.244.191.182:3417/'
           grep -q '<canvas' /tmp/fuckball-home.html
+          grep -q 'id="fullscreenBtn"' /tmp/fuckball-home.html
+          grep -q 'id="renderQuality"' /tmp/fuckball-home.html
+          grep -q 'id="roomSidebar"' /tmp/fuckball-home.html
+          echo "Live fullscreen and high-refresh controls found"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
         with:
