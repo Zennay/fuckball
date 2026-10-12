@@ -47,7 +47,18 @@ async function waitForServer(){
     assert.equal(fullscreen,true,'fullscreen requires a click and should then activate');
     assert.deepEqual(errors,[],'browser must not throw JavaScript errors');
     await page.screenshot({path:'fuckball-immersive-smoke.png'});
-    console.log('PASS: 1440x900 viewport, Escape options, 135/175/140ms extrap, bot chat, fullscreen');
+    // Narrow displays must also use every available pixel without horizontal
+    // overflow, even with touch controls and the always-available chat dock.
+    await page.setViewportSize({width:390,height:844});
+    await page.reload({waitUntil:'networkidle'});
+    const mobile=await page.locator('#pitch').boundingBox();
+    assert.ok(Math.abs(mobile.width-390)<=2&&Math.abs(mobile.height-844)<=2,
+      'mobile pitch should cover the complete 390x844 viewport');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,
+      'mobile layout should not scroll sideways');
+    await page.screenshot({path:'fuckball-mobile-smoke.png'});
+    assert.deepEqual(errors,[],'no browser errors on desktop or mobile');
+    console.log('PASS: desktop 1440x900 + mobile 390x844, Escape options, extrapolation, bot chat, fullscreen');
   }finally{
     if(browser)await browser.close();
     server.kill('SIGTERM');
