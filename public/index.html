@@ -215,9 +215,9 @@ let extrapMs=135,renderScale=1;
  });
  $('extrapNumber').addEventListener('change',()=>{$('extrapNumber').value=String(extrapMs);});
  $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
- let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
+ let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0,previousVisual=null;
 function makeSolo(){
-  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;cameraReady=false;
+  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;previousVisual=null;cameraReady=false;
   const count=[0,1,2,4].includes(Number($('soloTeams').value))?Number($('soloTeams').value):1;
   game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});
   for(let i=0;i<count;i++)P.addPlayer(game,P.player('bot-red-'+i,'Red AI '+(i+1),1));
@@ -260,7 +260,7 @@ function connect(action){
   ws.onmessage=ev=>{if(socket!==ws)return;let msg;try{msg=JSON.parse(ev.data);}catch{return;}
     if(msg.type==='error'){setNotice(msg.message,true);return;}
     if(msg.type==='joined'){
-      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;
+      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;previousVisual=null;
       $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;$('chatHeading').textContent='ROOM CHAT · '+roomCode;
       $('chatText').disabled=false;$('sendChat').disabled=false;
       $('status').textContent='Connected · play with your friends';
@@ -526,14 +526,18 @@ function drawPlayer(p){
   ctx.lineWidth=2.6;ctx.strokeStyle='#333';ctx.strokeText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
   ctx.fillStyle='#eee';ctx.fillText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
 }
-function displayedState(now){
-  // Fractional-tick prediction smooths the 60 Hz physics at 120/144/240+ Hz.
-  if(mode==='solo')return Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
-  if(!lastGame)return null;
-  if(extrapMs>0)return Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
-  if(!prevGame)return lastGame;
-  const t=P.clamp((now-lastReceive)/50,0,1);
-  return Prediction.interpolateView(prevGame,lastGame,t);
+function displayedState(now,dt){
+  // At high extrapolation the next authoritative update can reverse an
+  // incorrect visual forecast. Ease that rollback; never affect game state.
+  let raw;
+  if(mode==='solo')raw=Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
+  else if(!lastGame)raw=null;
+  else if(extrapMs>0)raw=Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
+  else if(!prevGame)raw=lastGame;
+  else raw=Prediction.interpolateView(prevGame,lastGame,P.clamp((now-lastReceive)/50,0,1));
+  const display=Prediction.reconcileVisual(previousVisual,raw,dt,extrapMs);
+  previousVisual=display;
+  return display;
 }
 function render(now){
   // Never throttle rendering to 60 FPS. Only simulation uses fixed 60 Hz steps.
@@ -544,7 +548,7 @@ function render(now){
     accumulator=Prediction.advanceFixed(accumulator,dt,updateSolo).accumulator;
   } else accumulator=0;
   fitCanvas();
-   const state=displayedState(now);
+   const state=displayedState(now,dt);
    cameraTransform(state,dt);
    if(stadiumCache)ctx.drawImage(stadiumCache,0,0,P.W,P.H);
    else field(ctx);
