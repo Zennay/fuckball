@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-function runPage({savedExtrapolation=null}={}){
+function runPage({savedExtrapolation=null,extrapVersion=null}={}){
   const html=fs.readFileSync(path.join(__dirname,'../dist/Pulseball-BFF-Big-v4-Play-Solo.html'),'utf8');
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   const elements={};let offscreenStrokes=0,framesDrawn=0;
@@ -57,7 +57,7 @@ function runPage({savedExtrapolation=null}={}){
   const window={addEventListener:(name,fn)=>(winListeners[name]??=[]).push(fn)};
   const ctx=vm.createContext({document,window,performance:{now:()=>0},location:{search:'',protocol:'file:'},
     URLSearchParams,devicePixelRatio:2,requestAnimationFrame:fn=>callbacks.push(fn),
-    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:null,setItem(){}},
+    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:key==='pulseball.extrapolation.v2'?extrapVersion:null,setItem(){}},
     console,WebSocket:undefined});
   const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
   for(const source of scripts)vm.runInContext(source,ctx,{timeout:1000});
@@ -188,6 +188,8 @@ test('135 ms is the default and previous client extrapolation preference is resp
   saved.fields.extrapNumber.value='185';saved.fields.extrapNumber.fire('input');
   assert.equal(saved.fields.extrapValue.textContent,'185 ms');
   assert.equal(saved.fields.extrapolation.value,'185');
+  assert.equal(runPage({savedExtrapolation:'0'}).fields.extrapValue.textContent,'135 ms','old default 0 is migrated');
+  assert.equal(runPage({savedExtrapolation:'0',extrapVersion:'1'}).fields.extrapValue.textContent,'0 ms','explicit new 0 setting is preserved');
 });
 test('Escape opens and closes options and movement input does not leak through the overlay',()=>{
   const app=runPage();
