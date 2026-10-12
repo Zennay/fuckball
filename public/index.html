@@ -174,17 +174,38 @@ const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=global
 const $=id=>document.getElementById(id);
 const canvas=$('pitch'),ctx=canvas.getContext('2d');
 const held=new Set(),touchHeld=new Set();
-let extrapMs=0,renderScale=1;
-    try{const saved=Number(localStorage.getItem('pulseball.extrapolation'));if(Number.isFinite(saved)&&saved>=0)extrapMs=Math.round(P.clamp(saved,0,200)/10)*10;}catch{}
-    $('extrapolation').value=String(extrapMs);$('extrapValue').textContent=extrapMs+' ms';
-    $('extrapolation').addEventListener('input',()=>{extrapMs=P.clamp(Number($('extrapolation').value)||0,0,200);$('extrapValue').textContent=extrapMs+' ms';try{localStorage.setItem('pulseball.extrapolation',String(extrapMs));}catch{}});
-    $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
-    let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
+let extrapMs=135,renderScale=1;
+ try{
+   const saved=localStorage.getItem('pulseball.extrapolation');
+   if(saved!==null && saved!==undefined && saved!==''){
+     const parsed=Number(saved);
+     if(Number.isFinite(parsed))extrapMs=P.clamp(Math.round(parsed),0,250);
+   }
+ }catch{}
+ function setExtrapolation(value){
+   const ms=Number(value);
+   if(!Number.isFinite(ms)||ms<0||ms>250)return false;
+   extrapMs=Math.round(ms);
+   $('extrapolation').value=String(extrapMs);
+   $('extrapNumber').value=String(extrapMs);
+   $('extrapValue').textContent=extrapMs+' ms';
+   try{localStorage.setItem('pulseball.extrapolation',String(extrapMs));}catch{}
+   return true;
+ }
+ setExtrapolation(extrapMs);
+ $('extrapolation').addEventListener('input',()=>{setExtrapolation($('extrapolation').value);});
+ $('extrapNumber').addEventListener('input',()=>{
+   if($('extrapNumber').value==='')return;
+   setExtrapolation($('extrapNumber').value);
+ });
+ $('extrapNumber').addEventListener('change',()=>{$('extrapNumber').value=String(extrapMs);});
+ $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
+ let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
 function makeSolo(){
   mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;
   game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});P.addPlayer(game,P.player('bot','Rival',1));P.addPlayer(game,P.player('solo',cleanName(),2));
   $('modeTag').textContent='SOLO · PRACTICE';$('status').textContent='BFF Big v4 · 20% faster ball / smart AI';$('roomCode').textContent='PRACTICE';
-  $('chatText').disabled=true;$('sendChat').disabled=true;$('restart').disabled=false;updateMatchControls();
+  $('chatText').disabled=false;$('sendChat').disabled=false;$('chatHeading').textContent='ROOM CHAT · '+roomCode;$('chatHeading').textContent='MATCH CHAT · RIVAL AI';$('restart').disabled=false;updateMatchControls();
   drawRoster([{id:'bot',name:'Rival · AI',team:1},{id:'solo',name:cleanName(),team:2}]);
   setNotice('Practice mode ready. First to three goals wins.');
 }
@@ -255,54 +276,118 @@ for(const id of ['scoreLimit','timeLimit','ballRebound'])$(id).addEventListener(
   else if(game){game.scoreLimit=settings.scoreLimit;game.timeLimit=settings.timeLimit;game.rebound=settings.rebound;}
 });
 for(const [id,team] of [['redTeam',1],['blueTeam',2],['spectate',0]])$(''+id).addEventListener('click',()=>{if(mode==='online')send({type:'team',team});else setNotice('Team changes are available in online rooms.');});
-$('chatForm').addEventListener('submit',e=>{e.preventDefault();const v=$('chatText').value.trim();if(v&&mode==='online')send({type:'chat',message:v});$('chatText').value='';});
+function sendChatMessage(raw){
+   const message=String(raw||'').trim().slice(0,160);
+   if(!message)return;
+   const command=message.match(/^\/(?:extrapolation|extrap|e)(?:\s+(.+))?$/i);
+   if(command){
+     if(!command[1])appendChat('SYSTEM','Extrapolation: '+extrapMs+' ms. Try /extrapolation 135.');
+     else if(setExtrapolation(command[1]))appendChat('SYSTEM','Extrapolation set to '+extrapMs+' ms (visual only).');
+     else appendChat('SYSTEM','Enter a number between 0 and 250, e.g. /extrapolation 135.');
+     return;
+   }
+   if(/^\/help$/i.test(message)){
+     appendChat('SYSTEM','/extrapolation 135 · /e 135 · Enter to chat · Esc options · F fullscreen');
+     return;
+   }
+   if(mode==='online'){send({type:'chat',message});return;}
+   appendChat(cleanName(),message);
+   appendChat('RIVAL AI',Bot.reply(message,game,game.players.find(p=>p.id==='bot')));
+ }
+ $('chatForm').addEventListener('submit',e=>{
+   e.preventDefault();sendChatMessage($('chatText').value);$('chatText').value='';
+   $('chatText').blur?.();
+ });
+ $('chatToggle').addEventListener('click',()=>{
+   const dock=$('chatDock'),collapsed=dock.classList.toggle('chat-collapsed');
+   $('chatToggle').textContent=collapsed?'SHOW +':'HIDE −';
+   $('chatToggle').setAttribute('aria-expanded',String(!collapsed));
+ });
+
 const keyMap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',KeyW:'up',KeyS:'down',KeyA:'left',KeyD:'right',Space:'kick',KeyX:'kick'};
 function editing(el){return !!el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName);}
-window.addEventListener('keydown',e=>{if(editing(document.activeElement))return;const k=keyMap[e.code];if(k){e.preventDefault();held.add(k);}}, {passive:false});
+window.addEventListener('keydown',e=>{
+   if(editing(document.activeElement)||optionsVisible)return;
+   const k=keyMap[e.code];if(k){e.preventDefault();held.add(k);}
+ }, {passive:false});
 window.addEventListener('keyup',e=>{const k=keyMap[e.code];if(k){held.delete(k);}});
 window.addEventListener('blur',()=>{held.clear();touchHeld.clear();});
 const shell=$('appShell');
-let fullscreenFallback=false,sidebarVisible=false;
+let fullscreenFallback=false,sidebarVisible=false,optionsVisible=false;
 const fullscreenBtn=$('fullscreenBtn'),lobbyToggle=$('lobbyToggle');
 function setSidebar(open){
-  sidebarVisible=!!open;
-  shell.classList.toggle('settings-open',sidebarVisible);
-  lobbyToggle.setAttribute('aria-expanded',String(sidebarVisible));
-  lobbyToggle.textContent=sidebarVisible?'✕ Close lobby':'⚙ Lobby';
-}
-function updateFullscreen(){
-  const active=fullscreenFallback||!!document.fullscreenElement;
-  fullscreenBtn.textContent=active?'↙ Exit fullscreen':'⛶ Fullscreen';
-  fullscreenBtn.setAttribute('aria-pressed',String(active));
-}
-async function toggleFullscreen(){
-  if(document.fullscreenElement){
-    try{await document.exitFullscreen();}catch{}
-    fullscreenFallback=false;
-  }else if(fullscreenFallback){
-    fullscreenFallback=false;
-  }else if(typeof shell.requestFullscreen==='function'){
-    try{await shell.requestFullscreen({navigationUI:'hide'});}catch{fullscreenFallback=true;}
-  }else fullscreenFallback=true;
-  shell.classList.toggle('is-maximized',fullscreenFallback);
-  updateFullscreen();
-}
-lobbyToggle.addEventListener('click',()=>setSidebar(!sidebarVisible));
-fullscreenBtn.addEventListener('click',()=>{void toggleFullscreen();});
-document.addEventListener?.('fullscreenchange',updateFullscreen);
-window.addEventListener('keydown',e=>{
-  if(e.code==='KeyF'&&!e.repeat&&!editing(document.activeElement)){
-    e.preventDefault();void toggleFullscreen();
-  }
-  if(e.code==='Escape'&&sidebarVisible)setSidebar(false);
-});
-for(const button of document.querySelectorAll('[data-dir]')){
+   sidebarVisible=!!open;
+   shell.classList.toggle('settings-open',sidebarVisible);
+   lobbyToggle.setAttribute('aria-expanded',String(sidebarVisible));
+   lobbyToggle.textContent=sidebarVisible?'✕ CLOSE':'ROOM';
+ }
+ function setOptions(open){
+   optionsVisible=!!open;
+   shell.classList.toggle('options-open',optionsVisible);
+   $('optionsScreen').setAttribute('aria-hidden',String(!optionsVisible));
+   $('optionsToggle').setAttribute('aria-expanded',String(optionsVisible));
+   if(optionsVisible){
+     held.clear();touchHeld.clear();setSidebar(false);
+     $('closeOptions').focus?.();
+   }else $('closeOptions').blur?.();
+ }
+ function updateFullscreen(){
+   const active=fullscreenFallback||!!document.fullscreenElement;
+   fullscreenBtn.textContent=active?'↙ EXIT':'⛶ FULL';
+   fullscreenBtn.setAttribute('aria-pressed',String(active));
+   $('fullscreenHint').style.display=active?'none':'';
+ }
+ async function toggleFullscreen(){
+   if(document.fullscreenElement){
+     try{await document.exitFullscreen();}catch{}
+     fullscreenFallback=false;
+   }else if(fullscreenFallback)fullscreenFallback=false;
+   else if(typeof shell.requestFullscreen==='function'){
+     try{await shell.requestFullscreen({navigationUI:'hide'});}catch{fullscreenFallback=true;}
+   }else fullscreenFallback=true;
+   shell.classList.toggle('is-maximized',fullscreenFallback);
+   updateFullscreen();
+ }
+ lobbyToggle.addEventListener('click',()=>{setOptions(false);setSidebar(!sidebarVisible);});
+ $('optionsToggle').addEventListener('click',()=>setOptions(!optionsVisible));
+ $('closeOptions').addEventListener('click',()=>setOptions(false));
+ $('resumeGame').addEventListener('click',()=>setOptions(false));
+ $('optionsRoom').addEventListener('click',()=>{setOptions(false);setSidebar(true);});
+ fullscreenBtn.addEventListener('click',()=>{void toggleFullscreen();});
+ $('fullscreenHint').addEventListener('click',()=>{void toggleFullscreen();});
+ $('playfield').addEventListener('click',()=>{
+   // Browsers require a user gesture before entering native fullscreen.
+   if(!document.fullscreenElement&&!fullscreenFallback&&!optionsVisible)void toggleFullscreen();
+ });
+ document.addEventListener?.('fullscreenchange',()=>{
+   const wasNative=fullscreenBtn.getAttribute?.('aria-pressed')==='true'&&!fullscreenFallback;
+   updateFullscreen();
+   if(wasNative&&!document.fullscreenElement)setOptions(true);
+ });
+ window.addEventListener('keydown',e=>{
+   if(e.code==='Escape'){
+     e.preventDefault();if(editing(document.activeElement))document.activeElement.blur?.();
+     if(sidebarVisible){setSidebar(false);setOptions(true);}
+     else setOptions(!optionsVisible);
+     return;
+   }
+   if(e.code==='Enter'&&!editing(document.activeElement)&&!optionsVisible){
+     e.preventDefault();
+     if($('chatDock').classList.contains('chat-collapsed'))$('chatToggle').click();
+     $('chatText').focus?.();
+     return;
+   }
+   if(e.code==='KeyF'&&!e.repeat&&!editing(document.activeElement)&&!optionsVisible){
+     e.preventDefault();void toggleFullscreen();
+   }
+ });
+ for(const button of document.querySelectorAll('[data-dir]')){
   const dir=button.dataset.dir;
   button.addEventListener('pointerdown',e=>{e.preventDefault();touchHeld.add(dir);button.classList.add('pressed');button.setPointerCapture(e.pointerId);});
   const release=()=>{touchHeld.delete(dir);button.classList.remove('pressed');};
   button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
 }
-function input(){const yes=k=>held.has(k)||touchHeld.has(k);return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
+function input(){const yes=k=>!optionsVisible&&(held.has(k)||touchHeld.has(k));return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
 setInterval(()=>{if(mode==='online')send({type:'input',...input()});},33);
 function updateSolo(){
   const me=game.players.find(p=>p.id==='solo'),bot=game.players.find(p=>p.id==='bot');
