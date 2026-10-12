@@ -29,9 +29,15 @@
   const BALL={invMass:STADIUM.discs[0].invMass,bCoef:STADIUM.discs[0].bCoef,damping:0.99};
   // Move the ball 20% further per tick, while keeping the BFF mass,
   // collision elasticity, damping and player/kick constants untouched.
-  const BALL_SPEED_MULTIPLIER=1.2; // +20% over the previous 1.2× setting
+  const BALL_SPEED_MULTIPLIER=1.2; // original requested +20% over 1.0× travel
   // HBS unconfigured wall segments use the ball's own bCoef.
   const DEFAULT_REBOUND=BALL.bCoef;
+  // A wall bounce should carry the existing shot instead of losing ~59% of
+  // its speed every time. This is separate from slow player-ball contact.
+  // Respect room rebound settings proportionally; the original 0.412 choice
+  // now means about 76% wall-speed retention, while 1 still means 100%.
+  const WALL_REBOUND_AT_DEFAULT=0.76;
+  const wallRebound=g=>clamp(g.rebound*WALL_REBOUND_AT_DEFAULT/DEFAULT_REBOUND,0.15,1);
   // A real kick is an intentional, recent press. Holding X while approaching
   // never shoots automatically. Baby kicks are rare grazing contacts at the
   // OUTER edge of the kick radius, within the first two ticks of a new press.
@@ -100,7 +106,7 @@
         playerNormal-ballNormal*BALL_SPEED_MULTIPLIER>0.12 &&
         ballNormal>=-0.6 && Math.hypot(ball.vx,ball.vy)<=3.5;
     }
-    const hit=collide(p,ball,controlled?0:Math.min(g.rebound,0.32));
+    const hit=collide(p,ball,controlled?0:g.rebound);
     if(hit&&controlled){
       // The fast-ball multiplier is positional, not an extra kick.
       // Limit the outgoing NORMAL ball travel to the player's travel;
@@ -276,12 +282,12 @@
     }
     for(const [x,y] of POSTS)againstStatic(ball,x,y,POST_R,g.rebound);
     // Main top and bottom field walls use the host-selected rebound coefficient.
-    if(ball.y-BALL_R<TOP){ball.y=TOP+BALL_R;ball.vy=Math.abs(ball.vy)*g.rebound;ball.lastWall='top';ball.lastWallTick=g.tick;}
-    if(ball.y+BALL_R>BOTTOM){ball.y=BOTTOM-BALL_R;ball.vy=-Math.abs(ball.vy)*g.rebound;ball.lastWall='bottom';ball.lastWallTick=g.tick;}
+    if(ball.y-BALL_R<TOP){ball.y=TOP+BALL_R;ball.vy=Math.abs(ball.vy)*wallRebound(g);ball.lastWall='top';ball.lastWallTick=g.tick;}
+    if(ball.y+BALL_R>BOTTOM){ball.y=BOTTOM-BALL_R;ball.vy=-Math.abs(ball.vy)*wallRebound(g);ball.lastWall='bottom';ball.lastWallTick=g.tick;}
     const insideMouth=ball.y>GOAL_TOP&&ball.y<GOAL_BOTTOM;
     if(!insideMouth){
-      if(ball.x-BALL_R<LEFT){ball.x=LEFT+BALL_R;ball.vx=Math.abs(ball.vx)*g.rebound;ball.lastWall='left';ball.lastWallTick=g.tick;}
-      if(ball.x+BALL_R>RIGHT){ball.x=RIGHT-BALL_R;ball.vx=-Math.abs(ball.vx)*g.rebound;ball.lastWall='right';ball.lastWallTick=g.tick;}
+      if(ball.x-BALL_R<LEFT){ball.x=LEFT+BALL_R;ball.vx=Math.abs(ball.vx)*wallRebound(g);ball.lastWall='left';ball.lastWallTick=g.tick;}
+      if(ball.x+BALL_R>RIGHT){ball.x=RIGHT-BALL_R;ball.vx=-Math.abs(ball.vx)*wallRebound(g);ball.lastWall='right';ball.lastWallTick=g.tick;}
     }else{
       // Goal posts & net provide a physical pocket outside the goal line.
       if(ball.x-BALL_R<NET_LEFT){ball.x=NET_LEFT+BALL_R;ball.vx=Math.abs(ball.vx)*g.rebound*0.1;}
@@ -302,6 +308,6 @@
     score:g.score.slice(),freeze:g.freeze,announcement:g.announcement,eventId:g.eventId,phase:g.phase,
     kickoffTeam:g.kickoffTeam,kickoffActive:g.kickoffActive,gameOverReason:g.gameOverReason};}
   return {STADIUM,W,H,CX,CY,LEFT,RIGHT,TOP,BOTTOM,OUTER_LEFT,OUTER_RIGHT,OUTER_TOP,OUTER_BOTTOM,GOAL_LEFT,GOAL_RIGHT,
-    GOAL_TOP,GOAL_BOTTOM,NET_LEFT,NET_RIGHT,PLAYER_R,BALL_R,POST_R,POSTS,PLAYER,BALL,PLAYER_SPEED_MULTIPLIER,BALL_SPEED_MULTIPLIER,DEFAULT_REBOUND,KICK_REACH,FULL_KICK_HOLD_FRAMES,BABY_KICK_HOLD_FRAMES,BABY_KICK_SCALE,
+    GOAL_TOP,GOAL_BOTTOM,NET_LEFT,NET_RIGHT,PLAYER_R,BALL_R,POST_R,POSTS,PLAYER,BALL,PLAYER_SPEED_MULTIPLIER,BALL_SPEED_MULTIPLIER,DEFAULT_REBOUND,WALL_REBOUND_AT_DEFAULT,wallRebound,KICK_REACH,FULL_KICK_HOLD_FRAMES,BABY_KICK_HOLD_FRAMES,BABY_KICK_SCALE,
     createGame,player,addPlayer,resetPositions,setInput,tick,snapshot,clamp};
 });
