@@ -50,3 +50,35 @@ test('AI uses finite normalized controls in tricky corner and fast-ball position
     assert.equal(typeof cmd.kick,'boolean');
   }
 });
+test('practice bot responds to questions using current game context, without network APIs',()=>{
+  const {g,bot}=setup();
+  assert.match(AI.reply('hi',g,bot),/Ready|round/i);
+  assert.match(AI.reply('what is the score?',g,bot),/0–0/);
+  assert.match(AI.reply('hoe werkt extrapolation?',g,bot),/\/extrapolation 135/);
+  assert.match(AI.reply('how do I shoot?',g,bot),/Space/);
+  assert.match(AI.reply('what map?',g,bot),/BFF Big v4/);
+  assert.match(AI.reply('hi again, tell me anything',g,bot),/I hear you|ball/);
+  g.score=[1,2];
+  assert.match(AI.reply('score',g,bot),/1–2/);
+});
+test('bot covers the goal lane when an incoming ball passes behind it',()=>{
+  const {g,bot}=setup();
+  bot.x=P.CX-320;bot.y=P.CY+110;
+  g.ball.x=P.CX-430;g.ball.y=P.CY-25;g.ball.vx=-5;g.ball.vy=0;
+  const cmd=AI.decide(g,bot);
+  assert.ok(cmd.y<0,'bot should move up to cover the incoming shot lane');
+  assert.ok(Number.isFinite(cmd.x)&&Math.hypot(cmd.x,cmd.y)<=1.00001);
+  assert.equal(cmd.kick,false,'bot must not shoot at a distant ball');
+});
+test('bot can still finish a match and does not randomly hold kick',()=>{
+  const {g,bot}=setup();
+  let kickHeld=0,turns=0;
+  for(let i=0;i<1100&&!g.score[0];i++){
+    const control=AI.decide(g,bot);P.setInput(bot,control);
+    if(control.kick)kickHeld++;
+    turns++;
+    P.tick(g);
+  }
+  assert.ok(g.score[0]>0,'bot should score when unopposed');
+  assert.ok(kickHeld<turns/3,'bot should not hold kick continuously while chasing');
+});
