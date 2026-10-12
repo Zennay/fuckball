@@ -18,13 +18,13 @@ Open `dist/Pulseball-BFF-Big-v4-Play-Solo.html` in a desktop browser. This stand
 
 - BFF Big v4 stadium loaded from `stadiums/BFF Big v4.hbs` (also embedded in `shared/stadium.js`): 1400 × 640 visible field, ±708.3 goal lines, 170-unit goal opening, authored field markings, goalposts and colors.
 - Ball radius **5.8**, ball inverse mass **1.5** and BFF original rebound **0.412**. Original HBS player accelerations are **0.11** and **0.083**. For this version, player acceleration is tuned **+10%** to **0.121** (normal) and **0.0913** (while kicking). The same unchanged damping makes the steady-state speed 10% higher. Kick strength stays **4.545**. Unspecified physical constants are approximated.
-- **Another 20% faster free-ball travel**: 1.44× original speed (previously 1.2×), with low-speed, no-X contacts cushioned so walking into a ball keeps it on the dribbling edge. Kick strength and wall restitution are unchanged.
+- **Ball travel at 1.2× the original**: restores coherent ball pace and preserves cushioned no-X dribbling. The original 0.412 coefficient remains for ordinary high-speed player impact; walls now retain roughly 76% speed on the standard setting, avoiding excessive slowdown.
 - **Continuous kick outline**: while Space / X (or the touch KICK button) is held, the actual black border of the player disc turns solid **white**, including before the ball arrives. Releasing restores the black border immediately; there is **no separate flashing halo** or cooldown pulsing. The local outline reacts on the next render frame instead of waiting for a 60 Hz physics step. An old held X press no longer shoots on later contact. A **baby kick** is only produced by a fresh, extremely shallow grazing press (outer 0.5 map units of reach); press closer for a full shot.
 - **Solo game modes:** free training without AI, 1v1, 2v2, and 4v4 (you always control one blue player). AI teammates and opponents divide responsibility between ball interception, goal cover, central support, and wide passing lanes, rather than every bot chasing the same ball. The bot uses legal movement and shooting inputs with no teleportation or extra abilities.
 - The selected-player marker follows the supplied HaxBall screenshot: an approximately **25-unit radius** translucent white ring with **2.4-unit stroke**, outside a **15-unit radius** player disc with **1.8-unit black/white stroke**. The gap remains clear for the small ball. Player labels remain below the ring.
 - Multiplayer snapshots include held-kick status for remote players, and extrapolation preserves it.
-- Diagonal wall runs enable **rockets**: a well-timed fresh kick while pressing into the wall adds bounded speed along the wall, even if the ball initially has little tangential momentum. Ordinary wall rebounds remain soft.
-- Extrapolation defaults to **135 ms**, adjustable from **0–250 ms** in **Escape → Video/Input**, or via chat `/extrapolation 135`, `/extrap 135`, or `/e 135`. The setting persists per browser. Prediction simulates collisions, corrects overlaps, and eases small mistaken ball forecasts back to the latest true position (a subtle lag-like rollback). It is **visual only** and does not alter the server or remove latency.
+- Diagonal wall runs enable **rockets**: a well-timed fresh kick while pressing into the wall adds bounded speed along the wall, even if the ball initially has little tangential momentum. Wall impacts retain enough energy to keep the ball moving; the visible disc edge contacts the field-line boundary.
+- Extrapolation defaults to **135 ms**, adjustable from **0–250 ms** in **Escape → Video/Input**, or via chat `/extrapolation 135`, `/extrap 135`, or `/e 135`. The setting persists per browser. Prediction simulates collisions, corrects overlaps and uses a shorter horizon when a collision is imminent. Unexpected corrections converge quickly to avoid perceived lag. It is **visual only** and does not alter the server or remove latency.
 - Physics simulation runs at a fixed **60 Hz** for consistent gameplay across devices; rendering uses `requestAnimationFrame` at the fastest rate the browser/display permits, with **no intentional 60 FPS cap**. A cached pitch avoids redrawing static stadium geometry each frame. Browser and display limits still apply; literal unlimited FPS is not possible.
 
 ## Immersive match UI and chat
@@ -39,9 +39,9 @@ Open `dist/Pulseball-BFF-Big-v4-Play-Solo.html` in a desktop browser. This stand
 ## October 2026 gameplay adjustments
 
 - Practice selector: no bots (free play), 1v1, 2v2, or 4v4, including the player on the blue team.
-- Free-ball travel 1.44× original (another 20% versus the 1.2× version); dribble contact is intentionally not accelerated into a shot.
+- Ball pace restored to 1.2× original; low-speed contact cannot become an accidental shot.
 - Early X holds remain visually highlighted but cannot auto-fire on later ball contact. A deliberately near-edge new press can produce a small baby kick.
-- Coordinated AI roles and diagonal wall rockets; extrapolation sometimes visibly corrects wrong forecasts without affecting the server state.
+- Active team AI runs into pass-receiving lanes; corrected wall bounce and impact-limited extrapolation avoid premature-looking rebounds.
 - HaxLab champion artifacts are Python NumPy `.npz` snapshots and not automatically compatible with this standalone JavaScript physics engine. The game uses a deterministic rule bot until a separately evaluated/exported policy is available; no unverified model is silently deployed.
 
 ## v0.7 adjustments
