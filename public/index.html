@@ -202,10 +202,10 @@ let extrapMs=135,renderScale=1;
  $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
  let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
 function makeSolo(){
-  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;
+  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;cameraReady=false;
   game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});P.addPlayer(game,P.player('bot','Rival',1));P.addPlayer(game,P.player('solo',cleanName(),2));
   $('modeTag').textContent='SOLO · PRACTICE';$('status').textContent='BFF Big v4 · 20% faster ball / smart AI';$('roomCode').textContent='PRACTICE';
-  $('chatText').disabled=false;$('sendChat').disabled=false;$('chatHeading').textContent='ROOM CHAT · '+roomCode;$('chatHeading').textContent='MATCH CHAT · RIVAL AI';$('restart').disabled=false;updateMatchControls();
+  $('chatText').disabled=false;$('sendChat').disabled=false;$('chatHeading').textContent='MATCH CHAT · RIVAL AI';$('restart').disabled=false;updateMatchControls();
   drawRoster([{id:'bot',name:'Rival · AI',team:1},{id:'solo',name:cleanName(),team:2}]);
   setNotice('Practice mode ready. First to three goals wins.');
 }
@@ -236,7 +236,7 @@ function connect(action){
     if(msg.type==='error'){setNotice(msg.message,true);return;}
     if(msg.type==='joined'){
       mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;
-      $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;
+      $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;$('chatHeading').textContent='ROOM CHAT · '+roomCode;
       $('chatText').disabled=false;$('sendChat').disabled=false;
       $('status').textContent='Connected · play with your friends';
       setNotice('Room '+roomCode+' is live. Join Red or Blue, then the host can start.');
@@ -398,18 +398,34 @@ function updateSolo(){
   P.tick(game);
 }
 function fitCanvas(){
-  const rect=(canvas.parentElement||canvas).getBoundingClientRect();
-  const ratio=P.W/P.H;
-  const usableW=Math.max(1,rect.width),usableH=Math.max(1,rect.height);
-  const cssW=Math.min(usableW,usableH*ratio),cssH=cssW/ratio;
-  const width=cssW.toFixed(2)+'px',height=cssH.toFixed(2)+'px';
-  if(canvas.style.width!==width)canvas.style.width=width;
-  if(canvas.style.height!==height)canvas.style.height=height;
-  const dpr=Math.min(Math.max(Number(devicePixelRatio)||1,1),renderScale);
-  const w=Math.max(1,Math.round(cssW*dpr)),h=Math.max(1,Math.round(cssH*dpr));
-  if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h;}
-}
-function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+   const rect=(canvas.parentElement||canvas).getBoundingClientRect();
+   const cssW=Math.max(1,rect.width),cssH=Math.max(1,rect.height);
+   const width=cssW.toFixed(2)+'px',height=cssH.toFixed(2)+'px';
+   if(canvas.style.width!==width)canvas.style.width=width;
+   if(canvas.style.height!==height)canvas.style.height=height;
+   const dpr=Math.min(Math.max(Number(devicePixelRatio)||1,1),renderScale);
+   const w=Math.max(1,Math.round(cssW*dpr)),h=Math.max(1,Math.round(cssH*dpr));
+   if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h;}
+ }
+ // Fill the display without distorting BFF Big v4 geometry. Follow the ball
+ // and local player with an aspect-preserving camera, as in HaxBall.
+ let cameraX=0,cameraY=0,cameraReady=false;
+ function cameraTransform(state,dt){
+   const scale=Math.max(canvas.width/P.W,canvas.height/P.H);
+   const viewW=canvas.width/scale,viewH=canvas.height/scale;
+   const me=state?.players.find(p=>p.id===myId);
+   const ball=state?.ball;
+   const targetX=me&&ball?me.x*.62+ball.x*.38:ball?.x??P.CX;
+   const targetY=me&&ball?me.y*.62+ball.y*.38:ball?.y??P.CY;
+   const x=P.clamp(targetX-viewW/2,0,Math.max(0,P.W-viewW));
+   const y=P.clamp(targetY-viewH/2,0,Math.max(0,P.H-viewH));
+   const blend=cameraReady?P.clamp(dt/95,0,1):1;
+   cameraX+=(x-cameraX)*blend;cameraY+=(y-cameraY)*blend;
+   cameraReady=true;
+   ctx.setTransform(scale,0,0,scale,-cameraX*scale,-cameraY*scale);
+   ctx.clearRect(cameraX,cameraY,viewW,viewH);
+ }
+ function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 function stadiumColor(color, fallback='#666'){
   const hex=String(color||'').replace(/[^a-fA-F0-9]/g,'').padStart(6,'0').slice(-6);
   return color?'#'+hex:fallback;
@@ -498,11 +514,12 @@ function render(now){
   if(mode==='solo'){
     accumulator=Prediction.advanceFixed(accumulator,dt,updateSolo).accumulator;
   } else accumulator=0;
-  fitCanvas();ctx.setTransform(canvas.width/P.W,0,0,canvas.height/P.H,0,0);ctx.clearRect(0,0,P.W,P.H);
-  if(stadiumCache)ctx.drawImage(stadiumCache,0,0,P.W,P.H);
-  else field(ctx);
-  const state=displayedState(now);
-  if(state){for(const p of state.players)drawPlayer(p);drawBall(state.ball);
+  fitCanvas();
+   const state=displayedState(now);
+   cameraTransform(state,dt);
+   if(stadiumCache)ctx.drawImage(stadiumCache,0,0,P.W,P.H);
+   else field(ctx);
+   if(state){for(const p of state.players)drawPlayer(p);drawBall(state.ball);
     $('scoreRed').textContent=state.score[0];$('scoreBlue').textContent=state.score[1];
     const secs=Math.max(0,Math.floor((state.elapsedTicks||0)/60));
     $('matchTimer').textContent=String(Math.floor(secs/60)).padStart(2,'0')+':'+String(secs%60).padStart(2,'0');
