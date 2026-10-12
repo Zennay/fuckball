@@ -93,6 +93,32 @@ test('unlocked 60/120/144/240/360 Hz drawing advances identical 60 Hz gameplay t
   assert.deepEqual(samples,[600,1200,1440,2400,3600]);
 });
 
+test('network prediction preserves held movement across 30 Hz snapshots',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const p=P.player('remote','Remote',1);P.addPlayer(g,p);
+  p.x=P.CX-140;p.y=P.CY-150; // no walls, posts, ball contact
+  P.setInput(p,{x:1,y:0,kick:false});
+  for(let i=0;i<25;i++)P.tick(g); // establish a moving player
+  const base=P.snapshot(g),before=JSON.stringify(base);
+  assert.equal(base.players[0].inputX,1);
+  const forecast=predictView(base,1000/30);
+  P.tick(g);P.tick(g);
+  const actual=P.snapshot(g);
+  assert.ok(Math.abs(forecast.players[0].x-actual.players[0].x)<1e-7,
+    'the projected remote player must keep accelerating with the held key');
+  assert.ok(Math.abs(forecast.players[0].vx-actual.players[0].vx)<1e-7);
+  assert.equal(JSON.stringify(base),before,'prediction must never mutate server data');
+});
+test('remote held-kick flags do not trigger guessed shots during prediction',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const p=P.player('remote','Remote',1);P.addPlayer(g,p);
+  p.x=P.CX-P.PLAYER_R-P.BALL_R-P.KICK_REACH+1;
+  P.setInput(p,{x:0,y:0,kick:true});
+  const s=P.snapshot(g);
+  const forecast=predictView(s,1000/60);
+  assert.equal(forecast.players[0].kicking,true);
+  assert.ok(Math.abs(forecast.ball.vx)<1e-12,'no predicted phantom kick');
+});
 test('visual extrapolation preserves remote held-kick indicator without inventing phantom input',()=>{
   const g=P.createGame();g.freeze=0;g.kickoffActive=false;
   const p=P.player('remote','Remote',1);P.addPlayer(g,p);
