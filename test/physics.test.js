@@ -260,11 +260,11 @@ test('approaching a ball without contact creates no magnetic pull',()=>{
   assert.equal(g.ball.x,P.CX,'ball should not be attached to player until collision');
 });
 
-test('ball speed boost is 20% over original and walls retain more rebound energy',()=>{
+test('ball speed remains 1.2x while walls restore original BFF restitution',()=>{
   assert.equal(P.BALL_SPEED_MULTIPLIER,1.2);
   const g=fresh();g.kickoffActive=false;
   assert.ok(Math.abs(P.wallRebound(g)-P.WALL_REBOUND_AT_DEFAULT)<1e-12);
-  assert.ok(P.wallRebound(g)>P.DEFAULT_REBOUND,'wall impacts should not bleed most of the velocity');
+  assert.equal(P.wallRebound(g),P.DEFAULT_REBOUND,'native BFF rebound must never be remapped from 0.412 to 0.76');
   assert.equal(P.wallRebound(fresh({rebound:1})),1,'hard wall setting must remain capped');
 });
 test('diagonal wall contact does not fabricate a special rocket kick',()=>{
@@ -287,7 +287,7 @@ test('visible wall collision occurs when the disc edge reaches the BFF field lin
     P.tick(g);
     assert.ok(Math.abs(g.ball[axis]-(boundary-dir*P.BALL_R))<1e-8,side+' ball rim should align exactly with the wall');
     assert.ok(g.ball[vel]*dir<0,side+' must bounce back');
-    assert.ok(Math.abs(g.ball[vel])>3.6,side+' should retain more than ~75% of pre-impact speed');
+    assert.ok(Math.abs(Math.abs(g.ball[vel])-5*P.BALL.damping*P.DEFAULT_REBOUND)<1e-8,side+' must use the native 0.412 rebound, not synthetic 76%');
   }
 });
 
