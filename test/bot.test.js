@@ -96,3 +96,30 @@ test('4v4 AI assigns one interceptor while others cover or offer passing lanes',
   const unique=new Set(moves.map(({cmd})=>Math.round(cmd.x*10)+','+Math.round(cmd.y*10)));
   assert.ok(unique.size>=2,'team must not blindly chase the exact same position');
 });
+
+test('AI aims a pass into a teammate running ahead instead of always shooting at goal',()=>{
+  const {g,bot}=setup();
+  bot.x=P.CX-65;bot.y=P.CY;
+  g.ball.x=P.CX;g.ball.y=P.CY;
+  const alone=AI.decide(g,bot);
+  const receiver=P.player('receiver','Receiver',1);P.addPlayer(g,receiver);
+  receiver.x=P.CX+180;receiver.y=P.CY+120;receiver.vy=.4;
+  const passing=AI.decide(g,bot);
+  assert.ok(passing.y<alone.y-.05,
+    'chaser should steer behind the ball toward the forward team-mate passing lane');
+  assert.equal(passing.kick,false,'do not blindly kick at a distant ball');
+});
+
+test('non-chasing AI supports dynamically and keeps moving while the ball is stationary',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const striker=P.player('striker','Striker',1),wing=P.player('wing','Wing',1),cover=P.player('cover','Cover',1);
+  P.addPlayer(g,striker);P.addPlayer(g,wing);P.addPlayer(g,cover);
+  Object.assign(striker,{x:P.CX-20,y:P.CY});
+  Object.assign(wing,{x:P.CX-210,y:P.CY+100});
+  Object.assign(cover,{x:P.GOAL_LEFT+100,y:P.CY});
+  const a=AI.decide(g,wing);
+  g.tick=155;
+  const b=AI.decide(g,wing);
+  assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>.005,
+    'support movement should adjust passing lanes over time instead of staying frozen');
+});
