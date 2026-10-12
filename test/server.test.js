@@ -53,6 +53,13 @@ test('two browser WebSocket clients can create, join, play, pause and stop a mat
     }
     assert.ok(started,'game should contain both teams and active settings');
     a.send({type:'input',x:1,y:0,kick:false});await sleep(200);
+    let remoteIntentSeen=false;
+    for(let i=0;i<25;i++){
+      const packet=await a.next('state');
+      const alice=packet.game.players.find(p=>p.id===joined.id);
+      if(alice?.inputX===1&&alice?.inputY===0){remoteIntentSeen=true;break;}
+    }
+    assert.equal(remoteIntentSeen,true,'server snapshots must transmit held movement inputs');
     a.send({type:'pause'});await sleep(100);
     a.send({type:'stop'});await sleep(100);
     const health=await (await fetch(`http://127.0.0.1:${PORT}/health`)).json();
