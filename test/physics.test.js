@@ -183,7 +183,7 @@ test('every valid fresh press shoots at full strength, including grazing contact
   assert.equal(p.lastKick,'full');assert.equal(p.flashType,'full');
   assert.ok(g.ball.vx>P.PLAYER.kickStrength*0.99);
   P.setInput(p,{kick:false});P.tick(g);
-  p.kickCooldown=0;p.x=g.ball.x-P.PLAYER_R-P.BALL_R-2;
+  p.kickCooldown=0;g.ball.vx=0;p.x=g.ball.x-P.PLAYER_R-P.BALL_R-2;
   P.setInput(p,{kick:true});P.tick(g);
   assert.equal(p.lastKick,'full');
 });
