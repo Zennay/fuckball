@@ -113,11 +113,29 @@
     const amount=Number(ms);
     if(!Number.isFinite(amount)||amount<=0||state.phase!=='playing'||state.freeze>0)return state;
     const frames=clamp(amount,0,250)/TICK_MS;
+    const ball=state.ball;
+    // A 135ms lookahead can visually bounce the ball several physics ticks
+    // BEFORE it actually reaches a wall/player, making rebounds feel laggy.
+    // Preserve the requested lookahead for players and open-field ball travel,
+    // but only look up to two ticks ahead for an imminent impact.
+    const travel=Math.hypot(ball.vx,ball.vy)*P.BALL_SPEED_MULTIPLIER*frames;
+    const approachingWall=Math.min(
+      ball.vy<0?ball.y-(P.TOP+P.BALL_R):Infinity,
+      ball.vy>0?(P.BOTTOM-P.BALL_R)-ball.y:Infinity,
+      ball.vx<0?ball.x-(P.LEFT+P.BALL_R):Infinity,
+      ball.vx>0?(P.RIGHT-P.BALL_R)-ball.x:Infinity
+    )<travel+P.BALL_R+2;
+    const approachingPlayer=state.players.some(p=>
+      Math.hypot(p.x-ball.x,p.y-ball.y)<
+      (Math.hypot(ball.vx-p.vx,ball.vy-p.vy)*P.BALL_SPEED_MULTIPLIER*frames)+P.PLAYER_R+P.BALL_R+3);
+    const cautious=frames>2&&(approachingWall||approachingPlayer);
+    let ballAtSafeHorizon=null;
     const game=simulationFromSnapshot(state,options);
     const full=Math.floor(frames+1e-9);
     for(let i=0;i<full;i++){
       const beforeEvent=game.eventId;
       P.tick(game);
+      if(cautious&&i===1)ballAtSafeHorizon={...game.ball};
       // Goal scoring must remain authoritative; stop visual forecasting at a goal.
       if(game.eventId!==beforeEvent)return separateContacts(state);
     }
@@ -134,7 +152,7 @@
     // instead reflect the authoritative held state (including remote players).
     const kicks=new Map(state.players.map(p=>[p.id,!!p.kicking]));
     const players=predicted.players.map(p=>({...p,kicking:kicks.get(p.id)||false}));
-    return separateContacts({...state,players,ball:predicted.ball});
+    return separateContacts({...state,players,ball:ballAtSafeHorizon||predicted.ball});
   }
   // Display-only rollback easing: high extrapolation can guess a trajectory
   // that the next authoritative snapshot disproves. The predicted ball then
@@ -145,7 +163,10 @@
        target.eventId!==previous.eventId||target.phase!==previous.phase)return target;
     const distance=Math.hypot(target.ball.x-previous.ball.x,target.ball.y-previous.ball.y);
     if(!Number.isFinite(distance)||distance>70)return target;
-    const smoothing=clamp((Number(dt)||16)/(36+0.25*clamp(extrapMs,0,250)),0.14,0.9);
+    // Fast convergence: old rollback easing intentionally left the rendered
+    // ball behind and made wall contacts look delayed. Do not interpolate
+    // across an impact for dozens of frames.
+    const smoothing=clamp((Number(dt)||16)/10,0.72,1);
     return separateContacts({...target,ball:{...target.ball,
       x:mix(previous.ball.x,target.ball.x,smoothing),
       y:mix(previous.ball.y,target.ball.y,smoothing)}});
