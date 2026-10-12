@@ -32,12 +32,11 @@
   const BALL_SPEED_MULTIPLIER=1.2; // original requested +20% over 1.0× travel
   // HBS unconfigured wall segments use the ball's own bCoef.
   const DEFAULT_REBOUND=BALL.bCoef;
-  // A wall bounce should carry the existing shot instead of losing ~59% of
-  // its speed every time. This is separate from slow player-ball contact.
-  // Respect room rebound settings proportionally; the original 0.412 choice
-  // now means about 76% wall-speed retention, while 1 still means 100%.
-  const WALL_REBOUND_AT_DEFAULT=0.76;
-  const wallRebound=g=>clamp(g.rebound*WALL_REBOUND_AT_DEFAULT/DEFAULT_REBOUND,0.15,1);
+  // Preserve the native BFF Big v4 wall bCoef: the old 0.412 setting
+  // must mean 41.2% restitution, not an undocumented 76% remap.
+  // The room's rebound selector remains a direct physical coefficient.
+  const WALL_REBOUND_AT_DEFAULT=DEFAULT_REBOUND;
+  const wallRebound=g=>g.rebound;
   // A shot is one full-strength impulse on a fresh Space/X press in range.
   const KICK_REACH=4, FULL_KICK_HOLD_FRAMES=1, KICK_COOLDOWN_FRAMES=9;
   const POSTS=STADIUM.discs.slice(1).map(d=>[mapX(d.pos[0]),mapY(d.pos[1])]);
