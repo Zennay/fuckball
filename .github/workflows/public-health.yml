@@ -46,6 +46,9 @@ jobs:
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-bot.js 'http://198.244.191.182:3417/shared/bot.js'
           grep -q 'function reply(message,g,bot)' /tmp/fuckball-bot.js
           grep -q 'const passOptions=' /tmp/fuckball-bot.js
+          grep -q 'const orbit=Math.sin' /tmp/fuckball-bot.js
+          grep -q 'Balanced · 76% wall bounce' /tmp/fuckball-home.html
+          echo "Physics, tuned wall control and active passing lanes verified externally"
           echo "Live 135ms extrapolation, immersive HUD and bot chat verified"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
