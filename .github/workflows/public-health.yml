@@ -22,7 +22,8 @@ jobs:
           set -euo pipefail
           curl --fail --show-error --silent --max-time 12 --retry 3 --retry-delay 3 'http://198.244.191.182:3417/health' | tee /tmp/fuckball-health.json
           grep -q '"ok":true' /tmp/fuckball-health.json
-          curl --fail --show-error --silent --max-time 12 'http://198.244.191.182:3417/' | grep -q '<canvas'
+          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-home.html 'http://198.244.191.182:3417/'
+          grep -q '<canvas' /tmp/fuckball-home.html
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
         with:
