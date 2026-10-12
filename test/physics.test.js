@@ -85,28 +85,26 @@ test('holding X early cannot auto-shoot when the ball arrives',()=>{
   P.setInput(p,{kick:true});P.tick(g);
   assert.equal(p.lastKick,'full','re-press within shooting range still gives a full shot');
 });
-test('re-pressing kick resets baby kick charge',()=>{
+test('re-pressing kick after a long hold produces one full-power shot',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-100;P.setInput(p,{kick:true});for(let i=0;i<12;i++)P.tick(g);
   P.setInput(p,{kick:false});P.tick(g);p.x=P.CX-24;P.setInput(p,{kick:true});P.tick(g);
   assert.equal(p.lastKick,'full');assert.ok(g.ball.vx>4.5);
 });
-test('wall follow-through produces a boost with the smaller BFF ball',()=>{
-  function run(near){
-    const g=fresh(),p=add(g);g.kickoffActive=false;
-    const y=near?P.TOP+P.BALL_R+2:P.CY+80;
-    g.ball.x=P.CX+40;g.ball.y=y;g.ball.vx=1;g.ball.vy=-0.4;
-    p.x=g.ball.x-10;p.y=y+14;p.vy=-1.5;
-    P.setInput(p,{y:-1,kick:true});P.tick(g);return {g,p};
-  }
-  const wall=run(true),open=run(false);
-  assert.equal(wall.p.lastKick,'wall-boost');assert.equal(open.p.lastKick,'full');
-  assert.ok(wall.g.ball.vx>open.g.ball.vx+0.5);
-});
-test('wall boost requires momentum toward the wall, not just wall proximity',()=>{
+test('a wall-side kick has no artificial extra sideways impulse',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
-  g.ball.x=P.CX+40;g.ball.y=P.TOP+P.BALL_R+2;g.ball.vx=1;
-  p.x=g.ball.x-10;p.y=g.ball.y+14;P.setInput(p,{kick:true});P.tick(g);
+  g.ball.x=P.CX+40;g.ball.y=P.TOP+P.BALL_R+2;g.ball.vx=0;g.ball.vy=0;
+  p.x=g.ball.x-24;p.y=g.ball.y;
+  P.setInput(p,{kick:true});P.tick(g);
+  assert.equal(p.lastKick,'full');
+  assert.ok(g.ball.vx>4.5,'normal fresh press still shoots');
+  assert.ok(Math.abs(g.ball.vy)<.001,'wall proximity alone must not generate a tangent rocket');
+});
+test('ordinary shots remain full strength near a wall',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  g.ball.x=P.CX+40;g.ball.y=P.TOP+P.BALL_R+2;
+  p.x=g.ball.x-10;p.y=g.ball.y+14;
+  P.setInput(p,{kick:true});P.tick(g);
   assert.equal(p.lastKick,'full');
 });
 test('kickoff barrier enforces BFF 80 radius until the kicking team touches',()=>{
@@ -178,16 +176,16 @@ test('holding shoot maintains a continuous kick indicator without ball contact a
   assert.equal(p.highlight,1,'outline activates on a new press');
 });
 
-test('baby kicks require a new press and a 0.5-unit grazing contact at outer reach',()=>{
+test('every valid fresh press shoots at full strength, including grazing contacts',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-(P.PLAYER_R+P.BALL_R+P.KICK_REACH-0.2);
   P.setInput(p,{kick:true});P.tick(g);
-  assert.equal(p.lastKick,'baby');assert.equal(p.flashType,'baby');
-  assert.ok(g.ball.vx>0&&g.ball.vx<P.PLAYER.kickStrength*0.3);
+  assert.equal(p.lastKick,'full');assert.equal(p.flashType,'full');
+  assert.ok(g.ball.vx>P.PLAYER.kickStrength*0.99);
   P.setInput(p,{kick:false});P.tick(g);
   p.kickCooldown=0;p.x=g.ball.x-P.PLAYER_R-P.BALL_R-2;
   P.setInput(p,{kick:true});P.tick(g);
-  assert.equal(p.lastKick,'full');assert.equal(p.flashType,'full');
+  assert.equal(p.lastKick,'full');
 });
 
 // User's screenshot is a presentation change only. The pace upgrade must work
@@ -209,27 +207,25 @@ test('player movement is precisely 10% faster in regular and held-kick modes',()
   assert.equal(P.PLAYER.kickStrength,4.545,'kicks must not gain an accidental 10% boost');
 });
 
-test('walking into a resting ball cushions contact instead of knocking it forward',()=>{
+test('walking ball contact transfers physical momentum but never triggers a shot',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-P.PLAYER_R-P.BALL_R-1;p.y=P.CY;p.vx=2;
-  P.setInput(p,{x:0,y:0,kick:false});
-  P.tick(g);
-  assert.equal(p.lastKick,null,'walking without Space must not generate a shot');
-  assert.ok(g.ball.vx>0,'the ball must move with the player');
-  assert.ok(g.ball.vx*P.BALL_SPEED_MULTIPLIER<=p.vx+1e-6,
-    'ball normal travel may not outrun the walking player on first contact');
+  P.setInput(p,{x:0,y:0,kick:false});P.tick(g);
+  assert.equal(p.lastKick,null);
+  assert.ok(g.ball.vx>0,'collision transfers momentum');
+  assert.ok(g.ball.vx<P.PLAYER.kickStrength,'incidental touch is not a real kick');
+  assert.ok(p.vx<2*P.PLAYER.damping,'momentum is conserved between dynamic bodies');
 });
 
-test('slow dribbling keeps ball close enough to roll off naturally',()=>{
+test('an un-kicked ball rolls free and is never magnetically attached to a player',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-28;p.y=P.CY;
   P.setInput(p,{x:1,kick:false});
   for(let i=0;i<90;i++)P.tick(g);
   const gap=Math.hypot(g.ball.x-p.x,g.ball.y-p.y);
-  assert.ok(g.ball.x>P.CX+35,'dribbling actually progresses downfield');
-  assert.ok(gap<P.PLAYER_R+P.BALL_R+9,
-    `ball should stay on the player's forward edge, not launch away: gap=${gap}`);
-  assert.equal(p.lastKick,null,'dribbling never synthesizes a real kick');
+  assert.ok(g.ball.x>P.CX+35,'ball advances on physical contacts');
+  assert.ok(gap>=P.PLAYER_R+P.BALL_R-0.02,'no permanent overlapping or sticking');
+  assert.equal(p.lastKick,null,'walking never synthesizes a kick');
 });
 
 test('glancing dribbles preserve sideways rolling velocity',()=>{
@@ -271,13 +267,13 @@ test('ball speed boost is 20% over original and walls retain more rebound energy
   assert.ok(P.wallRebound(g)>P.DEFAULT_REBOUND,'wall impacts should not bleed most of the velocity');
   assert.equal(P.wallRebound(fresh({rebound:1})),1,'hard wall setting must remain capped');
 });
-test('ordinary diagonal wall run can produce a rocket with an initially straight ball',()=>{
+test('diagonal wall contact does not fabricate a special rocket kick',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   g.ball.x=P.CX+40;g.ball.y=P.TOP+P.BALL_R+2;g.ball.vx=0;g.ball.vy=-0.4;
   p.x=g.ball.x-10;p.y=g.ball.y+14;p.vx=1.5;p.vy=-1.5;
   P.setInput(p,{x:1,y:-1,kick:true});P.tick(g);
-  assert.equal(p.lastKick,'wall-boost','diagonal moving wall presses produce rockets');
-  assert.ok(g.ball.vx>1.5,'wall rocket redirects the ball along the wall');
+  assert.equal(p.lastKick,'full');
+  assert.ok(Number.isFinite(g.ball.vx)&&Number.isFinite(g.ball.vy));
 });
 
 test('visible wall collision occurs when the disc edge reaches the BFF field line',()=>{
@@ -295,14 +291,34 @@ test('visible wall collision occurs when the disc edge reaches the BFF field lin
   }
 });
 
-test('walking contact remains soft yet fast shots rebound with untouched configured coefficient',()=>{
+test('physical walking contact and hard incoming shot share the natural solver',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-22;p.y=P.CY;p.vx=1.5;
   P.setInput(p,{kick:false});P.tick(g);
-  assert.ok(g.ball.vx>0 && g.ball.vx*P.BALL_SPEED_MULTIPLIER<=p.vx+1e-5);
+  assert.ok(g.ball.vx>0 && g.ball.vx<4,'walking transfers bounded physical momentum');
   const incoming=fresh(),def=add(incoming);incoming.kickoffActive=false;
   def.x=P.CX;def.y=P.CY;
   incoming.ball.x=P.CX+P.PLAYER_R+P.BALL_R+2;incoming.ball.vx=-9;
   P.tick(incoming);
-  assert.ok(incoming.ball.vx>0,'hard incoming shot must bounce rather than get damped as dribble');
+  assert.ok(incoming.ball.vx>0,'incoming shot must bounce and not stick');
+});
+
+// A ball already separating from a player may never be attracted back.
+test('separating ball never sticks or slows to track a player',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-22;p.y=P.CY;p.vx=1;
+  g.ball.vx=4;
+  P.setInput(p,{x:1,kick:false});
+  const before=g.ball.vx;P.tick(g);
+  assert.ok(g.ball.vx<=before,'free-flight damping only');
+  assert.ok(g.ball.vx>3.9,'player does not magnetically brake ball');
+  assert.equal(p.lastKick,null);
+});
+test('holding kick for two ticks then approaching ball cannot create a half-shot',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-100;P.setInput(p,{kick:true});P.tick(g);P.tick(g);
+  p.x=P.CX-24;P.tick(g);
+  assert.equal(p.lastKick,null);
+  assert.equal(g.ball.vx,0);
+  assert.equal(p.kickCooldown,0);
 });
