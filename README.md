@@ -2,9 +2,13 @@
 
 An independent, playable HaxBall-inspired browser football game, based on the user's **BFF Big v4.hbs** stadium. This is **not** the official HaxBall implementation, and its custom physics are an approximation of the closed-source HaxBall engine. No official HaxBall graphics, code, or branding are included.
 
-## Always-on browser version
+## Play online — no downloads
 
-After deployment, visit the public URL from the GitHub Actions deployment run; no downloads are needed. The Node.js server serves solo mode and multiplayer WebSocket rooms.
+**[🎮 Play Fuckball on the VPS](http://198.244.191.182:3417/)**
+
+The server runs continuously under systemd on vps-bb300bba. Play solo or create multiplayer rooms directly in your browser. The deployment workflow in [Zennay/zCloud](https://github.com/Zennay/zCloud/blob/main/.github/workflows/deploy-fuckball.yml) checks for game updates every 10 minutes and does not restart a healthy server when the deployed commit is unchanged. Public HTTP + WebSocket checks run twice per hour via [Public Fuckball health](https://github.com/Zennay/fuckball/actions/workflows/public-health.yml).
+
+The current direct-IP URL uses HTTP and WebSocket (not TLS). Add a domain plus HTTPS/WSS reverse proxy when one is available.
 
 ## Play immediately
 
