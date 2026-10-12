@@ -57,7 +57,7 @@ function runPage({savedExtrapolation=null,extrapVersion=null}={}){
   const window={addEventListener:(name,fn)=>(winListeners[name]??=[]).push(fn)};
   const ctx=vm.createContext({document,window,performance:{now:()=>0},location:{search:'',protocol:'file:'},
     URLSearchParams,devicePixelRatio:2,requestAnimationFrame:fn=>callbacks.push(fn),
-    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:key==='pulseball.extrapolation.v2'?extrapVersion:null,setItem(){}},
+    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:key==='pulseball.extrapolation.v3'?extrapVersion:null,setItem(){}},
     console,WebSocket:undefined});
   const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
   for(const source of scripts)vm.runInContext(source,ctx,{timeout:1000});
@@ -86,7 +86,7 @@ test('keyboard input and 0ms extrapolation continue to render at high refresh ra
   app.events.keyup[0]({code:'KeyD'});
   assert.equal(app.counts().framesDrawn,288);
   assert.match(app.fields.fpsMeter.textContent,/\b144 FPS\b/);
-  assert.equal(app.fields.extrapValue.textContent,'135 ms');
+  assert.equal(app.fields.extrapValue.textContent,'0 ms');
 });
 
 // Verify the exact paint operations, not just that 'something bright' was drawn.
@@ -178,18 +178,18 @@ test('render resolution defaults to fast 1x and can be raised without changing s
   assert.match(app.fields.fpsMeter.textContent,/240 FPS/);
 });
 
-test('135 ms is the default and previous client extrapolation preference is respected',()=>{
+test('0 ms is the responsive default and explicit extrapolation preference is respected',()=>{
   const fresh=runPage();
-  assert.equal(fresh.fields.extrapValue.textContent,'135 ms');
-  assert.equal(fresh.fields.extrapolation.value,'135');
-  assert.equal(fresh.fields.extrapNumber.value,'135');
+  assert.equal(fresh.fields.extrapValue.textContent,'0 ms');
+  assert.equal(fresh.fields.extrapolation.value,'0');
+  assert.equal(fresh.fields.extrapNumber.value,'0');
   const saved=runPage({savedExtrapolation:'45'});
   assert.equal(saved.fields.extrapValue.textContent,'45 ms');
   saved.fields.extrapNumber.value='185';saved.fields.extrapNumber.fire('input');
   assert.equal(saved.fields.extrapValue.textContent,'185 ms');
   assert.equal(saved.fields.extrapolation.value,'185');
-  assert.equal(runPage({savedExtrapolation:'0'}).fields.extrapValue.textContent,'135 ms','old default 0 is migrated');
-  assert.equal(runPage({savedExtrapolation:'0',extrapVersion:'1'}).fields.extrapValue.textContent,'0 ms','explicit new 0 setting is preserved');
+  assert.equal(runPage({savedExtrapolation:'135'}).fields.extrapValue.textContent,'0 ms','old 135 ms default is migrated');
+  assert.equal(runPage({savedExtrapolation:'135',extrapVersion:'1'}).fields.extrapValue.textContent,'135 ms','explicit post-migration 135 ms remains available');
 });
 test('Escape opens and closes options and movement input does not leak through the overlay',()=>{
   const app=runPage();

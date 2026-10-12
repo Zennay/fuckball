@@ -29,7 +29,7 @@ async function waitForServer(){
     const view=await page.locator('#pitch').boundingBox();
     assert.ok(Math.abs(view.width-1440)<=2,'arena should use entire viewport width');
     assert.ok(Math.abs(view.height-900)<=2,'arena should use entire viewport height');
-    assert.equal(await page.locator('#extrapValue').textContent(),'135 ms');
+    assert.equal(await page.locator('#extrapValue').textContent(),'0 ms');
     await page.locator('#optionsToggle').click();
     assert.equal(await page.locator('#optionsScreen').getAttribute('aria-hidden'),'false');
     await page.locator('#extrapNumber').fill('175');

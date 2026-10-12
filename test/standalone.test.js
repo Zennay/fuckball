@@ -12,5 +12,5 @@ test('standalone builder embeds current authoritative physics and prediction',()
   }
   assert.doesNotMatch(page,/<script src="\/shared\//);
   assert.match(page,/press Space \/ X near the ball to shoot/);
-  assert.match(page,/fast shots \/ controlled dribbling/);
+  assert.match(page,/natural ball collisions \/ full kicks/);
 });

@@ -166,9 +166,9 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#091017}
  <div class="options-dialog">
   <div class="options-title"><div><h2 id="optionsHeading">MATCH OPTIONS</h2><p>Game settings · press Escape to return</p></div><button id="closeOptions" type="button">ESC ✕</button></div>
   <section class="options-section"><h3>VIDEO / INPUT</h3>
-   <div class="extraprow"><div><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">135 ms</output></label><input type="range" id="extrapolation" min="0" max="250" step="5" value="135" aria-describedby="extrapHelp"></div>
-   <div><label class="label" for="extrapNumber">Milliseconds</label><input id="extrapNumber" type="number" min="0" max="250" step="5" value="135"></div></div>
-   <small id="extrapHelp">Visual prediction only · 0–250 ms · saved on this device. Use /extrapolation 135 in chat.</small>
+   <div class="extraprow"><div><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">0 ms</output></label><input type="range" id="extrapolation" min="0" max="250" step="5" value="0" aria-describedby="extrapHelp"></div>
+   <div><label class="label" for="extrapNumber">Milliseconds</label><input id="extrapNumber" type="number" min="0" max="250" step="5" value="0"></div></div>
+   <small id="extrapHelp">Default 0 ms minimizes visual lead · optional 0–250 ms prediction · saved on this device.</small>
    <label class="label" for="renderQuality" style="margin-top:16px">Render resolution</label><select id="renderQuality" aria-label="Render resolution"><option value="1" selected>Fast · high FPS</option><option value="1.5">Balanced · 1.5×</option><option value="2">Sharp · 2×</option></select>
    <small>Uncapped rendering follows your display refresh rate; simulation remains at 60 Hz.</small>
   </section>
@@ -176,26 +176,26 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#091017}
   <div class="options-actions"><button class="btn primary" id="resumeGame" type="button">RESUME MATCH</button><button class="btn ghost" id="optionsRoom" type="button">ROOM / TEAMS</button></div>
  </div>
 </div>
-<p class="bottomtip"><strong>Kick timing:</strong> press Space / X near the ball to shoot. Holding it far away lights the player's outline but will not auto-shoot on later contact. Very narrow grazing contacts trigger a rare baby kick; release and press again for full power. <strong>Wall boost:</strong> move into a wall as you kick a ball against it to add speed along the wall. Independent remake, not affiliated with HaxBall.</p></div>
+<p class="bottomtip"><strong>Kick timing:</strong> press Space / X near the ball to shoot. Holding it far away lights the player's outline but will not auto-shoot on later contact. Each fresh press in range produces one full kick; simply touching the ball never fires a shot. Wall deflections use physical contact, not scripted speed boosts. Independent remake, not affiliated with HaxBall.</p></div>
 <script src="/shared/stadium.js"></script><script src="/shared/physics.js"></script><script src="/shared/prediction.js"></script><script src="/shared/bot.js"></script><script>
 (()=>{'use strict';
 const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=globalThis.PulseBot;if(!P||!Prediction||!Bot){document.getElementById('status').textContent='Physics engine missing. Open the project through server or keep the shared folder beside public.';return;}
 const $=id=>document.getElementById(id);
 const canvas=$('pitch'),ctx=canvas.getContext('2d');
 const held=new Set(),touchHeld=new Set();
-let extrapMs=135,renderScale=1;
+let extrapMs=0,renderScale=1;
  try{
    const saved=localStorage.getItem('pulseball.extrapolation');
-   const migrated=localStorage.getItem('pulseball.extrapolation.v2');
-   if(saved!==null && saved!==undefined && saved!==''){
+   const migrated=localStorage.getItem('pulseball.extrapolation.v3');
+   if(saved!==null && saved!==''){
      const parsed=Number(saved);
-     // The previous client stored 0 ms as its default. Migrate that old
-     // default once to the newly requested 135 ms without discarding
-     // explicitly chosen nonzero settings or a new explicit 0 ms setting.
-     if(Number.isFinite(parsed)&&!(parsed===0&&migrated!=='1'))
-       extrapMs=P.clamp(Math.round(parsed),0,250);
+     if(Number.isFinite(parsed))extrapMs=P.clamp(Math.round(parsed),0,250);
+     // Earlier builds automatically stored 135 ms, a large speculative visual
+     // lead that players perceive as delayed contact. Migrate that default
+     // once; all other explicit preferences remain untouched.
+     if(migrated!=='1'&&parsed===135)extrapMs=0;
    }
-   localStorage.setItem('pulseball.extrapolation.v2','1');
+   localStorage.setItem('pulseball.extrapolation.v3','1');
  }catch{}
  function setExtrapolation(value){
    const ms=Number(value);
@@ -227,7 +227,7 @@ function makeSolo(){
   if(count===0){game.freeze=0;game.announcement='';game.kickoffActive=false;game.kickoffTeam=2;}
   roster=game.players.map(p=>({id:p.id,name:p.name,team:p.team}));
   $('modeTag').textContent=count===0?'FREE TRAINING':count+'v'+count+' · AI PRACTICE';
-  $('status').textContent='BFF Big v4 · fast shots / controlled dribbling';
+  $('status').textContent='BFF Big v4 · natural ball collisions / full kicks';
   $('roomCode').textContent='PRACTICE';
   $('chatText').disabled=false;$('sendChat').disabled=false;
   $('chatHeading').textContent=count===0?'MATCH CHAT · TRAINING':'MATCH CHAT · RIVAL AI';
@@ -417,7 +417,7 @@ function setSidebar(open){
   button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
 }
 function input(){const yes=k=>!optionsVisible&&(held.has(k)||touchHeld.has(k));return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
-setInterval(()=>{if(mode==='online')send({type:'input',...input()});},33);
+setInterval(()=>{if(mode==='online')send({type:'input',...input()});},1000/60);
 function updateSolo(){
   const me=game.players.find(p=>p.id==='solo');
   P.setInput(me,input());
@@ -533,9 +533,7 @@ function displayedState(now,dt){
   let raw;
   if(mode==='solo')raw=Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
   else if(!lastGame)raw=null;
-  else if(extrapMs>0)raw=Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
-  else if(!prevGame)raw=lastGame;
-  else raw=Prediction.interpolateView(prevGame,lastGame,P.clamp((now-lastReceive)/50,0,1));
+  else raw=Prediction.predictView(lastGame,Math.min(250,extrapMs+P.clamp(now-lastReceive,0,40)),{localId:myId,localInput:input()});
   const display=Prediction.reconcileVisual(previousVisual,raw,dt,extrapMs);
   previousVisual=display;
   return display;
