@@ -338,3 +338,61 @@ test('swept impact completes remaining travel using the same 1.2x pace as free f
     `sweep must preserve remaining scaled displacement: ${g.ball.x} vs ${expected}`);
   assert.ok(g.ball.x<p.x,'the rebound remains on the incoming side');
 });
+
+
+test('slow no-kick overlap does not inject a false impulse into a separating ball',()=>{
+  const g=fresh(),p=add(g,2);g.kickoffActive=false;
+  p.x=P.CX-20;p.y=P.CY;p.vx=1.1;
+  g.ball.x=P.CX;g.ball.y=P.CY;g.ball.vx=1.02;
+  // Its world-speed is 1.02 * 1.2, faster than the player. Old collision
+  // logic compared unscaled velocities and accelerated this separating ball.
+  P.setInput(p,{x:0,y:0,kick:false});
+  P.tick(g);
+  assert.ok(Math.abs(g.ball.vx-1.02*P.BALL.damping)<1e-9,
+    'an already separating ball may only lose speed to free-flight damping');
+  assert.equal(p.lastKick,null);
+  assert.ok(Math.hypot(g.ball.x-p.x,g.ball.y-p.y)>=P.PLAYER_R+P.BALL_R-1e-6);
+});
+
+test('player-ball bounce conserves momentum in world travel units',()=>{
+  const g=fresh(),p=add(g,2);g.kickoffActive=false;
+  p.x=P.CX;p.y=P.CY;p.vx=0;
+  g.ball.x=P.CX-22;g.ball.y=P.CY;g.ball.vx=2;
+  P.setInput(p,{x:0,y:0,kick:false});
+  const incomingWorld=2*P.BALL.damping*P.BALL_SPEED_MULTIPLIER;
+  const momentumBefore=incomingWorld/P.BALL.invMass;
+  P.tick(g);
+  const momentumAfter=p.vx/P.PLAYER.invMass+
+    (g.ball.vx*P.BALL_SPEED_MULTIPLIER)/P.BALL.invMass;
+  assert.ok(Math.abs(momentumBefore-momentumAfter)<1e-8,
+    'player and ball must use the same velocity units during impulse resolution');
+  assert.ok(g.ball.vx<0,'ordinary incoming contact rebounds naturally');
+  assert.equal(p.lastKick,null);
+});
+
+test('swept player collision also conserves world-unit momentum',()=>{
+  const g=fresh(),p=add(g,2);g.kickoffActive=false;
+  p.x=P.CX;p.y=P.CY;p.vx=0;
+  g.ball.x=P.CX-45;g.ball.y=P.CY;g.ball.vx=90;
+  const beforeWorld=g.ball.vx*P.BALL.damping*P.BALL_SPEED_MULTIPLIER;
+  P.tick(g);
+  const momentumAfter=p.vx/P.PLAYER.invMass+
+    (g.ball.vx*P.BALL_SPEED_MULTIPLIER)/P.BALL.invMass;
+  assert.ok(Math.abs(momentumAfter-beforeWorld/P.BALL.invMass)<1e-7);
+  assert.ok(g.ball.x<p.x,'fast moving ball must not tunnel through player');
+});
+
+
+test('medium-speed incoming shot resolves at first impact instead of teleporting defender',()=>{
+  const g=fresh(),p=add(g,2);g.kickoffActive=false;
+  p.x=P.CX;p.y=P.CY;p.vx=0;p.vy=0;
+  g.ball.x=P.CX-28;g.ball.y=P.CY;g.ball.vx=12;
+  P.setInput(p,{x:0,y:0,kick:false});
+  P.tick(g);
+  assert.equal(p.x,P.CX,'defender receives impulse, but cannot be teleported by deep overlap');
+  assert.ok(p.vx>0,'impulse transfers momentum into defender');
+  assert.ok(g.ball.vx<0,'incoming ball should rebound naturally');
+  assert.ok(g.ball.x<=p.x-(P.PLAYER_R+P.BALL_R-0.002),
+    'ball must be outside defender after contact and not appear stuck inside');
+  assert.equal(p.lastKick,null,'no phantom kick from an incidental collision');
+});
