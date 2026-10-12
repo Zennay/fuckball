@@ -38,12 +38,8 @@
   // now means about 76% wall-speed retention, while 1 still means 100%.
   const WALL_REBOUND_AT_DEFAULT=0.76;
   const wallRebound=g=>clamp(g.rebound*WALL_REBOUND_AT_DEFAULT/DEFAULT_REBOUND,0.15,1);
-  // A real kick is an intentional, recent press. Holding X while approaching
-  // never shoots automatically. Baby kicks are rare grazing contacts at the
-  // OUTER edge of the kick radius, within the first two ticks of a new press.
-  const KICK_REACH=4, FULL_KICK_HOLD_FRAMES=5, BABY_KICK_HOLD_FRAMES=2;
-  const BABY_KICK_SCALE=0.22, BABY_GRAZE_WIDTH=0.5, KICK_COOLDOWN_FRAMES=9;
-  const WALL_BOOST_WINDOW=16, WALL_BOOST_DISTANCE=24;
+  // A shot is one full-strength impulse on a fresh Space/X press in range.
+  const KICK_REACH=4, FULL_KICK_HOLD_FRAMES=1, KICK_COOLDOWN_FRAMES=9;
   const POSTS=STADIUM.discs.slice(1).map(d=>[mapX(d.pos[0]),mapY(d.pos[1])]);
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
   function player(id,name,team){return {id,name,team,x:team===1?CX-170:CX+170,y:CY,vx:0,vy:0,r:PLAYER_R,input:{x:0,y:0,kick:false},kickCooldown:0,kickHoldTicks:0,lastKick:null,highlight:0,flashType:'whiff'};}
@@ -89,37 +85,12 @@
     if(rel<0){const impulse=-(1+bCoef)*rel/total;a.vx-=nx*impulse*imA;a.vy-=ny*impulse*imA;b.vx+=nx*impulse*imB;b.vy+=ny*impulse*imB;}
     return true;
   }
-  // Gentle contact: a walking player should be able to carry a slow ball
-  // on the front edge of the disc instead of immediately launching it.
-  // This ONLY modifies low-speed, un-kicked player-to-ball contact.
-  // The ball retains all tangential velocity so glancing contacts can roll away.
+  // Match the disc solver on *every* contact. The former "controlled dribble"
+  // branch artificially capped the ball's normal velocity on each tick and
+  // made it ride the player like a magnet. Natural collisions transfer only
+  // the physical impulse; there is no hidden catch, slowdown or auto-kick.
   function collidePlayerBall(g,p,ball){
-    const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy);
-    let controlled=false,nx=0,ny=0;
-    if(d>1e-8 && d<p.r+ball.r && !p.input?.kick){
-      nx=dx/d;ny=dy/d;
-      const playerNormal=p.vx*nx+p.vy*ny;
-      const ballNormal=ball.vx*nx+ball.vy*ny;
-      // Only a player catching a slow ball can cushion it.
-      // Hard incoming passes and shots always use the ordinary rebound solver.
-      controlled=playerNormal>0.15 &&
-        playerNormal-ballNormal*BALL_SPEED_MULTIPLIER>0.12 &&
-        ballNormal>=-0.6 && Math.hypot(ball.vx,ball.vy)<=3.5;
-    }
-    const hit=collide(p,ball,controlled?0:g.rebound);
-    if(hit&&controlled){
-      // The fast-ball multiplier is positional, not an extra kick.
-      // Limit the outgoing NORMAL ball travel to the player's travel;
-      // never alter the tangential component (natural roll-off/dribbling).
-      const playerNormal=Math.max(0,p.vx*nx+p.vy*ny);
-      const ballNormal=ball.vx*nx+ball.vy*ny;
-      const maxBallNormal=Math.max(0,playerNormal/BALL_SPEED_MULTIPLIER)*0.82;
-      if(ballNormal>maxBallNormal){
-        const excess=ballNormal-maxBallNormal;
-        ball.vx-=nx*excess;ball.vy-=ny*excess;
-      }
-    }
-    return hit;
+    return collide(p,ball,g.rebound);
   }
   function againstStatic(disc,x,y,r,bCoef){
     const obstacle={x,y,vx:0,vy:0,r,invMass:0};
@@ -155,44 +126,10 @@
     g.kickoffTeam=scoringTeam===1?2:1;g.kickoffActive=true;
     resetPositions(g);
   }
-  function kickStrengthForHold(frames,distance){
-    if(frames>FULL_KICK_HOLD_FRAMES)return 0; // stale pre-hold: release before shooting
-    const outerEdge=PLAYER_R+BALL_R+KICK_REACH-BABY_GRAZE_WIDTH;
-    if(frames<=BABY_KICK_HOLD_FRAMES && distance>outerEdge)
-      return PLAYER.kickStrength*BABY_KICK_SCALE;
-    return PLAYER.kickStrength;
-  }
-  function wallBoost(g,p,strength){
-    // Tangential impulse models the skill shot of pressing the ball while
-    // moving into the wall. Ordinary bounces and wall-parallel taps remain unchanged.
-    const ball=g.ball;
-    const walls=[
-      ['top','y',-1,ball.y-(TOP+BALL_R)],
-      ['bottom','y',1,ball.y-(BOTTOM-BALL_R)],
-      ['left','x',-1,ball.x-(LEFT+BALL_R)],
-      ['right','x',1,ball.x-(RIGHT-BALL_R)]
-    ];
-    for(const [side,axis,direction,distance] of walls){
-      // Behind goal mouths there is no wall to press against.
-      if((side==='left'||side==='right')&&ball.y>GOAL_TOP&&ball.y<GOAL_BOTTOM)continue;
-      const recent=ball.lastWall===side&&g.tick-ball.lastWallTick<=WALL_BOOST_WINDOW;
-      if(Math.abs(distance)> (recent?WALL_BOOST_DISTANCE:5))continue;
-      const movement=p.input?.[axis]||0;
-      const approach=(axis==='x'?p.vx:p.vy)*direction;
-      if(movement*direction<0.5||approach<0.5)continue;
-      const tangent=axis==='x'?'vy':'vx';
-      // Rockets also work when the ball initially has almost no tangential
-      // speed: the player's diagonal wall run provides the missing direction.
-      const tangentVelocity=p[tangent];
-      if(Math.abs(ball[tangent])<0.2&&Math.abs(tangentVelocity)<0.4)continue;
-      const aim=Math.abs(tangentVelocity)>0.35?tangentVelocity:ball[tangent];
-      const boost=Math.min(2.8,0.4+0.7*approach+0.45*Math.abs(tangentVelocity));
-      const scale=clamp(strength/PLAYER.kickStrength,0,1);
-      if(scale<0.8)continue;
-      ball[tangent]+=Math.sign(aim)*boost*scale;
-      return true;
-    }
-    return false;
+  // Shooting is an edge-triggered action, never a weak "baby" impact.
+  // A held button (even for 2 ticks) cannot fire when the ball later arrives.
+  function kickStrengthForHold(frames){
+    return frames===1?PLAYER.kickStrength:0;
   }
   function sweepFastBall(g,startX,startY){
     // Continuous ball/player impact for an unusually fast shot. At high ball
@@ -270,12 +207,13 @@
       const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy);
       if(g.kickoffActive&&p.team===g.kickoffTeam&&d<=PLAYER_R+BALL_R+0.5)g.kickoffActive=false;
       if(p.input?.kick && p.kickCooldown===0 && d<=PLAYER_R+BALL_R+KICK_REACH && (!g.kickoffActive||p.team===g.kickoffTeam)){
-        const strength=kickStrengthForHold(p.kickHoldTicks,d);
+        const strength=kickStrengthForHold(p.kickHoldTicks);
         if(strength>0){
           const nx=d>1e-6?dx/d:p.team===1?1:-1,ny=d>1e-6?dy/d:0;
           ball.vx+=nx*strength;ball.vy+=ny*strength;
-          const boosted=wallBoost(g,p,strength);
-          p.lastKick=boosted?'wall-boost':strength<PLAYER.kickStrength*0.8?'baby':'full';
+          // Wall rockets must emerge from contact geometry, not a synthetic
+          // sideways velocity boost unrelated to the collision.
+          p.lastKick='full';
           p.kickCooldown=KICK_COOLDOWN_FRAMES;p.flashType=p.lastKick;g.kickoffActive=false;
         }
       }
@@ -308,6 +246,6 @@
     score:g.score.slice(),freeze:g.freeze,announcement:g.announcement,eventId:g.eventId,phase:g.phase,
     kickoffTeam:g.kickoffTeam,kickoffActive:g.kickoffActive,gameOverReason:g.gameOverReason};}
   return {STADIUM,W,H,CX,CY,LEFT,RIGHT,TOP,BOTTOM,OUTER_LEFT,OUTER_RIGHT,OUTER_TOP,OUTER_BOTTOM,GOAL_LEFT,GOAL_RIGHT,
-    GOAL_TOP,GOAL_BOTTOM,NET_LEFT,NET_RIGHT,PLAYER_R,BALL_R,POST_R,POSTS,PLAYER,BALL,PLAYER_SPEED_MULTIPLIER,BALL_SPEED_MULTIPLIER,DEFAULT_REBOUND,WALL_REBOUND_AT_DEFAULT,wallRebound,KICK_REACH,FULL_KICK_HOLD_FRAMES,BABY_KICK_HOLD_FRAMES,BABY_KICK_SCALE,
+    GOAL_TOP,GOAL_BOTTOM,NET_LEFT,NET_RIGHT,PLAYER_R,BALL_R,POST_R,POSTS,PLAYER,BALL,PLAYER_SPEED_MULTIPLIER,BALL_SPEED_MULTIPLIER,DEFAULT_REBOUND,WALL_REBOUND_AT_DEFAULT,wallRebound,KICK_REACH,FULL_KICK_HOLD_FRAMES,
     createGame,player,addPlayer,resetPositions,setInput,tick,snapshot,clamp};
 });
