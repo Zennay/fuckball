@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 
-function runPage({savedExtrapolation=null,extrapVersion=null}={}){
+function runPage({savedExtrapolation=null,extrapVersion=null,online=false}={}){
   const html=fs.readFileSync(path.join(__dirname,'../dist/Pulseball-BFF-Big-v4-Play-Solo.html'),'utf8');
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
   const elements={};let offscreenStrokes=0,framesDrawn=0;
@@ -50,19 +50,25 @@ function runPage({savedExtrapolation=null,extrapVersion=null}={}){
   }
   for(const id of ids)elements[id]=new Element(id);
   for(const [id,value] of [['scoreLimit','3'],['timeLimit','3'],['ballRebound','0.412'],['extrapolation','0'],['nickname','Test']])elements[id].value=value;
-  const callbacks=[],winListeners={};
+  const callbacks=[],winListeners={},intervals=[],sent=[];let now=0,ws;
+  class MockSocket{
+    static OPEN=1;
+    constructor(){this.readyState=1;ws=this;}
+    send(data){sent.push(JSON.parse(data));}
+    close(){this.readyState=3;}
+  }
   const document={getElementById:id=>elements[id],createElement:tag=>new Element(tag),
     createTextNode:text=>({textContent:text}),
     querySelectorAll:()=>[],activeElement:new Element()};
   const window={addEventListener:(name,fn)=>(winListeners[name]??=[]).push(fn)};
-  const ctx=vm.createContext({document,window,performance:{now:()=>0},location:{search:'',protocol:'file:'},
+  const ctx=vm.createContext({document,window,performance:{now:()=>now},location:{search:'',protocol:online?'http:':'file:',host:'localhost'},
     URLSearchParams,devicePixelRatio:2,requestAnimationFrame:fn=>callbacks.push(fn),
-    setInterval:()=>1,localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:key==='pulseball.extrapolation.v3'?extrapVersion:null,setItem(){}},
-    console,WebSocket:undefined});
+    setInterval:fn=>{intervals.push(fn);return intervals.length;},localStorage:{getItem:key=>key==='pulseball.extrapolation'?savedExtrapolation:key==='pulseball.extrapolation.v3'?extrapVersion:null,setItem(){}},
+    console,WebSocket:online?MockSocket:undefined});
   const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
   for(const source of scripts)vm.runInContext(source,ctx,{timeout:1000});
   const draw=(time)=>{strokes.length=0;const fn=callbacks.shift();assert.equal(typeof fn,'function','render must reschedule itself');fn(time);return strokes.slice();};
-  return {draw,fields:elements,events:winListeners,counts:()=>({offscreenStrokes,framesDrawn,callbacks:callbacks.length})};
+  return {draw,fields:elements,events:winListeners,sent,connect:()=>{elements.create.fire('click');ws.onopen();ws.onmessage({data:JSON.stringify({type:'joined',id:'local',code:'ABC123'})});},advance:ms=>{now+=ms;for(const fn of intervals)fn();},counts:()=>({offscreenStrokes,framesDrawn,callbacks:callbacks.length})};
 }
 
 test('standalone initializes, caches BFF stadium, renders at 240 Hz and changes extrapolation without errors',()=>{
@@ -79,6 +85,23 @@ test('standalone initializes, caches BFF stadium, renders at 240 Hz and changes 
   assert.equal(app.counts().callbacks,1,'one animation loop and no duplicates');
 });
 
+test('multiplayer sends input edges instantly instead of waiting for a 60 Hz poll',()=>{
+  const app=runPage({online:true});
+  app.connect();
+  const firstCount=app.sent.length;
+  app.events.keydown[0]({code:'KeyD',preventDefault(){}});
+  assert.deepEqual(JSON.parse(JSON.stringify(app.sent.at(-1))),{type:'input',x:1,y:0,kick:false});
+  assert.equal(app.sent.length,firstCount+1,'keydown sends immediately');
+  app.events.keydown[0]({code:'KeyD',repeat:true,preventDefault(){}});
+  assert.equal(app.sent.length,firstCount+1,'repeated keydown cannot flood the server');
+  app.advance(50);app.advance(50);
+  assert.equal(app.sent.length,firstCount+1,'held state remains on the server without redundant 60 Hz packets');
+  app.events.keyup[0]({code:'KeyD'});
+  assert.deepEqual(JSON.parse(JSON.stringify(app.sent.at(-1))),{type:'input',x:0,y:0,kick:false});
+  assert.equal(app.sent.length,firstCount+2,'release is immediate');
+  app.advance(250);
+  assert.equal(app.sent.length,firstCount+3,'heartbeat periodically refreshes controls');
+});
 test('keyboard input and 0ms extrapolation continue to render at high refresh rates',()=>{
   const app=runPage();
   app.events.keydown[0]({code:'KeyD',preventDefault(){}});
