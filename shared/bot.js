@@ -10,16 +10,17 @@
   'use strict';
   const clamp=P.clamp;
   function forecast(g,steps){
+    const bounce=P.wallRebound(g);
     let {x,y,vx,vy}=g.ball;
     const n=clamp(Math.round(steps),0,42);
     for(let i=0;i<n;i++){
       vx*=P.BALL.damping;vy*=P.BALL.damping;
       x+=vx*P.BALL_SPEED_MULTIPLIER;y+=vy*P.BALL_SPEED_MULTIPLIER;
-      if(y<P.TOP+P.BALL_R){y=P.TOP+P.BALL_R;vy=Math.abs(vy)*g.rebound;}
-      if(y>P.BOTTOM-P.BALL_R){y=P.BOTTOM-P.BALL_R;vy=-Math.abs(vy)*g.rebound;}
+      if(y<P.TOP+P.BALL_R){y=P.TOP+P.BALL_R;vy=Math.abs(vy)*bounce;}
+      if(y>P.BOTTOM-P.BALL_R){y=P.BOTTOM-P.BALL_R;vy=-Math.abs(vy)*bounce;}
       if(y<P.GOAL_TOP||y>P.GOAL_BOTTOM){
-        if(x<P.LEFT+P.BALL_R){x=P.LEFT+P.BALL_R;vx=Math.abs(vx)*g.rebound;}
-        if(x>P.RIGHT-P.BALL_R){x=P.RIGHT-P.BALL_R;vx=-Math.abs(vx)*g.rebound;}
+        if(x<P.LEFT+P.BALL_R){x=P.LEFT+P.BALL_R;vx=Math.abs(vx)*bounce;}
+        if(x>P.RIGHT-P.BALL_R){x=P.RIGHT-P.BALL_R;vx=-Math.abs(vx)*bounce;}
       }
       x=clamp(x,P.OUTER_LEFT+P.BALL_R,P.OUTER_RIGHT-P.BALL_R);
     }
@@ -45,14 +46,24 @@
     const distance=Math.hypot(b.x-bot.x,b.y-bot.y);
     const ahead=clamp((distance-20)/2.7,3,27);
     const f=forecast(g,ahead);
-    // Aim for the far side of the goal without needless sideways oscillation.
-    const targetGoalY=clamp(P.CY+(f.y-P.CY)*0.27,P.GOAL_TOP+21,P.GOAL_BOTTOM-21);
-    const dirLength=Math.hypot(enemyGoalX-f.x,targetGoalY-f.y)||1;
-    const ux=(enemyGoalX-f.x)/dirLength,uy=(targetGoalY-f.y)/dirLength;
+    // Lead a teammate in an attacking lane if a pass is a better option than
+    // blindly shooting from midfield. One player still chases; receivers run.
+    const passOptions=g.players.filter(p=>p.id!==bot.id&&p.team===bot.team&&
+      (p.x-f.x)*forward>65&&(p.x-f.x)*forward<390&&
+      Math.abs(p.y-f.y)<230);
+    const receiver=passOptions.sort((a,b)=>
+      ((b.x-f.x)*forward-Math.abs(b.y-f.y)*0.25)-
+      ((a.x-f.x)*forward-Math.abs(a.y-f.y)*0.25))[0];
+    const usePass=!!receiver && (enemyGoalX-f.x)*forward>300;
+    const aimX=usePass?receiver.x+receiver.vx*8:enemyGoalX;
+    const aimY=usePass?clamp(receiver.y+receiver.vy*8,P.TOP+35,P.BOTTOM-35):
+      clamp(P.CY+(f.y-P.CY)*0.27,P.GOAL_TOP+21,P.GOAL_BOTTOM-21);
+    const dirLength=Math.hypot(aimX-f.x,aimY-f.y)||1;
+    const ux=(aimX-f.x)/dirLength,uy=(aimY-f.y)/dirLength;
     const approachDist=P.PLAYER_R+P.BALL_R-1;
     let tx=f.x-ux*approachDist,ty=f.y-uy*approachDist;
-    // In team matches only the designated interceptor actively chases.
-    // Everyone else occupies a complementary passing/cover lane.
+    // In team matches one player intercepts while others remain active,
+    // moving into support/receiving lanes instead of freezing in formation.
     const teammates=g.players.filter(p=>p.team===bot.team);
     const candidates=teammates.slice().sort((a,b)=>{
       const priority=p=>Math.hypot(p.x-f.x,p.y-f.y)+(p.id==='solo'?16:0);
@@ -63,15 +74,16 @@
       const support=teammates.filter(p=>p.id!==candidates[0].id)
         .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       const slot=support.findIndex(p=>p.id===bot.id);
-      if(slot===0){ // safety / keeper: never leave the near-post corridor
-        tx=ownGoalX+forward*115;
-        ty=clamp(f.y,P.GOAL_TOP+25,P.GOAL_BOTTOM-25);
-      }else if(slot===1){ // central outlet behind the play
-        tx=clamp(f.x-forward*155,P.LEFT+115,P.RIGHT-115);
-        ty=clamp(P.CY+(f.y-P.CY)*0.3,P.TOP+80,P.BOTTOM-80);
-      }else{ // wide passing lane, staggered to avoid colliding with support
-        tx=clamp(f.x-forward*75,P.LEFT+85,P.RIGHT-85);
-        ty=clamp(P.CY+(f.y<P.CY?1:-1)*185,P.TOP+55,P.BOTTOM-55);
+      const orbit=Math.sin((g.tick+slot*95)/65)*22;
+      if(slot===0){ // safety / keeper shadows the ball's shooting lane
+        tx=ownGoalX+forward*(115+orbit*0.25);
+        ty=clamp(f.y+orbit*.35,P.GOAL_TOP+25,P.GOAL_BOTTOM-25);
+      }else if(slot===1){ // forward-running central passing option
+        tx=clamp(f.x+forward*(100+orbit),P.LEFT+115,P.RIGHT-115);
+        ty=clamp(P.CY+(f.y-P.CY)*0.3+orbit,P.TOP+80,P.BOTTOM-80);
+      }else{ // wide receiver makes diagonal runs beyond the ball
+        tx=clamp(f.x+forward*(60+orbit),P.LEFT+85,P.RIGHT-85);
+        ty=clamp(P.CY+(f.y<P.CY?1:-1)*(160+orbit),P.TOP+55,P.BOTTOM-55);
       }
     }
     // Defense: intercept incoming shots before they reach our goal. Never run
@@ -117,7 +129,7 @@
     const movement=steer(bot,tx,ty);
     const dx=b.x-bot.x,dy=b.y-bot.y;
     const contact=Math.hypot(dx,dy);
-    const aligned=((dx*ux+dy*uy)/Math.max(1,contact))>0.38;
+    const aligned=((dx*ux+dy*uy)/Math.max(1,contact))>0.32;
     // Re-tap for full strength only when we can actually contact the ball.
     const canKick=!g.kickoffActive||g.kickoffTeam===bot.team;
     // Time a kick at the point of impact. Only pre-arm when the ball is
@@ -130,7 +142,7 @@
     // cannot all hold X while waiting for the same predicted arrival.
     const kick=canKick&&aligned&&(chaser||contact<=reach)&&
       (contact<=reach+1||imminent) && (bot.kickCooldown||0)===0 &&
-      (bot.kickHoldTicks||0)<=1;
+      (bot.kickHoldTicks||0)===0;
     return {...movement,kick};
   }
   // Lightweight offline practice companion. Replies are generated locally
