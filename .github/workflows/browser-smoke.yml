@@ -30,5 +30,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuckball-immersive-browser
-          path: fuckball-immersive-smoke.png
+          path: |
+            fuckball-immersive-smoke.png
+            fuckball-mobile-smoke.png
           if-no-files-found: ignore
