@@ -168,7 +168,7 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#091017}
   <section class="options-section"><h3>VIDEO / INPUT</h3>
    <div class="extraprow"><div><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">0 ms</output></label><input type="range" id="extrapolation" min="0" max="250" step="5" value="0" aria-describedby="extrapHelp"></div>
    <div><label class="label" for="extrapNumber">Milliseconds</label><input id="extrapNumber" type="number" min="0" max="250" step="5" value="0"></div></div>
-   <small id="extrapHelp">Visual prediction only · 0–250 ms · saved on this device. Use /extrapolation 135 in chat.</small>
+   <small id="extrapHelp">Default 0 ms minimizes visual lead · optional 0–250 ms prediction · saved on this device.</small>
    <label class="label" for="renderQuality" style="margin-top:16px">Render resolution</label><select id="renderQuality" aria-label="Render resolution"><option value="1" selected>Fast · high FPS</option><option value="1.5">Balanced · 1.5×</option><option value="2">Sharp · 2×</option></select>
    <small>Uncapped rendering follows your display refresh rate; simulation remains at 60 Hz.</small>
   </section>
@@ -227,7 +227,7 @@ function makeSolo(){
   if(count===0){game.freeze=0;game.announcement='';game.kickoffActive=false;game.kickoffTeam=2;}
   roster=game.players.map(p=>({id:p.id,name:p.name,team:p.team}));
   $('modeTag').textContent=count===0?'FREE TRAINING':count+'v'+count+' · AI PRACTICE';
-  $('status').textContent='BFF Big v4 · fast shots / controlled dribbling';
+  $('status').textContent='BFF Big v4 · natural ball collisions / full kicks';
   $('roomCode').textContent='PRACTICE';
   $('chatText').disabled=false;$('sendChat').disabled=false;
   $('chatHeading').textContent=count===0?'MATCH CHAT · TRAINING':'MATCH CHAT · RIVAL AI';
