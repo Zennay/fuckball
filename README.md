@@ -24,8 +24,17 @@ Open `dist/Pulseball-BFF-Big-v4-Play-Solo.html` in a desktop browser. This stand
 - The selected-player marker follows the supplied HaxBall screenshot: an approximately **25-unit radius** translucent white ring with **2.4-unit stroke**, outside a **15-unit radius** player disc with **1.8-unit black/white stroke**. The gap remains clear for the small ball. Player labels remain below the ring.
 - Multiplayer snapshots include held-kick status for remote players, and extrapolation preserves it.
 - A deliberate moving kick against a wall can accelerate the ball tangentially, while normal rebound stays soft.
-- Extrapolation slider **0–200 ms**, default **0 ms**. Prediction simulates collisions using the same physics engine and corrects between-frame overlaps. Prediction is **visual only** and does not alter the server or remove latency.
+- Extrapolation defaults to **135 ms**, adjustable from **0–250 ms** in **Escape → Video/Input**, or via chat `/extrapolation 135`, `/extrap 135`, or `/e 135`. The setting persists per browser. Prediction simulates collisions and corrects overlaps. It is **visual only** and does not alter the server or remove latency.
 - Physics simulation runs at a fixed **60 Hz** for consistent gameplay across devices; rendering uses `requestAnimationFrame` at the fastest rate the browser/display permits, with **no intentional 60 FPS cap**. A cached pitch avoids redrawing static stadium geometry each frame. Browser and display limits still apply; literal unlimited FPS is not possible.
+
+## Immersive match UI and chat
+
+- **Viewport-filling arena** with aspect-safe, player-and-ball tracking camera; custom BFF Big v4 geometry stays unchanged.
+- **True fullscreen** is available via **F**, **⛶ FULL**, or **CLICK TO PLAY FULLSCREEN**. Browsers only permit native fullscreen after a user gesture; embedded clients may restrict it. The normal page already fills the browser viewport.
+- **Escape** opens the match options screen; Escape again or Resume closes it. Video/Input contains a 135 ms default extrapolation slider, exact numeric control and render-resolution setting. Room/teams are accessible from the ROOM button or options menu.
+- **Enter** focuses the always-visible match chat. In solo mode the practice bot responds locally to gameplay questions, score, controls, strategy and general chat; no AI API, login or tokens are used. In online rooms, chat goes to connected players.
+- **Bot** anticipates dangerous incoming shots and covers goal lanes, approaches the ball from behind, times kicks near contact and uses context-aware replies.
+- **Gentle dribbling** cushions slow player-ball contact, preserving natural roll-off without changing actual kicks, high-speed rebounds or wall boosts.
 
 ## v0.7 adjustments
 
@@ -48,7 +57,7 @@ Visit **http://localhost:3000**. Create a room or join using its six-character c
 
 `npm test` includes regression tests for stadium geometry, BFF physics, baby kicks, wall boosts, ball/player collisions and high-speed swept collision, extrapolation, fractional frames at 60/120/144/240/360 Hz, headless simulation of the bundled browser game including the cached pitch and slider, plus two real WebSocket connections and room lifecycle. Additional canvas-paint regression tests verify every frame of the held white outline at 144 Hz and 240 Hz, instant release, extra-ring removal, and extrapolated remote-player kick indicators.
 
-The game has not been validated as frame-perfect to HaxBall. Sandbox Chromium launch was blocked/timed out at packaging time, so the browser was tested with a DOM/canvas VM harness rather than a real graphical session.
+The game has not been validated as frame-perfect to HaxBall. The DOM/canvas VM harness verifies physics and high-Hz rendering. A separate **real Chromium smoke test** in [Fuckball browser smoke](https://github.com/Zennay/fuckball/actions/workflows/browser-smoke.yml) verifies viewport coverage, Escape menu, extrapolation changes, chat bot responses and fullscreen activation, and saves a screenshot artifact.
 
 ## Structure
 
