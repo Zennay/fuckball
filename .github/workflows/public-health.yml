@@ -34,22 +34,25 @@ jobs:
           grep -q 'function collidePlayerBall(g,p,ball)' /tmp/fuckball-physics.js
           grep -q 'collidePlayerBall(g,p,ball);' /tmp/fuckball-physics.js
           grep -q 'BALL_SPEED_MULTIPLIER=1.2' /tmp/fuckball-physics.js
-          grep -q 'WALL_REBOUND_AT_DEFAULT=0.76' /tmp/fuckball-physics.js
+          grep -Fq 'const WALL_REBOUND_AT_DEFAULT=DEFAULT_REBOUND;' /tmp/fuckball-physics.js
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-prediction.js 'http://198.244.191.182:3417/shared/prediction.js'
           grep -q 'const cautious=frames>2' /tmp/fuckball-prediction.js
-          echo "Live soft-contact dribbling physics verified"
+          grep -Fq 'inputX:p.input?.x??0,inputY:p.input?.y??0' /tmp/fuckball-physics.js
+          grep -Fq 'else P.setInput(next,{x:p.inputX??0,y:p.inputY??0,kick:false});' /tmp/fuckball-prediction.js
+          grep -Fq 'function flushInput(force=false)' /tmp/fuckball-home.html
+          echo "Live 60 Hz multiplayer input and original BFF rebound verified"
           grep -q 'id="optionsScreen"' /tmp/fuckball-home.html
           grep -q 'id="chatDock"' /tmp/fuckball-home.html
-          grep -q 'let extrapMs=135,renderScale=1;' /tmp/fuckball-home.html
-          grep -q 'pulseball.extrapolation.v2' /tmp/fuckball-home.html
+          grep -Fq 'let extrapMs=0,renderScale=1;' /tmp/fuckball-home.html
+          grep -q 'pulseball.extrapolation.v3' /tmp/fuckball-home.html
           grep -q 'function cameraTransform(state,dt)' /tmp/fuckball-home.html
           curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-bot.js 'http://198.244.191.182:3417/shared/bot.js'
           grep -q 'function reply(message,g,bot)' /tmp/fuckball-bot.js
           grep -q 'const passOptions=' /tmp/fuckball-bot.js
           grep -q 'const orbit=Math.sin' /tmp/fuckball-bot.js
-          grep -q 'Balanced · 76% wall bounce' /tmp/fuckball-home.html
-          echo "Physics, tuned wall control and active passing lanes verified externally"
-          echo "Live 135ms extrapolation, immersive HUD and bot chat verified"
+          grep -Fq 'Original BFF · 41% wall bounce' /tmp/fuckball-home.html
+          echo "Physics, native rebound and active passing lanes verified externally"
+          echo "Live responsive 0ms extrapolation, immersive HUD and bot chat verified"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
         with:
