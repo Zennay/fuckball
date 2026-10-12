@@ -178,10 +178,16 @@ const held=new Set(),touchHeld=new Set();
 let extrapMs=135,renderScale=1;
  try{
    const saved=localStorage.getItem('pulseball.extrapolation');
+   const migrated=localStorage.getItem('pulseball.extrapolation.v2');
    if(saved!==null && saved!==undefined && saved!==''){
      const parsed=Number(saved);
-     if(Number.isFinite(parsed))extrapMs=P.clamp(Math.round(parsed),0,250);
+     // The previous client stored 0 ms as its default. Migrate that old
+     // default once to the newly requested 135 ms without discarding
+     // explicitly chosen nonzero settings or a new explicit 0 ms setting.
+     if(Number.isFinite(parsed)&&!(parsed===0&&migrated!=='1'))
+       extrapMs=P.clamp(Math.round(parsed),0,250);
    }
+   localStorage.setItem('pulseball.extrapolation.v2','1');
  }catch{}
  function setExtrapolation(value){
    const ms=Number(value);
