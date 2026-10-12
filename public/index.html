@@ -183,6 +183,7 @@ const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=global
 const $=id=>document.getElementById(id);
 const canvas=$('pitch'),ctx=canvas.getContext('2d');
 const held=new Set(),touchHeld=new Set();
+ let lastInputPacket='',lastInputSentAt=0;
 let extrapMs=0,renderScale=1;
  try{
    const saved=localStorage.getItem('pulseball.extrapolation');
@@ -249,7 +250,18 @@ function drawRoster(players){
   }
 }
 function send(obj){if(socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify(obj));}
-function disconnect(){const old=socket;socket=null;if(old){old.onclose=null;old.close();}}
+ // Send a direction/shot transition immediately, not on the next 16ms polling
+ // slot. Held keys remain server-side until release; a periodic heartbeat keeps
+ // the latest state fresh without flooding the websocket at 60 packets/second.
+ function flushInput(force=false){
+   if(mode!=='online'||!socket||socket.readyState!==WebSocket.OPEN)return;
+   const next=input(),packed=next.x+','+next.y+','+Number(next.kick);
+   const now=performance.now();
+   if(!force&&packed===lastInputPacket&&now-lastInputSentAt<250)return;
+   lastInputPacket=packed;lastInputSentAt=now;
+   send({type:'input',...next});
+ }
+function disconnect(){const old=socket;socket=null;lastInputPacket='';if(old){old.onclose=null;old.close();}}
 function connect(action){
   if(location.protocol==='file:'){setNotice('To host an online room, run npm install && npm start, then open localhost:3000.',true);return;}
   if(typeof WebSocket==='undefined'){setNotice('WebSocket is unavailable in this browser.',true);return;}
@@ -261,7 +273,7 @@ function connect(action){
   ws.onmessage=ev=>{if(socket!==ws)return;let msg;try{msg=JSON.parse(ev.data);}catch{return;}
     if(msg.type==='error'){setNotice(msg.message,true);return;}
     if(msg.type==='joined'){
-      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;previousVisual=null;
+      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;previousVisual=null;lastInputPacket='';flushInput(true);
       $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;$('chatHeading').textContent='ROOM CHAT · '+roomCode;
       $('chatText').disabled=false;$('sendChat').disabled=false;
       $('status').textContent='Connected · play with your friends';
@@ -337,10 +349,10 @@ const keyMap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',
 function editing(el){return !!el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagName);}
 window.addEventListener('keydown',e=>{
    if(editing(document.activeElement)||optionsVisible)return;
-   const k=keyMap[e.code];if(k){e.preventDefault();held.add(k);}
+   const k=keyMap[e.code];if(k){e.preventDefault();const changed=!held.has(k);held.add(k);if(changed)flushInput();}
  }, {passive:false});
-window.addEventListener('keyup',e=>{const k=keyMap[e.code];if(k){held.delete(k);}});
-window.addEventListener('blur',()=>{held.clear();touchHeld.clear();});
+window.addEventListener('keyup',e=>{const k=keyMap[e.code];if(k&&held.delete(k))flushInput();});
+window.addEventListener('blur',()=>{held.clear();touchHeld.clear();flushInput();});
 const shell=$('appShell');
 let fullscreenFallback=false,sidebarVisible=false,optionsVisible=false;
 const fullscreenBtn=$('fullscreenBtn'),lobbyToggle=$('lobbyToggle');
@@ -356,7 +368,7 @@ function setSidebar(open){
    $('optionsScreen').setAttribute('aria-hidden',String(!optionsVisible));
    $('optionsToggle').setAttribute('aria-expanded',String(optionsVisible));
    if(optionsVisible){
-     held.clear();touchHeld.clear();setSidebar(false);
+     held.clear();touchHeld.clear();flushInput();setSidebar(false);
      $('closeOptions').focus?.();
    }else $('closeOptions').blur?.();
  }
@@ -412,12 +424,12 @@ function setSidebar(open){
  });
  for(const button of document.querySelectorAll('[data-dir]')){
   const dir=button.dataset.dir;
-  button.addEventListener('pointerdown',e=>{e.preventDefault();touchHeld.add(dir);button.classList.add('pressed');button.setPointerCapture(e.pointerId);});
-  const release=()=>{touchHeld.delete(dir);button.classList.remove('pressed');};
+  button.addEventListener('pointerdown',e=>{e.preventDefault();touchHeld.add(dir);button.classList.add('pressed');button.setPointerCapture(e.pointerId);flushInput();});
+  const release=()=>{if(touchHeld.delete(dir))flushInput();button.classList.remove('pressed');};
   button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
 }
 function input(){const yes=k=>!optionsVisible&&(held.has(k)||touchHeld.has(k));return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
-setInterval(()=>{if(mode==='online')send({type:'input',...input()});},1000/60);
+setInterval(()=>flushInput(),50);
 function updateSolo(){
   const me=game.players.find(p=>p.id==='solo');
   P.setInput(me,input());
