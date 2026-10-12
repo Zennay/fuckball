@@ -136,6 +136,20 @@
     const players=predicted.players.map(p=>({...p,kicking:kicks.get(p.id)||false}));
     return separateContacts({...state,players,ball:predicted.ball});
   }
+  // Display-only rollback easing: high extrapolation can guess a trajectory
+  // that the next authoritative snapshot disproves. The predicted ball then
+  // visibly returns over a few frames, like a small lag correction, without
+  // ever rewinding simulation, collisions, goals, or inputs.
+  function reconcileVisual(previous,target,dt,extrapMs){
+    if(!target||!previous||!target.ball||!previous.ball||extrapMs<=0 ||
+       target.eventId!==previous.eventId||target.phase!==previous.phase)return target;
+    const distance=Math.hypot(target.ball.x-previous.ball.x,target.ball.y-previous.ball.y);
+    if(!Number.isFinite(distance)||distance>70)return target;
+    const smoothing=clamp((Number(dt)||16)/(36+0.25*clamp(extrapMs,0,250)),0.14,0.9);
+    return separateContacts({...target,ball:{...target.ball,
+      x:mix(previous.ball.x,target.ball.x,smoothing),
+      y:mix(previous.ball.y,target.ball.y,smoothing)}});
+  }
   function advanceFixed(accumulator,elapsedMs,onTick){
     let remaining=Math.max(0,Number(accumulator)||0)+clamp(Number(elapsedMs)||0,0,125);
     let steps=0;
@@ -145,5 +159,5 @@
     if(steps===8&&remaining+1e-8>=TICK_MS)remaining=0;
     return {accumulator:remaining,steps};
   }
-  return {predictView,interpolateView,TICK_MS,separateContacts,advanceFixed};
+  return {predictView,interpolateView,reconcileVisual,TICK_MS,separateContacts,advanceFixed};
 });
