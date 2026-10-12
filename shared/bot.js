@@ -194,5 +194,5 @@
       return 'GG, see you next match!';
     return distance<75?'I’m right on the ball. Show me your next move!':'I hear you. Try a quick one-two off the wall — I’ll try to stop it.';
   }
-  return {decide,forecast,steer,reply};
+  return {decide,forecast,steer,reply,laneClear};
 });
