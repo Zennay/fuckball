@@ -115,7 +115,7 @@ test('non-chasing AI supports dynamically and keeps moving while the ball is sta
   const striker=P.player('striker','Striker',1),wing=P.player('wing','Wing',1),cover=P.player('cover','Cover',1);
   P.addPlayer(g,striker);P.addPlayer(g,wing);P.addPlayer(g,cover);
   Object.assign(striker,{x:P.CX-20,y:P.CY});
-  Object.assign(wing,{x:P.CX-210,y:P.CY+100});
+  Object.assign(wing,{x:P.CX+90,y:P.CY+20});
   Object.assign(cover,{x:P.GOAL_LEFT+100,y:P.CY});
   const a=AI.decide(g,wing);
   g.tick=155;
