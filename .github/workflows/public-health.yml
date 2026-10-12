@@ -28,6 +28,12 @@ jobs:
           grep -q 'id="renderQuality"' /tmp/fuckball-home.html
           grep -q 'id="roomSidebar"' /tmp/fuckball-home.html
           echo "Live fullscreen and high-refresh controls found"
+          # The game loads the physics as a separate script: verify the VPS really
+          # serves the updated gentle player-ball contact implementation.
+          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-physics.js 'http://198.244.191.182:3417/shared/physics.js'
+          grep -q 'function collidePlayerBall(g,p,ball)' /tmp/fuckball-physics.js
+          grep -q 'collidePlayerBall(g,p,ball);' /tmp/fuckball-physics.js
+          echo "Live soft-contact dribbling physics verified"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
         with:
