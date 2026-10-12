@@ -229,3 +229,16 @@ test('the full-viewport game retains custom BFF map and fullscreen affordance',(
   assert.match(html,/function cameraTransform\(state,dt\)/);
   assert.match(html,/const scale=Math.max\(canvas.width\/P.W,canvas.height\/P.H\)/);
 });
+
+test('free training has no AI and 4v4 fills seven AI slots around the player',()=>{
+  const app=runPage();
+  const playersAt=time=>app.draw(time).filter(s=>s.r===15).length;
+  assert.equal(playersAt(1000/60),2,'default is 1v1');
+  app.fields.soloTeams.value='0';app.fields.soloTeams.fire('change');
+  assert.equal(playersAt(2000/60),1,'no hidden opponent in free training');
+  app.fields.soloTeams.value='2';app.fields.soloTeams.fire('change');
+  assert.equal(playersAt(3000/60),4,'2v2 includes the user and three bots');
+  app.fields.soloTeams.value='4';app.fields.soloTeams.fire('change');
+  assert.equal(playersAt(4000/60),8,'4v4 includes the user and seven bots');
+  assert.match(app.fields.modeTag.textContent,/4v4/);
+});
