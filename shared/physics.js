@@ -29,7 +29,7 @@
   const BALL={invMass:STADIUM.discs[0].invMass,bCoef:STADIUM.discs[0].bCoef,damping:0.99};
   // Move the ball 20% further per tick, while keeping the BFF mass,
   // collision elasticity, damping and player/kick constants untouched.
-  const BALL_SPEED_MULTIPLIER=1.44; // +20% over the previous 1.2× setting
+  const BALL_SPEED_MULTIPLIER=1.2; // +20% over the previous 1.2× setting
   // HBS unconfigured wall segments use the ball's own bCoef.
   const DEFAULT_REBOUND=BALL.bCoef;
   // A real kick is an intentional, recent press. Holding X while approaching
@@ -100,14 +100,14 @@
         playerNormal-ballNormal*BALL_SPEED_MULTIPLIER>0.12 &&
         ballNormal>=-0.6 && Math.hypot(ball.vx,ball.vy)<=3.5;
     }
-    const hit=collide(p,ball,controlled?0:g.rebound);
+    const hit=collide(p,ball,controlled?0:Math.min(g.rebound,0.32));
     if(hit&&controlled){
       // The fast-ball multiplier is positional, not an extra kick.
       // Limit the outgoing NORMAL ball travel to the player's travel;
       // never alter the tangential component (natural roll-off/dribbling).
       const playerNormal=Math.max(0,p.vx*nx+p.vy*ny);
       const ballNormal=ball.vx*nx+ball.vy*ny;
-      const maxBallNormal=playerNormal/BALL_SPEED_MULTIPLIER;
+      const maxBallNormal=Math.max(0,playerNormal/BALL_SPEED_MULTIPLIER)*0.82;
       if(ballNormal>maxBallNormal){
         const excess=ballNormal-maxBallNormal;
         ball.vx-=nx*excess;ball.vy-=ny*excess;
