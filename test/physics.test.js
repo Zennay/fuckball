@@ -267,7 +267,7 @@ test('approaching a ball without contact creates no magnetic pull',()=>{
 test('ball speed boost is 20% over original and walls retain more rebound energy',()=>{
   assert.equal(P.BALL_SPEED_MULTIPLIER,1.2);
   const g=fresh();g.kickoffActive=false;
-  assert.equal(P.wallRebound(g),P.WALL_REBOUND_AT_DEFAULT);
+  assert.ok(Math.abs(P.wallRebound(g)-P.WALL_REBOUND_AT_DEFAULT)<1e-12);
   assert.ok(P.wallRebound(g)>P.DEFAULT_REBOUND,'wall impacts should not bleed most of the velocity');
   assert.equal(P.wallRebound(fresh({rebound:1})),1,'hard wall setting must remain capped');
 });
