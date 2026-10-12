@@ -121,3 +121,34 @@ test('visual extrapolation rolls back a wrong forecast without changing match ph
   assert.equal(Prediction.reconcileVisual(large,s,16,135),s,
     'large disagreement should snap safely rather than drawing a ghost');
 });
+
+test('135ms extrapolation does not draw an early bounce while ball is still approaching a wall',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  g.ball.x=P.CX+130;g.ball.y=P.TOP+P.BALL_R+55;
+  g.ball.vx=0;g.ball.vy=-5;
+  const source=P.snapshot(g),before=JSON.stringify(source);
+  const predicted=predictView(source,135);
+  assert.ok(predicted.ball.y>P.TOP+P.BALL_R+30,
+    'collision-risk prediction must remain near the real approach, not jump to the rebound');
+  assert.ok(predicted.ball.vy<0,'ball must visually continue approaching the wall');
+  assert.equal(JSON.stringify(source),before,'visual prediction cannot alter the simulation');
+});
+
+test('safe open-field ball extrapolation still responds to the full requested 135ms',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  g.ball.x=P.CX;g.ball.y=P.CY;
+  g.ball.vx=3;g.ball.vy=0;
+  const s=P.snapshot(g),predicted=predictView(s,135);
+  assert.ok(predicted.ball.x>s.ball.x+20,
+    'open field keeps the normal high-extrapolation lookahead');
+});
+
+test('visual reconciliation catches up within one high-refresh frame',()=>{
+  const Prediction=require('../shared/prediction');
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const authoritative=P.snapshot(g);
+  const prior={...authoritative,ball:{...authoritative.ball,x:authoritative.ball.x-25}};
+  const display=Prediction.reconcileVisual(prior,authoritative,1000/144,135);
+  assert.ok(Math.abs(display.ball.x-authoritative.ball.x)<8,
+    'do not keep a lagging ghost ball multiple frames behind the server');
+});
