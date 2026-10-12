@@ -34,6 +34,13 @@ jobs:
           grep -q 'function collidePlayerBall(g,p,ball)' /tmp/fuckball-physics.js
           grep -q 'collidePlayerBall(g,p,ball);' /tmp/fuckball-physics.js
           echo "Live soft-contact dribbling physics verified"
+          grep -q 'id="optionsScreen"' /tmp/fuckball-home.html
+          grep -q 'id="chatDock"' /tmp/fuckball-home.html
+          grep -q 'let extrapMs=135,renderScale=1;' /tmp/fuckball-home.html
+          grep -q 'function cameraTransform(state,dt)' /tmp/fuckball-home.html
+          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-bot.js 'http://198.244.191.182:3417/shared/bot.js'
+          grep -q 'function reply(message,g,bot)' /tmp/fuckball-bot.js
+          echo "Live 135ms extrapolation, immersive HUD and bot chat verified"
       - name: Probe WebSocket room creation from the internet
         uses: actions/setup-node@v4
         with:
