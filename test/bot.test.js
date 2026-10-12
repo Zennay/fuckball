@@ -157,3 +157,22 @@ test('AI teammate roles stay active when human is close to possession',()=>{
   assert.ok(Math.hypot(first.x,first.y)>0.1||Math.hypot(second.x,second.y)>0.1);
   assert.ok([a.id,b.id].includes(g.aiChasers[2]),'AI retains a reserve interceptor');
 });
+
+
+test('AI avoids whiffing one frame outside kick reach when ball moves away',()=>{
+  const {g,bot}=setup();
+  bot.x=P.CX-(P.PLAYER_R+P.BALL_R+P.KICK_REACH+0.5);
+  bot.y=P.CY;g.ball.vx=2;
+  assert.equal(AI.decide(g,bot).kick,false,
+    'shooting input should not be consumed on a receding ball outside range');
+});
+
+test('AI can pre-arm a real closing contact on the next simulation step',()=>{
+  const {g,bot}=setup();
+  bot.x=P.CX-(P.PLAYER_R+P.BALL_R+P.KICK_REACH+1.2);
+  bot.y=P.CY;g.ball.vx=-3;
+  const cmd=AI.decide(g,bot);
+  assert.equal(cmd.kick,true,'a ball entering kick range should get a single timed press');
+  P.setInput(bot,cmd);P.tick(g);
+  assert.equal(bot.lastKick,'full','the timed press must be an actual full shot, not a miss');
+});

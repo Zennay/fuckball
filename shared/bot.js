@@ -159,11 +159,21 @@
     const nx=contact>1e-6?dx/contact:forward,ny=contact>1e-6?dy/contact:0;
     const closing=(bot.vx-b.vx*P.BALL_SPEED_MULTIPLIER)*nx+(bot.vy-b.vy*P.BALL_SPEED_MULTIPLIER)*ny;
     const reach=P.PLAYER_R+P.BALL_R+P.KICK_REACH;
-    const imminent=closing>0.45&&contact<=reach+Math.min(1.7,closing);
-    // Support players only shoot on an immediate legal contact; teammates
-    // cannot all hold X while waiting for the same predicted arrival.
-    const kick=canKick&&aligned&&(chaser||contact<=reach)&&
-      (contact<=reach+1||imminent) && (bot.kickCooldown||0)===0 &&
+    // Check the *next actual simulation step* before pressing. The previous
+    // reach+1 heuristic often pressed one frame too early while the ball was
+    // receding, so the edge-triggered kick was consumed out of range. The bot
+    // then had to release and re-arm, appearing to hesitate or half-shoot.
+    const nextBall=forecast(g,1);
+    const kickAccel=P.PLAYER.kickingAcceleration;
+    const nextVX=(bot.vx+movement.x*kickAccel)*P.PLAYER.kickingDamping;
+    const nextVY=(bot.vy+movement.y*kickAccel)*P.PLAYER.kickingDamping;
+    const nextContact=Math.hypot(nextBall.x-(bot.x+nextVX),nextBall.y-(bot.y+nextVY));
+    const insideReach=contact<=reach;
+    const enteringReach=contact>reach&&closing>0&&nextContact<=reach;
+    // Teammates should only shoot if already near the ball, not chase it
+    // through the striker or fire an early press from their support lane.
+    const kick=canKick&&aligned&&(chaser||insideReach)&&
+      (insideReach||enteringReach)&&(bot.kickCooldown||0)===0&&
       (bot.kickHoldTicks||0)===0;
     return {...movement,kick};
   }

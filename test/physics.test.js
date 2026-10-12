@@ -322,3 +322,19 @@ test('holding kick for two ticks then approaching ball cannot create a half-shot
   assert.equal(g.ball.vx,0);
   assert.equal(p.kickCooldown,0);
 });
+
+
+test('swept impact completes remaining travel using the same 1.2x pace as free flight',()=>{
+  const g=fresh();g.kickoffActive=false;
+  const p=add(g,2);p.x=P.CX;p.y=P.CY;
+  const start=P.CX-45;
+  g.ball.x=start;g.ball.y=P.CY;g.ball.vx=90;
+  const move=90*P.BALL.damping*P.BALL_SPEED_MULTIPLIER;
+  const firstContact=(45-(P.PLAYER_R+P.BALL_R))/move;
+  P.tick(g);
+  const expected=p.x-(P.PLAYER_R+P.BALL_R+0.0001)+
+    g.ball.vx*P.BALL_SPEED_MULTIPLIER*(1-firstContact);
+  assert.ok(Math.abs(g.ball.x-expected)<0.002,
+    `sweep must preserve remaining scaled displacement: ${g.ball.x} vs ${expected}`);
+  assert.ok(g.ball.x<p.x,'the rebound remains on the incoming side');
+});

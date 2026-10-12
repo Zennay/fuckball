@@ -162,8 +162,13 @@
     const impulse=-(1+g.rebound)*relative/(invA+invB);
     p.vx-=nx*impulse*invA;p.vy-=ny*impulse*invA;
     ball.vx+=nx*impulse*invB;ball.vy+=ny*impulse*invB;
-    ball.x=p.x+nx*(PLAYER_R+BALL_R+0.0001)+ball.vx*(1-t);
-    ball.y=p.y+ny*(PLAYER_R+BALL_R+0.0001)+ball.vy*(1-t);
+    // Finish the unused fraction of this tick with the *new* velocity.
+    // Normal motion multiplies ball displacement by BALL_SPEED_MULTIPLIER;
+    // forgetting it only on swept impacts made high-speed contact appear to
+    // slow/lag for one frame even though the bounce impulse was correct.
+    const remaining=BALL_SPEED_MULTIPLIER*(1-t);
+    ball.x=p.x+nx*(PLAYER_R+BALL_R+0.0001)+ball.vx*remaining;
+    ball.y=p.y+ny*(PLAYER_R+BALL_R+0.0001)+ball.vy*remaining;
   }
   function tick(g){
     if(g.phase==='ended'||g.phase==='paused'||g.phase==='stopped')return;
