@@ -35,6 +35,16 @@
     const m=Math.hypot(x,y);if(m>1){x/=m;y/=m;}
     return {x,y};
   }
+  // Avoid repeatedly sending a striker into an opponent standing in the pass.
+  function laneClear(g,fromX,fromY,toX,toY,team){
+    const dx=toX-fromX,dy=toY-fromY,length2=dx*dx+dy*dy;
+    if(length2<1)return false;
+    return !g.players.some(p=>p.team===3-team&&(()=>{
+      const t=clamp(((p.x-fromX)*dx+(p.y-fromY)*dy)/length2,0,1);
+      if(t<.08||t>.92)return false;
+      return Math.hypot(p.x-(fromX+dx*t),p.y-(fromY+dy*t))<P.PLAYER_R*2.5;
+    })());
+  }
   function decide(g,bot){
     if(!g||!bot||bot.team!==1&&bot.team!==2)return {x:0,y:0,kick:false};
     if(g.phase!=='playing'||g.freeze>0)return {x:0,y:0,kick:false};
@@ -50,7 +60,7 @@
     // blindly shooting from midfield. One player still chases; receivers run.
     const passOptions=g.players.filter(p=>p.id!==bot.id&&p.team===bot.team&&
       (p.x-f.x)*forward>65&&(p.x-f.x)*forward<390&&
-      Math.abs(p.y-f.y)<230);
+      Math.abs(p.y-f.y)<230&&laneClear(g,f.x,f.y,p.x+p.vx*8,p.y+p.vy*8,bot.team));
     const receiver=passOptions.sort((a,b)=>
       ((b.x-f.x)*forward-Math.abs(b.y-f.y)*0.25)-
       ((a.x-f.x)*forward-Math.abs(a.y-f.y)*0.25))[0];
@@ -65,13 +75,25 @@
     // In team matches one player intercepts while others remain active,
     // moving into support/receiving lanes instead of freezing in formation.
     const teammates=g.players.filter(p=>p.team===bot.team);
-    const candidates=teammates.slice().sort((a,b)=>{
-      const priority=p=>Math.hypot(p.x-f.x,p.y-f.y)+(p.id==='solo'?16:0);
-      return priority(a)-priority(b)||String(a.id).localeCompare(String(b.id));
-    });
-    const chaser=candidates[0]?.id===bot.id;
+    // A controlled human should not become the nominal AI interceptor just
+    // because they happen to be slightly nearer the loose ball. Give them
+    // possession priority only when within genuine touching distance.
+    const human=teammates.find(p=>p.id==='solo');
+    const humanPossession=!!human&&Math.hypot(human.x-b.x,human.y-b.y)<P.PLAYER_R+P.BALL_R+12;
+    const eligible=teammates.filter(p=>p.id!=='solo');
+    const priority=p=>Math.hypot(p.x-f.x,p.y-f.y)+
+      Math.max(0,(p.x-f.x)*forward)*0.25;
+    const candidates=eligible.slice().sort((a,b)=>priority(a)-priority(b)||String(a.id).localeCompare(String(b.id)));
+    // Interceptor hysteresis: near-tied teammates should not switch roles on
+    // every tick and both stop while the ball passes between them.
+    if(!g.aiChasers)g.aiChasers={};
+    const previous=eligible.find(p=>p.id===g.aiChasers[bot.team]);
+    const selected=previous&&(!candidates[0]||priority(previous)<=priority(candidates[0])+35)?previous:candidates[0];
+    const chaserId=humanPossession?'solo':selected?.id;
+    if(selected)g.aiChasers[bot.team]=selected.id;
+    const chaser=chaserId===bot.id;
     if(!chaser&&teammates.length>1){
-      const support=teammates.filter(p=>p.id!==candidates[0].id)
+      const support=eligible.filter(p=>p.id!==chaserId)
         .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       const slot=support.findIndex(p=>p.id===bot.id);
       const orbit=Math.sin((g.tick+slot*95)/65)*22;
