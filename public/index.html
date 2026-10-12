@@ -524,8 +524,8 @@ function drawPlayer(p){
   ctx.fillText(String(number),p.x,p.y+.4);
   // Keep labels clear of the outer selection ring.
   ctx.font='16px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.lineWidth=2.6;ctx.strokeStyle='#333';ctx.strokeText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
-  ctx.fillStyle='#eee';ctx.fillText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
+  ctx.lineWidth=2.6;ctx.strokeStyle='#333';ctx.strokeText(String(p.name||'Player').slice(0,18),p.x,p.y+30);
+  ctx.fillStyle='#eee';ctx.fillText(String(p.name||'Player').slice(0,18),p.x,p.y+30);
 }
 function displayedState(now,dt){
   // At high extrapolation the next authoritative update can reverse an
