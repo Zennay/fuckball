@@ -51,12 +51,35 @@
     const ux=(enemyGoalX-f.x)/dirLength,uy=(targetGoalY-f.y)/dirLength;
     const approachDist=P.PLAYER_R+P.BALL_R-1;
     let tx=f.x-ux*approachDist,ty=f.y-uy*approachDist;
+    // In team matches only the designated interceptor actively chases.
+    // Everyone else occupies a complementary passing/cover lane.
+    const teammates=g.players.filter(p=>p.team===bot.team);
+    const candidates=teammates.slice().sort((a,b)=>{
+      const priority=p=>Math.hypot(p.x-f.x,p.y-f.y)+(p.id==='solo'?16:0);
+      return priority(a)-priority(b)||String(a.id).localeCompare(String(b.id));
+    });
+    const chaser=candidates[0]?.id===bot.id;
+    if(!chaser&&teammates.length>1){
+      const support=teammates.filter(p=>p.id!==candidates[0].id)
+        .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+      const slot=support.findIndex(p=>p.id===bot.id);
+      if(slot===0){ // safety / keeper: never leave the near-post corridor
+        tx=ownGoalX+forward*115;
+        ty=clamp(f.y,P.GOAL_TOP+25,P.GOAL_BOTTOM-25);
+      }else if(slot===1){ // central outlet behind the play
+        tx=clamp(f.x-forward*155,P.LEFT+115,P.RIGHT-115);
+        ty=clamp(P.CY+(f.y-P.CY)*0.3,P.TOP+80,P.BOTTOM-80);
+      }else{ // wide passing lane, staggered to avoid colliding with support
+        tx=clamp(f.x-forward*75,P.LEFT+85,P.RIGHT-85);
+        ty=clamp(P.CY+(f.y<P.CY?1:-1)*185,P.TOP+55,P.BOTTOM-55);
+      }
+    }
     // Defense: intercept incoming shots before they reach our goal. Never run
     // toward the other end if the ball is already threatening the goal.
     const incoming=(defendingLeft?b.vx<-0.7:b.vx>0.7);
     const danger=(defendingLeft?f.x<P.CX-160:f.x>P.CX+160);
     const behindDefense=(defendingLeft?b.x<bot.x:b.x>bot.x);
-    if(incoming&&danger&&behindDefense){
+    if(chaser&&incoming&&danger&&behindDefense){
       const intercept=forecast(g,Math.min(24,Math.abs((b.x-bot.x)/(b.vx||1))));
       tx=clamp(intercept.x-forward*(P.PLAYER_R+P.BALL_R+2),P.LEFT+P.PLAYER_R+7,P.RIGHT-P.PLAYER_R-7);
       ty=clamp(intercept.y,P.TOP+P.PLAYER_R,P.BOTTOM-P.PLAYER_R);
@@ -65,7 +88,7 @@
     // pushing it toward our own net. Prefer the open side of the field.
     const side=(bot.x-b.x)*forward;
     const nearY=Math.abs(bot.y-b.y)<P.PLAYER_R+P.BALL_R+20;
-    if(side>4&&distance<135&&nearY){
+    if(chaser&&side>4&&distance<135&&nearY){
       tx=b.x-forward*(P.PLAYER_R+P.BALL_R+45);
       ty=clamp(b.y+(bot.y>=b.y?1:-1)*65,P.TOP+25,P.BOTTOM-25);
     }
@@ -74,7 +97,7 @@
     const ownHalf=defendingLeft?f.x<P.CX-220:f.x>P.CX+220;
     const towardOwn=forward*b.vx < -0.7;
     const shotLane=b.y>P.GOAL_TOP-65&&b.y<P.GOAL_BOTTOM+65;
-    if(ownHalf&&towardOwn&&shotLane&&distance>38){
+    if(chaser&&ownHalf&&towardOwn&&shotLane&&distance>38){
       const arrival=clamp(Math.abs((ownGoalX-b.x)/(b.vx||1)),0,34);
       const future=forecast(g,arrival);
       const safeGoalX=ownGoalX+forward*58;
@@ -103,7 +126,11 @@
     const closing=(bot.vx-b.vx*P.BALL_SPEED_MULTIPLIER)*nx+(bot.vy-b.vy*P.BALL_SPEED_MULTIPLIER)*ny;
     const reach=P.PLAYER_R+P.BALL_R+P.KICK_REACH;
     const imminent=closing>0.45&&contact<=reach+Math.min(1.7,closing);
-    const kick=canKick&&aligned&&(contact<=reach+1||imminent) && (bot.kickCooldown||0)===0;
+    // Support players only shoot on an immediate legal contact; teammates
+    // cannot all hold X while waiting for the same predicted arrival.
+    const kick=canKick&&aligned&&(chaser||contact<=reach)&&
+      (contact<=reach+1||imminent) && (bot.kickCooldown||0)===0 &&
+      (bot.kickHoldTicks||0)<=1;
     return {...movement,kick};
   }
   // Lightweight offline practice companion. Replies are generated locally
@@ -120,7 +147,7 @@
     if(/(score|stand|winning|win|lose|winn|scorebord)/.test(q))
       return `Score is ${score[0]}–${score[1]}. ${score[0]>score[1]?'I’m ahead!':score[1]>score[0]?'You’re ahead — for now.':'All tied up!'}`;
     if(/(help|how|hoe|controls|key|shoot|schiet|kick|space|bestuur)/.test(q))
-      return 'WASD / arrows to move, Space or X to kick. Hold early for a softer kick; aim your run for a clean full shot.';
+      return 'WASD / arrows move, Space or X shoots. Press near contact; a long early hold no longer auto-shoots.';
     if(/(map|stadium|veld|bff)/.test(q))
       return 'We’re playing BFF Big v4 — your custom stadium. I’ll keep defending these goals.';
     if(/(defend|defens|verdedig|goalie|keep|attack|aanval|tactic|strategie)/.test(q))

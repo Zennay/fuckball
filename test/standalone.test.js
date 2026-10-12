@@ -11,6 +11,6 @@ test('standalone builder embeds current authoritative physics and prediction',()
     assert.ok(page.includes(original),`the solo page must embed shared/${name}.js exactly`);
   }
   assert.doesNotMatch(page,/<script src="\/shared\//);
-  assert.match(page,/hold Space \/ X to keep the player's black outline solid white/);
-  assert.match(page,/20% faster ball/);
+  assert.match(page,/press Space \/ X near the ball to shoot/);
+  assert.match(page,/fast shots \/ controlled dribbling/);
 });

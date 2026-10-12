@@ -29,13 +29,14 @@
   const BALL={invMass:STADIUM.discs[0].invMass,bCoef:STADIUM.discs[0].bCoef,damping:0.99};
   // Move the ball 20% further per tick, while keeping the BFF mass,
   // collision elasticity, damping and player/kick constants untouched.
-  const BALL_SPEED_MULTIPLIER=1.2;
+  const BALL_SPEED_MULTIPLIER=1.44; // +20% over the previous 1.2× setting
   // HBS unconfigured wall segments use the ball's own bCoef.
   const DEFAULT_REBOUND=BALL.bCoef;
-  // Kick input is read every simulation frame: an early held key remains armed.
-  // Late timing gives the normal strength; a long pre-hold produces a baby kick.
-  const KICK_REACH=4, FULL_KICK_HOLD_FRAMES=3, BABY_KICK_HOLD_FRAMES=10;
-  const BABY_KICK_SCALE=0.3, KICK_COOLDOWN_FRAMES=9;
+  // A real kick is an intentional, recent press. Holding X while approaching
+  // never shoots automatically. Baby kicks are rare grazing contacts at the
+  // OUTER edge of the kick radius, within the first two ticks of a new press.
+  const KICK_REACH=4, FULL_KICK_HOLD_FRAMES=5, BABY_KICK_HOLD_FRAMES=2;
+  const BABY_KICK_SCALE=0.22, BABY_GRAZE_WIDTH=0.5, KICK_COOLDOWN_FRAMES=9;
   const WALL_BOOST_WINDOW=16, WALL_BOOST_DISTANCE=24;
   const POSTS=STADIUM.discs.slice(1).map(d=>[mapX(d.pos[0]),mapY(d.pos[1])]);
   const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -148,10 +149,12 @@
     g.kickoffTeam=scoringTeam===1?2:1;g.kickoffActive=true;
     resetPositions(g);
   }
-  function kickStrengthForHold(frames){
-    if(frames<=FULL_KICK_HOLD_FRAMES)return PLAYER.kickStrength;
-    const t=clamp((frames-FULL_KICK_HOLD_FRAMES)/(BABY_KICK_HOLD_FRAMES-FULL_KICK_HOLD_FRAMES),0,1);
-    return PLAYER.kickStrength*(1-(1-BABY_KICK_SCALE)*t);
+  function kickStrengthForHold(frames,distance){
+    if(frames>FULL_KICK_HOLD_FRAMES)return 0; // stale pre-hold: release before shooting
+    const outerEdge=PLAYER_R+BALL_R+KICK_REACH-BABY_GRAZE_WIDTH;
+    if(frames<=BABY_KICK_HOLD_FRAMES && distance>outerEdge)
+      return PLAYER.kickStrength*BABY_KICK_SCALE;
+    return PLAYER.kickStrength;
   }
   function wallBoost(g,p,strength){
     // Tangential impulse models the skill shot of pressing the ball while
@@ -172,13 +175,15 @@
       const approach=(axis==='x'?p.vx:p.vy)*direction;
       if(movement*direction<0.5||approach<0.5)continue;
       const tangent=axis==='x'?'vy':'vx';
-      if(Math.abs(ball[tangent])<0.25)continue;
-      // The follow-through is directional and capped: it cannot become a
-      // super-shot by holding kick or standing still against the wall.
-      const boost=Math.min(2.5,0.45+0.7*approach+0.12*Math.abs(ball[tangent]));
+      // Rockets also work when the ball initially has almost no tangential
+      // speed: the player's diagonal wall run provides the missing direction.
+      const tangentVelocity=p[tangent];
+      if(Math.abs(ball[tangent])<0.2&&Math.abs(tangentVelocity)<0.4)continue;
+      const aim=Math.abs(tangentVelocity)>0.35?tangentVelocity:ball[tangent];
+      const boost=Math.min(2.8,0.4+0.7*approach+0.45*Math.abs(tangentVelocity));
       const scale=clamp(strength/PLAYER.kickStrength,0,1);
       if(scale<0.8)continue;
-      ball[tangent]+=Math.sign(ball[tangent])*boost*scale;
+      ball[tangent]+=Math.sign(aim)*boost*scale;
       return true;
     }
     return false;
@@ -259,12 +264,14 @@
       const dx=ball.x-p.x,dy=ball.y-p.y,d=Math.hypot(dx,dy);
       if(g.kickoffActive&&p.team===g.kickoffTeam&&d<=PLAYER_R+BALL_R+0.5)g.kickoffActive=false;
       if(p.input?.kick && p.kickCooldown===0 && d<=PLAYER_R+BALL_R+KICK_REACH && (!g.kickoffActive||p.team===g.kickoffTeam)){
-        const nx=d>1e-6?dx/d:p.team===1?1:-1,ny=d>1e-6?dy/d:0;
-        const strength=kickStrengthForHold(p.kickHoldTicks);
-        ball.vx+=nx*strength;ball.vy+=ny*strength;
-        const boosted=wallBoost(g,p,strength);
-        p.lastKick=boosted?'wall-boost':strength<PLAYER.kickStrength*0.8?'baby':'full';
-        p.kickCooldown=KICK_COOLDOWN_FRAMES;p.flashType=p.lastKick;g.kickoffActive=false;
+        const strength=kickStrengthForHold(p.kickHoldTicks,d);
+        if(strength>0){
+          const nx=d>1e-6?dx/d:p.team===1?1:-1,ny=d>1e-6?dy/d:0;
+          ball.vx+=nx*strength;ball.vy+=ny*strength;
+          const boosted=wallBoost(g,p,strength);
+          p.lastKick=boosted?'wall-boost':strength<PLAYER.kickStrength*0.8?'baby':'full';
+          p.kickCooldown=KICK_COOLDOWN_FRAMES;p.flashType=p.lastKick;g.kickoffActive=false;
+        }
       }
     }
     for(const [x,y] of POSTS)againstStatic(ball,x,y,POST_R,g.rebound);

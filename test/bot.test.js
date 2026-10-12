@@ -30,9 +30,9 @@ test('AI prediction accounts for the faster ball and wall reflections',()=>{
   assert.ok(f.y>=P.TOP+P.BALL_R);
   assert.ok(f.vy>0,'predict top wall rebound');
 });
-test('AI can score within a reasonable practice period against a stationary opponent',()=>{
+test('AI can score within twenty seconds of play against a stationary opponent',()=>{
   const {g,bot}=setup();let kicks=0;
-  for(let i=0;i<860&&!g.score[0];i++){
+  for(let i=0;i<1200&&!g.score[0];i++){
     P.setInput(bot,AI.decide(g,bot));
     if(bot.input.kick)kicks++;
     P.tick(g);
@@ -81,4 +81,18 @@ test('bot can still finish a match and does not randomly hold kick',()=>{
   }
   assert.ok(g.score[0]>0,'bot should score when unopposed');
   assert.ok(kickHeld<turns/3,'bot should not hold kick continuously while chasing');
+});
+
+test('4v4 AI assigns one interceptor while others cover or offer passing lanes',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  for(let i=0;i<4;i++)P.addPlayer(g,P.player('red'+i,'Red '+i,1));
+  for(let i=0;i<4;i++)P.addPlayer(g,P.player(i===0?'solo':'blue'+i,'Blue '+i,2));
+  g.ball.x=P.CX-170;g.ball.y=P.CY+10;
+  const moves=g.players.filter(p=>p.team===1).map(p=>({p,cmd:AI.decide(g,p)}));
+  for(const {cmd} of moves){
+    assert.ok(Number.isFinite(cmd.x)&&Number.isFinite(cmd.y));
+    assert.ok(Math.hypot(cmd.x,cmd.y)<=1.00001);
+  }
+  const unique=new Set(moves.map(({cmd})=>Math.round(cmd.x*10)+','+Math.round(cmd.y*10)));
+  assert.ok(unique.size>=2,'team must not blindly chase the exact same position');
 });

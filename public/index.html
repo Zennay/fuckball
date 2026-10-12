@@ -143,7 +143,15 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#091017}
 <button id="fullscreenHint" class="fullscreen-hint" type="button">⛶ CLICK TO PLAY FULLSCREEN</button></main><aside id="roomSidebar" class="sidebar">
 <section class="panel"><h2>Play your way</h2><p class="subtitle">Instant solo practice, or make a private room and send your friend the code.</p>
 <label class="label" for="nickname">Your player name</label><div class="field"><input maxlength="18" id="nickname" value="Player" autocomplete="nickname"></div>
-<div class="buttons"><button class="btn primary" id="practice" type="button">⚽ Practice solo</button><button class="btn ghost" id="create" type="button">+ Create room</button></div>
+<label class="label" for="soloTeams">Practice opponents / team size</label>
+<select id="soloTeams" aria-label="AI players for practice">
+<option value="0">Free training · no AI</option>
+<option value="1" selected>1v1 · one rival AI</option>
+<option value="2">2v2 · three AI players</option>
+<option value="4">4v4 · seven AI players</option>
+</select>
+<small>You're always on the blue team. Start practice again to apply the chosen lineup.</small>
+<div class="buttons"><button class="btn primary" id="practice" type="button">⚽ Start practice</button><button class="btn ghost" id="create" type="button">+ Create room</button></div>
 <label for="roomInput" class="label">Have a room code?</label><div class="join"><input id="roomInput" type="text" maxlength="6" placeholder="ABC123" aria-label="Room code"><button class="btn ghost" id="join" type="button">Join</button></div><p class="notice" id="notice" role="status">Solo is ready. Multiplayer requires the Node server.</p></section>
 <section class="panel"><div class="roomhead"><h2 style="margin:0">Players</h2><span id="roomCode" class="code">PRACTICE</span></div><div class="players" id="roster"></div><div class="teamselect"><button class="btn ghost" id="redTeam" type="button">Join Red</button><button class="btn ghost" id="blueTeam" type="button">Join Blue</button><button class="btn ghost" id="spectate" type="button">Spectate</button></div><div class="buttons" style="margin:12px 0 0"><button class="btn ghost" id="restart" type="button" style="width:100%">Start match</button><button class="btn ghost" id="stop" type="button" disabled>Stop</button><button class="btn ghost" id="pause" type="button" disabled>Pause</button></div>
 <div class="settings"><label class="label" for="scoreLimit">Score limit</label><select id="scoreLimit"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select><label class="label" for="timeLimit">Time limit</label><select id="timeLimit"><option value="1">1 min</option><option value="3" selected>3 min</option><option value="5">5 min</option><option value="10">10 min</option></select><label class="label" for="ballRebound">Ball rebound</label><select id="ballRebound" aria-label="Ball rebound strength"><option value="0.412" selected>BFF original · 41.2%</option><option value="0.3">Extra soft · 30%</option><option value="0.7">Medium · 70%</option><option value="1">Hard · 100%</option></select></div></section>
@@ -168,7 +176,7 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#091017}
   <div class="options-actions"><button class="btn primary" id="resumeGame" type="button">RESUME MATCH</button><button class="btn ghost" id="optionsRoom" type="button">ROOM / TEAMS</button></div>
  </div>
 </div>
-<p class="bottomtip"><strong>Kick timing:</strong> hold Space / X to keep the player's black outline solid white, even before the ball arrives. Release to return it to black. A well-timed contact produces a full shot, while a long early hold creates a softer baby kick. <strong>Wall boost:</strong> move into a wall as you kick a ball against it to add speed along the wall. Independent remake, not affiliated with HaxBall.</p></div>
+<p class="bottomtip"><strong>Kick timing:</strong> press Space / X near the ball to shoot. Holding it far away lights the player's outline but will not auto-shoot on later contact. Very narrow grazing contacts trigger a rare baby kick; release and press again for full power. <strong>Wall boost:</strong> move into a wall as you kick a ball against it to add speed along the wall. Independent remake, not affiliated with HaxBall.</p></div>
 <script src="/shared/stadium.js"></script><script src="/shared/physics.js"></script><script src="/shared/prediction.js"></script><script src="/shared/bot.js"></script><script>
 (()=>{'use strict';
 const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=globalThis.PulseBot;if(!P||!Prediction||!Bot){document.getElementById('status').textContent='Physics engine missing. Open the project through server or keep the shared folder beside public.';return;}
@@ -207,14 +215,25 @@ let extrapMs=135,renderScale=1;
  });
  $('extrapNumber').addEventListener('change',()=>{$('extrapNumber').value=String(extrapMs);});
  $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
- let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
+ let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0,previousVisual=null;
 function makeSolo(){
-  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;cameraReady=false;
-  game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});P.addPlayer(game,P.player('bot','Rival',1));P.addPlayer(game,P.player('solo',cleanName(),2));
-  $('modeTag').textContent='SOLO · PRACTICE';$('status').textContent='BFF Big v4 · 20% faster ball / smart AI';$('roomCode').textContent='PRACTICE';
-  $('chatText').disabled=false;$('sendChat').disabled=false;$('chatHeading').textContent='MATCH CHAT · RIVAL AI';$('restart').disabled=false;updateMatchControls();
-  drawRoster([{id:'bot',name:'Rival · AI',team:1},{id:'solo',name:cleanName(),team:2}]);
-  setNotice('Practice mode ready. First to three goals wins.');
+  mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;previousVisual=null;cameraReady=false;
+  const selected=$('soloTeams').value;
+  const count=selected!==''&&[0,1,2,4].includes(Number(selected))?Number(selected):1;
+  game=P.createGame({scoreLimit:Number($('scoreLimit').value),timeLimit:Number($('timeLimit').value),rebound:Number($('ballRebound').value)});
+  for(let i=0;i<count;i++)P.addPlayer(game,P.player('bot-red-'+i,'Red AI '+(i+1),1));
+  P.addPlayer(game,P.player('solo',cleanName(),2));
+  for(let i=1;i<count;i++)P.addPlayer(game,P.player('bot-blue-'+i,'Blue AI '+(i+1),2));
+  if(count===0){game.freeze=0;game.announcement='';game.kickoffActive=false;game.kickoffTeam=2;}
+  roster=game.players.map(p=>({id:p.id,name:p.name,team:p.team}));
+  $('modeTag').textContent=count===0?'FREE TRAINING':count+'v'+count+' · AI PRACTICE';
+  $('status').textContent='BFF Big v4 · fast shots / controlled dribbling';
+  $('roomCode').textContent='PRACTICE';
+  $('chatText').disabled=false;$('sendChat').disabled=false;
+  $('chatHeading').textContent=count===0?'MATCH CHAT · TRAINING':'MATCH CHAT · RIVAL AI';
+  $('restart').disabled=false;updateMatchControls();
+  drawRoster(roster);
+  setNotice(count===0?'Free training: no opponents or teammates.':'Practice ready: '+count+'v'+count+' with coordinated AI.');
 }
 function cleanName(){return ($('nickname').value||'Player').trim().slice(0,18)||'Player';}
 function setNotice(message,error=false){$('notice').textContent=message;$('notice').classList.toggle('error',error);}
@@ -242,7 +261,7 @@ function connect(action){
   ws.onmessage=ev=>{if(socket!==ws)return;let msg;try{msg=JSON.parse(ev.data);}catch{return;}
     if(msg.type==='error'){setNotice(msg.message,true);return;}
     if(msg.type==='joined'){
-      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;
+      mode='online';roomCode=msg.code;myId=msg.id;prevGame=null;lastGame=null;previousVisual=null;
       $('roomCode').textContent=roomCode;$('modeTag').textContent='ONLINE · ROOM '+roomCode;$('chatHeading').textContent='ROOM CHAT · '+roomCode;
       $('chatText').disabled=false;$('sendChat').disabled=false;
       $('status').textContent='Connected · play with your friends';
@@ -262,6 +281,7 @@ function connect(action){
 }
 function appendChat(name,message){const line=document.createElement('div');const strong=document.createElement('b');strong.textContent=name+': ';line.append(strong,document.createTextNode(message));const box=$('chatlog');box.append(line);while(box.children.length>40)box.firstElementChild.remove();box.scrollTop=box.scrollHeight;}
 $('practice').addEventListener('click',()=>{disconnect();makeSolo();});
+$('soloTeams').addEventListener('change',()=>{if(mode==='solo')makeSolo();});
 $('create').addEventListener('click',()=>connect('create'));
 $('join').addEventListener('click',()=>{if($('roomInput').value.trim().length!==6){setNotice('Enter a six-character room code.',true);return;}connect('join');});
 $('roomInput').addEventListener('keydown',e=>{if(e.key==='Enter'){$('join').click();}});
@@ -273,6 +293,7 @@ function updateMatchControls(){
   $('pause').disabled=!isHost||!(phase==='playing'||phase==='paused');
   $('pause').textContent=phase==='paused'?'Resume':'Pause';
   for(const id of ['scoreLimit','timeLimit','ballRebound'])$(id).disabled=!isHost||(mode==='online'&&(phase==='playing'||phase==='paused'));
+  $('soloTeams').disabled=mode==='online';
 }
 $('restart').addEventListener('click',()=>{if(mode==='online'){send({type:'start'});}else{makeSolo();}});
 $('stop').addEventListener('click',()=>send({type:'stop'}));
@@ -299,7 +320,8 @@ function sendChatMessage(raw){
    }
    if(mode==='online'){send({type:'chat',message});return;}
    appendChat(cleanName(),message);
-   appendChat('RIVAL AI',Bot.reply(message,game,game.players.find(p=>p.id==='bot')));
+   const rival=game.players.find(p=>p.team===1);
+   appendChat(rival?'RIVAL AI':'TRAINING',rival?Bot.reply(message,game,rival):'Free training: use WASD to dribble and X or Space to shoot.');
  }
  $('chatForm').addEventListener('submit',e=>{
    e.preventDefault();sendChatMessage($('chatText').value);$('chatText').value='';
@@ -397,11 +419,12 @@ function setSidebar(open){
 function input(){const yes=k=>!optionsVisible&&(held.has(k)||touchHeld.has(k));return {x:Number(yes('right'))-Number(yes('left')),y:Number(yes('down'))-Number(yes('up')),kick:yes('kick')};}
 setInterval(()=>{if(mode==='online')send({type:'input',...input()});},33);
 function updateSolo(){
-  const me=game.players.find(p=>p.id==='solo'),bot=game.players.find(p=>p.id==='bot');
+  const me=game.players.find(p=>p.id==='solo');
   P.setInput(me,input());
-  // Tactics shared with tests: predicted interception, correct approach side,
-  // goal-directed kicks, braking, defense and kickoff positioning.
-  P.setInput(bot,Bot.decide(game,bot));
+  for(const bot of game.players)if(bot.id!=='solo')
+    P.setInput(bot,Bot.decide(game,bot));
+  // Free practice cannot get stuck waiting for a nonexistent kickoff opponent.
+  if(game.players.length===1){game.kickoffTeam=2;game.kickoffActive=false;}
   P.tick(game);
 }
 function fitCanvas(){
@@ -504,14 +527,18 @@ function drawPlayer(p){
   ctx.lineWidth=2.6;ctx.strokeStyle='#333';ctx.strokeText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
   ctx.fillStyle='#eee';ctx.fillText(String(p.name||'Player').slice(0,18),p.x,p.y+40);
 }
-function displayedState(now){
-  // Fractional-tick prediction smooths the 60 Hz physics at 120/144/240+ Hz.
-  if(mode==='solo')return Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
-  if(!lastGame)return null;
-  if(extrapMs>0)return Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
-  if(!prevGame)return lastGame;
-  const t=P.clamp((now-lastReceive)/50,0,1);
-  return Prediction.interpolateView(prevGame,lastGame,t);
+function displayedState(now,dt){
+  // At high extrapolation the next authoritative update can reverse an
+  // incorrect visual forecast. Ease that rollback; never affect game state.
+  let raw;
+  if(mode==='solo')raw=Prediction.predictView(P.snapshot(game),extrapMs+accumulator,{controls:game.players});
+  else if(!lastGame)raw=null;
+  else if(extrapMs>0)raw=Prediction.predictView(lastGame,extrapMs+P.clamp(now-lastReceive,0,50),{localId:myId,localInput:input()});
+  else if(!prevGame)raw=lastGame;
+  else raw=Prediction.interpolateView(prevGame,lastGame,P.clamp((now-lastReceive)/50,0,1));
+  const display=Prediction.reconcileVisual(previousVisual,raw,dt,extrapMs);
+  previousVisual=display;
+  return display;
 }
 function render(now){
   // Never throttle rendering to 60 FPS. Only simulation uses fixed 60 Hz steps.
@@ -522,7 +549,7 @@ function render(now){
     accumulator=Prediction.advanceFixed(accumulator,dt,updateSolo).accumulator;
   } else accumulator=0;
   fitCanvas();
-   const state=displayedState(now);
+   const state=displayedState(now,dt);
    cameraTransform(state,dt);
    if(stadiumCache)ctx.drawImage(stadiumCache,0,0,P.W,P.H);
    else field(ctx);

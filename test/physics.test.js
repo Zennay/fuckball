@@ -74,12 +74,16 @@ test('early kick catches the smaller BFF ball before contact',()=>{
   const {g,p}=kickSetup(P.PLAYER_R+P.BALL_R+P.KICK_REACH-1);
   P.tick(g);assert.equal(p.lastKick,'full');assert.ok(g.ball.vx>4.5);
 });
-test('held early kick becomes a weaker baby kick on BFF',()=>{
+test('holding X early cannot auto-shoot when the ball arrives',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
   p.x=P.CX-100;P.setInput(p,{kick:true});for(let i=0;i<12;i++)P.tick(g);
+  p.x=P.CX-24;P.tick(g);
   assert.equal(p.lastKick,null);
-  p.x=P.CX-24;P.tick(g);assert.equal(p.lastKick,'baby');
-  assert.ok(g.ball.vx>1&&g.ball.vx<1.6);
+  assert.equal(p.kickCooldown,0);
+  assert.equal(g.ball.vx,0,'pre-hold must not create even a baby kick');
+  P.setInput(p,{kick:false});P.tick(g);
+  P.setInput(p,{kick:true});P.tick(g);
+  assert.equal(p.lastKick,'full','re-press within shooting range still gives a full shot');
 });
 test('re-pressing kick resets baby kick charge',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
@@ -141,14 +145,14 @@ test('fast ball crosses a full player diameter only after a resolved impact',()=
 });
 
 
-test('BFF ball travels 20% faster while original velocity damping and bounce stay unchanged',()=>{
-  assert.equal(P.BALL_SPEED_MULTIPLIER,1.2);
+test('BFF ball gains another 20% travel speed while original velocity damping and bounce stay unchanged',()=>{
+  assert.equal(P.BALL_SPEED_MULTIPLIER,1.44);
   const g=fresh();g.kickoffActive=false;
   const startingX=g.ball.x,startingY=g.ball.y;
   g.ball.vx=6;g.ball.vy=2;
   P.tick(g);
-  assert.ok(Math.abs(g.ball.x-startingX-6*0.99*1.2)<1e-9);
-  assert.ok(Math.abs(g.ball.y-startingY-2*0.99*1.2)<1e-9);
+  assert.ok(Math.abs(g.ball.x-startingX-6*0.99*1.44)<1e-9);
+  assert.ok(Math.abs(g.ball.y-startingY-2*0.99*1.44)<1e-9);
   assert.equal(g.ball.vx,6*0.99);
   assert.equal(g.ball.vy,2*0.99);
 });
@@ -174,14 +178,12 @@ test('holding shoot maintains a continuous kick indicator without ball contact a
   assert.equal(p.highlight,1,'outline activates on a new press');
 });
 
-test('early flash still allows a weaker baby kick, followed by a full re-press',()=>{
+test('baby kicks require a new press and a 0.5-unit grazing contact at outer reach',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
-  p.x=P.CX-130;
-  P.setInput(p,{kick:true});for(let i=0;i<13;i++)P.tick(g);
-  assert.equal(p.lastKick,null);
-  p.x=P.CX-24;P.tick(g);
+  p.x=P.CX-(P.PLAYER_R+P.BALL_R+P.KICK_REACH-0.2);
+  P.setInput(p,{kick:true});P.tick(g);
   assert.equal(p.lastKick,'baby');assert.equal(p.flashType,'baby');
-  assert.ok(g.ball.vx>0&&g.ball.vx<P.PLAYER.kickStrength*0.5);
+  assert.ok(g.ball.vx>0&&g.ball.vx<P.PLAYER.kickStrength*0.3);
   P.setInput(p,{kick:false});P.tick(g);
   p.kickCooldown=0;p.x=g.ball.x-P.PLAYER_R-P.BALL_R-2;
   P.setInput(p,{kick:true});P.tick(g);
@@ -203,7 +205,7 @@ test('player movement is precisely 10% faster in regular and held-kick modes',()
     const expected=originalAcc*1.1*.96*(1-.96**60)/(1-.96);
     assert.ok(Math.abs(p.vx-expected)<1e-9,`kick=${kick}: velocity should be 10% faster`);
   }
-  assert.equal(P.BALL_SPEED_MULTIPLIER,1.2,'ball speed remains at earlier 20% adjustment');
+  assert.equal(P.BALL_SPEED_MULTIPLIER,1.44,'ball gains 20% above its previous multiplier');
   assert.equal(P.PLAYER.kickStrength,4.545,'kicks must not gain an accidental 10% boost');
 });
 
@@ -260,4 +262,16 @@ test('approaching a ball without contact creates no magnetic pull',()=>{
   P.tick(g);
   assert.equal(g.ball.vx,0);
   assert.equal(g.ball.x,P.CX,'ball should not be attached to player until collision');
+});
+
+test('open-field ball pace rises 20% compared with the previous game setting',()=>{
+  assert.ok(Math.abs(P.BALL_SPEED_MULTIPLIER/1.2-1.2)<1e-12);
+});
+test('ordinary diagonal wall run can produce a rocket with an initially straight ball',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  g.ball.x=P.CX+40;g.ball.y=P.TOP+P.BALL_R+2;g.ball.vx=0;g.ball.vy=-0.4;
+  p.x=g.ball.x-10;p.y=g.ball.y+14;p.vx=1.5;p.vy=-1.5;
+  P.setInput(p,{x:1,y:-1,kick:true});P.tick(g);
+  assert.equal(p.lastKick,'wall-boost','diagonal moving wall presses produce rockets');
+  assert.ok(g.ball.vx>1.5,'wall rocket redirects the ball along the wall');
 });
