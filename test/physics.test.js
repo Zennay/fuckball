@@ -381,3 +381,18 @@ test('swept player collision also conserves world-unit momentum',()=>{
   assert.ok(Math.abs(momentumAfter-beforeWorld/P.BALL.invMass)<1e-7);
   assert.ok(g.ball.x<p.x,'fast moving ball must not tunnel through player');
 });
+
+
+test('medium-speed incoming shot resolves at first impact instead of teleporting defender',()=>{
+  const g=fresh(),p=add(g,2);g.kickoffActive=false;
+  p.x=P.CX;p.y=P.CY;p.vx=0;p.vy=0;
+  g.ball.x=P.CX-28;g.ball.y=P.CY;g.ball.vx=12;
+  P.setInput(p,{x:0,y:0,kick:false});
+  P.tick(g);
+  assert.equal(p.x,P.CX,'defender receives impulse, but cannot be teleported by deep overlap');
+  assert.ok(p.vx>0,'impulse transfers momentum into defender');
+  assert.ok(g.ball.vx<0,'incoming ball should rebound naturally');
+  assert.ok(g.ball.x<=p.x-(P.PLAYER_R+P.BALL_R-0.002),
+    'ball must be outside defender after contact and not appear stuck inside');
+  assert.equal(p.lastKick,null,'no phantom kick from an incidental collision');
+});
