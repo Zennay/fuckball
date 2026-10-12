@@ -206,3 +206,58 @@ test('player movement is precisely 10% faster in regular and held-kick modes',()
   assert.equal(P.BALL_SPEED_MULTIPLIER,1.2,'ball speed remains at earlier 20% adjustment');
   assert.equal(P.PLAYER.kickStrength,4.545,'kicks must not gain an accidental 10% boost');
 });
+
+test('walking into a resting ball cushions contact instead of knocking it forward',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-P.PLAYER_R-P.BALL_R-1;p.y=P.CY;p.vx=2;
+  P.setInput(p,{x:0,y:0,kick:false});
+  P.tick(g);
+  assert.equal(p.lastKick,null,'walking without Space must not generate a shot');
+  assert.ok(g.ball.vx>0,'the ball must move with the player');
+  assert.ok(g.ball.vx*P.BALL_SPEED_MULTIPLIER<=p.vx+1e-6,
+    'ball normal travel may not outrun the walking player on first contact');
+});
+
+test('slow dribbling keeps ball close enough to roll off naturally',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-28;p.y=P.CY;
+  P.setInput(p,{x:1,kick:false});
+  for(let i=0;i<90;i++)P.tick(g);
+  const gap=Math.hypot(g.ball.x-p.x,g.ball.y-p.y);
+  assert.ok(g.ball.x>P.CX+35,'dribbling actually progresses downfield');
+  assert.ok(gap<P.PLAYER_R+P.BALL_R+9,
+    `ball should stay on the player's forward edge, not launch away: gap=${gap}`);
+  assert.equal(p.lastKick,null,'dribbling never synthesizes a real kick');
+});
+
+test('glancing dribbles preserve sideways rolling velocity',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-20;p.y=P.CY+7;p.vx=2;
+  g.ball.vy=-0.45;
+  P.setInput(p,{x:0,kick:false});
+  P.tick(g);
+  assert.ok(g.ball.vx>0,'player still transfers momentum into the ball');
+  assert.ok(g.ball.vy< -0.45,'sideways motion must not be pinned or erased');
+});
+
+test('fast incoming balls and real kicks keep their original physical character',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX;p.y=P.CY;
+  g.ball.x=p.x+P.PLAYER_R+P.BALL_R+2;
+  g.ball.vx=-9;
+  P.setInput(p,{kick:false});
+  P.tick(g);
+  assert.ok(g.ball.vx>0,'fast incoming ball should rebound, not be glued to player');
+  const shot=kickSetup();P.tick(shot.g);
+  assert.equal(shot.p.lastKick,'full');
+  assert.ok(shot.g.ball.vx>4.5,'full-power kicks remain untouched');
+});
+
+test('approaching a ball without contact creates no magnetic pull',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-50;p.y=P.CY;p.vx=2;
+  P.setInput(p,{x:1,kick:false});
+  P.tick(g);
+  assert.equal(g.ball.vx,0);
+  assert.equal(g.ball.x,P.CX,'ball should not be attached to player until collision');
+});
