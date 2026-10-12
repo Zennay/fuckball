@@ -71,7 +71,7 @@
     const length=Math.hypot(x,y);if(length>1){x/=length;y/=length;}
     p.input={x,y,kick:input?.kick===true};
   }
-  function collide(a,b,bCoef=0.5){
+  function collide(a,b,bCoef=0.5,scaleA=1,scaleB=1){
     const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),r=a.r+b.r;
     if(d>=r)return false;
     const nx=d>1e-9?dx/d:1,ny=d>1e-9?dy/d:0;
@@ -80,8 +80,15 @@
     const push=r-d;
     a.x-=nx*push*imA/total;a.y-=ny*push*imA/total;
     b.x+=nx*push*imB/total;b.y+=ny*push*imB/total;
-    const rel=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
-    if(rel<0){const impulse=-(1+bCoef)*rel/total;a.vx-=nx*impulse*imA;a.vy-=ny*impulse*imA;b.vx+=nx*impulse*imB;b.vy+=ny*impulse*imB;}
+    // Restitution operates on *world displacement speeds*. The custom 1.2x
+    // ball-travel tuning scales ball movement, so comparing raw stored speeds
+    // previously treated an already-receding ball as approaching a player.
+    const rel=(b.vx*scaleB-a.vx*scaleA)*nx+(b.vy*scaleB-a.vy*scaleA)*ny;
+    if(rel<0){
+      const impulse=-(1+bCoef)*rel/total;
+      a.vx-=nx*impulse*imA/scaleA;a.vy-=ny*impulse*imA/scaleA;
+      b.vx+=nx*impulse*imB/scaleB;b.vy+=ny*impulse*imB/scaleB;
+    }
     return true;
   }
   // Match the disc solver on *every* contact. The former "controlled dribble"
@@ -89,11 +96,11 @@
   // made it ride the player like a magnet. Natural collisions transfer only
   // the physical impulse; there is no hidden catch, slowdown or auto-kick.
   function collidePlayerBall(g,p,ball){
-    return collide(p,ball,g.rebound);
+    return collide(p,ball,g.rebound,1,BALL_SPEED_MULTIPLIER);
   }
-  function againstStatic(disc,x,y,r,bCoef){
+  function againstStatic(disc,x,y,r,bCoef,motionScale=1){
     const obstacle={x,y,vx:0,vy:0,r,invMass:0};
-    return collide(obstacle,disc,bCoef);
+    return collide(obstacle,disc,bCoef,1,motionScale);
   }
   function bounceBound(o,axis,min,max,bCoef){
     if(o[axis]<min){o[axis]=min;const v=axis==='x'?'vx':'vy';if(o[v]<0)o[v]=-o[v]*bCoef;}
@@ -155,12 +162,13 @@
     }
     if(!hit)return;
     const {p,t,nx,ny}=hit;
-    const relative=(ball.vx-p.vx)*nx+(ball.vy-p.vy)*ny;
+    const relative=(ball.vx*BALL_SPEED_MULTIPLIER-p.vx)*nx+(ball.vy*BALL_SPEED_MULTIPLIER-p.vy)*ny;
     if(relative>=0)return;
     const invA=PLAYER.invMass,invB=BALL.invMass;
     const impulse=-(1+g.rebound)*relative/(invA+invB);
     p.vx-=nx*impulse*invA;p.vy-=ny*impulse*invA;
-    ball.vx+=nx*impulse*invB;ball.vy+=ny*impulse*invB;
+    ball.vx+=nx*impulse*invB/BALL_SPEED_MULTIPLIER;
+    ball.vy+=ny*impulse*invB/BALL_SPEED_MULTIPLIER;
     // Finish the unused fraction of this tick with the *new* velocity.
     // Normal motion multiplies ball displacement by BALL_SPEED_MULTIPLIER;
     // forgetting it only on swept impacts made high-speed contact appear to
@@ -222,7 +230,7 @@
         }
       }
     }
-    for(const [x,y] of POSTS)againstStatic(ball,x,y,POST_R,g.rebound);
+    for(const [x,y] of POSTS)againstStatic(ball,x,y,POST_R,g.rebound,BALL_SPEED_MULTIPLIER);
     // Main top and bottom field walls use the host-selected rebound coefficient.
     if(ball.y-BALL_R<TOP){ball.y=TOP+BALL_R;ball.vy=Math.abs(ball.vy)*wallRebound(g);ball.lastWall='top';ball.lastWallTick=g.tick;}
     if(ball.y+BALL_R>BOTTOM){ball.y=BOTTOM-BALL_R;ball.vy=-Math.abs(ball.vy)*wallRebound(g);ball.lastWall='bottom';ball.lastWallTick=g.tick;}
