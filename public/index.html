@@ -15,21 +15,57 @@
 .settings .label{margin:0} .teamname.red{color:#f07971}.teamname.blue{color:#7f9dff}
 .overlay{top:41%;font-size:clamp(19px,3.6vw,39px);letter-spacing:.015em;text-shadow:2px 3px 0 #24201e,0 0 12px #24201e}
 .gamebox{border-radius:7px}.panel{border-radius:7px}.matchline{background:#352c2b}.code{border-color:#9ba66f}
-</style></head><body><div class="shell">
+
+/* Full-viewport arena with optionally hidden lobby */
+html,body{height:100%;width:100%;overflow-x:hidden}
+.shell{width:100%;max-width:none;min-height:100vh;min-height:100dvh;padding:0;display:flex;flex-direction:column}
+.top{height:50px;min-height:50px;padding:5px 16px;margin:0;flex-wrap:nowrap}
+.topright{white-space:nowrap}
+.hero,.bottomtip{display:none}
+.layout{display:block;position:relative;flex:1;min-height:0}
+.gamebox{width:100%;height:calc(100vh - 50px);height:calc(100dvh - 50px);border:0;border-radius:0;display:flex;flex-direction:column;overflow:hidden}
+.matchline{padding:6px 12px;min-height:46px;flex:0 0 auto;gap:10px}
+.match-actions{display:flex;gap:8px;align-items:center}
+.match-actions .btn{padding:9px 12px;white-space:nowrap}
+.playfield{min-height:0;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#pitch{width:auto;height:auto;max-width:100%;max-height:100%;aspect-ratio:auto;touch-action:none}
+.gamefoot{min-height:37px;padding:6px 12px;flex:0 0 auto}
+.sidebar{display:none;position:absolute;right:12px;top:12px;bottom:12px;width:min(360px,calc(100% - 24px));min-width:0;z-index:30;background:#101821;border:1px solid #394450;border-radius:10px;padding:12px;overflow-y:auto;box-shadow:0 16px 45px rgba(0,0,0,.5);align-content:start}
+.shell.settings-open .sidebar{display:grid;grid-template-columns:1fr;gap:12px}
+.shell.settings-open .sidebar .panel:last-child{grid-column:auto}
+.shell:fullscreen,.shell.is-maximized{width:100%;height:100vh;height:100dvh;min-height:0;background:#10141b;overflow:hidden}
+.shell:fullscreen .top,.shell.is-maximized .top{display:none}
+.shell:fullscreen .gamebox,.shell.is-maximized .gamebox{height:100vh;height:100dvh}
+.shell:fullscreen .sidebar,.shell.is-maximized .sidebar{top:55px;bottom:12px}
+@media(max-width:700px){
+ .shell{padding:0}.top{height:42px;min-height:42px;padding:4px 10px}
+ .brand{font-size:19px}.topright{font-size:10px}
+ .gamebox{height:calc(100vh - 42px);height:calc(100dvh - 42px)}
+ .matchline{min-height:44px;gap:5px;padding:5px 6px}
+ .matchline .tag{padding:5px 6px;font-size:9px}
+ .scoreboard{gap:5px;font-size:17px}
+ .match-actions{gap:4px}.match-actions .btn{font-size:11px;padding:7px}
+ .gamefoot{padding:5px 8px;font-size:10px}
+ .sidebar{right:6px;top:6px;bottom:6px;width:min(360px,calc(100% - 12px))}
+ .touchcontrols{flex:0 0 auto;padding:6px 12px;gap:7px}
+ .pad{grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px)}
+ .touchcontrols .kick{width:66px;height:66px}
+}
+</style></head><body><div class="shell" id="appShell">
 <header class="top"><div class="brand"><span class="logo">⚽</span><span>FUCKBALL<small>BFF BIG V4</small></span></div><div class="topright"><span class="live"></span><span>PLAY IN YOUR BROWSER · NO ACCOUNT</span></div></header>
 <section class="hero"><h1>BFF Big v4 · Player rings +10% speed</h1><p>BFF Big v4 with 10% faster players, screenshot-matched player rings, a faster ball and a smarter practice opponent. Play solo or with friends.</p></section>
 <div class="layout"><main class="gamebox">
-<div class="matchline"><span class="tag" id="modeTag">SOLO · PRACTICE</span><div class="scoreboard"><span class="teamname red">RED</span><span id="scoreRed">0</span><span class="dash">:</span><span id="scoreBlue">0</span><span class="teamname blue">BLUE</span></div><span class="tag" id="matchTimer">00:00</span></div>
+<div class="matchline"><span class="tag" id="modeTag">SOLO · PRACTICE</span><div class="scoreboard"><span class="teamname red">RED</span><span id="scoreRed">0</span><span class="dash">:</span><span id="scoreBlue">0</span><span class="teamname blue">BLUE</span></div><span class="tag" id="matchTimer">00:00</span><div class="match-actions"><button id="lobbyToggle" class="btn ghost" type="button" aria-controls="roomSidebar" aria-expanded="false">⚙ Lobby</button><button id="fullscreenBtn" class="btn ghost" type="button" aria-pressed="false">⛶ Fullscreen</button></div></div>
 <div class="playfield"><canvas id="pitch" width="1700" height="800" aria-label="Top-down football pitch. Move with WASD or arrow keys and kick with space."></canvas><div id="overlay" class="overlay" aria-live="polite"></div></div>
 <div class="gamefoot"><span class="foot-status" id="status">Playing against a practice bot</span><span class="foot-status" id="fpsMeter" title="Rendering follows your display refresh rate; physics stays at 60 Hz">FPS UNLOCKED · PHYSICS 60 Hz</span><div class="help">MOVE <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> OR <span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span> · KICK <span class="key">SPACE</span></div></div>
 <div class="touchcontrols" aria-label="Touch controls"><div class="pad"><span></span><button type="button" data-dir="up" aria-label="Move up">↑</button><span></span><button type="button" data-dir="left" aria-label="Move left">←</button><span></span><button type="button" data-dir="down" aria-label="Move down">↓</button><button type="button" data-dir="right" aria-label="Move right">→</button></div><button type="button" class="kick" data-dir="kick" aria-label="Kick ball">KICK</button></div>
-</main><aside class="sidebar">
+</main><aside id="roomSidebar" class="sidebar">
 <section class="panel"><h2>Play your way</h2><p class="subtitle">Instant solo practice, or make a private room and send your friend the code.</p>
 <label class="label" for="nickname">Your player name</label><div class="field"><input maxlength="18" id="nickname" value="Player" autocomplete="nickname"></div>
 <div class="buttons"><button class="btn primary" id="practice" type="button">⚽ Practice solo</button><button class="btn ghost" id="create" type="button">+ Create room</button></div>
 <label for="roomInput" class="label">Have a room code?</label><div class="join"><input id="roomInput" type="text" maxlength="6" placeholder="ABC123" aria-label="Room code"><button class="btn ghost" id="join" type="button">Join</button></div><p class="notice" id="notice" role="status">Solo is ready. Multiplayer requires the Node server.</p></section>
 <section class="panel"><div class="roomhead"><h2 style="margin:0">Players</h2><span id="roomCode" class="code">PRACTICE</span></div><div class="players" id="roster"></div><div class="teamselect"><button class="btn ghost" id="redTeam" type="button">Join Red</button><button class="btn ghost" id="blueTeam" type="button">Join Blue</button><button class="btn ghost" id="spectate" type="button">Spectate</button></div><div class="buttons" style="margin:12px 0 0"><button class="btn ghost" id="restart" type="button" style="width:100%">Start match</button><button class="btn ghost" id="stop" type="button" disabled>Stop</button><button class="btn ghost" id="pause" type="button" disabled>Pause</button></div>
-<div class="settings"><label class="label" for="scoreLimit">Score limit</label><select id="scoreLimit"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select><label class="label" for="timeLimit">Time limit</label><select id="timeLimit"><option value="1">1 min</option><option value="3" selected>3 min</option><option value="5">5 min</option><option value="10">10 min</option></select><label class="label" for="ballRebound">Ball rebound</label><select id="ballRebound" aria-label="Ball rebound strength"><option value="0.412" selected>BFF original · 41.2%</option><option value="0.3">Extra soft · 30%</option><option value="0.7">Medium · 70%</option><option value="1">Hard · 100%</option></select></div><div class="clientSettings"><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">0 ms</output></label><input type="range" id="extrapolation" min="0" max="200" step="10" value="0" aria-describedby="extrapHelp"><small id="extrapHelp">Collision-aware prediction (0–200 ms). Visual only: no changes to actual ping or 60 Hz physics. Rendering stays unlocked at your display refresh rate, even at 0 ms.</small></div></section>
+<div class="settings"><label class="label" for="scoreLimit">Score limit</label><select id="scoreLimit"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select><label class="label" for="timeLimit">Time limit</label><select id="timeLimit"><option value="1">1 min</option><option value="3" selected>3 min</option><option value="5">5 min</option><option value="10">10 min</option></select><label class="label" for="ballRebound">Ball rebound</label><select id="ballRebound" aria-label="Ball rebound strength"><option value="0.412" selected>BFF original · 41.2%</option><option value="0.3">Extra soft · 30%</option><option value="0.7">Medium · 70%</option><option value="1">Hard · 100%</option></select></div><div class="clientSettings"><label class="label" for="renderQuality">Render quality</label><select id="renderQuality" aria-label="Render resolution"><option value="1" selected>Fast · 1× (140+ FPS target)</option><option value="1.5">Balanced · 1.5×</option><option value="2">Sharp · 2×</option></select><small>Unlimited rendering follows your display refresh rate. On a 60 Hz display, 140 FPS cannot be shown.</small><label class="label" for="extrapolation">Extrapolation <output id="extrapValue" for="extrapolation">0 ms</output></label><input type="range" id="extrapolation" min="0" max="200" step="10" value="0" aria-describedby="extrapHelp"><small id="extrapHelp">Collision-aware prediction (0–200 ms). Visual only: no changes to actual ping or 60 Hz physics. Rendering stays unlocked at your display refresh rate, even at 0 ms.</small></div></section>
 <section class="panel"><h2>Room chat</h2><p class="subtitle">Available when you're in an online room.</p><div class="chatlog" id="chatlog" aria-live="polite"><div>Welcome to Fuckball BFF Big v4!</div></div><form class="chatinput" id="chatForm"><input id="chatText" maxlength="160" placeholder="Say something..." aria-label="Chat message" disabled><button type="submit" class="btn ghost" id="sendChat" disabled>Send</button></form></section>
 </aside></div><p class="bottomtip"><strong>Kick timing:</strong> hold Space / X to keep the player's black outline solid white, even before the ball arrives. Release to return it to black. A well-timed contact produces a full shot, while a long early hold creates a softer baby kick. <strong>Wall boost:</strong> move into a wall as you kick a ball against it to add speed along the wall. Independent remake, not affiliated with HaxBall.</p></div>
 <script src="/shared/stadium.js"></script><script src="/shared/physics.js"></script><script src="/shared/prediction.js"></script><script src="/shared/bot.js"></script><script>
@@ -38,10 +74,11 @@ const P=globalThis.PulsePhysics,Prediction=globalThis.PulsePrediction,Bot=global
 const $=id=>document.getElementById(id);
 const canvas=$('pitch'),ctx=canvas.getContext('2d');
 const held=new Set(),touchHeld=new Set();
-let extrapMs=0;
+let extrapMs=0,renderScale=1;
     try{const saved=Number(localStorage.getItem('pulseball.extrapolation'));if(Number.isFinite(saved)&&saved>=0)extrapMs=Math.round(P.clamp(saved,0,200)/10)*10;}catch{}
     $('extrapolation').value=String(extrapMs);$('extrapValue').textContent=extrapMs+' ms';
     $('extrapolation').addEventListener('input',()=>{extrapMs=P.clamp(Number($('extrapolation').value)||0,0,200);$('extrapValue').textContent=extrapMs+' ms';try{localStorage.setItem('pulseball.extrapolation',String(extrapMs));}catch{}});
+    $('renderQuality').addEventListener('change',()=>{renderScale=P.clamp(Number($('renderQuality').value)||1,1,2);});
     let game,mode='solo',myId='solo',socket=null,roomCode='',hostId='',roster=[],lastGame=null,prevGame=null,lastReceive=0,frameTs=performance.now(),accumulator=0,fpsStart=frameTs,fpsFrames=0;
 function makeSolo(){
   mode='solo';roomCode='';hostId='';myId='solo';roster=[];prevGame=null;lastGame=null;
@@ -124,6 +161,41 @@ function editing(el){return !!el&&['INPUT','TEXTAREA','SELECT'].includes(el.tagN
 window.addEventListener('keydown',e=>{if(editing(document.activeElement))return;const k=keyMap[e.code];if(k){e.preventDefault();held.add(k);}}, {passive:false});
 window.addEventListener('keyup',e=>{const k=keyMap[e.code];if(k){held.delete(k);}});
 window.addEventListener('blur',()=>{held.clear();touchHeld.clear();});
+const shell=$('appShell');
+let fullscreenFallback=false,sidebarVisible=false;
+const fullscreenBtn=$('fullscreenBtn'),lobbyToggle=$('lobbyToggle');
+function setSidebar(open){
+  sidebarVisible=!!open;
+  shell.classList.toggle('settings-open',sidebarVisible);
+  lobbyToggle.setAttribute('aria-expanded',String(sidebarVisible));
+  lobbyToggle.textContent=sidebarVisible?'✕ Close lobby':'⚙ Lobby';
+}
+function updateFullscreen(){
+  const active=fullscreenFallback||!!document.fullscreenElement;
+  fullscreenBtn.textContent=active?'↙ Exit fullscreen':'⛶ Fullscreen';
+  fullscreenBtn.setAttribute('aria-pressed',String(active));
+}
+async function toggleFullscreen(){
+  if(document.fullscreenElement){
+    try{await document.exitFullscreen();}catch{}
+    fullscreenFallback=false;
+  }else if(fullscreenFallback){
+    fullscreenFallback=false;
+  }else if(typeof shell.requestFullscreen==='function'){
+    try{await shell.requestFullscreen({navigationUI:'hide'});}catch{fullscreenFallback=true;}
+  }else fullscreenFallback=true;
+  shell.classList.toggle('is-maximized',fullscreenFallback);
+  updateFullscreen();
+}
+lobbyToggle.addEventListener('click',()=>setSidebar(!sidebarVisible));
+fullscreenBtn.addEventListener('click',()=>{void toggleFullscreen();});
+document.addEventListener?.('fullscreenchange',updateFullscreen);
+window.addEventListener('keydown',e=>{
+  if(e.code==='KeyF'&&!e.repeat&&!editing(document.activeElement)){
+    e.preventDefault();void toggleFullscreen();
+  }
+  if(e.code==='Escape'&&sidebarVisible)setSidebar(false);
+});
 for(const button of document.querySelectorAll('[data-dir]')){
   const dir=button.dataset.dir;
   button.addEventListener('pointerdown',e=>{e.preventDefault();touchHeld.add(dir);button.classList.add('pressed');button.setPointerCapture(e.pointerId);});
@@ -140,7 +212,18 @@ function updateSolo(){
   P.setInput(bot,Bot.decide(game,bot));
   P.tick(game);
 }
-function fitCanvas(){const rect=canvas.getBoundingClientRect();const dpr=Math.min(devicePixelRatio||1,2);const w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h;}}
+function fitCanvas(){
+  const rect=(canvas.parentElement||canvas).getBoundingClientRect();
+  const ratio=P.W/P.H;
+  const usableW=Math.max(1,rect.width),usableH=Math.max(1,rect.height);
+  const cssW=Math.min(usableW,usableH*ratio),cssH=cssW/ratio;
+  const width=cssW.toFixed(2)+'px',height=cssH.toFixed(2)+'px';
+  if(canvas.style.width!==width)canvas.style.width=width;
+  if(canvas.style.height!==height)canvas.style.height=height;
+  const dpr=Math.min(Math.max(Number(devicePixelRatio)||1,1),renderScale);
+  const w=Math.max(1,Math.round(cssW*dpr)),h=Math.max(1,Math.round(cssH*dpr));
+  if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h;}
+}
 function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 function stadiumColor(color, fallback='#666'){
   const hex=String(color||'').replace(/[^a-fA-F0-9]/g,'').padStart(6,'0').slice(-6);
