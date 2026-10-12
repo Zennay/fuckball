@@ -26,8 +26,9 @@ function runPage(){
     constructor(id=''){
       this.id=id;this.value='';this.textContent='';this.disabled=false;
       this.children=[];this.listeners={};this.dataset={};this.classList={add(){},remove(){},toggle(){}};
-      this.style={};this.width=1700;this.height=800;
+      this.style={};this.attrs={};this.width=1700;this.height=800;
     }
+    setAttribute(key,value){this.attrs[key]=String(value);}
     getContext(){return this.id==='pitch'?mainCtx:offCtx;}
     getBoundingClientRect(){return {width:850,height:400};}
     addEventListener(type,handler){(this.listeners[type]??=[]).push(handler);}
@@ -130,4 +131,37 @@ test('selection circle matches screenshot spacing and appears around local playe
   assert.ok(rim);
   assert.ok((marker.r/15)>1.65&&(marker.r/15)<1.68,'selection radius matches ~74px / ~45px');
   assert.ok(marker.r-marker.width/2 > rim.r+rim.width/2+6,'visible gap stays clear for small ball');
+});
+
+test('fullscreen game defaults to viewport-filling arena with controls available in a drawer',()=>{
+  const app=runPage();
+  const canvas=app.fields.pitch;
+  canvas.parentElement={getBoundingClientRect:()=>({width:1600,height:650})};
+  app.draw(1000/144);
+  assert.equal(canvas.style.height,'650.00px');
+  assert.ok(Math.abs(canvas.width/canvas.height-1700/800)<0.01,'viewport must not stretch game geometry');
+  assert.equal(app.fields.lobbyToggle.attrs['aria-expanded'],undefined);
+  app.fields.lobbyToggle.fire('click');
+  assert.equal(app.fields.lobbyToggle.attrs['aria-expanded'],'true','room and multiplayer controls must stay reachable');
+  app.fields.lobbyToggle.fire('click');
+  assert.equal(app.fields.lobbyToggle.attrs['aria-expanded'],'false');
+  app.fields.fullscreenBtn.fire('click');
+  assert.equal(app.fields.fullscreenBtn.attrs['aria-pressed'],'true','fullscreen fallback works in restricted embedded browsers');
+  app.fields.fullscreenBtn.fire('click');
+  assert.equal(app.fields.fullscreenBtn.attrs['aria-pressed'],'false');
+});
+
+test('render resolution defaults to fast 1x and can be raised without changing simulation timing',()=>{
+  const app=runPage();const canvas=app.fields.pitch;
+  canvas.parentElement={getBoundingClientRect:()=>({width:1700,height:800})};
+  app.draw(1000/240);
+  assert.equal(canvas.width,1700,'default canvas uses 1x for high-refresh performance');
+  assert.equal(canvas.height,800);
+  app.fields.renderQuality.value='2';
+  app.fields.renderQuality.fire('change');
+  app.draw(2000/240);
+  assert.equal(canvas.width,3400,'sharp setting uses 2x device resolution');
+  assert.equal(canvas.height,1600);
+  for(let i=3;i<=480;i++)app.draw(i*1000/240);
+  assert.match(app.fields.fpsMeter.textContent,/240 FPS/);
 });
