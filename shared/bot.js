@@ -69,6 +69,21 @@
       tx=b.x-forward*(P.PLAYER_R+P.BALL_R+45);
       ty=clamp(b.y+(bot.y>=b.y?1:-1)*65,P.TOP+25,P.BOTTOM-25);
     }
+    // Emergency defense: cover the shooting lane instead of blindly chasing
+    // the ball toward our own net. Use the projected arrival at the goal line.
+    const ownHalf=defendingLeft?f.x<P.CX-220:f.x>P.CX+220;
+    const towardOwn=forward*b.vx < -0.7;
+    const shotLane=b.y>P.GOAL_TOP-65&&b.y<P.GOAL_BOTTOM+65;
+    if(ownHalf&&towardOwn&&shotLane&&distance>38){
+      const arrival=clamp(Math.abs((ownGoalX-b.x)/(b.vx||1)),0,34);
+      const future=forecast(g,arrival);
+      const safeGoalX=ownGoalX+forward*58;
+      const between=defendingLeft?bot.x<=b.x:bot.x>=b.x;
+      if(!between){
+        tx=clamp(safeGoalX,P.LEFT+P.PLAYER_R+6,P.RIGHT-P.PLAYER_R-6);
+        ty=clamp(future.y,P.GOAL_TOP+12,P.GOAL_BOTTOM-12);
+      }
+    }
     // At kickoff only the kicking team may enter the center circle.
     if(g.kickoffActive&&g.kickoffTeam!==bot.team){
       tx=P.CX-forward*(P.STADIUM.bg.kickOffRadius+P.PLAYER_R+25);
@@ -82,8 +97,41 @@
     const aligned=((dx*ux+dy*uy)/Math.max(1,contact))>0.38;
     // Re-tap for full strength only when we can actually contact the ball.
     const canKick=!g.kickoffActive||g.kickoffTeam===bot.team;
-    const kick=canKick&&aligned&&contact<=P.PLAYER_R+P.BALL_R+P.KICK_REACH+1 && (bot.kickCooldown||0)===0;
+    // Time a kick at the point of impact. Only pre-arm when the ball is
+    // genuinely closing in within ~1 physics tick, avoiding random whiffs.
+    const nx=contact>1e-6?dx/contact:forward,ny=contact>1e-6?dy/contact:0;
+    const closing=(bot.vx-b.vx*P.BALL_SPEED_MULTIPLIER)*nx+(bot.vy-b.vy*P.BALL_SPEED_MULTIPLIER)*ny;
+    const reach=P.PLAYER_R+P.BALL_R+P.KICK_REACH;
+    const imminent=closing>0.45&&contact<=reach+Math.min(1.7,closing);
+    const kick=canKick&&aligned&&(contact<=reach+1||imminent) && (bot.kickCooldown||0)===0;
     return {...movement,kick};
   }
-  return {decide,forecast,steer};
+  // Lightweight offline practice companion. Replies are generated locally
+  // from game context; no account, API key, network call or tokens are needed.
+  function reply(message,g,bot){
+    const q=String(message||'').toLowerCase().trim().slice(0,160);
+    const score=g?.score||[0,0],ball=g?.ball||{x:P.CX,y:P.CY};
+    const distance=bot?Math.hypot(ball.x-bot.x,ball.y-bot.y):0;
+    if(!q)return 'Type something and I’ll answer.';
+    if(/^(hey|hi|hello|hoi|hallo|yo|sup|hey bot|hi bot)[!?. ]*$/.test(q))
+      return 'Yo! Ready for another round? Try to beat me 1v1.';
+    if(/(extrap|lag|ping|delay|ms|fps)/.test(q))
+      return 'Use /extrapolation 135 in chat, or Esc → Video. Prediction is visual only; physics stays at 60 Hz.';
+    if(/(score|stand|winning|win|lose|winn|scorebord)/.test(q))
+      return `Score is ${score[0]}–${score[1]}. ${score[0]>score[1]?'I’m ahead!':score[1]>score[0]?'You’re ahead — for now.':'All tied up!'}`;
+    if(/(help|how|hoe|controls|key|shoot|schiet|kick|space|bestuur)/.test(q))
+      return 'WASD / arrows to move, Space or X to kick. Hold early for a softer kick; aim your run for a clean full shot.';
+    if(/(map|stadium|veld|bff)/.test(q))
+      return 'We’re playing BFF Big v4 — your custom stadium. I’ll keep defending these goals.';
+    if(/(defend|defens|verdedig|goalie|keep|attack|aanval|tactic|strategie)/.test(q))
+      return distance<100?'I’m close to the ball. Try changing direction before you shoot.':'I’m watching the shooting lane. Attack the open side.';
+    if(/(nice|goed|gg|good|wp|lekker|goal|doelpunt)/.test(q))
+      return 'GG! Keep the pressure on — I’m not giving up.';
+    if(/(harder|stronger|moeilijk|better|beter|easy|makkelijk|weak|zwak)/.test(q))
+      return 'Challenge accepted. I’ll intercept earlier, protect my goal and time my shots.';
+    if(/(bye|later|doei|ciao)/.test(q))
+      return 'GG, see you next match!';
+    return distance<75?'I’m right on the ball. Show me your next move!':'I hear you. Try a quick one-two off the wall — I’ll try to stop it.';
+  }
+  return {decide,forecast,steer,reply};
 });
