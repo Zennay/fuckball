@@ -57,7 +57,7 @@ test('tiny fixed post deflects shots at goal edges',()=>{
 test('default BFF rebound is 0.412, and host rebound adjustment remains available',()=>{
   for(const factor of [0.412,0.7,1]){
     const g=fresh({rebound:factor});g.ball.y=P.TOP+P.BALL_R+1;g.ball.vy=-5;P.tick(g);
-    assert.ok(Math.abs(g.ball.vy-4.95*factor)<1e-8);
+    assert.ok(Math.abs(g.ball.vy-4.95*P.wallRebound(g))<1e-8);
   }
 });
 test('acceleration and kick strength apply accurately, with reduced speed while kicking',()=>{
@@ -145,14 +145,14 @@ test('fast ball crosses a full player diameter only after a resolved impact',()=
 });
 
 
-test('BFF ball gains another 20% travel speed while original velocity damping and bounce stay unchanged',()=>{
-  assert.equal(P.BALL_SPEED_MULTIPLIER,1.44);
+test('ball travels 20% faster than original physics while velocity damping stays unchanged',()=>{
+  assert.equal(P.BALL_SPEED_MULTIPLIER,1.2);
   const g=fresh();g.kickoffActive=false;
   const startingX=g.ball.x,startingY=g.ball.y;
   g.ball.vx=6;g.ball.vy=2;
   P.tick(g);
-  assert.ok(Math.abs(g.ball.x-startingX-6*0.99*1.44)<1e-9);
-  assert.ok(Math.abs(g.ball.y-startingY-2*0.99*1.44)<1e-9);
+  assert.ok(Math.abs(g.ball.x-startingX-6*0.99*1.2)<1e-9);
+  assert.ok(Math.abs(g.ball.y-startingY-2*0.99*1.2)<1e-9);
   assert.equal(g.ball.vx,6*0.99);
   assert.equal(g.ball.vy,2*0.99);
 });
@@ -205,7 +205,7 @@ test('player movement is precisely 10% faster in regular and held-kick modes',()
     const expected=originalAcc*1.1*.96*(1-.96**60)/(1-.96);
     assert.ok(Math.abs(p.vx-expected)<1e-9,`kick=${kick}: velocity should be 10% faster`);
   }
-  assert.equal(P.BALL_SPEED_MULTIPLIER,1.44,'ball gains 20% above its previous multiplier');
+  assert.equal(P.BALL_SPEED_MULTIPLIER,1.2,'ball retains intended 20% boost');
   assert.equal(P.PLAYER.kickStrength,4.545,'kicks must not gain an accidental 10% boost');
 });
 
@@ -264,8 +264,12 @@ test('approaching a ball without contact creates no magnetic pull',()=>{
   assert.equal(g.ball.x,P.CX,'ball should not be attached to player until collision');
 });
 
-test('open-field ball pace rises 20% compared with the previous game setting',()=>{
-  assert.ok(Math.abs(P.BALL_SPEED_MULTIPLIER/1.2-1.2)<1e-12);
+test('ball speed boost is 20% over original and walls retain more rebound energy',()=>{
+  assert.equal(P.BALL_SPEED_MULTIPLIER,1.2);
+  const g=fresh();g.kickoffActive=false;
+  assert.equal(P.wallRebound(g),P.WALL_REBOUND_AT_DEFAULT);
+  assert.ok(P.wallRebound(g)>P.DEFAULT_REBOUND,'wall impacts should not bleed most of the velocity');
+  assert.equal(P.wallRebound(fresh({rebound:1})),1,'hard wall setting must remain capped');
 });
 test('ordinary diagonal wall run can produce a rocket with an initially straight ball',()=>{
   const g=fresh(),p=add(g);g.kickoffActive=false;
@@ -274,4 +278,31 @@ test('ordinary diagonal wall run can produce a rocket with an initially straight
   P.setInput(p,{x:1,y:-1,kick:true});P.tick(g);
   assert.equal(p.lastKick,'wall-boost','diagonal moving wall presses produce rockets');
   assert.ok(g.ball.vx>1.5,'wall rocket redirects the ball along the wall');
+});
+
+test('visible wall collision occurs when the disc edge reaches the BFF field line',()=>{
+  for(const side of ['top','bottom','left','right']){
+    const g=fresh();g.kickoffActive=false;
+    const axis=side==='top'||side==='bottom'?'y':'x';
+    const vel=axis==='y'?'vy':'vx',boundary=side==='top'?P.TOP:side==='bottom'?P.BOTTOM:side==='left'?P.LEFT:P.RIGHT;
+    const dir=side==='top'||side==='left'?-1:1;
+    g.ball[axis]=boundary-dir*(P.BALL_R+0.4);g.ball[vel]=dir*5;
+    if(axis==='x')g.ball.y=P.GOAL_TOP-38;else g.ball.x=P.CX+60;
+    P.tick(g);
+    assert.ok(Math.abs(g.ball[axis]-(boundary-dir*P.BALL_R))<1e-8,side+' ball rim should align exactly with the wall');
+    assert.ok(g.ball[vel]*dir<0,side+' must bounce back');
+    assert.ok(Math.abs(g.ball[vel])>3.6,side+' should retain more than ~75% of pre-impact speed');
+  }
+});
+
+test('walking contact remains soft yet fast shots rebound with untouched configured coefficient',()=>{
+  const g=fresh(),p=add(g);g.kickoffActive=false;
+  p.x=P.CX-22;p.y=P.CY;p.vx=1.5;
+  P.setInput(p,{kick:false});P.tick(g);
+  assert.ok(g.ball.vx>0 && g.ball.vx*P.BALL_SPEED_MULTIPLIER<=p.vx+1e-5);
+  const incoming=fresh(),def=add(incoming);incoming.kickoffActive=false;
+  def.x=P.CX;def.y=P.CY;
+  incoming.ball.x=P.CX+P.PLAYER_R+P.BALL_R+2;incoming.ball.vx=-9;
+  P.tick(incoming);
+  assert.ok(incoming.ball.vx>0,'hard incoming shot must bounce rather than get damped as dribble');
 });
