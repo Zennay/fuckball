@@ -138,11 +138,12 @@
     return frames===1?PLAYER.kickStrength:0;
   }
   function sweepFastBall(g,startX,startY){
-    // Continuous ball/player impact for an unusually fast shot. At high ball
-    // speeds the disc may cross an entire player in one 60 Hz tick; detecting
-    // only final overlap would let both simulation and extrapolation tunnel.
+    // Resolve the first point of impact even for MEDIUM-speed shots that finish
+    // inside a player. Deferring those contacts until after full penetration
+    // causes a visible displacement of both discs (the apparent sticky bounce).
+    // Truly overlapping starts still use the regular disc solver below.
     const ball=g.ball,dx=ball.x-startX,dy=ball.y-startY;
-    if(Math.hypot(dx,dy)<PLAYER_R+BALL_R)return;
+    if(dx===0&&dy===0)return;
     let hit=null;
     for(const p of g.players){
       if(p.team!==1&&p.team!==2)continue;
@@ -154,10 +155,6 @@
       if(discr<0)continue;
       const t=(-b-Math.sqrt(discr))/(2*a);
       if(t<0||t>1||hit&&t>=hit.t)continue;
-      // Keep the ordinary end-overlap collision unless the ball has almost
-      // reached the opposite side of the disc in this single simulation tick.
-      const ex=ball.x-p.x,ey=ball.y-p.y;
-      if(ex*sx+ey*sy>0&&Math.hypot(ex,ey)<r)continue;
       hit={p,t,nx:(sx+dx*t)/r,ny:(sy+dy*t)/r};
     }
     if(!hit)return;
