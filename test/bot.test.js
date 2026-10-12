@@ -123,3 +123,37 @@ test('non-chasing AI supports dynamically and keeps moving while the ball is sta
   assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>.005,
     'support movement should adjust passing lanes over time instead of staying frozen');
 });
+
+test('AI interceptor selection stays stable across small teammate distance changes',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const a=P.player('a','A',1),b=P.player('b','B',1);
+  P.addPlayer(g,a);P.addPlayer(g,b);
+  a.x=P.CX-50;a.y=P.CY;b.x=P.CX-70;b.y=P.CY;
+  AI.decide(g,a);
+  assert.equal(g.aiChasers[1],'a');
+  b.x=P.CX-40;AI.decide(g,b);
+  assert.equal(g.aiChasers[1],'a','a marginally closer teammate must not flip the role');
+  a.x=P.CX-240;AI.decide(g,b);
+  assert.equal(g.aiChasers[1],'b','a materially closer interceptor should take over');
+});
+test('AI treats a player obstructing the pass lane as a reason not to pass',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const attacker=P.player('red','Red',1),defender=P.player('blue','Blue',2);
+  P.addPlayer(g,attacker);P.addPlayer(g,defender);
+  const x=P.CX,y=P.CY;
+  Object.assign(defender,{x:x+100,y:y+60});
+  assert.equal(AI.laneClear(g,x,y,x+200,y+120,1),false);
+  defender.y=y+180;
+  assert.equal(AI.laneClear(g,x,y,x+200,y+120,1),true);
+});
+test('AI teammate roles stay active when human is close to possession',()=>{
+  const g=P.createGame();g.freeze=0;g.kickoffActive=false;
+  const solo=P.player('solo','You',2),a=P.player('support-a','A',2),b=P.player('support-b','B',2);
+  for(const p of [solo,a,b])P.addPlayer(g,p);
+  solo.x=P.CX-18;solo.y=P.CY;
+  a.x=P.CX-130;a.y=P.CY+60;
+  b.x=P.CX-150;b.y=P.CY-60;
+  const first=AI.decide(g,a),second=AI.decide(g,b);
+  assert.ok(Math.hypot(first.x,first.y)>0.1||Math.hypot(second.x,second.y)>0.1);
+  assert.ok([a.id,b.id].includes(g.aiChasers[2]),'AI retains a reserve interceptor');
+});
