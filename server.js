@@ -125,7 +125,7 @@ setInterval(()=>{
   for(const room of rooms.values()){
     const oldPhase=room.game.phase;P.tick(room.game);
     if(oldPhase!==room.game.phase)announceLobby(room);
-    if(ticks%3===0)sendState(room);
+    if(ticks%2===0)sendState(room);
   }
 },1000/60);
 server.listen(PORT,'0.0.0.0',()=>console.log(`Pulseball running on http://localhost:${PORT}`));
