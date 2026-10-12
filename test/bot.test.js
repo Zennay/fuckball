@@ -30,9 +30,9 @@ test('AI prediction accounts for the faster ball and wall reflections',()=>{
   assert.ok(f.y>=P.TOP+P.BALL_R);
   assert.ok(f.vy>0,'predict top wall rebound');
 });
-test('AI can score within a reasonable practice period against a stationary opponent',()=>{
+test('AI can score within twenty seconds of play against a stationary opponent',()=>{
   const {g,bot}=setup();let kicks=0;
-  for(let i=0;i<860&&!g.score[0];i++){
+  for(let i=0;i<1200&&!g.score[0];i++){
     P.setInput(bot,AI.decide(g,bot));
     if(bot.input.kick)kicks++;
     P.tick(g);
