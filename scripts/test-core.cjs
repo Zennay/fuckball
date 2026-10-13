@@ -1,0 +1,1 @@
+'use strict';const{spawnSync}=require('node:child_process');for(const file of ['engine','physics-regression','headless','ai','academy-worker','server']){const r=spawnSync(process.execPath,['tests/'+file+'.cjs'],{stdio:'inherit'});if(r.status!==0)process.exit(r.status||1);}

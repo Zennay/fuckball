@@ -1,0 +1,117 @@
+{
+  "model": "BFF Replay BC 02",
+  "source": "HaxLab human BFF replay imitation",
+  "training_samples": 192563,
+  "test": {
+    "samples": 24688,
+    "direction_accuracy": 0.5402219701879456,
+    "joint_accuracy": 0.5039290343486714,
+    "kick_precision": 0.13846153846153847,
+    "kick_recall": 0.2949029126213592,
+    "kick_f1": 0.18844513377278016,
+    "kick_true_rate": 0.03337653920933247,
+    "kick_predicted_rate": 0.07108716785482826,
+    "kick_threshold": 0.7,
+    "kick_confusion": {
+      "tp": 243,
+      "fp": 1512,
+      "fn": 581,
+      "tn": 22352
+    },
+    "baselines": {
+      "majority_direction_accuracy": 0.19438593648736227,
+      "always_no_kick_accuracy": 0.9666234607906675
+    }
+  },
+  "splits": {
+    "train": [
+      {
+        "sha256": "86f30a8d3263336121a8b3725bf0c14620392edfa1a34ac95e7d9f1e2f3ac6fa",
+        "map": "BFF Big v4"
+      },
+      {
+        "sha256": "864b0a1cb0ab9d4adca5e98fb80368b5fa97445fcd146faf1324a53eaf2fc5a0",
+        "map": "BFF Big v4"
+      },
+      {
+        "sha256": "86a93b799fe836716c97c7fb4b77e4ae5dc83eaf54ed72b6bcd79d173a6a71d3",
+        "map": "BFF Big v4"
+      },
+      {
+        "sha256": "8650cb8f087175f3aeb0822adb92414bbf23e9b97d3db3e34dbe68e959fd6668",
+        "map": "BFF Big v4"
+      },
+      {
+        "sha256": "86a56d592c4355ce7717d482a1a7766998b564c78ad7ba08a574ae2dbe79180b",
+        "map": "BFF Big v4"
+      },
+      {
+        "sha256": "86d8f885960b8f085f0ef71c1f3f55fd9ab38752544de9626e11674746ef5b04",
+        "map": "BFF Big v4"
+      }
+    ],
+    "validation": [
+      {
+        "sha256": "86f9940cb12f057291dfac7a477e7ba1b6969e29ee2214e33c58fbb2d578d985",
+        "map": "BFF Big v4"
+      }
+    ],
+    "test": [
+      {
+        "sha256": "862805a64485463097f493799317b68a2769d28975d922015388e1c02453ea98",
+        "map": "BFF Big v4"
+      }
+    ]
+  },
+  "arena": {
+    "schema": "fuckball-arena-benchmark-v1",
+    "model": "BFF Replay BC 02",
+    "frames_per_match": 3600,
+    "opponent": "tactical",
+    "matches": [
+      {
+        "map": "BFF Big v4",
+        "model_team": 1,
+        "model_goals": 0,
+        "tactical_goals": 0,
+        "kicks": 0,
+        "model_kicks": 0,
+        "model_distance": 0,
+        "simulated_seconds": 0
+      },
+      {
+        "map": "BFF Big v4",
+        "model_team": 2,
+        "model_goals": 0,
+        "tactical_goals": 1,
+        "kicks": 5,
+        "model_kicks": 2,
+        "model_distance": 8287,
+        "simulated_seconds": 14.23333333333362
+      },
+      {
+        "map": "Classic",
+        "model_team": 1,
+        "model_goals": 0,
+        "tactical_goals": 0,
+        "kicks": 0,
+        "model_kicks": 0,
+        "model_distance": 0,
+        "simulated_seconds": 0
+      },
+      {
+        "map": "Classic",
+        "model_team": 2,
+        "model_goals": 0,
+        "tactical_goals": 1,
+        "kicks": 2,
+        "model_kicks": 0,
+        "model_distance": 72,
+        "simulated_seconds": 2.6499999999999955
+      }
+    ],
+    "limitations": "Four deterministic side-swapped matches; not human skill or latency evidence."
+  },
+  "promotion": "Not promoted: tactical remains default",
+  "verification_limit": "Application/native Canvas and real WebSocket checks; no real browser visual or human skill validation."
+}

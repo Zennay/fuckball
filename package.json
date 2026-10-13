@@ -1,16 +1,14 @@
 {
   "name": "fuckball",
-  "version": "0.7.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "BFF Big v4 browser football with 20% faster ball, screenshot-matched circles, 10% faster players, continuous white kick outlines, smarter practice AI and collision-safe extrapolation",
+  "description": "Original BFF stadium on a shared node-haxball engine, fullscreen match UI, headless rooms and replay Academy",
   "scripts": {
     "start": "node server.js",
-    "build:solo": "node scripts/build-standalone.js",
-    "test": "node --test test/*.test.js"
+    "test": "node scripts/test-core.cjs",
+    "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs",
+    "build:solo": "python3 scripts/build-sdk.py"
   },
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {},
+  "engines": {"node": ">=22"},
   "license": "MIT"
 }

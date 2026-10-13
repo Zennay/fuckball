@@ -1,76 +1,17 @@
 name: Public Fuckball health
-
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/public-health.yml']
   workflow_dispatch:
   schedule:
     - cron: '17,47 * * * *'
-
 permissions:
   contents: read
-
 jobs:
   external-probe:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - name: Probe public web and server from GitHub-hosted runner
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --show-error --silent --max-time 12 --retry 3 --retry-delay 3 'http://198.244.191.182:3417/health' | tee /tmp/fuckball-health.json
-          grep -q '"ok":true' /tmp/fuckball-health.json
-          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-home.html 'http://198.244.191.182:3417/'
-          grep -q '<canvas' /tmp/fuckball-home.html
-          grep -q 'id="fullscreenBtn"' /tmp/fuckball-home.html
-          grep -q 'id="renderQuality"' /tmp/fuckball-home.html
-          grep -q 'id="roomSidebar"' /tmp/fuckball-home.html
-          echo "Live fullscreen and high-refresh controls found"
-          # The game loads the physics as a separate script: verify the VPS really
-          # serves the updated gentle player-ball contact implementation.
-          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-physics.js 'http://198.244.191.182:3417/shared/physics.js'
-          grep -q 'function collidePlayerBall(g,p,ball)' /tmp/fuckball-physics.js
-          grep -q 'collidePlayerBall(g,p,ball);' /tmp/fuckball-physics.js
-          grep -q 'BALL_SPEED_MULTIPLIER=1.2' /tmp/fuckball-physics.js
-          grep -Fq 'const WALL_REBOUND_AT_DEFAULT=DEFAULT_REBOUND;' /tmp/fuckball-physics.js
-          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-prediction.js 'http://198.244.191.182:3417/shared/prediction.js'
-          grep -q 'const cautious=frames>2' /tmp/fuckball-prediction.js
-          grep -Fq 'inputX:p.input?.x??0,inputY:p.input?.y??0' /tmp/fuckball-physics.js
-          grep -Fq 'else P.setInput(next,{x:p.inputX??0,y:p.inputY??0,kick:false});' /tmp/fuckball-prediction.js
-          grep -Fq 'function flushInput(force=false)' /tmp/fuckball-home.html
-          echo "Live 60 Hz multiplayer input and original BFF rebound verified"
-          grep -q 'id="optionsScreen"' /tmp/fuckball-home.html
-          grep -q 'id="chatDock"' /tmp/fuckball-home.html
-          grep -Fq 'let extrapMs=0,renderScale=1;' /tmp/fuckball-home.html
-          grep -q 'pulseball.extrapolation.v3' /tmp/fuckball-home.html
-          grep -q 'function cameraTransform(state,dt)' /tmp/fuckball-home.html
-          curl --fail --show-error --silent --max-time 12 -o /tmp/fuckball-bot.js 'http://198.244.191.182:3417/shared/bot.js'
-          grep -q 'function reply(message,g,bot)' /tmp/fuckball-bot.js
-          grep -q 'const passOptions=' /tmp/fuckball-bot.js
-          grep -q 'const orbit=Math.sin' /tmp/fuckball-bot.js
-          grep -Fq 'Original BFF · 41% wall bounce' /tmp/fuckball-home.html
-          echo "Physics, native rebound and active passing lanes verified externally"
-          echo "Live responsive 0ms extrapolation, immersive HUD and bot chat verified"
-      - name: Probe WebSocket room creation from the internet
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Create multiplayer room via external WebSocket
-        shell: bash
-        run: |
-          node <<'NODE'
-          const ws = new WebSocket('ws://198.244.191.182:3417/');
-          const timer=setTimeout(()=>{console.error('WebSocket timeout');process.exit(1)},12000);
-          ws.addEventListener('open',()=>ws.send(JSON.stringify({type:'create',name:'External smoke test'})));
-          ws.addEventListener('message',e=>{
-            const m=JSON.parse(e.data);
-            if(m.type==='joined' && /^[A-Z0-9]{6}$/.test(m.code||'')){
-              console.log('Room created:',m.code);
-              clearTimeout(timer);ws.close();process.exit(0);
-            }
-            if(m.type==='error'){console.error(m);process.exit(1)}
-          });
-          ws.addEventListener('error',e=>{console.error('WebSocket failed',e.message);process.exit(1)});
-          NODE
+      - run: node scripts/verify-live.cjs http://198.244.191.182:3417
