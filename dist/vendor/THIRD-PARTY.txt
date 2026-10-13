@@ -1,0 +1,23 @@
+Fuckball third-party components
+
+node-haxball 2.3.1
+Source: https://github.com/wxyz-abcd/node-haxball
+Commit: 4d4b88f1e5e25d484d27819ee6a4699720bda164
+Copyright (c) 2022 wxyz-abcd
+License: MIT (see LICENSE-node-haxball.txt)
+Files: haxball.js, renderer.js, language.js
+Renderer and language browser-global entry points adapted from the CommonJS originals.
+
+JSON5
+Source: https://github.com/json5/json5
+Browser distribution vendored from node-haxball/examples_web/src/vendor/json5.min.js
+License: MIT (see LICENSE-json5.txt)
+
+pako / JSZip deflate helper bundle
+Source: node-haxball/examples_web/src/vendor/pako-jszip.min.js
+pako: https://github.com/nodeca/pako
+License: MIT and Zlib (see LICENSE-pako.txt)
+JSZip: https://github.com/Stuk/jszip
+License: MIT (see LICENSE-jszip.txt)
+
+HaxBall is created by basro. Fuckball is an independent game, not affiliated with or endorsed by HaxBall.

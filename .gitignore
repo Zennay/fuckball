@@ -1,4 +1,9 @@
+training/data/
+training/output/
+training/received/
+__pycache__/
+*.pyc
 node_modules/
-.DS_Store
-.env
-coverage/
+
+training/human-data/
+training/human-output/
