@@ -26,15 +26,20 @@ The previous `shared/physics.js` was a separate approximation with 1.10x player 
 - Ball radius: 5.8; inverse mass: 1.5; restitution: 0.412; damping: 0.99.
 - Kick strength: 4.545. The engine applies inverse mass to the impulse: 6.8175 velocity change before damping in an isolated stationary kick.
 - No extra speed scaling, magnetic dribbling, custom contact solver or extrapolation-driven authoritative motion.
-- Simulation: fixed 60 Hz. Server and peer snapshots: 30 Hz. Extrapolation: user 0–200 ms, total online prediction capped at 250 ms. Rendering never mutates authoritative state. Old sequence numbers are discarded; acknowledged inputs are not re-applied.
+- Simulation: fixed 60 Hz. Server and peer snapshots: 30 Hz with the server tick. Extrapolation: HaxBall model (see below), capped at 120 frames. Rendering never mutates authoritative state. Old sequence numbers are discarded; acknowledged inputs are not re-applied.
 
 This is a compatible independent engine, not proprietary HaxBall source. Current official HaxBall bit-for-bit parity is not claimed. HBS JSON5 and HBR2 v3 are supported; Flash .hbr is not. The official room list/service is not connected.
 
-## Extrapolation and high-refresh rendering
+## Extrapolation (HaxBall-equivalent) and high-refresh rendering
 
-Physics stays at 60 ticks/s. The renderer blends adjacent native-engine predictions for fractional frame positions, so 120/144/240Hz frames do not repeat whole-tick positions. The user-selected extrapolation is stable through contacts; the earlier global collision cutoff is no longer applied. Native predicted states still contain the engine's actual collision response. Default online prediction accounts for snapshot age; extra half-RTT prediction is opt-in. This does not remove network latency or guarantee exact official-client parity.
+Rendering uses the same prediction as the official HaxBall client, ported from the pinned engine (`dist/render-timing.js`):
 
-Esc → Settings offers extrapolation 0–1000ms, a frame limit (display rate by default), actual rendered FPS, and native/performance resolution. Browser/display refresh and hardware determine achievable FPS. The low-latency canvas and direct input-event handling remain enabled. Camera fitting no longer reads layout on every animation frame. Predicted geometry is cached per state/input/tick and updated without changing authoritative physics.
+- **Stepping (`j1`).** Each rendered frame copies the last confirmed state, replays your own unconfirmed inputs at the frames they were stamped, runs whole 60 Hz engine ticks and finishes with one fractional tick (`dt = frames − ⌊frames⌋`). Capped at 120 frames. Positions are identical to the real engine through collisions and kicks. The old renderer did a single big step (`dt = 6` for 100 ms) and lerped between two of those, which drifted badly (e.g. 60 px vs 18 px real after 20 ticks).
+- **Online timing (`cW`).** The client renders at `(now + extrapolation)·0.06 + clock offset`. Offset samples come from ping replies (`server tick at reply − ping sent time`) in a 50-sample window with 0.97 decay, read at the weighted median. So, like HaxBall, you see ahead of the last snapshot by about your latency, your own moves show instantly, and other players continue with their last known input. Snapshots (30 Hz) and pongs carry the server tick (packet header v2, `0x46423201`).
+- **Local / host timing.** `(now − roomStart + extrapolation)·0.06 − currentFrame`, giving smooth 120/144/240 Hz frames between ticks.
+- **Setting.** Esc → Settings → Extrapolation, −200 to 1000 ms, default 0 (as in HaxBall). Visual only; the server and engine remain authoritative and untouched.
+
+`tests/render-timing.cjs` checks positions against the engine's own tick through a ball/player contact, the fractional tick, own-input replay, the cap, isolation and the clock estimator.
 
 ## VPS training
 
