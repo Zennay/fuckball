@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const API=abcHaxballAPI(window); API.Language.current=new FuckballLanguage(API);
 const {Room,Utils,Replay}=API;
 let room,renderer,replay=null,started=false,paused=false,tick=0,botIds=new Set(),myTeam=1,toastTimer,raf,peer=null,channel=null,peerRole=null,peerConnected=false;
-let settings={name:'Player',zoom:1,sound:true,extrapolation:0,adaptive:true,difficulty:'hard',botLevels:{},teamProfile:{}};
+let settings={name:'Player',zoom:1,sound:true,extrapolation:0,adaptive:true,difficulty:'hard',botLevels:{},teamProfile:{},quality:'native'};
 let aiModel=null,stateChannel=null,serverLink=null,networkPlayerId=2;
 const frameStats={lastTick:0,lastUi:0,fpsStart:0,frames:0};const net={rtt:0,jitter:0,lastRtt:0,lastSnapshot:0,sequence:0,receivedSequence:0,inputSeq:0,ack:0,remoteAck:0,bytes:0};
 try{Object.assign(settings,JSON.parse(localStorage.getItem('fuckball.settings')||'{}'));}catch{}
@@ -17,6 +17,7 @@ function texture(color){const c=document.createElement('canvas');c.width=64;c.he
 const images={grass:texture('#718c5a'),concrete:texture('#858982'),concrete2:texture('#696e68')};
 const rendererParams={canvas:$('gameCanvas'),images,paintGame:true};
 renderer=new FuckballRenderer(API,rendererParams);
+renderer.resolutionScale=settings.quality==='performance'?0.7:1;
 function makeRoom(){
  room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();$('startOverlay').hidden=false;}},2500);},onPlayerBallKick:()=>beep(220,.035),onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
  renderer.room=room;renderer.initialize();renderer.zoomCoeff=settings.zoom;renderer.followPlayerId=1;renderer.currentPlayerDistinction=true;room.initialize();
@@ -76,6 +77,8 @@ function drawFrame(){
 }
 function savePrefs(){try{localStorage.setItem('fuckball.settings',JSON.stringify(settings));}catch{}}
 $('extrapolation').value=String(Math.max(0,Math.min(200,settings.extrapolation||0)));$('extrapValue').textContent=$('extrapolation').value+' ms';$('adaptivePrediction').checked=settings.adaptive!==false;
+$('renderQuality').value=settings.quality==='performance'?'performance':'native';
+$('renderQuality').onchange=()=>{settings.quality=$('renderQuality').value;renderer.resolutionScale=settings.quality==='performance'?0.7:1;savePrefs();};
 $('extrapolation').oninput=()=>{settings.extrapolation=+$('extrapolation').value;$('extrapValue').textContent=settings.extrapolation+' ms';savePrefs();updatePrediction();};$('adaptivePrediction').onchange=()=>{settings.adaptive=$('adaptivePrediction').checked;savePrefs();};
 function saveBlob(bytes,name,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([bytes],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 function safeName(name){return String(name).replace(/[^a-z0-9._-]/gi,'_').slice(0,80)||'stadium';}
