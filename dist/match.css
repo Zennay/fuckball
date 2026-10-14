@@ -5,3 +5,5 @@ body.match-active{overflow:hidden}.match-active>.club-header{display:none}#match
 @media(max-height:650px) and (min-width:651px){.pause-matchline{height:75px}.pause-layout{padding:22px 0}.pause-nav button{font-size:14px;padding:11px 16px;min-height:40px}.pause-nav>.eyebrow{padding-bottom:11px}.pause-footer{height:50px}.menu-pane h1{font-size:64px;margin:20px 0}.pause-facts{margin-top:22px;padding-top:18px}.pause-facts b{font-size:32px}.pause-content{max-height:calc(100dvh - 170px)}}
 
 .bot-level{width:88px;min-width:70px;padding:5px;font-size:11px;margin-left:auto}.player{gap:8px}#selfplayProgress{width:100%;margin-top:16px}
+
+.match-invite{position:absolute;right:150px;top:max(24px,env(safe-area-inset-top));z-index:5;padding:10px 14px;background:#101a20de;border:1px solid #7c90834d;color:#f3f5ea;font-weight:700;letter-spacing:.04em}.match-invite[hidden]{display:none}@media (max-width:700px){.match-invite{right:76px;top:16px;padding:8px 10px}}
