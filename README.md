@@ -30,15 +30,17 @@ The previous `shared/physics.js` was a separate approximation with 1.10x player 
 
 This is a compatible independent engine, not proprietary HaxBall source. Current official HaxBall bit-for-bit parity is not claimed. HBS JSON5 and HBR2 v3 are supported; Flash .hbr is not. The official room list/service is not connected.
 
-## Extrapolation, sweeper keeper and high-refresh rendering
+## Extrapolation and high-refresh rendering
 
-The native physics simulation remains fixed at 60 ticks/s. Rendering is scheduled by the browser's `requestAnimationFrame`, with fractional-tick visual lookahead for high-refresh monitors. The pause menu shows **actual rendered FPS**, not simulated physics ticks. A 300Hz browser/display may approach 300 FPS if the computer can render each frame quickly; a 60Hz display cannot show 300 distinct frames through ordinary animation frames.
+Physics stays at 60 ticks/s. The renderer blends adjacent native-engine predictions for fractional frame positions, so 120/144/240Hz frames do not repeat whole-tick positions. The user-selected extrapolation is stable through contacts; the earlier global collision cutoff is no longer applied. Native predicted states still contain the engine's actual collision response. Default online prediction accounts for snapshot age; extra half-RTT prediction is opt-in. This does not remove network latency or guarantee exact official-client parity.
 
-Esc → Settings → Extrapolation: start at 0–35 ms locally. Higher values (up to 200 ms) lead players farther ahead, but extrapolation is automatically reduced before likely ball/player or wall collisions to prevent premature speculative rebounds. Direct-play guests also factor in bounded snapshot age and optional adaptive network delay. This alters the *display only*, not the engine's collision response, scoring or speed. The frame rate and collision guard are covered by Canvas and headless regression tests.
+Esc → Settings offers extrapolation 0–1000ms, a frame limit (display rate by default), actual rendered FPS, and native/performance resolution. Browser/display refresh and hardware determine achievable FPS. The low-latency canvas and direct input-event handling remain enabled. Camera fitting no longer reads layout on every animation frame. Predicted geometry is cached per state/input/tick and updated without changing authoritative physics.
 
-Esc → Settings → Rendering → Performance · 70% reduces the internal canvas resolution to improve FPS on demanding screens; Native resolution keeps maximum sharpness.
+## VPS training
 
-In 4v4, the assigned AI keeper acts as a sweeper: it supports the team farther upfield, steps toward an unmarked ball carrier and recovers toward goal for incoming shots. Its assignment stays stable through chaser changes; movement obeys the same player physics as everyone else.
+`node training/continuous.cjs /opt/fuckball-training 12` runs a 12-hour window in batches of 192 matches. It fine-tunes the previous checkpoint and uses it for the next rollout; normalization changes are compensated when weights resume. Checkpoints, metrics and arena results persist, while only two recent generated datasets are retained. A STOP file or service stop ends training. Low disk space pauses generation. Candidates never overwrite live gameplay automatically.
+
+The `fuckball-training` service uses a two-CPU quota, a 3GB memory limit and lower scheduling priority. `/api/training` and Academy's server-status button expose completed matches/cycles and latest metrics. The existing GitHub training workflow remains separate.
 
 ## AI Academy
 
