@@ -22,8 +22,19 @@ function teamPlan(state,teamId,tick=0,raw={}){
  const g=state.gameState,b=g?.physicsState.discs[0],team=state.players.filter(p=>p.disc&&p.team.id===teamId),ops=state.players.filter(p=>p.disc&&p.team.id===3-teamId),cfg=profile(raw),sign=teamId===1?1:-1;if(!b||!team.length)return {};
  const s=g.stadium,goal=s.goals.find(x=>x.team.id!==teamId),own=s.goals.find(x=>x.team.id===teamId),gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,height=s.bgHeight||s.height-30;
  const dist=p=>Math.hypot(p.disc.pos.x-b.pos.x,p.disc.pos.y-b.pos.y),score=p=>dist(p)+Math.max(0,sign*(p.disc.pos.x-b.pos.x))*.45;
- const bots=team.filter(p=>p.aiControlled!==false),rank=(bots.length?bots:team).slice().sort((a,c)=>score(a)-score(c)||a.id-c.id);let memory=tactics.get(state);if(!memory)tactics.set(state,memory={});const previous=rank.find(p=>p.id===memory[teamId]);const chaser=previous&&score(previous)<score(rank[0])+25?previous:rank[0];memory[teamId]=chaser.id;
- const carrier=team.filter(p=>dist(p)<40&&sign*(b.pos.x-p.disc.pos.x)>-5).sort((a,c)=>dist(a)-dist(c))[0];const leader=carrier||chaser;const remaining=bots.filter(p=>p.id!==leader.id),keeper=team.length>=3?remaining.slice().sort((a,c)=>sign*(a.disc.pos.x-c.disc.pos.x)||a.id-c.id)[0]:null;
+ const bots=team.filter(p=>p.aiControlled!==false);let memory=tactics.get(state);if(!memory)tactics.set(state,memory={});
+ // Keep one sweeper-keeper assigned across possession changes. A role flip
+ // each time the keeper approached the ball made the whole defense hesitate.
+ const keeperCandidates=bots.slice().sort((a,c)=>sign*(a.disc.pos.x-c.disc.pos.x)||a.id-c.id);
+ const sticky=keeperCandidates.find(p=>p.id===memory['keeper'+teamId]);
+ const keeper=team.length>=3&&bots.length>1?(sticky||keeperCandidates[0]):null;
+ if(keeper)memory['keeper'+teamId]=keeper.id;
+ const field=bots.filter(p=>p!==keeper),rank=(field.length?field:team.filter(p=>p!==keeper)).slice().sort((a,c)=>score(a)-score(c)||a.id-c.id);
+ const previous=rank.find(p=>p.id===memory[teamId]);
+ const chaser=previous&&score(previous)<score(rank[0])+25?previous:rank[0];
+ memory[teamId]=chaser?.id;
+ const carrier=team.filter(p=>p!==keeper&&dist(p)<40&&sign*(b.pos.x-p.disc.pos.x)>-5).sort((a,c)=>dist(a)-dist(c))[0];
+ const leader=carrier||chaser;const remaining=bots.filter(p=>p.id!==leader.id);
  const nearest=ops.slice().sort((a,c)=>dist(a)-dist(c))[0],underPressure=nearest&&dist(nearest)<cfg.press,ownDanger=sign*b.pos.x<-Math.abs(gx)*.55,attacking=carrier&&!ownDanger;
  const free=remaining.filter(p=>p!==keeper).sort((a,c)=>a.id-c.id),plan={};
  for(const p of team){let role='chaser',x=b.pos.x-sign*22,y=b.pos.y;
