@@ -1,0 +1,3 @@
+'use strict';const assert=require('node:assert/strict'),{createApp}=require('./app-smoke.cjs');
+function run(hz,limit=0){const a=createApp();a.elements.get('heroPlay').click();a.evalJS('settings.fpsLimit='+limit);a.advance(hz,1000/hz);const result={ticks:a.evalJS('tick'),fps:Number(a.elements.get('fpsValue').textContent)};a.evalJS('room.destroy()');return result;}
+const normal=run(60),fast=run(240),limited=run(240,60);assert(Math.abs(normal.ticks-fast.ticks)<=1,'higher render FPS cannot speed up physics');assert(fast.fps>220&&fast.fps<260);assert(limited.fps>55&&limited.fps<70);console.log('PASS 240Hz rendered frames, optional 60FPS limit and unchanged 60Hz physics');

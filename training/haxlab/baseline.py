@@ -409,6 +409,21 @@ def evaluate(
     }
 
 
+def resume_params(initial_path, params, mean, std):
+    """Preserve the old network function under the current train-only normalization."""
+    with np.load(initial_path, allow_pickle=False) as z:
+        restored = {k: np.array(z[k], copy=True) for k in params}
+        if any(restored[k].shape != params[k].shape or not np.isfinite(restored[k]).all() for k in params):
+            raise ValueError("Incompatible checkpoint")
+        old_mean, old_std = z["mean"], z["std"]
+        if old_mean.shape != mean.shape or old_std.shape != std.shape or not (old_std > 0).all():
+            raise ValueError("Invalid checkpoint normalization")
+        old_w1 = restored["w1"].copy()
+        restored["w1"] = old_w1 * (std / old_std)[:, None]
+        restored["b1"] += ((mean - old_mean) / old_std) @ old_w1
+    return restored
+
+
 def train_baseline(
     *,
     train_index_path: Path,
@@ -422,6 +437,7 @@ def train_baseline(
     learning_rate: float = 1e-3,
     l2: float = 1e-5,
     seed: int = 1337,
+    initial_path: Path | None = None,
 ) -> dict[str, Any]:
     train_index = _load_index(train_index_path, train_limit)
     holdout_index = _load_index(holdout_index_path, holdout_limit)
@@ -429,6 +445,8 @@ def train_baseline(
 
     rng = np.random.default_rng(seed)
     params = _init_params(len(input_columns), hidden_dim, rng)
+    if initial_path is not None:
+        params = resume_params(initial_path, params, mean, std)
     m = {key: np.zeros_like(value) for key, value in params.items()}
     v = {key: np.zeros_like(value) for key, value in params.items()}
 

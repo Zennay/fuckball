@@ -915,8 +915,8 @@ window.FuckballRenderer = function(API, params){
     rendererObj = null;
   };
 
-  this.render = function(){ // render logic here. called inside requestAnimationFrame callback
-    var extrapolatedRoomState = thisRenderer.room.extrapolate(thisRenderer.extrapolation, true);
+  this.render = function(visualState){ // render logic here. called inside requestAnimationFrame callback
+    var extrapolatedRoomState = visualState || thisRenderer.room.extrapolate(thisRenderer.extrapolation, true);
     if (!params.paintGame || !extrapolatedRoomState.gameState)
       return;
     rendererObj.render(extrapolatedRoomState);
