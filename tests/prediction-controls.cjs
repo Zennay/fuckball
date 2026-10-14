@@ -10,7 +10,7 @@ for(const ms of [0,5,25,60,135,200,250]){
 }
 assert.equal(P.effectiveMs(-30,state),0);
 assert.equal(P.effectiveMs(999,state),250);
-teammate.disc.pos.x=60;
+teammate.disc.pos.x=35;
 for(const ms of [60,135,200,250]){
  const bounded=P.effectiveMs(ms,state);
  assert(bounded<ms,'approaching contact at '+ms+'ms should cap visual prediction');
