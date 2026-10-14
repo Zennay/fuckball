@@ -12,11 +12,11 @@ npm start
 # HOST and PORT can override the listen address.
 ```
 
-The field fills the browser viewport. Esc opens the FC-inspired pause menu: teams/match, camera/network, replays, chat, Academy and controls. Browser full-screen is optional under Beeld & verbinding. The default camera fits the complete stadium. Choose Speler volgen for a closer camera.
+The field fills the browser viewport. Esc opens the FC-inspired pause menu: teams/match, camera/network, replays, chat and controls. Browser full-screen is optional under Beeld & verbinding. The default camera fits the complete stadium. Choose Speler volgen for a closer camera.
 
-On a self-hosted server, choose Samen spelen, then Room maken. Share the six-character room code. The server supports up to eight humans, fills 1v1/2v2/4v4 with tactical bots, and authorizes match changes only for the room owner. The owner transfers when they leave. Rooms disappear after the last person leaves. Player names and rooms are ephemeral; no accounts are implemented.
+On a self-hosted server, choose Online, then Create room. The game shows an invite link (`/?room=XXXXXXXX`) and copies it; anyone who opens the link joins that room directly, with no code to type. Expired or full rooms show a clear message and the link is removed from the address bar. Room IDs are 8 random characters (~40 bits) and are no longer listed by `/api/rooms`. The server supports up to eight humans, fills 1v1/2v2/4v4 with tactical bots, and authorizes match changes only for the room owner. The owner transfers when they leave. Rooms disappear after the last person leaves. Player names and rooms are ephemeral; no accounts are implemented.
 
-Static hosting (including the private Site) supports local play and direct WebRTC 1v1 through manual connection codes. The separate Node server requires its own hosting. HTTPS clients require a `wss://` endpoint. A reverse proxy can terminate TLS. Cross-origin room connections are disabled by default; set `ALLOW_CROSS_ORIGIN=1` only when deliberately exposing the server to another origin. Direct WebRTC has STUN but no TURN fallback.
+Static hosting (including the private Site) supports local play; invite links need the Node server. Direct WebRTC 1v1 with manual connection codes remains available under Play online → Advanced connection. The separate Node server requires its own hosting. HTTPS clients require a `wss://` endpoint. A reverse proxy can terminate TLS. Cross-origin room connections are disabled by default; set `ALLOW_CROSS_ORIGIN=1` only when deliberately exposing the server to another origin. Direct WebRTC has STUN but no TURN fallback.
 
 ## Physics recovery / issue #9
 
@@ -40,15 +40,20 @@ Esc → Settings offers extrapolation 0–1000ms, a frame limit (display rate by
 
 `node training/continuous.cjs /opt/fuckball-training 12` runs a 12-hour window in batches of 192 matches. It fine-tunes the previous checkpoint and uses it for the next rollout; normalization changes are compensated when weights resume. Checkpoints, metrics and arena results persist, while only two recent generated datasets are retained. A STOP file or service stop ends training. Low disk space pauses generation. Candidates never overwrite live gameplay automatically.
 
-The `fuckball-training` service uses a two-CPU quota, a 3GB memory limit and lower scheduling priority. `/api/training` and Academy's server-status button expose completed matches/cycles and latest metrics. The existing GitHub training workflow remains separate.
+The `fuckball-training` service uses a two-CPU quota, a 3GB memory limit and lower scheduling priority. `/api/training` exposes completed matches/cycles and latest metrics for operators; it is not shown in the game. The existing GitHub training workflow remains separate.
 
-## AI Academy
+## Backend AI training (not in the game)
+
+Training is backend-only. The game has no Academy tab, model import/export, replay training or self-play controls; bots in the game always use the tactical team AI with the selected difficulty. The browser worker modules under `dist/ai/` remain only because the CLI/VPS training and tests import them; the page does not load them.
+
+### Training history
+
 
 The bundled `BFF Replay BC 02` model was trained with the user's original HaxLab NumPy trainer on six BFF replays (192,563 examples); a seventh replay calibrates the kick threshold; an eighth is a separate test (24,688 examples). Direction accuracy: 54.02%, majority-direction baseline 19.44%; kick F1: 0.188. These are imitation metrics, not win rates. The arena benchmark shows kickoff stalls and no wins over the tactical policy. Therefore **tactical is the default**, and the neural model is explicitly an evaluation candidate.
 
 Tactical bots use interception, stable striker assignment, defensive cover, forward support/pass options and contact-timed kick re-arming. A human is given possession priority only when actually near the ball. There are no bot-only physics powers.
 
-Replay Lab processes files locally in a Worker. Select 1–20 unique HBR2 files to analyze; at least 3 to train. Whole files form train/validation/test splits, normalization uses only training rows, and the kick threshold is selected on validation. The browser keeps up to 16,000 reservoir-sampled rows per replay. Exported JSON weights can be imported back into the game. Training does not automatically promote a new model over tactical bots.
+The former in-browser Replay Lab worker (`dist/ai/trainer-worker.js`) is kept only for the CLI/test pipeline: whole files form train/validation/test splits, normalization uses only training rows, and the kick threshold is selected on validation. Training never promotes a model into the game automatically.
 
 For reproducible offline training, install NumPy in your own Python environment:
 
@@ -117,7 +122,7 @@ Home → **4v4** starts you plus seven bots. Esc → Teams → **Watch 4v4 bots*
 
 Team AI assigns a ball carrier/chaser, passing support, cover and keeper. A supporting player screens a nearby opponent only when the team has possession under pressure; otherwise it keeps a passing lane or covers behind the ball. This is a heuristic team controller, not a claim of human-level play.
 
-Academy → **HaxLab training** runs real 4v4 simulations with the bundled engine. It evolves five team-tactic parameters, tests on separate seeds and both team sides on BFF and Classic, then generates disjoint match datasets for a portable neural policy. Stop terminates the worker. Validated team tactics can be applied; neural candidates can be selected manually or exported.
+HaxLab self-play (CLI/VPS only) runs real 4v4 simulations with the bundled engine. It evolves five team-tactic parameters, tests on separate seeds and both team sides on BFF and Classic, then generates disjoint match datasets for a portable neural policy. Results are written to the training output directory; nothing is applied to the live game automatically.
 
 For the original HaxLab NumPy trainer, run from the repository root:
 
@@ -126,6 +131,6 @@ python3 -m pip install numpy
 node training/haxlab_selfplay.cjs training/output/haxlab-selfplay 12 3
 ```
 
-This runs 12 natural 4v4 matches and three tactic generations, uses the current neural policy for assisted rollout movement, labels visited states with the team teacher, writes HaxLab-compatible shards, trains with `training/haxlab/baseline.py`, exports a candidate and runs the arena benchmark. Split assignment is by whole match. Initial position variation is confined to episode setup; no physics parameters are changed. Output includes weights, held-out metrics, team tactics and arena results. The neural candidate does not replace the live model automatically. Browser training uses the portable JS trainer with the same feature schema; the CLI uses the original HaxLab trainer.
+This runs 12 natural 4v4 matches and three tactic generations, uses the current neural policy for assisted rollout movement, labels visited states with the team teacher, writes HaxLab-compatible shards, trains with `training/haxlab/baseline.py`, exports a candidate and runs the arena benchmark. Split assignment is by whole match. Initial position variation is confined to episode setup; no physics parameters are changed. Output includes weights, held-out metrics, team tactics and arena results. The neural candidate does not replace the live model automatically.
 
 The first run is a small bootstrap dataset, not evidence of elite playing strength. A positive tactics score includes ball territory and relative kick activity; drawn games alone do not establish a stronger player.
