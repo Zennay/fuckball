@@ -12,9 +12,9 @@ assert.equal(scoreFor(0, 0), 0.5);
 assert.equal(scoreFor(1, 2), 0);
 assert.throws(() => integer('1.2', 'foo', 0, 100), /integer/);
 assert.throws(() => integer('-2', 'foo', 0, 100), /integer/);
-assert.throws(() => decideGate({ matches: 0, scoreRate: 1, goalDifference: 5,
+assert.equal(decideGate({ matches: 0, scoreRate: 1, goalDifference: 5,
   meanPairDistance: 150, totalKicks: 10 }, { matches: 4, scoreRate: 1, goalDifference: 5,
-  meanPairDistance: 150, totalKicks: 10 }).promoted, /never/);
+  meanPairDistance: 150, totalKicks: 10 }).promoted, false);
 // A tied candidate cannot be promoted; win-only rewards cannot bypass partner tests.
 const good = { matches: 8, scoreRate: .625, goalDifference: 3, meanPairDistance: 190, totalKicks: 18 };
 const peers = { matches: 4, scoreRate: .5, goalDifference: 0, meanPairDistance: 180, totalKicks: 8 };
