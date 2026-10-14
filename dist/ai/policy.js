@@ -27,7 +27,32 @@ function teamPlan(state,teamId,tick=0,raw={}){
  const nearest=ops.slice().sort((a,c)=>dist(a)-dist(c))[0],underPressure=nearest&&dist(nearest)<cfg.press,ownDanger=sign*b.pos.x<-Math.abs(gx)*.55,attacking=carrier&&!ownDanger;
  const free=remaining.filter(p=>p!==keeper).sort((a,c)=>a.id-c.id),plan={};
  for(const p of team){let role='chaser',x=b.pos.x-sign*22,y=b.pos.y;
-  if(p===keeper){role='keeper';x=ox+sign*(ownDanger?35:Math.min(cfg.cover,70+Math.max(0,sign*b.pos.x)*.12));y=Math.max(-70,Math.min(70,b.pos.y*.6));if(b.speed.x*sign<-.3){const t=(x-b.pos.x)/b.speed.x;if(t>0&&t<120)y=Math.max(-78,Math.min(78,b.pos.y+b.speed.y*t));}}
+  if(p===keeper){
+    // Sweeper keeper in 4v4: close the space behind the press rather than
+    // remaining pinned to the goal line. Stay behind the ball and recover
+    // for genuine shots; these are target positions, never physics overrides.
+    role='keeper';
+    const depth=Math.max(0,sign*(b.pos.x-ox)),width=Math.abs(gx);
+    const forwardDepth=ownDanger?Math.max(90,Math.min(165,depth*.5)):Math.min(345,155+depth*.30);
+    x=ox+sign*forwardDepth;
+    y=Math.max(-Math.min(height*.62,160),Math.min(Math.min(height*.62,160),b.pos.y*.8));
+    const opponentOnBall=nearest&&dist(nearest)<95;
+    const openToChallenge=team.filter(q=>q!==p&&q.disc).every(q=>dist(q)>dist(p)-45);
+    if(opponentOnBall&&depth<width*.95&&openToChallenge){
+      // Attack the ball carrier early when no outfield teammate can cover it.
+      x=ox+sign*Math.min(365,Math.max(105,depth-18));
+      y=Math.max(-height+30,Math.min(height-30,b.pos.y+b.speed.y*3));
+    }
+    if(b.speed.x*sign< -1.15&&depth<420){
+      const toGoal=(ox-b.pos.x)/b.speed.x;
+      const shotY=b.pos.y+b.speed.y*Math.max(0,toGoal);
+      if(toGoal>0&&toGoal<80&&Math.abs(shotY)<110){
+        // Recover for actual goal-bound shots; do not chase through the net.
+        x=ox+sign*65;
+        y=Math.max(-95,Math.min(95,shotY));
+      }
+    }
+   }
   else if(p.id!==leader.id){const i=free.indexOf(p),lane=(i%2? -1:1);role=i===0?'support':'cover';x=b.pos.x+sign*(i===0?cfg.support:-cfg.cover);y=b.pos.y+lane*cfg.spread;
    // One teammate screens the nearest defender only while we control the ball under pressure.
    // The other teammate stays available as a passing option; the keeper retains cover.
