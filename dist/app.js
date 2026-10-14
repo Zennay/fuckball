@@ -4,7 +4,8 @@ const API=abcHaxballAPI(window); API.Language.current=new FuckballLanguage(API);
 const {Room,Utils,Replay}=API;
 let room,renderer,replay=null,started=false,paused=false,tick=0,botIds=new Set(),myTeam=1,toastTimer,raf,peer=null,channel=null,peerRole=null,peerConnected=false;
 let settings={name:'Player',zoom:1,sound:true,extrapolation:0,adaptive:true,difficulty:'hard',botLevels:{},teamProfile:{}};
-let aiModel=null,stateChannel=null,serverLink=null,networkPlayerId=2;const net={rtt:0,jitter:0,lastRtt:0,lastSnapshot:0,sequence:0,receivedSequence:0,inputSeq:0,ack:0,remoteAck:0,bytes:0};
+let aiModel=null,stateChannel=null,serverLink=null,networkPlayerId=2;
+const frameStats={lastTick:0,lastUi:0,fpsStart:0,frames:0};const net={rtt:0,jitter:0,lastRtt:0,lastSnapshot:0,sequence:0,receivedSequence:0,inputSeq:0,ack:0,remoteAck:0,bytes:0};
 try{Object.assign(settings,JSON.parse(localStorage.getItem('fuckball.settings')||'{}'));}catch{}
 settings.name=String(settings.name).slice(0,25)||'Player';settings.zoom=Math.max(.6,Math.min(2,Number(settings.zoom)||1));
 const keys=new Set();let touch={x:0,y:0,kick:false},inputCache=new Map(),audioContext;
@@ -17,7 +18,7 @@ const images={grass:texture('#718c5a'),concrete:texture('#858982'),concrete2:tex
 const rendererParams={canvas:$('gameCanvas'),images,paintGame:true};
 renderer=new FuckballRenderer(API,rendererParams);
 function makeRoom(){
- room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();$('startOverlay').hidden=false;}},2500);},onPlayerBallKick:()=>beep(220,.035),onPlayerTeamChange:()=>updateRoster(),render:()=>{updatePrediction();renderer.render();updateScore();}}, {controlledPlayerId:1,delayedInit:true});
+ room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();$('startOverlay').hidden=false;}},2500);},onPlayerBallKick:()=>beep(220,.035),onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
  renderer.room=room;renderer.initialize();renderer.zoomCoeff=settings.zoom;renderer.followPlayerId=1;renderer.currentPlayerDistinction=true;room.initialize();
  room.setCurrentStadium(stadium,0);room.setScoreLimit(+$('scoreLimit').value,0);room.setTimeLimit(+$('timeLimit').value,0);configurePlayers();room.startGame(0);room.setGamePaused(true,0);updateRoster();
 }
@@ -44,8 +45,35 @@ function updateScore(){const g=(replay||room)?.gameState;$('redScore').textConte
 function sendInput(id,input){if(inputCache.get(id)===input)return;inputCache.set(id,input);if(peerConnected&&peerRole==='guest'){send({type:'input',value:input,seq:++net.inputSeq});room.playerInput(input,networkPlayerId);}else room.playerInput(input,id);}
 function refreshInput(){if($('mode').value==='watch')return;if(!started||paused||replay)return;const local=$('mode').value==='local';const k=(...c)=>c.some(x=>keys.has(x));const x=+(k('KeyD')||(!local&&k('ArrowRight'))||touch.x>0)-+(k('KeyA')||(!local&&k('ArrowLeft'))||touch.x<0);const y=+(k('KeyS')||(!local&&k('ArrowDown'))||touch.y>0)-+(k('KeyW')||(!local&&k('ArrowUp'))||touch.y<0);const kick=touch.kick||(local?k('KeyF'):k('Space','KeyX','ControlLeft','ControlRight'));sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local)sendInput(2,Utils.keyState(+k('ArrowRight')-+k('ArrowLeft'),+k('ArrowDown')-+k('ArrowUp'),k('Slash','Enter','Numpad0')));}
 function releaseInputs(){keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();if(!room||replay)return;if(peerConnected&&peerRole==='guest'){send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if($('mode').value==='local'||peerConnected)room.playerInput(0,2);}$('stick').style.transform='';}
-function gameTick(){tick++;if(replay||!started||paused)return;if(peerConnected&&peerRole==='guest')return;if(!room.gameState)return;if(tick%2===0){for(const p of room.state.players){if(!botIds.has(p.id)||!p.disc)continue;const mode=$('aiMode').value;let input=FuckballAI.tactical(room.state,p.id,tick,{difficulty:settings.botLevels?.[p.id]||settings.difficulty,profile:settings.teamProfile});if(aiModel&&mode!=='tactical'){if(aiModel.w2&&tick%6!==0)continue;const prediction=FuckballAI.infer(aiModel,room.state,p.id,['gk','dm','am','st'][room.state.players.filter(q=>q.team.id===p.team.id).findIndex(q=>q.id===p.id)%4]);if(mode==='model')input=prediction.input;else if(prediction.confidence>.58&&(prediction.input&15)!==0)input=(prediction.input&15)|(input&16);}sendInput(p.id,input);}}if(peerConnected&&peerRole==='host'&&tick%2===0)sendSnapshot();}
-function updatePrediction(){let ms=Number(settings.extrapolation)||0;if(replay||paused||!started)ms=0;else if(peerConnected&&peerRole==='guest'){const age=net.lastSnapshot?Math.min(100,performance.now()-net.lastSnapshot):0;ms+=age+(settings.adaptive?net.rtt/2:0);}renderer.extrapolation=Math.max(0,Math.min(250,ms));$('networkQuality').textContent=peerConnected?Math.round(net.rtt)+' ms RTT':'LOCAL · 0 ms';$('netStats').textContent=peerConnected?'RTT '+Math.round(net.rtt)+' ms · jitter '+Math.round(net.jitter)+' ms · prediction '+Math.round(renderer.extrapolation)+' ms':'Local simulation · extrapolation '+Math.round(ms)+' ms';}
+function gameTick(){frameStats.lastTick=performance.now();tick++;if(replay||!started||paused)return;if(peerConnected&&peerRole==='guest')return;if(!room.gameState)return;if(tick%2===0){for(const p of room.state.players){if(!botIds.has(p.id)||!p.disc)continue;const mode=$('aiMode').value;let input=FuckballAI.tactical(room.state,p.id,tick,{difficulty:settings.botLevels?.[p.id]||settings.difficulty,profile:settings.teamProfile});if(aiModel&&mode!=='tactical'){if(aiModel.w2&&tick%6!==0)continue;const prediction=FuckballAI.infer(aiModel,room.state,p.id,['gk','dm','am','st'][room.state.players.filter(q=>q.team.id===p.team.id).findIndex(q=>q.id===p.id)%4]);if(mode==='model')input=prediction.input;else if(prediction.confidence>.58&&(prediction.input&15)!==0)input=(prediction.input&15)|(input&16);}sendInput(p.id,input);}}if(peerConnected&&peerRole==='host'&&tick%2===0)sendSnapshot();}
+function updatePrediction(now=performance.now()){
+ let ms=Number(settings.extrapolation)||0;
+ if(replay||paused||!started)ms=0;
+ else if(peerConnected&&peerRole==='guest'){
+   const age=net.lastSnapshot?Math.max(0,Math.min(65,now-net.lastSnapshot)):0;
+   ms+=age+(settings.adaptive?Math.min(60,Math.max(0,net.rtt/2)):0);
+ }else if(frameStats.lastTick){
+   // Smooth visual positions between 60Hz ticks on high-refresh screens.
+   ms+=Math.max(0,Math.min(FuckballPrediction.TICK_MS,now-frameStats.lastTick));
+ }
+ renderer.extrapolation=FuckballPrediction.effectiveMs(Math.max(0,Math.min(250,ms)),room?.state);
+ if(now-frameStats.lastUi>=100){
+   $('networkQuality').textContent=peerConnected?Math.round(net.rtt)+' ms RTT':'LOCAL · 0 ms';
+   $('netStats').textContent=peerConnected?'RTT '+Math.round(net.rtt)+' ms · jitter '+Math.round(net.jitter)+' ms · prediction '+Math.round(renderer.extrapolation)+' ms':'Local · prediction '+Math.round(renderer.extrapolation)+' ms';
+ }
+}
+function drawFrame(){
+ const now=performance.now();
+ updatePrediction(now);
+ renderer.render();
+ frameStats.frames++;
+ if(now-frameStats.lastUi>=100){updateScore();frameStats.lastUi=now;}
+ if(!frameStats.fpsStart)frameStats.fpsStart=now;
+ if(now-frameStats.fpsStart>=500){
+   $('fpsValue').textContent=String(Math.round(frameStats.frames*1000/(now-frameStats.fpsStart)));
+   frameStats.frames=0;frameStats.fpsStart=now;
+ }
+}
 function savePrefs(){try{localStorage.setItem('fuckball.settings',JSON.stringify(settings));}catch{}}
 $('extrapolation').value=String(Math.max(0,Math.min(200,settings.extrapolation||0)));$('extrapValue').textContent=$('extrapolation').value+' ms';$('adaptivePrediction').checked=settings.adaptive!==false;
 $('extrapolation').oninput=()=>{settings.extrapolation=+$('extrapolation').value;$('extrapValue').textContent=settings.extrapolation+' ms';savePrefs();updatePrediction();};$('adaptivePrediction').onchange=()=>{settings.adaptive=$('adaptivePrediction').checked;savePrefs();};
