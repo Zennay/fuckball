@@ -97,3 +97,23 @@ These are executable application and native Canvas tests, not visual browser ins
 - Third-party license notices are under `dist/vendor/`.
 
 VPS publication must deploy an explicit tested commit into a new release directory. Never reset a live Work-session working tree and never re-enable automatic legacy deployment as a side effect. The old solver may remain in repository history/legacy files but must never be used by the active entry point.
+
+
+## 4v4 team AI and HaxLab self-play
+
+Home → **4v4** starts you plus seven bots. Esc → Teams → **Watch 4v4 bots** starts eight bots. Set Easy, Normal, Hard or Elite globally or on each bot's roster entry. Online room hosts can change difficulty; guests cannot. Levels change decision frequency and tactics, never player speed, kick power or collision rules.
+
+Team AI assigns a ball carrier/chaser, passing support, cover and keeper. A supporting player screens a nearby opponent only when the team has possession under pressure; otherwise it keeps a passing lane or covers behind the ball. This is a heuristic team controller, not a claim of human-level play.
+
+Academy → **HaxLab training** runs real 4v4 simulations with the bundled engine. It evolves five team-tactic parameters, tests on separate seeds and both team sides on BFF and Classic, then generates disjoint match datasets for a portable neural policy. Stop terminates the worker. Validated team tactics can be applied; neural candidates can be selected manually or exported.
+
+For the original HaxLab NumPy trainer, run from the repository root:
+
+```sh
+python3 -m pip install numpy
+node training/haxlab_selfplay.cjs training/output/haxlab-selfplay 12 3
+```
+
+This runs 12 natural 4v4 matches and three tactic generations, uses the current neural policy for assisted rollout movement, labels visited states with the team teacher, writes HaxLab-compatible shards, trains with `training/haxlab/baseline.py`, exports a candidate and runs the arena benchmark. Split assignment is by whole match. Initial position variation is confined to episode setup; no physics parameters are changed. Output includes weights, held-out metrics, team tactics and arena results. The neural candidate does not replace the live model automatically. Browser training uses the portable JS trainer with the same feature schema; the CLI uses the original HaxLab trainer.
+
+The first run is a small bootstrap dataset, not evidence of elite playing strength. A positive tactics score includes ball territory and relative kick activity; drawn games alone do not establish a stronger player.

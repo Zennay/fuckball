@@ -3,7 +3,7 @@
 async function train(splits,columns,progress=()=>{},options={}){
  let seed=options.seed||1337;const random=()=>{seed=(Math.imul(1664525,seed)+1013904223)>>>0;return seed/4294967296;};
  const n=columns.length,h=options.hidden||48,epochs=options.epochs||12,rows=splits.train;
- if(!rows.length||!splits.validation.length||!splits.test.length)throw Error('Elke datasplit moet speelbare voorbeelden bevatten.');
+ if(!rows.length||!splits.validation.length||!splits.test.length)throw Error('Each split needs playable samples.');
  const mean=Array(n).fill(0),std=Array(n).fill(0);for(const r of rows)for(let i=0;i<n;i++)mean[i]+=r.x[i]/rows.length;for(const r of rows)for(let i=0;i<n;i++)std[i]+=(r.x[i]-mean[i])**2/rows.length;for(let i=0;i<n;i++)std[i]=Math.sqrt(std[i])||1;
  const m={schema:'fuckball-policy-v1',name:'Replay Academy '+new Date().toISOString().slice(0,10),input_columns:columns,window:1,role_order:[],mean,std,w1:Array.from({length:n},()=>Array.from({length:h},()=>(random()-.5)*Math.sqrt(8/n))),b1:Array(h).fill(0),wd:Array.from({length:h},()=>Array.from({length:9},()=>(random()-.5)*Math.sqrt(8/h))),bd:Array(9).fill(0),wk:Array.from({length:h},()=>[(random()-.5)*Math.sqrt(8/h)]),bk:[-2],kick_threshold:.5,kick_max_distance:31,source_kind:'human-replay-browser',training:{train_samples:rows.length,validation_samples:splits.validation.length,test_samples:splits.test.length,epochs,seed:options.seed||1337,split:'whole replays',normalization:'train only'}};
  const normalize=r=>({...r,x:r.x.map((v,i)=>(v-mean[i])/std[i])});

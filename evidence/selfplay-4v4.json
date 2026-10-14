@@ -1,0 +1,244 @@
+{
+  "schema": "fuckball-selfplay-evidence-v1",
+  "engine": "node-haxball-2.3.1",
+  "sourceModel": "BFF Replay BC 02",
+  "episodes": 12,
+  "split": "8 train, 2 validation, 2 test; whole matches",
+  "team": {
+    "schema": "fuckball-team-policy-v1",
+    "name": "Self-play team 20261014",
+    "profile": {
+      "support": 115,
+      "spread": 115,
+      "cover": 150,
+      "press": 110,
+      "screen": 55
+    },
+    "candidate": {
+      "support": 115,
+      "spread": 115,
+      "cover": 150,
+      "press": 110,
+      "screen": 55
+    },
+    "promoted": false,
+    "training": {
+      "generations": 3,
+      "seed": 20261014,
+      "frames": 2400,
+      "accepted": 0,
+      "history": [
+        {
+          "generation": 1,
+          "accepted": false,
+          "score": -0.12279081874605424,
+          "games": [
+            {
+              "map": "BFF",
+              "side": 1,
+              "seed": 20261014,
+              "goals": 1,
+              "conceded": 0,
+              "kicks": 9,
+              "opponentKicks": 14,
+              "seconds": 34.46666666666599,
+              "fitness": 100.2964742833267
+            },
+            {
+              "map": "BFF",
+              "side": 2,
+              "seed": 20261014,
+              "goals": 0,
+              "conceded": 1,
+              "kicks": 10,
+              "opponentKicks": 15,
+              "seconds": 33.98333333333269,
+              "fitness": -100.41926510207276
+            }
+          ]
+        },
+        {
+          "generation": 2,
+          "accepted": false,
+          "score": -0.98499983151024,
+          "games": [
+            {
+              "map": "BFF",
+              "side": 1,
+              "seed": 20261015,
+              "goals": 0,
+              "conceded": 0,
+              "kicks": 9,
+              "opponentKicks": 10,
+              "seconds": 38.51666666666576,
+              "fitness": -0.6490187778787251
+            },
+            {
+              "map": "BFF",
+              "side": 2,
+              "seed": 20261015,
+              "goals": 0,
+              "conceded": 0,
+              "kicks": 11,
+              "opponentKicks": 10,
+              "seconds": 38.51666666666576,
+              "fitness": -0.33598105363151487
+            }
+          ]
+        },
+        {
+          "generation": 3,
+          "accepted": false,
+          "score": -0.023708714217816063,
+          "games": [
+            {
+              "map": "BFF",
+              "side": 1,
+              "seed": 20261016,
+              "goals": 0,
+              "conceded": 0,
+              "kicks": 10,
+              "opponentKicks": 9,
+              "seconds": 38.51666666666576,
+              "fitness": -0.4971493872358664
+            },
+            {
+              "map": "BFF",
+              "side": 2,
+              "seed": 20261016,
+              "goals": 1,
+              "conceded": 1,
+              "kicks": 9,
+              "opponentKicks": 14,
+              "seconds": 33.03333333333274,
+              "fitness": 0.4734406730180503
+            }
+          ]
+        }
+      ]
+    },
+    "validation": {
+      "games": [
+        {
+          "map": "BFF",
+          "side": 1,
+          "seed": 20361017,
+          "goals": 0,
+          "conceded": 0,
+          "kicks": 12,
+          "opponentKicks": 6,
+          "seconds": 37.999999999999126,
+          "fitness": 0.44236525498520024
+        },
+        {
+          "map": "BFF",
+          "side": 2,
+          "seed": 20361017,
+          "goals": 0,
+          "conceded": 0,
+          "kicks": 6,
+          "opponentKicks": 12,
+          "seconds": 37.999999999999126,
+          "fitness": -0.44236525498520024
+        },
+        {
+          "map": "Classic",
+          "side": 1,
+          "seed": 20361017,
+          "goals": 2,
+          "conceded": 0,
+          "kicks": 15,
+          "opponentKicks": 14,
+          "seconds": 27.016666666666413,
+          "fitness": 200.4669443328602
+        },
+        {
+          "map": "Classic",
+          "side": 2,
+          "seed": 20361017,
+          "goals": 0,
+          "conceded": 2,
+          "kicks": 14,
+          "opponentKicks": 15,
+          "seconds": 27.016666666666413,
+          "fitness": -200.4669443328602
+        }
+      ],
+      "score": 0,
+      "goalDifference": 0,
+      "active": true
+    },
+    "note": "Evolutionary team tactics. Validation against the previous policy; not a human skill rating."
+  },
+  "neuralTest": {
+    "samples": 3200,
+    "direction_accuracy": 0.494375,
+    "joint_accuracy": 0.4915625,
+    "kick_precision": 0.0,
+    "kick_recall": 0.0,
+    "kick_f1": 0.0,
+    "kick_true_rate": 0.005,
+    "kick_predicted_rate": 0.001875,
+    "kick_threshold": 0.5,
+    "kick_confusion": {
+      "tp": 0,
+      "fp": 6,
+      "fn": 16,
+      "tn": 3178
+    },
+    "baselines": {
+      "majority_direction_accuracy": 0.2071875,
+      "always_no_kick_accuracy": 0.995
+    }
+  },
+  "arena": {
+    "schema": "fuckball-arena-benchmark-v1",
+    "model": "HaxLab 4v4 Self-play",
+    "frames_per_match": 3600,
+    "opponent": "tactical",
+    "matches": [
+      {
+        "map": "BFF Big v4",
+        "model_team": 1,
+        "model_goals": 0,
+        "tactical_goals": 2,
+        "kicks": 12,
+        "model_kicks": 2,
+        "model_distance": 34971,
+        "simulated_seconds": 49.0499999999985
+      },
+      {
+        "map": "BFF Big v4",
+        "model_team": 2,
+        "model_goals": 0,
+        "tactical_goals": 1,
+        "kicks": 13,
+        "model_kicks": 0,
+        "model_distance": 32847,
+        "simulated_seconds": 53.86666666666489
+      },
+      {
+        "map": "Classic",
+        "model_team": 1,
+        "model_goals": 0,
+        "tactical_goals": 1,
+        "kicks": 16,
+        "model_kicks": 1,
+        "model_distance": 25996,
+        "simulated_seconds": 52.03333333333166
+      },
+      {
+        "map": "Classic",
+        "model_team": 2,
+        "model_goals": 0,
+        "tactical_goals": 4,
+        "kicks": 13,
+        "model_kicks": 0,
+        "model_distance": 27792,
+        "simulated_seconds": 35.5833333333326
+      }
+    ],
+    "limitations": "Four deterministic side-swapped matches; not human skill or latency evidence."
+  },
+  "neuralPromoted": false
+}
