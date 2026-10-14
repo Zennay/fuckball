@@ -30,6 +30,16 @@ The previous `shared/physics.js` was a separate approximation with 1.10x player 
 
 This is a compatible independent engine, not proprietary HaxBall source. Current official HaxBall bit-for-bit parity is not claimed. HBS JSON5 and HBR2 v3 are supported; Flash .hbr is not. The official room list/service is not connected.
 
+## Extrapolation, sweeper keeper and high-refresh rendering
+
+The native physics simulation remains fixed at 60 ticks/s. Rendering is scheduled by the browser's `requestAnimationFrame`, with fractional-tick visual lookahead for high-refresh monitors. The pause menu shows **actual rendered FPS**, not simulated physics ticks. A 300Hz browser/display may approach 300 FPS if the computer can render each frame quickly; a 60Hz display cannot show 300 distinct frames through ordinary animation frames.
+
+Esc → Settings → Extrapolation: start at 0–35 ms locally. Higher values (up to 200 ms) lead players farther ahead, but extrapolation is automatically reduced before likely ball/player or wall collisions to prevent premature speculative rebounds. Direct-play guests also factor in bounded snapshot age and optional adaptive network delay. This alters the *display only*, not the engine's collision response, scoring or speed. The frame rate and collision guard are covered by Canvas and headless regression tests.
+
+Esc → Settings → Rendering → Performance · 70% reduces the internal canvas resolution to improve FPS on demanding screens; Native resolution keeps maximum sharpness.
+
+In 4v4, the assigned AI keeper acts as a sweeper: it supports the team farther upfield, steps toward an unmarked ball carrier and recovers toward goal for incoming shots. Its assignment stays stable through chaser changes; movement obeys the same player physics as everyone else.
+
 ## AI Academy
 
 The bundled `BFF Replay BC 02` model was trained with the user's original HaxLab NumPy trainer on six BFF replays (192,563 examples); a seventh replay calibrates the kick threshold; an eighth is a separate test (24,688 examples). Direction accuracy: 54.02%, majority-direction baseline 19.44%; kick F1: 0.188. These are imitation metrics, not win rates. The arena benchmark shows kickoff stalls and no wins over the tactical policy. Therefore **tactical is the default**, and the neural model is explicitly an evaluation candidate.
