@@ -52,7 +52,8 @@ function assertPredictionAsset(source) {
   assert.doesNotMatch(active, /\.nM\(\s*(?:frames|whole)\s*\)/,
     'legacy one-big-dt native extrapolation is forbidden');
   assert.match(active, /function\s+createPredictor\s*\(/, 'online guest predictor must be served');
-  assert.match(active, /pending\.splice\(/, 'prediction must retain pending unacked inputs');
+  assert.match(active, /if\s*\(\s*n\s*\)\s*pending\.splice\(\s*0\s*,\s*n\s*\)/,
+    'prediction must prune acknowledged inputs, not just cap the pending queue');
 }
 
 async function get(base, pathname) {
