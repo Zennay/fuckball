@@ -18,6 +18,14 @@ const before=a.evalJS('room.state.players.find(p=>p.id===1).disc.pos.x');key('Ke
 el('resetBindings').click();assert.equal(a.evalJS("settings.keys.right[0]"),'ArrowRight');
 // Bottom-left chat: chat key opens the input, Enter sends, messages stay in the HUD log.
 key('Enter');assert.equal(el('chatForm').hidden,false,'chat opens in the corner');el('chatInput').value='hello';el('chatForm').onsubmit({preventDefault(){}});assert.equal(el('chatForm').hidden,true);assert(el('chatLog').children.some(r=>/hello/.test(r.textContent)),'message visible in HUD chat');
+// Slash commands change settings locally and are not sent as chat.
+function say(t){key('Enter');el('chatInput').value=t;el('chatForm').onsubmit({preventDefault(){}});}
+say('/extrapolation 80');assert.equal(a.evalJS('settings.extrapolation'),80);assert.equal(el('extrapolation').value,'80');
+say('/fps unlimited');assert.equal(a.evalJS('settings.fpsLimit'),-1);say('/fps 144');assert.equal(a.evalJS('settings.fpsLimit'),144);
+say('/zoom 1.5');assert.equal(a.evalJS('settings.zoom'),1.5);say('/name Keeper');assert.equal(a.evalJS('settings.name'),'Keeper');
+say('/extrapolation 5000');assert.equal(a.evalJS('settings.extrapolation'),80,'invalid values rejected');assert(/-200 to 1000/.test(el('chatLog').children.at(-1).textContent));
+say('/nope');assert(/Unknown command/.test(el('chatLog').children.at(-1).textContent));
+assert(!el('chatLog').children.some(r=>/: \/fps/.test(r.textContent)),'commands are not posted as chat');
 // Teams: move, add and remove bots; arrangement survives a restart.
 key('Escape');el('menuMatch').click();el('mode').value='4v4';el('mode').onchange();assert.equal(a.evalJS('room.state.players.length'),8);
 a.evalJS('movePlayer(3,0)');assert.equal(a.evalJS('room.state.players.find(p=>p.id===3).team.id'),0,'player dragged to spectators');assert.equal(el('specPlayers').children.length,1);
@@ -27,4 +35,4 @@ el('joinBlue').click();assert.equal(a.evalJS('room.state.players.find(p=>p.id===
 el('resetButton').click();assert.equal(a.evalJS('room.state.players.find(p=>p.id===3).team.id'),0,'restart keeps the teams');assert.equal(a.evalJS('room.state.players.find(p=>p.id===1).team.id'),2);
 // Copy link falls back to execCommand on plain HTTP (no navigator.clipboard).
 let copied='';a.evalJS('document').execCommand=c=>{copied=c;return true;};a.evalJS('document').body.append=()=>{};el('inviteLink').value='http://example/?room=ABCDEFGH';a.evalJS('copyInvite(false)');
-setTimeout(()=>{assert.equal(copied,'copy','clipboard fallback used');assert(/copied/.test(el('toast').textContent),el('toast').textContent);a.evalJS('room.destroy()');console.log('PASS translucent room menu keeps the match running, P pause, rebindable controls, corner chat, drag/add/remove players kept across restart, HTTP link copy');},20);
+setTimeout(()=>{assert.equal(copied,'copy','clipboard fallback used');assert(/copied/.test(el('toast').textContent),el('toast').textContent);a.evalJS('room.destroy()');console.log('PASS translucent room menu keeps the match running, P pause, rebindable controls, corner chat, slash commands, drag/add/remove players kept across restart, HTTP link copy');},20);

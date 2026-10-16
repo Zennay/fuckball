@@ -37,9 +37,8 @@ body{background:#0d1113}
 .rm-score b{font-size:11px;letter-spacing:1.5px}.rm-score b.red{color:var(--rm-red)}.rm-score b.blue{color:var(--rm-blue)}
 .rm-score strong{font-size:22px;font-weight:700;letter-spacing:2px}
 .rm-score time{font:12px monospace;color:var(--rm-muted);margin-left:6px}
-.rm-close{display:flex;align-items:center;gap:8px;border-radius:8px;background:var(--rm-lime);border-color:var(--rm-lime);color:#15200c;font-weight:700}
-.rm-close:hover{background:#d8ff80}
-.rm-close kbd{margin:0;border-color:#15200c55;color:#15200c}
+.rm-head-actions{display:flex;gap:8px;align-items:center}
+.rm-head-actions button{border-radius:8px;font-weight:700;font-size:12.5px;padding:9px 13px}
 .rm-tabs{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--rm-line)}
 .rm-tabs button{background:none;border:0;border-radius:7px;color:var(--rm-muted);font-weight:700;font-size:13px;padding:8px 13px}
 .rm-tabs button:hover{background:#ffffff12;color:#fff}
@@ -111,7 +110,7 @@ body{background:#0d1113}
  .room-menu{padding:56px 8px 8px}
  .rm-head{flex-wrap:wrap;gap:10px;padding:12px}
  .rm-score{order:3;width:100%;justify-content:center;margin:0}
- .rm-close{margin-left:auto}
+ .rm-head-actions{margin-left:auto}
  .rm-teams{grid-template-columns:1fr 1fr}
  .rm-team.spec{grid-column:1/-1;min-height:0;order:3}
  .rm-settings,.rm-form,.rm-adv-grid{grid-template-columns:1fr 1fr}
@@ -124,3 +123,6 @@ body{background:#0d1113}
 }
 #chatForm.hud-chat-form{display:block;background:none;border:0;padding:0}
 #chatForm.hud-chat-form input{margin:0}
+
+/* Score centred at the top of the pitch. */
+#matchView .scoreboard{left:50%;transform:translateX(-50%)}
