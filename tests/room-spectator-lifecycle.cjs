@@ -42,6 +42,41 @@ async function main() {
     assert.equal(new Set(ids).size, 12);
     assert(players.every(p => p.room === host.room));
 
+    // Under the currently overfilled #31 roster, guests must not exploit
+    // forged host/admin metadata or concurrent control messages to rewrite
+    // team membership, game mode or start state. This green authorization
+    // check is separate from the still-RED 4v4 active-cap acceptance.
+    const ownerState = () => ({
+      owner:room.owner, mode:room.mode, started:room.started,
+      teams:room.hb.getPlayerList().map(p => [p.id,p.team]).sort((a,b)=>a[0]-b[0]),
+      ids:[...room.clients.keys()].sort((a,b)=>a-b),
+      socketCount:room.sockets.size
+    });
+    const beforeForgery = ownerState();
+    const guests = players.slice(1);
+    const errorOffsets = guests.map(g => g.ws.messages.filter(m => m.type === 'error').length);
+    for (const guest of guests) {
+      for (const message of [
+        {type:'team',id:host.id,team:0,owner:guest.id,admin:true},
+        {type:'specAll',owner:host.id,admin:true},
+        {type:'configure',mode:'bot',started:true,owner:host.id,admin:true}
+      ]) guest.ws.send(JSON.stringify(message));
+    }
+    await until(() => guests.every((guest,index) =>
+      guest.ws.messages.filter(m => m.type === 'error').length >= errorOffsets[index]+3),
+    'all 33 forged guest commands rejected');
+    for (const [index, guest] of guests.entries()) {
+      const errors = guest.ws.messages.filter(m => m.type === 'error')
+        .slice(errorOffsets[index]);
+      assert.equal(errors.length,3,'each guest receives exactly three denials');
+      for (const error of errors)
+        assert.match(error.message,/Only the host can change the match/,
+          'forged metadata cannot grant admin rights');
+    }
+    assert.deepEqual(ownerState(),beforeForgery,
+      '33 concurrent forged controls cannot alter teams, owner, mode or roster');
+    assert.equal(app.rooms.get(host.room),room,'room link survives forged controls');
+
     host.ws.send(JSON.stringify({type:'specAll'}));
     await until(() => room.hb.getPlayerList().every(p => p.team === 0), 'all on spectators');
     assert.equal(room.clients.size, 12, 'spectating must not disconnect any guests');
@@ -73,7 +108,7 @@ async function main() {
     for (const p of players.slice(3)) {
       assert.equal(room.hb.getPlayer(p.id).team, 0, 'handover keeps spectator state');
     }
-    console.log('PASS #31 precursor: 12 online, spectate-all, forged promotion rejected, selective team moves and owner handover');
+    console.log('PASS #31 precursor: 12 online, 33 forged guest controls denied, spectate-all, selective team moves and owner handover');
   } finally {
     for (const ws of connections) ws.close();
     await app.close();
