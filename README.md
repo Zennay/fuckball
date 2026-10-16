@@ -46,6 +46,17 @@ Rendering uses the same prediction as the official HaxBall client, ported from t
 
 `tests/render-timing.cjs` checks positions against the engine's own tick through a ball/player contact, the fractional tick, own-input replay, the cap, isolation and the clock estimator.
 
+## Netcode v3 (online play at 200 ms)
+
+Online rooms and direct 1v1 connections use netcode v3 by default (design and measurements: `docs/netcode-plan.md`). Physics and the engine are unchanged; the server stays authoritative.
+
+- **Frame-stamped inputs.** The client stamps every input change with the host frame it is meant for. The host keeps a small per-player buffer and applies each input exactly at that frame, so jitter no longer moves your own player, and short kick taps can no longer be lost when packets arrive bunched up. Late inputs are replayed in order, one change per frame.
+- **Lead control.** Each snapshot carries the input "slack" the host measured for that client. The client nudges its own clock (at most 5% faster or 2% slower) so the 5th percentile of the slack stays just above zero. On a stable line that is about one frame; on wifi with spikes it is a few frames.
+- **Smooth corrections.** When a snapshot corrects the prediction, the error becomes a visual offset that decays in ~40–80 ms. Above 90 units (kickoff, goal reset) the view snaps instead. Only the rendered copy is touched.
+- **Switch.** Esc → Settings → Netcode → *Classic* restores the previous behaviour for new connections; `FUCKBALL_NETCODE=classic` does the same for the whole server. Old and new clients can share a room (snapshot header `0x46423201` classic, `0x46423203` v3 with a slack field).
+
+`node scripts/netsim.cjs [seconds] [profile ...]` runs real engines over a simulated network (TCP or UDP behaviour, latency, jitter, loss) and compares classic with v3. `tests/netcode.cjs` keeps the key properties under test.
+
 ## VPS training
 
 `node training/continuous.cjs /opt/fuckball-training 12` runs a 12-hour window in batches of 192 matches. It fine-tunes the previous checkpoint and uses it for the next rollout; normalization changes are compensated when weights resume. Checkpoints, metrics and arena results persist, while only two recent generated datasets are retained. A STOP file or service stop ends training. Low disk space pauses generation. Candidates never overwrite live gameplay automatically.

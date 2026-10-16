@@ -42,19 +42,27 @@ function extrapolate(state,frames,events=[],baseFrame=0){
 function localFrames({now,roomStart,currentFrame,extrapolation=0}){return Math.max(0,Math.min(MAX_FRAMES,(now-roomStart+extrapolation)*XE-currentFrame));}
 
 /* Online guest: confirmed snapshots + clock estimate + own pending inputs. */
-function createPredictor(){const pingClock=createClock(),snapshotClock=createClock(),pending=[];let snapshotFrame=0;
+function createPredictor(){const pingClock=createClock(),snapshotClock=createClock(),pending=[];let snapshotFrame=0,lastStamp=-Infinity,lastInput=0;
  return{
   pingClock,snapshotClock,pending,
+  /* Netcode v3: extra frames of lead (from the lead controller) and per-frame input stamping. */
+  lead:0,stamped:false,
   get snapshotFrame(){return snapshotFrame;},
-  reset(){pingClock.reset();snapshotClock.reset();pending.length=0;snapshotFrame=0;},
+  reset(){pingClock.reset();snapshotClock.reset();pending.length=0;snapshotFrame=0;lastStamp=-Infinity;lastInput=0;this.lead=0;},
   /* Host frame (may be fractional) reported in the pong for a ping sent at `sentAt` (local ms). */
   pong(hostFrame,sentAt){pingClock.add(hostFrame-sentAt*XE);},
   /* Snapshot of host frame `frame` arrived at `now`; `ack` = last own input seq it already contains. */
   snapshot(frame,now,ack){snapshotFrame=frame;snapshotClock.add(frame-now*XE);let n=0;while(n<pending.length&&pending[n].seq<=ack)n++;if(n)pending.splice(0,n);},
   offset(){return pingClock.size?pingClock.percentile(.5):snapshotClock.percentile(.5);},
-  targetFrame(now,extrapolation=0){return (now+extrapolation)*XE+this.offset();},
-  /* Own input, stamped like HaxBall at the frame the client is currently predicting. */
-  input(seq,id,input,now){pending.push({seq,id,input,frame:Math.max(snapshotFrame,Math.floor(this.targetFrame(now)))});if(pending.length>240)pending.splice(0,pending.length-240);},
+  targetFrame(now,extrapolation=0){return (now+extrapolation)*XE+this.offset()+this.lead;},
+  /* Own input, stamped like HaxBall at the frame the client is currently predicting.
+     v3 (stamped): stamps never go backwards, and a kick released in the frame it was pressed moves to
+     the next frame, so the host simulates every tap. Returns the stamped frame. */
+  input(seq,id,input,now){let frame=Math.max(snapshotFrame,Math.floor(this.targetFrame(now)));
+   if(this.stamped){frame=Math.max(frame,lastStamp);if(frame===lastStamp&&(lastInput&16)&&!(input&16))frame++;lastStamp=frame;lastInput=input;}
+   pending.push({seq,id,input,frame});if(pending.length>240)pending.splice(0,pending.length-240);return frame;},
+  /* v3 wire form of the inputs the host has not confirmed yet: [[seq,frame,input],...]. */
+  unacked(max=32){return pending.slice(-max).map(e=>[e.seq,e.frame,e.input]);},
   frames(now,extrapolation=0){return Math.max(0,Math.min(MAX_FRAMES,this.targetFrame(now,extrapolation)-snapshotFrame));},
   predict(state,now,extrapolation=0){return extrapolate(state,this.frames(now,extrapolation),pending,snapshotFrame);}
  };}

@@ -8,7 +8,8 @@ const MAGIC='258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 class WebSocket extends EventEmitter {
   static OPEN=1;
   constructor(socket,maxPayload){
-    super();this.socket=socket;this.readyState=1;this.buf=Buffer.alloc(0);this.maxPayload=maxPayload;
+    super();this.socket=socket;socket.setNoDelay?.(true); // small input/snapshot frames must not wait for Nagle
+    this.readyState=1;this.buf=Buffer.alloc(0);this.maxPayload=maxPayload;
     socket.on('data',data=>this.readData(data));
     socket.on('close',()=>this.closed());socket.on('end',()=>this.closed());socket.on('error',()=>this.closed());
   }
