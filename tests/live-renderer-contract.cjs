@@ -28,14 +28,26 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
       ['missing input predictor',
         served.replace('function createPredictor()', 'function createOldPredictor()')],
       ['missing tick progression',
-        served.replace('f<=last;f++', 'f<=last;f+=frames')]
+        served.replace('f<=last;f++', 'f<=last;f+=frames')],
+      ['copy-state promise hidden in comment',
+        served.replace('const out=copyState(state)',
+          'const out=state; /* const out=copyState(state) */')],
+      ['60 Hz native tick promise hidden in comment',
+        served.replace('out.nM(f!==last?1:frames-whole)',
+          'out.nM(frames + 0); /* out.nM(f!==last?1:frames-whole) */')],
+      ['predictor function name hidden in quoted text',
+        served.replace('function createPredictor()',
+          'const fakeName="function createPredictor()"; function obsoletePredictor()')],
+      ['unacked input retention hidden in line comment',
+        served.replace('pending.splice(0,n);',
+          'pending.length=0; // pending.splice(0,n);')]
     ];
     for (const [label, source] of mutations) {
       assert.notEqual(source, served, label + ': fixture must mutate the shipped code');
       assert.throws(() => assertPredictionAsset(source), assert.AssertionError,
         label + ': public verifier must reject the faulty served asset');
     }
-    console.log('PASS public-release renderer probe: actual HTTP+WS room and 5 adversarial old-physics/prediction asset mutations rejected');
+    console.log('PASS public-release renderer probe: actual HTTP+WS room and 9 adversarial old-physics/prediction asset mutations rejected');
   } finally {
     await app.close();
   }
