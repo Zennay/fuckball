@@ -51,12 +51,12 @@ function showSummary(result){
  const eligible=mode!=='watch'&&result.time>=HISTORY_MIN_SECONDS;
  if(eligible){const [scored]=goalsBy(result.goals,ownId());writeHistory([{at:Date.now(),mode,map:String(result.map).slice(0,60),red:result.red,blue:result.blue,time:result.time,team,result:team?outcome:null,goals:team?scored:0,online:result.online,scorers:result.goals.filter(g=>g.name).slice(0,30).map(g=>({team:g.team,name:String(g.name).slice(0,25),own:!!g.own}))},...readHistory()]);renderGames();}
  $('summaryNote').textContent=eligible?'Saved to My Games.':mode==='watch'?'Bot-only matches are not saved.':'Not saved to My Games: under '+fmt(HISTORY_MIN_SECONDS)+' played.';
- const host=!serverLink||serverLink.isOwner;$('summaryRematch').disabled=$('summaryNew').disabled=!host;$('summaryRematch').title=host?'Same players, sides swapped':'The host decides';
- summary=result;releaseInputs();$('startOverlay').hidden=true;$('matchSummary').hidden=false;document.body.classList.add('summary-open');$('summaryRematch').focus();
+ const host=!serverLink||serverLink.canControl;$('summaryRematch').disabled=$('summaryNew').disabled=!host;$('summaryRematch').title=host?'Same players, sides swapped':'The host decides';
+ summary=result;releaseInputs();$('startOverlay').hidden=true;$('matchSummary').hidden=false;document.body.classList.add('summary-open');$('gameCanvas').focus();
 }
 function hideSummary(){if(!summary)return;summary=null;$('matchSummary').hidden=true;document.body.classList.remove('summary-open');}
-$('summaryRematch').onclick=()=>{if(serverLink){if(serverLink.isOwner)serverLink.send({type:'rematch'});hideSummary();return;}myTeam=myTeam===1?2:1;resetMatch(true);};
-$('summaryNew').onclick=()=>{if(serverLink){if(serverLink.isOwner)serverLink.send({type:'start'});hideSummary();return;}resetMatch(true);};
+$('summaryRematch').onclick=()=>{if(serverLink){if(serverLink.canControl)serverLink.send({type:'rematch'});hideSummary();return;}myTeam=myTeam===1?2:1;resetMatch(true);};
+$('summaryNew').onclick=()=>{if(serverLink){if(serverLink.canControl)serverLink.send({type:'start'});hideSummary();return;}resetMatch(true);};
 $('summaryExit').onclick=()=>{hideSummary();if(serverLink||peerConnected)leaveRoom();showView('home');};
 function leaveRoom(){$('disconnectPeer').onclick({});}
 const lobbyBaseReset=resetMatch;resetMatch=function(play=true){hideSummary();pendingResult=null;clearTimeout(endTimer);if(!serverLink)matchLog={goals:[],lastKick:null};return lobbyBaseReset(play);};
@@ -117,5 +117,25 @@ const lobbyBaseShowView=showView;showView=function(view){lobbyBaseShowView(view)
 window.addEventListener('keydown',e=>{if(e.code!=='Tab'||$('matchView').hidden||menuOpen||summary||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName))return;e.preventDefault();if($('tabBoard').hidden){$('tabBoard').hidden=false;renderTabBoard();}},true);
 window.addEventListener('keyup',e=>{if(e.code==='Tab')$('tabBoard').hidden=true;});
 window.addEventListener('blur',()=>{$('tabBoard').hidden=true;});
-const boardTimer=setInterval(refreshBoards,500);boardTimer.unref?.();
+const boardTimer=setInterval(()=>refreshBoards(),500);boardTimer.unref?.();
 applyPreferences();refreshPlay();renderGames();refreshBoards();
+// Chat stays available at full time: the summary mirrors the room log and has its own input.
+const lobbyBaseLog=log;log=function(text,system=true){lobbyBaseLog(text,system);const row=el('div','chat-line'+(system?' system':''),text);$('summaryChatLog').append(row);while($('summaryChatLog').childElementCount>40)$('summaryChatLog').firstChild.remove();$('summaryChatLog').scrollTop=$('summaryChatLog').scrollHeight;};
+$('summaryChatForm').onsubmit=e=>{e.preventDefault();const msg=$('summaryChatInput').value.trim();if(!msg)return;$('chatInput').value=msg;$('chatForm').onsubmit({preventDefault(){}});$('summaryChatInput').value='';$('summaryChatInput').focus();};
+window.addEventListener('keydown',e=>{if(!summary||e.code!=='Enter'||document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(e.target?.tagName))return;e.preventDefault();e.stopImmediatePropagation();$('summaryChatInput').focus();},true);
+// Room players (online): owner and admins move people between Red, Blue and Spectators and remove them; the owner appoints admins.
+let peopleKey='';
+function renderRoomPeople(){
+ const link=serverLink,people=link&&!replay?room.state.players.filter(p=>p.id<100):[];$('roomPeople').hidden=!people.length;if(!people.length){peopleKey='';return;}
+ const key=JSON.stringify([people.map(p=>[p.id,p.name,p.team.id]),link.owner,link.admins,link.canControl,networkPlayerId]);if(key===peopleKey)return;peopleKey=key;
+ $('roomPeopleRole').textContent=link.isOwner?'· YOU ARE HOST':link.canControl?'· YOU ARE ADMIN':'';$('roomPeopleList').replaceChildren();
+ for(const p of people){
+  const host=p.id===link.owner,admin=(link.admins||[]).includes(p.id),row=el('div','person '+['spec','red','blue'][p.team.id]),label=el('span','person-name',p.name);
+  if(p.id===networkPlayerId)label.append(el('i','board-tag','YOU'));if(host)label.append(el('i','board-tag role','HOST'));else if(admin)label.append(el('i','board-tag role','ADMIN'));row.append(label);
+  if(link.canControl){const moves=el('span','person-moves');for(const [team,text]of [[1,'Red'],[2,'Blue'],[0,'Spec']]){const b=el('button','move-'+team+(p.team.id===team?' selected':''),text);b.disabled=p.team.id===team;b.onclick=()=>link.send({type:'move',id:p.id,team});moves.append(b);}row.append(moves);}
+  if(link.isOwner&&!host){const b=el('button','person-admin'+(admin?' selected':''),admin?'Admin ✓':'Make admin');b.onclick=()=>link.send({type:'admin',id:p.id,value:!admin});row.append(b);}
+  if(link.canControl&&!host&&p.id!==networkPlayerId&&(link.isOwner||!admin)){const b=el('button','person-kick','Remove');b.onclick=()=>{if(window.confirm&&!window.confirm('Remove '+p.name+' from the room?'))return;link.send({type:'kick',id:p.id});};row.append(b);}
+  $('roomPeopleList').append(row);
+ }
+}
+const lobbyBaseRefreshBoards=refreshBoards;refreshBoards=function(){lobbyBaseRefreshBoards();if(menuOpen)renderRoomPeople();};

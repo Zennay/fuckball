@@ -115,3 +115,29 @@
  .summary-actions button{flex:1;min-width:0}
  .tab-board{top:56px}
 }
+/* HUD bands: score, clock and menu live above the pitch and hints below it, so no zoom level or camera can put them over play. */
+#matchView{--hud-top:calc(68px + env(safe-area-inset-top));--hud-bottom:34px;background:#141c21}
+.pitch{inset:var(--hud-top) 0 var(--hud-bottom) 0;height:auto!important}
+.scoreboard,.match-menu-trigger,.match-invite{top:calc(env(safe-area-inset-top) + 12px)}
+.match-hints{bottom:11px}
+.pitch-label{position:fixed;bottom:11px}
+.tab-board{top:calc(var(--hud-top) + 8px)}
+@media (max-width:700px){#matchView{--hud-top:calc(58px + env(safe-area-inset-top));--hud-bottom:0px}.scoreboard,.match-menu-trigger,.match-invite{top:calc(env(safe-area-inset-top) + 10px)}.pitch-label{display:none}}
+/* Room players: move between teams, appoint admins, remove. */
+.room-people{margin:18px 0}
+.room-people .section-label span{color:var(--green)}
+.person{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #2b3335}
+.person-name{flex:1;min-width:120px;font-weight:700;font-size:13px}
+.person.red .person-name{color:var(--red-team)}.person.blue .person-name{color:var(--blue-team)}.person.spec .person-name{color:#c4ceca}
+.board-tag.role{border-color:var(--green);color:var(--green)}
+.person-moves{display:flex;gap:3px}
+.person button{padding:5px 8px;font-size:11px;min-height:0}
+.person-moves button.selected{background:#f1f6e9;color:#15200c;border-color:#f1f6e9;opacity:1}
+.person-admin.selected{border-color:var(--green);color:var(--green)}
+.person-kick{color:#ff9a93;border-color:#6b3a3a}
+/* Chat at full time */
+.summary-chat{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.summary-chat-log{max-height:96px;overflow:auto;font-size:12px;color:#c9d3cf;display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.summary-chat-log .system{color:#86938d}
+#summaryChatForm{display:flex;gap:6px}
+#summaryChatInput{flex:1;min-width:0;background:#0f1517;border:1px solid #46514f;color:#eef3ea;padding:9px 10px;font-size:13px}

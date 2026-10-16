@@ -16,4 +16,13 @@ console.log('PASS goal scorer attribution and full-time result for every client'
 b.send(JSON.stringify({type:'rematch'}));await until(()=>b.messages.find(x=>x.type==='error'));const before=[r.hb.getPlayer(welcome.id).team,r.hb.getPlayer(guest.id).team];
 a.send(JSON.stringify({type:'rematch'}));await until(()=>r.started&&r.hb.getPlayer(welcome.id).team!==before[0]);assert.deepEqual([r.hb.getPlayer(welcome.id).team,r.hb.getPlayer(guest.id).team],before.map(t=>3-t));assert.equal(g().redScore+g().blueScore,0);assert.equal(r.goals.length,0);assert.equal(r.hb.getPlayerList().length,6);
 console.log('PASS host-only rematch swaps sides and resets the score');
+// Admins: appointed by the owner; may pause, move and remove players, but not the owner or other admins' roles.
+const errors=()=>b.messages.filter(x=>x.type==='error').length,errBefore=errors();b.send(JSON.stringify({type:'pause',value:true}));await until(()=>errors()>errBefore);assert.equal(r.paused,false,'non-admin cannot pause');
+a.send(JSON.stringify({type:'admin',id:guest.id,value:true}));await until(()=>b.messages.find(x=>x.type==='room'&&x.admins?.includes(guest.id)));await until(()=>b.messages.find(x=>x.type==='notice'&&/is now an admin/.test(x.text)));
+b.send(JSON.stringify({type:'pause',value:true}));await until(()=>r.paused);b.send(JSON.stringify({type:'pause',value:false}));await until(()=>!r.paused);
+b.send(JSON.stringify({type:'move',id:welcome.id,team:0}));await until(()=>r.hb.getPlayer(welcome.id).team===0);assert.equal(r.hb.getPlayerList().filter(p=>p.team===1||p.team===2).length,6,'bots fill the moved player\'s slot');b.send(JSON.stringify({type:'move',id:welcome.id,team:1}));await until(()=>r.hb.getPlayer(welcome.id).team===1);
+let n=errors();b.send(JSON.stringify({type:'kick',id:welcome.id}));await until(()=>errors()>n);n=errors();b.send(JSON.stringify({type:'admin',id:welcome.id,value:false}));await until(()=>errors()>n);assert.equal(r.owner,welcome.id);
+const c=await connect(url);c.send(JSON.stringify({type:'join',room:welcome.room,name:'Third'}));const third=await until(()=>c.messages.find(x=>x.type==='welcome'));b.send(JSON.stringify({type:'kick',id:third.id}));await until(()=>c.messages.find(x=>x.type==='kicked'));await until(()=>r.clients.size===2);assert.equal(r.hb.getPlayer(third.id),null);c.close();
+a.send(JSON.stringify({type:'admin',id:guest.id,value:false}));await until(()=>!r.admins.has(guest.id));n=errors();b.send(JSON.stringify({type:'pause',value:true}));await until(()=>errors()>n);assert.equal(r.paused,false);
+console.log('PASS owner appoints admins; admins pause, move and remove players; roles are protected');
 }finally{a?.close();b?.close();await app.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

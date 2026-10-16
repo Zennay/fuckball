@@ -6,5 +6,5 @@ for(const [key,,tab]of views)$(tab).onclick=()=>showView(key);
 function quickPlay(mode){if(typeof closeMatchMenu==='function')closeMatchMenu(false);if(replay)closeReplay();if(peerConnected)disconnect();$('mode').value=mode;showView('play');resetMatch(true);}
 $('quickOnline').onclick=()=>{showView('play');openDialog('networkDialog');};$('quickReplay').onclick=()=>{showView('play');$('replayFile').click();};
 showView('home');
-$('botDifficulty').value=settings.difficulty||'hard';$('botDifficulty').onchange=()=>{settings.difficulty=$('botDifficulty').value;settings.botLevels={};savePrefs();if(serverLink?.isOwner)serverLink.send({type:'difficulty',difficulty:settings.difficulty,botLevels:{},teamProfile:settings.teamProfile});updateRoster();};
+$('botDifficulty').value=settings.difficulty||'hard';$('botDifficulty').onchange=()=>{settings.difficulty=$('botDifficulty').value;settings.botLevels={};savePrefs();if(serverLink?.canControl)serverLink.send({type:'difficulty',difficulty:settings.difficulty,botLevels:{},teamProfile:settings.teamProfile});updateRoster();};
 $('watchBots').onclick=$('watchHome').onclick=()=>quickPlay('watch');$('playPractice').onclick=()=>quickPlay('practice');$('playLocal').onclick=()=>quickPlay('local');
