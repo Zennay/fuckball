@@ -28,10 +28,10 @@ function createRoomCore(opts){
  function bots(refill=true){const size=r.mode==='4v4'?4:r.mode==='2v2'?2:1;if(refill)for(const p of [...hb._room.state.players])if(p.id>=100)hb._room.playerLeave(p.id);for(const team of [1,2]){const list=hb.getPlayerList().filter(p=>p.team===team);for(let i=list.length;i<size;i++)addBot(team);if(!refill)for(const p of list.filter(p=>p.id>=100).slice(0,Math.max(0,list.length-size)))hb._room.playerLeave(p.id);}for(const p of hb._room.state.players)p.aiControlled=p.id>=100;}
  function reset(start=true){hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
  /* id: client/player id (< 100), chosen by the room server so it stays the same on every host. */
- function join(id,{name='Player',netcode=2}={}){if(r.clients.size>=8)throw Error('Room is full.');if(r.clients.has(id))throw Error('Already in this room.');
+ function join(id,{name='Player',netcode=2,account=null}={}){if(r.clients.size>=8)throw Error('Room is full.');if(r.clients.has(id))throw Error('Already in this room.');
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
   const red=hb.getPlayerList().filter(p=>p.id<100&&p.team===1).length,blue=hb.getPlayerList().filter(p=>p.id<100&&p.team===2).length;hb.addPlayer(id,c.name,red<=blue?1:2);
-  send(id,{type:'welcome',id,room:r.id,owner:r.owner,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
+  send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
  function leave(id){if(!r.clients.delete(id))return !r.clients.size;hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
  function message(id,d,hostTime=r.frame){const c=r.clients.get(id);if(!c)throw Error('Join a room first.');
@@ -41,6 +41,8 @@ function createRoomCore(opts){
   if(r.owner!==id)throw Error('Only the host can change the match.');
   if(d.type==='difficulty'){if(!AI.levels[d.difficulty])throw Error('Invalid difficulty.');r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(Number(bid)>=100&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);status();return;}
   if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');hb.setPlayerTeam(pid,team);status();snapshot();return;}
+  if(d.type==='swap'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);status();snapshot();return;}
+  if(d.type==='specAll'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,0);status();snapshot();return;}
   if(d.type==='addBot'){const team=Number(d.team);if(![0,1,2].includes(team))throw Error('Invalid team.');if(hb._room.state.players.length>=16)throw Error('Room is full (16 players).');addBot(team);status();snapshot();return;}
   if(d.type==='removeBot'){const bid=Number(d.id);if(!(bid>=100)||!hb.getPlayer(bid))throw Error('Invalid bot.');hb._room.playerLeave(bid);status();snapshot();return;}
   if(d.type==='start')reset(true);else if(d.type==='stop'){r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);status();snapshot();}else if(d.type==='configure'){

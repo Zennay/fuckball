@@ -12,12 +12,18 @@ npm start
 # HOST and PORT can override the listen address.
 ```
 
-The field fills the browser viewport. Esc opens a translucent, HaxBall-style room menu on top of the running match — the game never stops for it (P pauses). The menu opens on the teams: Red, Spectators and Blue, and the host drags players (and bots) between them, adds bots with **+ Bot** or removes them with ×. Below the teams: Start/Stop, Pause, Restart, Record, **Copy room link** (online) or **Create online room** (offline), and time limit, score limit and stadium. Team setup presets, bot difficulty (global and per bot), stadium import/edit, replays and direct WebRTC connections sit under **Advanced**. Teams you arrange survive restarts and limit changes.
+The field fills the browser viewport. Esc opens a translucent, HaxBall-style room menu on top of the running match — the game never stops for it (P pauses). The menu opens on the teams: Red, Spectators and Blue, and the host drags players (and bots) between them, adds bots with **+ Bot** or removes them with ×. **Copy room link** (online) or **Create online room** (offline) sits at the top of the menu. Below the teams: Start/Stop, Pause, Swap teams, All to spectators, Record, and time limit, score limit and stadium. Bot difficulty is set per bot next to its name. Replays are opened from the home screen. Esc closes the menu again; there is no separate resume button. The score is centred at the top of the pitch and the only pause indicator is the engine's own “Game Paused”. Teams you arrange survive restarts and limit changes.
 
 - **Controls** tab: every action (up, down, left, right, kick, open chat) has two rebindable key slots. Defaults: arrows/WASD, Space/X, Enter for chat.
 - **Chat** sits in the bottom-left corner, always visible but small; messages fade after a few seconds. Press the chat key to type, Enter to send, Esc to close.
 - **Ping and FPS** are shown under the chat (local games show LOCAL).
-- **Settings** tab: name, camera, zoom, rendering, FPS limit, sound, extrapolation, fullscreen.
+- **Settings** tab (second tab): name, camera, zoom, rendering, FPS limit (up to 1000 or Unlimited; above the display refresh rate an extra MessageChannel loop renders between animation frames), sound, extrapolation, fullscreen.
+- **Chat commands**: `/extrapolation <ms>`, `/fps <limit|0|unlimited>`, `/zoom <0.6–2>`, `/camera full|follow`, `/name <nick>`, `/sound on|off`, `/quality native|performance`, `/ping`, `/clear`, `/help`. They change your local settings and are never sent to the room.
+- **Network**: the server disables Nagle batching (`TCP_NODELAY`) and enables TCP keep-alive on room sockets; a dropped client rejoins the same room automatically (three attempts with back-off).
+
+**Room links and accounts.** Opening a room link first shows a join screen: type a nickname, join as a guest (random `Guest 1234` name), or log in / create an account. An account (username + password, scrypt-hashed, stored in `accounts.json` under `FUCKBALL_DATA_DIR`, systemd's `STATE_DIRECTORY`, or `./data`) reserves that nickname: guests cannot join under it, and a logged-in player always plays under the account name. Sessions are random tokens of which only a hash is stored; there is no e-mail or password recovery. Settings → Account shows who you are and logs out.
+
+**Lobby.** Until the game is started the pitch is hidden behind a “Game not started” card with Start game (host) or “Waiting for the host”, so a waiting room never looks paused. Time limit takes any whole number of minutes (0 = none, default 7). **Swap teams** flips Red and Blue; **All to spectators** clears both teams. Bots show their difficulty next to their name.
 
 On a self-hosted server, choose Online (or Esc → Create online room). The room menu opens with the room link (`/?room=XXXXXXXX`) and **Copy room link**; copying also works on plain-HTTP servers (where the browser clipboard API is unavailable) through a fallback; anyone who opens the link joins that room directly, with no code to type. Expired or full rooms show a clear message and the link is removed from the address bar. Room IDs are 8 random characters (~40 bits) and are no longer listed by `/api/rooms`. The server supports up to eight humans, fills 1v1/2v2/4v4 with tactical bots, and authorizes match changes only for the room owner. The owner transfers when they leave. Rooms disappear after the last person leaves. Player names and rooms are ephemeral; no accounts are implemented.
 
@@ -62,7 +68,7 @@ An online room can run in a player's browser when that gives everyone a better c
 - Every client keeps a WebRTC data channel to every other client (signalled through the server), measures round trips and reports them. The server scores each candidate (itself and every eligible browser) by the worst delay between two players through it, plus half the worst prediction horizon. It switches only for at least 25 ms and 15% gain, held for 8 s.
 - **Handover at an exact frame.** The old host steps to frame M and exports the engine state, every input timeline, the room settings, the bots' memory and the counters. The new host continues bit for bit (`tests/handover.cjs`), and clients switch at the first snapshot ≥ M. A browser host runs the room in a Web Worker (`dist/host-worker.js`), because two engines in one page share internal timers.
 - **Failover.** A browser host sends a standby copy about 6 times a second, and every input also goes to the server. If the host vanishes, the server continues from the copy plus its own inputs. A hidden tab hands the room back at once. A player joining while a browser hosts brings the room back to the server first.
-- **Trade-offs.** Players in a room see each other's IP address (WebRTC, as in HaxBall). A browser host could cheat. There is no TURN server, so players without a direct channel keep the room on the server. Esc → Settings → *Peer hosting* opts a browser out, and `FUCKBALL_PEER_HOSTING=off` keeps every room on the server.
+- **Trade-offs.** Players in a room see each other's IP address (WebRTC, as in HaxBall). A browser host could cheat. There is no TURN server, so players without a direct channel keep the room on the server. Because of the IP exposure, peer hosting is **off by default**: set `FUCKBALL_PEER_HOSTING=on` on the server to enable it. Esc → Settings → *Peer hosting* also opts a single browser out.
 - `npm run test:browser` checks real Chromium pages: WebRTC mesh, worker host, handovers and failover. `tests/peer-hosting.cjs` runs the full protocol with simulated browsers.
 
 The engine runtime clock is now `n·(1000/60) + 1 µs` instead of a running sum, so `step(1)` is always exactly one engine tick. Before, about 1 in 3,300 steps ran 0 or 2 ticks.
@@ -153,16 +159,19 @@ VPS publication must deploy an explicit tested commit into a new release directo
 
 The 4v4 keeper no longer hugs its line. It stands on the ball–goal line to narrow the angle (far out when its team has the ball), leaves the box to sweep any loose ball it can reach before every opponent (engine-accurate interception: player acceleration/damping, ball damping), steps onto the path of shots instead of backing into the net, and attacks the ball from the goal side so contact clears it. Targets and inputs only — no physics changes. The team plan is computed once per tick and shared, which keeps eight bots cheap.
 
-`node training/duel.cjs <policyA.js> <policyB.js> [matches] [frames] [workers]` plays alternating-side 4v4 matches on BFF and Classic. Results over 200 matches of 60 s:
+`node training/duel.cjs <policyA.js> <policyB.js> [matches] [frames] [workers]` plays 4v4 matches on BFF and Classic. Every seed is played twice with the sides swapped, so two identical policies score exactly equal (an earlier version alternated sides across different seeds, which gave identical policies a 36–18 split and made small differences meaningless). `node training/keeper-gallery.cjs [policy.js] [shots] [BFF|Classic]` fires random shots (60–480 px, 5.5–10.5 px/frame) at a set keeper and reports save rates by range.
 
-| Matchup | Goals | W–D–L |
-| --- | --- | --- |
-| New keeper vs previous policy | 115–28 | 79–107–14 |
-| VPS self-play profile (cycle 291, "promoted") vs default profile, previous keeper | 86–99 | 45–99–56 |
-| VPS neural model steering vs tactical, previous keeper (100 matches) | 34–54 | 19–48–33 |
-| VPS profile vs default profile, both with the new keeper | 29–29 | 22–157–21 |
+| Comparison (fair mirrored harness) | Result |
+| --- | --- |
+| Current keeper vs previous policy, 400 matches | 209–38 goals, 159 W / 219 D / 22 L |
+| Keeper gallery, 300 shots, BFF | 84% saved (previous keeper 63%) |
+| Keeper gallery, 300 shots, Classic | 93% saved (previous keeper 75%) |
+| Gallery-tuned variants (closer to the shooter), 400 matches vs current | 52–65 and 49–70: better in the gallery, worse in matches (dribbled past), not adopted |
+| Goal-side recovery / earlier shot interception variant, 400 matches vs current | 64–70, not adopted |
+| VPS self-play profile vs default profile (older harness, previous keeper) | 86–99 over 200 matches, not adopted |
+| VPS neural model steering vs tactical (older harness, previous keeper) | 34–54 over 100 matches, not adopted |
 
-The VPS run had promoted a profile and a neural model on four validation games each; over 200 matches both were weaker, so the live game keeps the default tactical profile with the new keeper. Self-play promotion now validates on 16 games (four seeds × two maps × both sides) and requires a positive goal difference and more wins than losses.
+Self-play promotion validates on 16 games (four seeds × two maps × both sides) and requires a positive goal difference and more wins than losses.
 
 ## 4v4 team AI and HaxLab self-play
 

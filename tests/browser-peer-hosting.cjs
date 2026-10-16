@@ -12,7 +12,7 @@ async function until(fn,ms=10000,what='condition'){const end=Date.now()+ms;while
   const open=async()=>{const ctx=await browser.newContext({viewport:{width:1280,height:800}});const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});return page;};
   const A=await open(),B=await open(),base='http://127.0.0.1:'+port+'/';
   await A.goto(base);await A.evaluate(()=>connectServer(true));await until(()=>A.evaluate(()=>!!serverLink?.room&&peerConnected),10000,'A creates a room');
-  const room=await A.evaluate(()=>serverLink.room);await B.goto(base+'?room='+room);await until(()=>B.evaluate(()=>peerConnected),10000,'B joins by link');
+  const room=await A.evaluate(()=>serverLink.room);await B.goto(base+'?room='+room);await B.click('#joinGuest');await until(()=>B.evaluate(()=>peerConnected),10000,'B joins by link');
   await A.evaluate(()=>serverLink.send({type:'configure',mode:'bot',started:true}));
   const meshOpen=p=>p.evaluate(()=>{const n=serverLink?.net;return !!n&&[...n.peers.values()].some(x=>x.ch?.readyState==='open');});
   await until(async()=>await meshOpen(A)&&await meshOpen(B),15000,'WebRTC data channel between the pages');

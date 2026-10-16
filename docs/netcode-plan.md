@@ -71,7 +71,7 @@ Een browser-host draait de kamer in een **Web Worker**. Dat moet: twee engines i
 ## 5. Aan/uit en terugdraaien
 
 - In het spel: Esc → Settings → **Netcode** (*v3* / *Classic*) en **Peer hosting** (aan/uit). Geldt vanaf de volgende verbinding.
-- Server: `FUCKBALL_NETCODE=classic` (alles klassiek, ook geen peer-hosting) of `FUCKBALL_PEER_HOSTING=off` (v3 aan, kamers blijven op de server).
+- Server: `FUCKBALL_NETCODE=classic` (alles klassiek). Peer-hosting staat **standaard uit** vanwege de IP-adressen; `FUCKBALL_PEER_HOSTING=on` zet het aan.
 - Git: de branch `netcode-plan` heeft aparte commits per stap (netcode v3, peer-hosting, documentatie). Elke stap is los terug te draaien met `git revert <commit>`.
 - Oude en nieuwe clients kunnen in dezelfde kamer: snapshot-header `0x46423201` is klassiek, `0x46423203` is v3. Een klassieke client in de kamer houdt de kamer op de server.
 

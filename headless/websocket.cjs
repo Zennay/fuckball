@@ -70,6 +70,8 @@ class WebSocketServer extends EventEmitter{
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;
       }
       socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+crypto.createHash('sha1').update(key+MAGIC).digest('base64')+'\r\n\r\n');
+      // Small frames (inputs, pongs, 30 Hz snapshots) must not wait for Nagle batching.
+      socket.setNoDelay?.(true);socket.setKeepAlive?.(true,15000);
       const ws=new WebSocket(socket,this.maxPayload);this.emit('connection',ws,req);
       if(head&&head.length)ws.readData(head);
     });
