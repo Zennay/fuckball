@@ -35,6 +35,21 @@ try {
   assert(x(moved) > idleX + 0.05, 'speculative native direction must move predicted position');
   assert.equal(x(source), original, 'authoritative room must not be mutated by prediction');
 
+  // Real guest-facing predictor must retain the speculative state even after
+  // a later server acknowledgement removes that pending input.
+  const guest = Render.createPredictor();
+  guest.snapshot(0, 0, -1);
+  guest.input(1, 1, 8, 0);
+  const pendingPrediction = guest.predict(source, 200);
+  const pendingX = x(pendingPrediction);
+  guest.snapshot(0, 0, 1); // acknowledge the outstanding input
+  const confirmedPrediction = guest.predict(source, 200);
+  assert.equal(guest.pending.length, 0, 'ack must remove only its pending input');
+  assert(pendingX > x(confirmedPrediction) + 0.05,
+    'guest prediction must include unconfirmed input while it is pending');
+  assert.equal(x(pendingPrediction), pendingX,
+    'later acknowledged guest prediction may not rewrite prior speculative result');
+
   const before = Render.extrapolate(source, 3, [{ frame: 5, id: 1, input: 8 }]);
   const beforeX = x(before);
   const after = Render.extrapolate(source, 12, [{ frame: 5, id: 1, input: 8 }]);
