@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'tests/ai-delivery-mirror-qa.cjs'
+      - 'tests/ai-native-shot-qa.cjs'
       - 'dist/ai/policy.js'
       - 'dist/stadiums/bff-big-v4.hbs'
       - '.github/workflows/qa-ai-delivery-mirror.yml'
@@ -10,6 +11,7 @@ on:
     branches: [main]
     paths:
       - 'tests/ai-delivery-mirror-qa.cjs'
+      - 'tests/ai-native-shot-qa.cjs'
       - 'dist/ai/policy.js'
       - 'dist/stadiums/bff-big-v4.hbs'
       - '.github/workflows/qa-ai-delivery-mirror.yml'
@@ -27,3 +29,4 @@ jobs:
           node-version: '22'
       - run: npm run build:solo
       - run: node tests/passing.cjs && node tests/sweeper-keeper.cjs && node tests/ai-delivery-mirror-qa.cjs
+      - run: node tests/ai-native-shot-qa.cjs
