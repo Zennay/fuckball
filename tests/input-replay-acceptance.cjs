@@ -55,16 +55,18 @@ for (const ms of [50, 100, 200]) {
       const idle = Render.extrapolate(source, frames);
       const moved = Render.extrapolate(source, frames, [{frame:0,id:1,input:8}], 0);
       const difference = playerX(moved) - playerX(idle);
-      assert(difference > 0.05,
-        ms + 'ms must predict rightward input; observed movement difference ' +
-          difference.toFixed(6));
+      // These must run *before* the expected RED assertion: otherwise the
+      // first speculative-input failure masks a broken native input handler or
+      // a prediction routine that mutated the authoritative room.
       assert.equal(JSON.stringify({red:playerX(source),ball:ballSpeed(source)}),
         sourceBefore, 'rendering must never modify authoritative physics');
-
       room.setPlayerInput(1, 8);
       room.step(Math.ceil(frames));
       assert(playerX(room._room.state) > initialX + 0.05,
         ms + 'ms: authoritative native control must physically move');
+      assert(difference > 0.05,
+        ms + 'ms must predict rightward input; observed movement difference ' +
+          difference.toFixed(6));
     } finally { room.destroy(); }
   });
 }
@@ -92,14 +94,14 @@ check('speculative fresh kick predicts a real native ball impulse', () => {
     const source = room._room.state;
     const unchanged = ballSpeed(source);
     const prediction = Render.extrapolate(source, 2, [{frame:0,id:1,input:16}]);
-    assert(ballSpeed(prediction) > unchanged + 4,
-      'fresh speculative kick must produce the native full-strength impulse');
     assert.equal(ballSpeed(source), unchanged,
       'speculation must not change the authoritative ball');
     room.setPlayerInput(1, 16);
     room.step(1);
     assert(room.getDiscProperties(0).xspeed > unchanged + 4,
       'same kick must be demonstrably possible in authoritative native room');
+    assert(ballSpeed(prediction) > unchanged + 4,
+      'fresh speculative kick must produce the native full-strength impulse');
   } finally { room.destroy(); }
 });
 
