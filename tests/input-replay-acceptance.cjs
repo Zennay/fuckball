@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const {HBInit} = require('../headless/runtime.cjs');
 const Render = require('../dist/render-timing.js');
 const stadium = fs.readFileSync('dist/stadiums/bff-big-v4.hbs', 'utf8');
+const {isTrackedRed} = require('../scripts/qa-known-red-classifier.cjs');
 const failures = [];
 
 function openRoom() {
@@ -34,6 +35,10 @@ function ballSpeed(state) { return state.gameState.physicsState.discs[0].speed.x
 function check(label, block) {
   try { block(); console.log('PASS ' + label); }
   catch (error) {
+    if (!isTrackedRed(error)) {
+      console.error('UNEXPECTED QA FAILURE ' + label + ':', error);
+      throw error;
+    }
     failures.push(label + ': ' + error.message);
     console.error('RED ' + label + ': ' + error.message);
   }
