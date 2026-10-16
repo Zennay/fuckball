@@ -1,8 +1,9 @@
-name: QA Custom Rooms lifecycle
+name: QA Custom Rooms lifecycle and isolation
 on:
   pull_request:
     paths:
       - 'tests/room-lifecycle-qa.cjs'
+      - 'tests/room-isolation-qa.cjs'
       - 'headless/**'
       - 'dist/room-core.js'
       - '.github/workflows/room-lifecycle-qa.yml'
@@ -10,6 +11,7 @@ on:
     branches: [main]
     paths:
       - 'tests/room-lifecycle-qa.cjs'
+      - 'tests/room-isolation-qa.cjs'
       - 'headless/**'
       - 'dist/room-core.js'
       - '.github/workflows/room-lifecycle-qa.yml'
@@ -27,3 +29,4 @@ jobs:
           node-version: '22'
       - run: npm run build:solo
       - run: node tests/room-lifecycle-qa.cjs
+      - run: node tests/room-isolation-qa.cjs
