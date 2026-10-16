@@ -14,7 +14,7 @@ npm start
 
 The field fills the browser viewport. Esc opens a translucent, HaxBall-style room menu on top of the running match — the game never stops for it (P pauses). The menu opens on the teams: Red, Spectators and Blue, and the host drags players (and bots) between them, adds bots with **+ Bot** or removes them with ×. Below the teams: Start/Stop, Pause, Restart, Record, **Copy room link** (online) or **Create online room** (offline), and time limit, score limit and stadium. Team setup presets, bot difficulty (global and per bot), stadium import/edit, replays and direct WebRTC connections sit under **Advanced**. Teams you arrange survive restarts and limit changes.
 
-- **Controls** tab: every action (up, down, left, right, kick, open chat) has two rebindable key slots. Defaults: arrows/WASD, Space/X, Enter/T for chat.
+- **Controls** tab: every action (up, down, left, right, kick, open chat) has two rebindable key slots. Defaults: arrows/WASD, Space/X, Enter for chat.
 - **Chat** sits in the bottom-left corner, always visible but small; messages fade after a few seconds. Press the chat key to type, Enter to send, Esc to close.
 - **Ping and FPS** are shown under the chat (local games show LOCAL).
 - **Settings** tab: name, camera, zoom, rendering, FPS limit, sound, extrapolation, fullscreen.

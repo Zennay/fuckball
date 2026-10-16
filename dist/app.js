@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const API=abcHaxballAPI(window); API.Language.current=new FuckballLanguage(API);
 const {Room,Utils,Replay}=API;
 let room,renderer,replay=null,started=false,paused=false,tick=0,botIds=new Set(),myTeam=1,toastTimer,raf,peer=null,channel=null,peerRole=null,peerConnected=false;
-const defaultBindings={up:['ArrowUp','KeyW'],down:['ArrowDown','KeyS'],left:['ArrowLeft','KeyA'],right:['ArrowRight','KeyD'],kick:['Space','KeyX'],chat:['Enter','KeyT']};
+const defaultBindings={up:['ArrowUp','KeyW'],down:['ArrowDown','KeyS'],left:['ArrowLeft','KeyA'],right:['ArrowRight','KeyD'],kick:['Space','KeyX'],chat:['Enter','']};
 let settings={keys:null,name:'Player',zoom:1,sound:true,extrapolation:0,fpsLimit:0,predictionVersion:0,difficulty:'hard',botLevels:{},teamProfile:{},quality:'native'};
 let aiModel=null,stateChannel=null,serverLink=null,networkPlayerId=2;
 const frameStats={lastTick:0,lastUi:0,fpsStart:0,frames:0,lastPaint:-Infinity,inputVersion:0};const predictor=FuckballRenderTiming.createPredictor();let roomStart=0,pingTick=0;const net={rtt:0,jitter:0,lastRtt:0,lastSnapshot:0,sequence:0,receivedSequence:0,inputSeq:0,ack:0,remoteAck:0,bytes:0};
