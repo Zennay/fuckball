@@ -38,7 +38,13 @@ function createInputTimeline(){
   valueAt(frame){while(changes.length&&changes[0].frame<=frame){const c=changes.shift();current=c.value;appliedSeq=c.seq;}return current;},
   /* Lowest slack (stamped frame − host time) since the last call, or NaN when nothing arrived. */
   takeSlack(){const s=slack;slack=Infinity;return Number.isFinite(s)?s:NaN;},
-  reset(value=0){changes.length=0;current=value;slack=Infinity;lastFrame=-Infinity;lastValue=value;lastShifted=false;}
+  reset(value=0){changes.length=0;current=value;slack=Infinity;lastFrame=-Infinity;lastValue=value;lastShifted=false;},
+  /* Host handover: the full timeline moves with the room, so the next host applies the same inputs at the same frames. */
+  export(){return{current,appliedSeq,lastSeq,late,total,lastFrame:Number.isFinite(lastFrame)?lastFrame:null,lastValue,lastShifted,changes:changes.map(c=>[c.seq,c.frame,c.value])};},
+  import(o){changes.length=0;for(const [seq,frame,value]of o.changes||[])changes.push({seq,frame,value});current=o.current|0;appliedSeq=o.appliedSeq|0;lastSeq=o.lastSeq|0;late=o.late|0;total=o.total|0;lastFrame=o.lastFrame==null?-Infinity:o.lastFrame;lastValue=o.lastValue|0;lastShifted=!!o.lastShifted;slack=Infinity;},
+  /* Standby: everything up to `seq` is already inside the host's state (applied); `value` is the input in force. */
+  prune(seq,value){for(let i=changes.length-1;i>=0;i--)if(changes[i].seq<=seq)changes.splice(i,1);if(seq>appliedSeq){appliedSeq=seq;current=value;}else if(seq===appliedSeq)current=value;},
+  get pending(){return changes.length;}
  };}
 
 /* ---------- client side ---------- */
@@ -79,10 +85,13 @@ function createSmoother({ball=45,player=80,own=40,snap=90}={}){
  };}
 
 /* ---------- peer hosting ---------- */
-/* rtt: Map/object id -> Map/object id -> ms (symmetric measurements, missing = unreachable).
-   players: ids that play; candidates: ids that may host (players and/or servers).
-   Cost of a host = its worst round trip to any player (the host itself plays at 0). */
-function hostCost(rtt,host,players){let worst=0;for(const p of players){if(p===host)continue;const v=get(rtt,host,p)??get(rtt,p,host);if(!Number.isFinite(v))return Infinity;if(v>worst)worst=v;}return worst;}
+/* rtt: Map/object id -> Map/object id -> ms (missing = unreachable). players: ids that play; candidates:
+   ids that may host (players and/or 'server'). The cost of a host is what the players feel:
+   - the worst delay between two players' actions through it, (rtt(a,host) + rtt(host,b)) / 2, and
+   - half the worst prediction horizon, max rtt(player,host) (how far ahead a player must predict).
+   A player hosting plays at 0 ms; that is what makes peer hosting attractive within one region. */
+function hostCost(rtt,host,players){const d=[];for(const p of players){if(p===host){d.push(0);continue;}const v=get(rtt,host,p)??get(rtt,p,host);if(!Number.isFinite(v))return Infinity;d.push(v);}
+ if(!d.length)return 0;const s=[...d].sort((a,b)=>b-a),pair=s.length>1?(s[0]+s[1])/2:s[0]/2;return pair+s[0]/2;}
 function get(m,a,b){const row=m instanceof Map?m.get(a):m?.[a];return row instanceof Map?row.get(b):row?.[b];}
 /* Hysteresis: switch only when the best candidate beats the current host by `minGain` ms and `ratio`,
    continuously for `hold` ms (or immediately when the current host is gone/unreachable). */

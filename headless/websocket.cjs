@@ -47,7 +47,8 @@ class WebSocket extends EventEmitter {
       const key=this.buf.subarray(pos,pos+4),payload=Buffer.from(this.buf.subarray(pos+4,pos+4+len));
       this.buf=this.buf.subarray(pos+4+len);
       for(let i=0;i<payload.length;i++)payload[i]^=key[i&3];
-      if(opcode===1){this.emit('message',payload);}
+      if(opcode===1){this.emit('message',payload,false);}
+      else if(opcode===2){this.emit('message',payload,true);}
       else if(opcode===8){this.close(1000);return;}
       else if(opcode===9){this.frame(10,payload);}
       else if(opcode!==10){this.close(1003,'Unsupported opcode');return;}

@@ -4,7 +4,7 @@ const API=abcHaxballAPI(window); API.Language.current=new FuckballLanguage(API);
 const {Room,Utils,Replay}=API;
 let room,renderer,replay=null,started=false,paused=false,tick=0,botIds=new Set(),myTeam=1,toastTimer,raf,peer=null,channel=null,peerRole=null,peerConnected=false;
 const defaultBindings={up:['ArrowUp','KeyW'],down:['ArrowDown','KeyS'],left:['ArrowLeft','KeyA'],right:['ArrowRight','KeyD'],kick:['Space','KeyX'],chat:['Enter','']};
-let settings={keys:null,name:'Player',zoom:1,sound:true,extrapolation:0,fpsLimit:0,netcode:'v3',predictionVersion:0,difficulty:'hard',botLevels:{},teamProfile:{},quality:'native'};
+let settings={keys:null,name:'Player',zoom:1,sound:true,extrapolation:0,fpsLimit:0,netcode:'v3',peerHost:true,predictionVersion:0,difficulty:'hard',botLevels:{},teamProfile:{},quality:'native'};
 let aiModel=null,stateChannel=null,serverLink=null,networkPlayerId=2;
 const frameStats={lastTick:0,lastUi:0,fpsStart:0,frames:0,lastPaint:-Infinity,inputVersion:0};const predictor=FuckballRenderTiming.createPredictor();
 // Netcode v3 (docs/netcode-plan.md): lead control and visual correction smoothing for online guests,
@@ -13,7 +13,7 @@ const leadControl=FuckballNetcode.createLeadController(),smoother=FuckballNetcod
 function enableV3(on){net.v3=!!on;predictor.stamped=!!on;leadControl.reset();smoother.reset();}
 let roomStart=0,pingTick=0;const net={rtt:0,jitter:0,lastRtt:0,lastSnapshot:0,sequence:0,receivedSequence:0,inputSeq:0,ack:0,remoteAck:0,bytes:0};
 try{Object.assign(settings,JSON.parse(localStorage.getItem('fuckball.settings')||'{}'));}catch{}
-if(settings.predictionVersion!==3){delete settings.adaptive;settings.predictionVersion=3;}settings.extrapolation=Math.max(-200,Math.min(1000,Number(settings.extrapolation)||0));settings.netcode=settings.netcode==='classic'?'classic':'v3';
+if(settings.predictionVersion!==3){delete settings.adaptive;settings.predictionVersion=3;}settings.extrapolation=Math.max(-200,Math.min(1000,Number(settings.extrapolation)||0));settings.netcode=settings.netcode==='classic'?'classic':'v3';settings.peerHost=settings.peerHost!==false;
 settings.name=String(settings.name).slice(0,25)||'Player';settings.keys=Object.fromEntries(Object.entries(defaultBindings).map(([k,v])=>[k,Array.isArray(settings.keys?.[k])?[0,1].map(i=>typeof settings.keys[k][i]==='string'?settings.keys[k][i].slice(0,32):''):[...v]]));settings.zoom=Math.max(.6,Math.min(2,Number(settings.zoom)||1));
 const keys=new Set();let touch={x:0,y:0,kick:false},inputCache=new Map(),audioContext;
 const defaults=[Utils.parseStadium(JSON.stringify(window.BFF_STADIUM)),...Utils.getDefaultStadiums()];let stadium=defaults[0];
@@ -101,7 +101,7 @@ function drawFrame(){
 }
 function savePrefs(){try{localStorage.setItem('fuckball.settings',JSON.stringify(settings));}catch{}}
 $('extrapolation').value=String(settings.extrapolation);$('extrapValue').textContent=$('extrapolation').value+' ms';$('fpsLimit').value=String(settings.fpsLimit||0);$('fpsLimit').onchange=()=>{settings.fpsLimit=+$('fpsLimit').value;frameStats.lastPaint=-Infinity;savePrefs();};
-$('netcodeMode').value=settings.netcode;$('netcodeMode').onchange=()=>{settings.netcode=$('netcodeMode').value==='classic'?'classic':'v3';savePrefs();notify('Netcode '+(settings.netcode==='v3'?'v3':'Classic')+(peerConnected?' · applies from the next connection':''));};
+$('peerHostEnabled').checked=settings.peerHost;$('peerHostEnabled').onchange=()=>{settings.peerHost=!!$('peerHostEnabled').checked;savePrefs();if(!settings.peerHost)serverLink?.net?.relinquish('disabled');notify('Peer hosting '+(settings.peerHost?'allowed':'off')+(peerConnected?' · applies from the next room':''));};$('netcodeMode').value=settings.netcode;$('netcodeMode').onchange=()=>{settings.netcode=$('netcodeMode').value==='classic'?'classic':'v3';savePrefs();notify('Netcode '+(settings.netcode==='v3'?'v3':'Classic')+(peerConnected?' · applies from the next connection':''));};
 $('renderQuality').value=settings.quality==='performance'?'performance':'native';
 $('renderQuality').onchange=()=>{settings.quality=$('renderQuality').value;renderer.resolutionScale=settings.quality==='performance'?0.7:1;savePrefs();};
 $('extrapolation').oninput=()=>{settings.extrapolation=+$('extrapolation').value;$('extrapValue').textContent=settings.extrapolation+' ms';savePrefs();updatePrediction();};

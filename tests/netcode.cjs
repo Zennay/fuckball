@@ -39,7 +39,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
 // 5. Host election: lowest worst ping, hysteresis, immediate failover.
 {const rtt={a:{b:200,c:240,s:110},b:{a:200,c:60,s:120},c:{a:240,b:60,s:130},s:{a:110,b:120,c:130}};const players=['a','b','c'];
- assert.equal(N.hostCost(rtt,'a',players),240);assert.equal(N.hostCost(rtt,'s',players),130);
+ assert.equal(N.hostCost(rtt,'a',players),220+120,'a: worst pair b↔c through a = 220, horizon 240/2');assert.equal(N.hostCost(rtt,'s',players),125+65);
  const e=N.createElection({hold:5000});assert.equal(e.decide({rtt,players,candidates:['a','b','c','s'],current:'a',now:0}).switch,false,'waits before switching');
  const d=e.decide({rtt,players,candidates:['a','b','c','s'],current:'a',now:6000});assert.equal(d.switch,true);assert.equal(d.host,'s','a server in the middle beats any player at home');
  assert.equal(e.decide({rtt,players,candidates:['a','b','c'],current:'s',now:6100}).host,'b','failover when the host disappears');

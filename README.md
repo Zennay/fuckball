@@ -55,7 +55,19 @@ Online rooms and direct 1v1 connections use netcode v3 by default (design and me
 - **Smooth corrections.** When a snapshot corrects the prediction, the error becomes a visual offset that decays in ~40–80 ms. Above 90 units (kickoff, goal reset) the view snaps instead. Only the rendered copy is touched.
 - **Switch.** Esc → Settings → Netcode → *Classic* restores the previous behaviour for new connections; `FUCKBALL_NETCODE=classic` does the same for the whole server. Old and new clients can share a room (snapshot header `0x46423201` classic, `0x46423203` v3 with a slack field).
 
-`node scripts/netsim.cjs [seconds] [profile ...]` runs real engines over a simulated network (TCP or UDP behaviour, latency, jitter, loss) and compares classic with v3. `tests/netcode.cjs` keeps the key properties under test.
+### Peer hosting (the room moves to the best connection)
+
+An online room can run in a player's browser when that gives everyone a better connection, and it moves seamlessly as connections change. The Node server stays the coordinator and the safety net.
+
+- Every client keeps a WebRTC data channel to every other client (signalled through the server), measures round trips and reports them. The server scores each candidate (itself and every eligible browser) by the worst delay between two players through it, plus half the worst prediction horizon. It switches only for at least 25 ms and 15% gain, held for 8 s.
+- **Handover at an exact frame.** The old host steps to frame M and exports the engine state, every input timeline, the room settings, the bots' memory and the counters. The new host continues bit for bit (`tests/handover.cjs`), and clients switch at the first snapshot ≥ M. A browser host runs the room in a Web Worker (`dist/host-worker.js`), because two engines in one page share internal timers.
+- **Failover.** A browser host sends a standby copy about 6 times a second, and every input also goes to the server. If the host vanishes, the server continues from the copy plus its own inputs. A hidden tab hands the room back at once. A player joining while a browser hosts brings the room back to the server first.
+- **Trade-offs.** Players in a room see each other's IP address (WebRTC, as in HaxBall). A browser host could cheat. There is no TURN server, so players without a direct channel keep the room on the server. Esc → Settings → *Peer hosting* opts a browser out, and `FUCKBALL_PEER_HOSTING=off` keeps every room on the server.
+- `npm run test:browser` checks real Chromium pages: WebRTC mesh, worker host, handovers and failover. `tests/peer-hosting.cjs` runs the full protocol with simulated browsers.
+
+The engine runtime clock is now `n·(1000/60) + 1 µs` instead of a running sum, so `step(1)` is always exactly one engine tick. Before, about 1 in 3,300 steps ran 0 or 2 ticks.
+
+`node scripts/netsim.cjs [seconds] [profile ...]` (or `npm run netsim`) runs real engines over a simulated network (TCP or UDP behaviour, latency, jitter, loss) and compares classic with v3. Measurements: `docs/netcode-plan.md`. `tests/netcode.cjs` keeps the key properties under test.
 
 ## VPS training
 
