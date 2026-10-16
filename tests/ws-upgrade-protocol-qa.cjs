@@ -53,6 +53,13 @@ async function main() {
       assert.equal(app.rooms.size,0,name+': no game room on any handshake');
     }
     console.log('PASS WebSocket handshake: '+cases.length+' valid/invalid raw HTTP upgrade cases');
-  } finally {await app.close();}
+  } finally {
+    // A bare await app.close() can strand the test promise while Node exits
+    // successfully with an empty event loop: never silently turn RED green.
+    await Promise.race([
+      app.close(),
+      sleep(2000).then(() => {throw Error('WebSocket test cleanup timeout');})
+    ]);
+  }
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
