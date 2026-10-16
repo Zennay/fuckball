@@ -1,0 +1,55 @@
+name: QA tracked known-red acceptance
+on:
+  pull_request:
+    paths:
+      - 'tests/input-replay-acceptance.cjs'
+      - 'tests/room-roster-acceptance.cjs'
+      - 'dist/render-timing.js'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-known-red-acceptance.yml'
+  workflow_dispatch:
+jobs:
+  check-known-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build native client SDK
+        run: npm run build:solo
+      - name: Execute tracked 4v4 acceptance
+        shell: bash
+        run: |
+          set +e
+          npm run test:roster-acceptance > "$RUNNER_TEMP/roster.txt" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/roster.txt"
+          if [ "$result" -eq 0 ]; then
+            echo "4v4 roster acceptance: GREEN" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -Fq "12-person lobby: exactly four active red players" "$RUNNER_TEMP/roster.txt"; then
+            echo "::warning title=4v4 roster known RED::Issue #31 not yet implemented"
+            echo "4v4 roster acceptance: known RED (#31); do not treat as release-ready" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::4v4 acceptance failed for an unexpected reason; inspect logs"
+            exit 1
+          fi
+      - name: Execute tracked speculative-input acceptance
+        shell: bash
+        run: |
+          set +e
+          npm run test:input-replay-acceptance > "$RUNNER_TEMP/input-replay.txt" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/input-replay.txt"
+          if [ "$result" -eq 0 ]; then
+            echo "Speculative input acceptance: GREEN" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -Fq "#28 still RED" "$RUNNER_TEMP/input-replay.txt"; then
+            echo "::warning title=Speculative input known RED::Issue #28 not yet implemented"
+            echo "Speculative input acceptance: known RED (#28); do not treat as release-ready" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Speculative input acceptance failed for an unexpected reason; inspect logs"
+            exit 1
+          fi
