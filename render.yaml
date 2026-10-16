@@ -1,0 +1,25 @@
+# Free Render web-service Blueprint
+# This is a separate deployment; it never touches the existing VPS service.
+services:
+  - type: web
+    name: fuckball-game
+    runtime: node
+    region: frankfurt
+    plan: free
+    branch: main
+    buildCommand: node --version && npm test && node --check server.js
+    startCommand: npm start
+    healthCheckPath: /health
+    # An explicit release avoids overwriting the verified game while physics
+    # recovery issue #9 is still open. Deploy intentionally from Render.
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FUCKBALL_NETCODE
+        value: v3
+      - key: FUCKBALL_PEER_HOSTING
+        value: off
+      # Render free plans have no persistent disk: accounts are *not* durable.
+      - key: FUCKBALL_DATA_DIR
+        value: /tmp/fuckball-data
