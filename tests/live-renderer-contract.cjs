@@ -120,7 +120,11 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
       ['replayed snapshot sequence', (view, first) => view.setUint32(4, first.seq),
         /snapshot sequence must increase/],
       ['frozen snapshot frame', (view, first) => view.setUint32(12, first.frame),
-        /authoritative snapshot frames must advance/]
+        /authoritative snapshot frames must advance/],
+      ['corrupt native replay payload', view => {
+        const wire = new Uint8Array(view.buffer, view.byteOffset + 20, view.byteLength - 20);
+        wire.fill(0);
+      }, /native snapshot replay must decode successfully|live gameplay snapshot/]
     ]) {
       let started = false, count = 0, first = null;
       class SnapshotTamperWebSocket {
@@ -145,7 +149,7 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
             if (view.byteLength > 20) {
               count++;
               if (!first) first = {seq:view.getUint32(4),frame:view.getUint32(12)};
-              if (count >= (label === 'invalid v3 snapshot magic' ? 1 : 2))
+              if (count >= (['replayed snapshot sequence', 'frozen snapshot frame'].includes(label) ? 2 : 1))
                 mutate(view, first);
             }
             this.onmessage?.({data:clone});
@@ -160,11 +164,11 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
       try {
         await assert.rejects(verifyLive(base), expected,
           label + ': stale/incompatible gameplay packets are not a healthy release');
-        assert(count >= (label === 'invalid v3 snapshot magic' ? 1 : 2),
+        assert(count >= (['replayed snapshot sequence', 'frozen snapshot frame'].includes(label) ? 2 : 1),
           label + ': binary snapshot tamper must actually be injected');
       } finally { globalThis.WebSocket = NativeWebSocket; }
     }
-    console.log('PASS public-release probe: real HTTP+WS room, 9 source mutations, 2 bad headers, 2 clock faults and 3 binary snapshot attacks rejected');
+    console.log('PASS public-release probe: real HTTP+WS room, 9 source mutations, 2 bad headers, 2 clock faults and 4 binary snapshot attacks rejected');
   } finally {
     await app.close();
   }
