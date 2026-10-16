@@ -72,7 +72,7 @@ async function probeRoom(base, release) {
     const ws = new WebSocket(base.replace(/^http/, 'ws') + '/ws');
     ws.binaryType = 'arraybuffer';
     let settled = false, firstFrame = null, secondPingTimer = null;
-    let phase = 'joining', ownId = null, firstSnapshot = null, lastSeq = null, lastFrame = null, framesSeen = 0;
+    let phase = 'joining', ownId = null, inputStamp = null, firstOwnX = null, appliedInput = false, movedOwn = false, firstSnapshot = null, lastSeq = null, lastFrame = null, framesSeen = 0;
     const finish = error => {
       if (settled) return;
       settled = true;
@@ -115,6 +115,12 @@ async function probeRoom(base, release) {
           const ball = nativeState.gameState?.physicsState?.discs?.[0];
           assert(ball && Number.isFinite(ball.pos?.x) && Number.isFinite(ball.pos?.y),
             'live snapshot must include a finite native ball position');
+          const own = nativeState.players.find(player => player.id === ownId);
+          if (firstOwnX === null) firstOwnX = own.disc.pos.x;
+          if (own.disc.pos.x > firstOwnX + 0.05) movedOwn = true;
+          const ack = view.getUint32(8);
+          assert(ack <= 1, 'temporary test player must never ACK unknown input sequences');
+          if (ack === 1) appliedInput = true;
           const seq = view.getUint32(4), frame = view.getUint32(12);
           assert(seq > 0 && Number.isSafeInteger(frame), 'snapshot sequence/frame must be valid');
           if (lastSeq !== null) {
@@ -124,10 +130,14 @@ async function probeRoom(base, release) {
           lastSeq = seq;
           lastFrame = frame;
           framesSeen++;
-          if (framesSeen >= 4) {
+          if (framesSeen >= 4 && appliedInput && movedOwn) {
             assert(lastFrame >= firstSnapshot + 4,
               'live snapshots must span multiple 60 Hz ticks (' + firstSnapshot + ' to ' + lastFrame + ')');
             finish();
+          } else if (framesSeen >= 20) {
+            assert(appliedInput, 'native room must acknowledge the frame-stamped test input');
+            assert(movedOwn, 'authoritative native room must move its own player after input');
+            assert.fail('native room failed to produce advancing acknowledged gameplay');
           }
           return;
         }
@@ -154,11 +164,13 @@ async function probeRoom(base, release) {
             assert.equal(data.t, 2, 'second room pong must echo the later ping');
             assert(data.frame > firstFrame,
               'authoritative 60 Hz room clock must advance between two pongs');
+            inputStamp = Math.ceil(data.frame) + 2;
             phase = 'starting';
             ws.send(JSON.stringify({type: 'start'}));
           }
         } else if (data.type === 'status' && phase === 'starting' && data.started === true) {
           phase = 'snapshots';
+          ws.send(JSON.stringify({type:'in',c:[[1,inputStamp,8]]}));
         }
       } catch (error) { finish(error); }
     };
@@ -209,7 +221,7 @@ async function verifyLive(base, expectedRelease) {
   await probeRoom(base, release);
   return {verified: true, url: base, release: health.release, engine: health.engine,
     checks: ['served engine hash', 'original BFF hash', 'active 60 Hz renderer contract',
-      'browser script order', '60/30Hz v3', 'real room creation', 'advancing authoritative 60 Hz room clock', 'live v3 snapshots over advancing frames'].concat(
+      'browser script order', '60/30Hz v3', 'real room creation', 'advancing authoritative 60 Hz room clock', 'live v3 snapshots over advancing frames', 'acknowledged native input movement'].concat(
       release ? ['invite-link UI', '8-char room id', 'server tick in pong', 'approved release SHA'] : [])};
 }
 
