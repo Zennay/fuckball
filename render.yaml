@@ -14,6 +14,9 @@ services:
     # recovery issue #9 is still open. Deploy intentionally from Render.
     autoDeployTrigger: off
     envVars:
+      # Match the CI runtime instead of drifting to Render's latest Node major.
+      - key: NODE_VERSION
+        value: 22.22.0
       - key: NODE_ENV
         value: production
       - key: FUCKBALL_NETCODE
