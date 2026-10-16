@@ -1,0 +1,29 @@
+name: QA Tactical Passing and Keeper Symmetry
+on:
+  pull_request:
+    paths:
+      - 'tests/ai-delivery-mirror-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/stadiums/bff-big-v4.hbs'
+      - '.github/workflows/qa-ai-delivery-mirror.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/ai-delivery-mirror-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/stadiums/bff-big-v4.hbs'
+      - '.github/workflows/qa-ai-delivery-mirror.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-bff-symmetry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/passing.cjs && node tests/sweeper-keeper.cjs && node tests/ai-delivery-mirror-qa.cjs
