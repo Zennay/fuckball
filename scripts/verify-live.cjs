@@ -121,7 +121,7 @@ async function verifyLive(base, expectedRelease) {
     'do not ship duplicate render timing implementations');
   const renderer = await get(base, '/render-timing.js');
   assert.match(renderer.headers.get('content-type') || '',
-    /^\\s*(?:text|application)\\/javascript(?:\\s*;|$)/i,
+    /^\s*(?:text|application)\/javascript(?:\s*;|$)/i,
     'served prediction asset must have a JavaScript MIME type, not HTML fallback');
   assert.equal((renderer.headers.get('x-content-type-options') || '').toLowerCase(),
     'nosniff', 'browser must not be asked to MIME-sniff the prediction script');
