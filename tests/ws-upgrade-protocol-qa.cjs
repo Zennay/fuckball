@@ -9,6 +9,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function exchange(port, {key, connection='Upgrade', version='13', upgrade='websocket', path='/ws'}={}) {
   const socket = net.createConnection({host:'127.0.0.1',port});
+  // Register BEFORE any reply: invalid handshakes can already be closed by
+  // the server when the response header is read.
+  const closed = new Promise(resolve => socket.once('close', resolve));
   let response='';
   socket.on('data', bytes => {response += bytes.toString('latin1');});
   try {
@@ -27,11 +30,9 @@ async function exchange(port, {key, connection='Upgrade', version='13', upgrade=
   } finally {
     // An upgraded socket may still be registered with the HTTP server for a
     // microtask after destroy(). Wait for close before server teardown.
+    socket.destroy();
     await Promise.race([
-      new Promise(resolve => {
-        socket.once('close', resolve);
-        socket.destroy();
-      }),
+      closed,
       sleep(2000).then(() => {throw Error('TCP fixture close timeout');})
     ]);
   }
