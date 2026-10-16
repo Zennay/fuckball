@@ -6,9 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "test": "node scripts/test-core.cjs",
-    "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/team-ai.cjs && node tests/high-refresh.cjs",
+    "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/team-ai.cjs && node tests/high-refresh.cjs && node tests/rtc-browser.cjs",
     "build:solo": "python3 scripts/build-sdk.py"
   },
-  "engines": {"node": ">=22"},
-  "license": "MIT"
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "optionalDependencies": {
+    "node-datachannel": "0.27.0"
+  }
 }

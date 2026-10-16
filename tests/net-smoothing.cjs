@@ -29,6 +29,9 @@ async function until(fn){for(let i=0;i<300;i++){const x=fn();if(x)return x;await
   ws.send(JSON.stringify({type:'input',value:4,seq:2,frame:frame-30}));await until(()=>me().input===4);
   ws.send(JSON.stringify({type:'input',value:2,seq:3}));await until(()=>me().input===2);
   ws.send(JSON.stringify({type:'input',value:1,seq:4,frame:frame+100000}));await until(()=>me().input===1);
+  // Redundant copies (prev) of inputs already seen are skipped; a stale message changes nothing.
+  ws.send(JSON.stringify({type:'input',value:6,seq:6,prev:[[1,4,null],[9,5,null]]}));await until(()=>me().input===6);
+  ws.send(JSON.stringify({type:'input',value:9,seq:5}));await wait(60);assert.equal(me().input,6,'stale input ignored');
   console.log('PASS stamped inputs wait for their frame and are acked when applied, late/unstamped/absurd stamps run at once; correction smoothing is exact, fades, snaps and never mutates confirmed state');
  }finally{ws.close();await app.close();}
 })().catch(e=>{console.error(e);process.exit(1);});
