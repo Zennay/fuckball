@@ -5,6 +5,15 @@
 const crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const MAGIC='258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+// Client text and close-reason payloads must be valid UTF-8 (RFC 6455 §8.1).
+// Validate raw bytes before a lossy Buffer.toString() can replace malformed
+// input with U+FFFD. Binary messages deliberately bypass UTF-8 validation.
+const utf8Decoder=new TextDecoder('utf-8',{fatal:true});
+function validUtf8(bytes){try{utf8Decoder.decode(bytes);return true;}catch{return false;}}
+function validPeerCloseCode(code){
+ return code>=3000&&code<=4999||
+   code>=1000&&code<=1014&&code!==1004&&code!==1005&&code!==1006;
+}
 class WebSocket extends EventEmitter {
   static OPEN=1;
   constructor(socket,maxPayload){
@@ -50,9 +59,19 @@ class WebSocket extends EventEmitter {
       const key=this.buf.subarray(pos,pos+4),payload=Buffer.from(this.buf.subarray(pos+4,pos+4+len));
       this.buf=this.buf.subarray(pos+4+len);
       for(let i=0;i<payload.length;i++)payload[i]^=key[i&3];
-      if(opcode===1){this.emit('message',payload,false);}
+      if(opcode===1){
+        if(!validUtf8(payload)){this.close(1007,'Invalid UTF-8 text');return;}
+        this.emit('message',payload,false);
+      }
       else if(opcode===2){this.emit('message',payload,true);}
-      else if(opcode===8){if(payload.length===1){this.close(1002,'Invalid close frame');return;}this.close(1000);return;}
+      else if(opcode===8){
+        if(payload.length===1){this.close(1002,'Invalid close frame');return;}
+        if(payload.length>=2){
+          if(!validPeerCloseCode(payload.readUInt16BE(0))){this.close(1002,'Invalid close code');return;}
+          if(!validUtf8(payload.subarray(2))){this.close(1007,'Invalid UTF-8 close');return;}
+        }
+        this.close(1000);return;
+      }
       else if(opcode===9){this.frame(10,payload);}
       else if(opcode!==10){this.close(1003,'Unsupported opcode');return;}
     }
