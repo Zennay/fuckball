@@ -1,83 +1,92 @@
-# Netcode v3: spelen over continenten (ontwerp)
+# Netcode v3 en peer-hosting
 
-Doel: een speler in São Paulo of Tokio speelt met Europeanen, en 200 ms ping voelt als "iets minder scherp", niet als "onspeelbaar". Dit document beschrijft hoe het nu werkt, waarom dat bij hoge ping breekt, en een model dat het oplost.
+Doel: spelers uit Zuid-Amerika, Azië en Europa spelen samen, en 200 ms ping voelt als "iets minder scherp", niet als "onspeelbaar". De physics-engine en de parameters zijn nergens veranderd; wie host is altijd autoritatief.
 
-## 1. Wat er nu gebeurt
+## 1. Wat er nu is
 
-| Onderdeel | Nu | Probleem bij 200 ms / jitter / verlies |
+| Laag | Wat het doet | Waar |
 | --- | --- | --- |
-| Server | Eén Node-server, 60 Hz, op één plek (VPS) | Iemand in Azië speelt altijd via een lange route naar die ene plek |
-| Transport | WebSocket (TCP), alles geordend en betrouwbaar | Eén verloren pakket blokkeert álles tot de hertransmissie: freeze van 1 RTT+ (200–400 ms), daarna een inhaalsprong |
-| Inputs | `{type:'input', value, seq}` alleen bij verandering; de server zet ze bij aankomst | De server negeert het frame waarop jij drukte. Jitter van ±20 ms betekent dat je eigen speler steeds 1–2 frames wordt gecorrigeerd. Komen druk + loslaten in hetzelfde tick binnen (gebeurt na TCP-ophoping), dan wint alleen de laatste: **een kick kan verdwijnen** |
-| Snapshots | Volledige room-snapshot (~1 KB, replay-formaat), 30 Hz, naar iedereen | Groot en traag; de client vervangt zijn hele staat ermee |
-| Client | HaxBall-extrapolatie: laatste snapshot + eigen onbevestigde inputs, anderen houden hun laatste input vast | Klopt de voorspelling niet, dan springt de bal of tegenstander direct naar de nieuwe plek. Geen correctie-smoothing |
+| Inputs per frame | De client stempelt elke input met het hostframe waarvoor hij bedoeld is; de host past hem op precies dat frame toe. Te late inputs worden op volgorde ingehaald, één wijziging per frame, en een kick-tik wordt nooit opgeslokt. | `dist/netcode.js` (timeline), `dist/render-timing.js` (stempelen) |
+| Voorsprong-regeling | Elke snapshot meldt hoeveel marge ("slack") de inputs van die client hadden. De client zet zijn klok onmerkbaar bij (max. 5% sneller / 2% trager) tot de 5e percentiel net boven nul ligt. | `createLeadController` |
+| Zachte correcties | Een correctie wordt een visuele offset die in 40–80 ms wegzakt; boven 90 eenheden (aftrap, goal) springt het beeld wél. Alleen de getekende kopie wordt aangepast. | `createSmoother` |
+| Peer-hosting | De kamer kan in de browser van een speler draaien als dat voor iedereen beter is, en wisselt naadloos mee met de verbindingen. | `dist/peer-net.js`, `dist/peer-host.js`, `dist/host-worker.js`, `headless/server.cjs` |
+| Gedeelde kamerlogica | Dezelfde kamercode (teams, bots, start/stop, inputs, snapshots) draait op de Node-server en in een browser-worker, inclusief export/import van de complete toestand. | `dist/room-core.js`, `dist/headless-room.js` |
+| Exacte engineklok | `step(1)` is nu altijd precies één engine-tick. Voorheen gaf de opgetelde klok ~1 op 3.300 stappen 0 of 2 ticks. | `dist/headless-room.js`, `headless/runtime.cjs` |
 
-De extrapolatie zelf (`dist/render-timing.js`) is goed en blijft het fundament. Het probleem zit in transport, timing van inputs en hoe correcties zichtbaar worden.
+## 2. Metingen
 
-Een harde ondergrens bestaat: de lichtsnelheid. Amsterdam–São Paulo is ~190 ms RTT, Amsterdam–Tokio ~230 ms, São Paulo–Tokio ~260 ms. Die latency kunnen we niet weghalen, alleen onzichtbaar maken. Wat wél weg kan: jitter, freezes door pakketverlies, verloren inputs en schokkerige correcties. Juist die maken HaxBall onspeelbaar, niet de 200 ms zelf.
+`node scripts/netsim.cjs` draait echte engines (host + twee clients) over een gesimuleerd netwerk. Gemiddelde over 5 seeds × 30 s, client A op het profiel, client B op 20 ms. Afstanden zijn in stadioneenheden (spelerstraal 15, balstraal 5,8). "Schok" is het 99e percentiel van de tweede afgeleide van de getekende positie per frame: hoe hard iets zichtbaar verspringt.
 
-## 2. Het model
+**EU ↔ Zuid-Amerika** (200 ms, ±15 ms jitter, 0,5% verlies)
 
-Vijf lagen. Elke laag is apart te bouwen en te meten.
+| | kick-tikken kwijt | eigen correctie p95 | eigen speler schok | bal schok | tegenstander schok |
+| --- | --- | --- | --- | --- | --- |
+| klassiek (TCP) | **25%** | 0,85 | 2,59 | 7,64 | 21,7 |
+| v3 via server (TCP) | 0% | 0,31 | 0,97 | 3,23 | 5,30 |
+| v3 via peer-host (UDP) | 0% | 0,10 | 1,03 | 5,30 | 5,12 |
 
-### Laag A: inputs per frame, redundant verstuurd
+**EU ↔ Azië op slechte wifi** (250 ms, ±35 ms, 2% verlies)
 
-- De client stempelt elke input met het **serverframe** waarvoor hij bedoeld is (dat frame berekent `targetFrame()` nu al).
-- Elk inputpakket bevat de inputs van de laatste ~12 frames (5 bits per frame, run-length gecodeerd: meestal een paar bytes). Een verloren pakket kost niets: het volgende pakket bevat dezelfde inputs nog eens.
-- Verstuurd elke tick (60 Hz), niet alleen bij verandering. Ongeveer 20–30 bytes per pakket.
-- Een kick die 1 frame lang was, bestaat dus als frame met kick-bit en kan niet meer wegvallen.
+| | kick-tikken kwijt | eigen correctie p95 | eigen speler schok | bal schok | tegenstander schok |
+| --- | --- | --- | --- | --- | --- |
+| klassiek (TCP) | **37,5%** | 2,92 | 8,23 | 38,4 | 38,4 |
+| v3 via server (TCP) | 0% | 2,51 | 2,69 | 6,94 | 13,1 |
+| v3 via peer-host (UDP) | 0% | 0,00 | 0,90 | 6,02 | 7,39 |
 
-### Laag B: input-buffer op de server + tijdsdilatatie
+De kick-test is het zwaarste geval: tikken van precies één frame. Echte tikken duren meestal langer, maar ook die vielen weg zodra pakketten na een hapering tegelijk binnenkwamen.
 
-- De server houdt per speler een kleine buffer: inputs voor toekomstige frames wachten tot hun frame komt. Elk frame krijgt precies de input die de speler voor dat frame bedoelde, ongeacht jitter.
-- De client loopt voor op de server met `RTT/2 + buffer`. De buffer is adaptief: de server meldt per speler "je input kwam X frames te vroeg/te laat". De client past zijn klok heel licht aan (simulatiesnelheid ±2–3%, onzichtbaar) tot er net genoeg marge is, bijvoorbeeld het 95e percentiel van de jitter. Stabiele lijn: ~1 frame buffer. Wifi met pieken: 3–4 frames.
-- Komt een input toch te laat, dan herhaalt de server de vorige input voor dat frame (zoals HaxBall/Rocket League) en de client corrigeert. Optioneel kan de server een paar frames terugspoelen en opnieuw simuleren (9 discs, dat is goedkoop), zodat een laat kickframe toch telt. Dit venster blijft klein (≤ 6 frames) zodat lag geen voordeel wordt.
+Bij TCP (WebSocket naar de server) blijft pakketverlies voelbaar: een verloren pakket houdt alles erachter vast. v3 haalt die inputs daarna netjes in, maar de hapering zelf blijft. Over de WebRTC-kanalen van peer-hosting bestaat dat probleem niet.
 
-Gevolg: **je eigen speler wordt bij stabiele ping nooit gecorrigeerd**. De client voorspelt precies wat de server gaat doen, omdat de server dezelfde inputs op dezelfde frames gebruikt met dezelfde engine.
+## 3. Peer-hosting: hoe het werkt
 
-### Laag C: kleine, frequente, deterministische snapshots
+Wat je in je hoofd had: de kamer draait niet per se op een server maar bij de spelers zelf, en pakt steeds de beste verbinding. Dat kan, en het is gebouwd als **hybride**. De server blijft regisseur en vangnet; de simulatie mag naar een browser verhuizen.
 
-- Twee kanalen. **Betrouwbaar** voor joinen, stadion, teams, chat en score (het huidige 1 KB-formaat blijft hier). **Onbetrouwbaar** voor de match-staat.
-- Match-snapshot per tick of om de tick: per disc positie + snelheid, plus framenummer en per speler de laatste verwerkte inputframe. Delta ten opzichte van de laatste snapshot die de client heeft bevestigd. Bij 4v4 + bal ongeveer 60–120 bytes.
-- **Determinisme-truc** (Overwatch-aanpak): de server rondt zijn eigen staat elke tick af op precies de waarden die hij verstuurt (bijv. float32). Dan levert opnieuw simuleren op de client bit voor bit hetzelfde op als op de server, en ontstaan er geen kleine afwijkingen die later uitgroeien. Een test bewaakt dit.
+1. **Meten.** Iedere speler heeft een WebRTC-datakanaal naar iedere andere speler (opgezet via de server). Elke seconde worden pings gemeten; elke 2 s gaat een rapport naar de server: ping naar de server, ping naar elke speler, en of deze browser mag hosten (tab zichtbaar, instelling aan, kanalen naar iedereen open).
+2. **Kiezen.** De server berekent per kandidaat (de server zelf en elke geschikte speler) wat de spelers zouden merken:
+   - de slechtste vertraging tussen twee spelers via die host: (ping(a,host) + ping(host,b)) / 2;
+   - plus de helft van de slechtste voorspellingshorizon: max ping(speler,host) / 2.
 
-### Laag D: client-voorspelling met zachte correcties
+   Een wissel gebeurt alleen bij minstens 25 ms en 15% winst, 8 s lang volgehouden, met 10 s rust na elke wissel.
+3. **Overdragen op frame M.** De server kondigt "host wordt X vanaf frame M" aan, ruim genoeg vooruit dat iedereen het weet. De oude host rekent tot M en geeft de exacte toestand door: engine, alle input-tijdlijnen, kamerinstellingen, het bot-geheugen en de tellers. De nieuwe host rekent vanaf M verder op dezelfde kamerklok. Clients schakelen pas om bij de eerste snapshot van de nieuwe host met frame ≥ M. Daarna bevestigt een test dat de voortzetting **bit voor bit** gelijk is (1v1, 2v2 en 4v4, 60 s, bots inbegrepen).
+4. **Vangnet.** Een host stuurt ~6× per seconde een reservekopie naar de server, en elke input gaat óók naar de server. Valt de host weg (tab dicht, netwerk weg, geen kopie binnen 1,5 s), dan rekent de server vanaf de laatste kopie verder met de inputs die hij zelf heeft. Een host die zo uitvalt, wordt een minuut niet gekozen. Bij een verborgen tabblad geeft de host de kamer meteen zelf terug.
+5. **Joinen.** Een nieuwe speler laat de kamer eerst (naadloos) terugkomen naar de server, joint daar, en daarna kan de kamer weer verhuizen.
 
-- De simulatie blijft zoals nu: laatste bevestigde snapshot → eigen inputs opnieuw toepassen → doorrekenen tot het doelframe.
-- **Nieuw: de weergave springt niet meer.** Wijkt een nieuwe voorspelling af van de vorige, dan blijft het verschil bewaard als visuele offset die in ~80–150 ms naar nul zakt. De simulatie is direct correct, alleen het beeld glijdt.
-  - Tegenstanders: altijd gladstrijken.
-  - Bal: gladstrijken, behalve bij een groot verschil (> ~1 balstraal na een kick van iemand anders). Dan een snelle maar zichtbare overgang van ~50 ms in plaats van teleporteren.
-  - Bij contact met je eigen speler weegt de offset minder zwaar, zodat de bal visueel niet "door je heen" gaat.
-- **Andere spelers voorspellen**: standaard "houdt laatste input vast" (zoals nu en zoals Rocket League). Een experiment dat hier toevallig goed bij past: de getrainde bot-policy voorspelt wat een menselijke speler waarschijnlijk doet (naar de bal lopen, dekken). Alleen invoeren als metingen laten zien dat het correcties verkleint.
+Een browser-host draait de kamer in een **Web Worker**. Dat moet: twee engines in dezelfde pagina delen interne timers. Bijkomend voordeel: de simulatie loopt los van het tekenen.
 
-### Laag E: transport en servers dichtbij
+### Wanneer wint peer-hosting?
 
-1. **Onbetrouwbaar transport naar de server.** WebRTC DataChannel met `ordered:false, maxRetransmits:0` voor match-data (de browser heeft dit al voor de peer-modus; aan de serverkant `node-datachannel`). WebTransport-datagrammen later als tweede optie. De WebSocket blijft als fallback en voor betrouwbare berichten. Hiermee verdwijnen de TCP-freezes.
-2. **Meerdere serverlocaties** (bijv. Frankfurt, Virginia/Miami, São Paulo, Singapore). Bij het maken van een room meet iedere client de ping naar alle regio's. De room draait op de regio waar de **hoogste ping het laagst** is. EU + Zuid-Amerika → Virginia/Miami (~110 + ~120 ms in plaats van 20 + 200). Dat is eerlijker: niemand heeft een groot thuisvoordeel.
-3. **Relays (later, optioneel).** Een lichte UDP-relay per regio waar spelers verbinding mee maken. Die stuurt verkeer door over een goede backbone naar de room-server. Dit verlaagt niet altijd de ping, wel jitter en verlies op slechte routes (het idee achter Valve SDR / Riot Direct). Pas zinnig als metingen laten zien dat routes echt het probleem zijn.
+- **Iedereen in één regio, server ver weg** (bijv. 4 Europeanen, server in de VS): een speler host, en iedereen speelt op ~20 ms in plaats van ~100 ms. Hier wint peer-hosting het duidelijkst.
+- **1v1 tussen twee continenten**: via een van de spelers is de vertraging tussen de twee precies de directe route. Een server ergens anders in Europa is een omweg. Een server precies in het midden is even goed voor de vertraging tussen spelers, maar eerlijker voor de voorspellingshorizon. De kostfunctie weegt dat af.
+- **Gemengde groep, verspreid over de wereld**: vaak blijft de server de beste keuze. Dat beslist de meting, niet een vaste regel.
 
-## 3. Wat je dan voelt bij 200 ms
+## 4. Eerlijke kanttekeningen
 
-| Situatie | Nu | Met v3 |
-| --- | --- | --- |
-| Eigen beweging | Direct, met kleine schokjes door jitter | Direct, zonder correcties |
-| Eigen kick op een vrije bal | Direct; kan bij pakketophoping verdwijnen | Direct en altijd geregistreerd |
-| Pakketverlies 1–2% | Freeze van 200–400 ms + sprong | Onzichtbaar |
-| Tegenstander verandert van richting | Springt | Glijdt in ~100 ms naar de juiste plek |
-| Tegenstander schiet | Bal teleporteert | Bal buigt snel af naar de juiste baan |
-| EU vs Azië | Eén kant speelt op 250+ ms | Room in het midden, beide ~120–150 ms |
+- **IP-adressen.** WebRTC laat spelers in dezelfde kamer elkaars IP-adres zien, net als bij HaxBall. Wie dat niet wil, zet *Peer hosting* uit in de instellingen; dan maakt die browser geen directe verbindingen.
+- **Vertrouwen.** Een browser-host kan in principe valsspelen, net als een HaxBall-host. De server stuurt alleen een vaste lijst berichttypes door van een host. Ranked/competitief spelen hoort op een server.
+- **Geen TURN-server.** Sommige NAT-combinaties krijgen geen direct kanaal. Die spelers blijven gewoon op de server spelen; peer-hosting valt dan niet in voor die kamer.
+- **Browsers onderling.** Chrome en Node gebruiken dezelfde JavaScript-engine (V8), dus overdrachten daartussen zijn exact. Bij Firefox of Safari als host kunnen wiskundige functies minimaal anders afronden. Dat geeft hooguit een kleine, gladgestreken correctie, geen breuk.
+- **Opnemen** blokkeert wisselen zolang de opname loopt (een opname kan niet mee verhuizen).
+- **Kamers op de server** gaan nog over TCP (WebSocket). Zie stap 6.
 
-Eerlijk over de grens: als jij en een tegenstander tegelijk tegen de bal duelleren, zie je zijn actie altijd ~zijn ping/2 + jouw ping/2 + buffer later. Dat is bij elk online spel zo, ook Rocket League. Dit model zorgt dat het in die situaties glad oogt en dat de rest van de tijd alles klopt.
+## 5. Aan/uit en terugdraaien
 
-## 4. Volgorde van bouwen
+- In het spel: Esc → Settings → **Netcode** (*v3* / *Classic*) en **Peer hosting** (aan/uit). Geldt vanaf de volgende verbinding.
+- Server: `FUCKBALL_NETCODE=classic` (alles klassiek, ook geen peer-hosting) of `FUCKBALL_PEER_HOSTING=off` (v3 aan, kamers blijven op de server).
+- Git: de branch `netcode-plan` heeft aparte commits per stap (netcode v3, peer-hosting, documentatie). Elke stap is los terug te draaien met `git revert <commit>`.
+- Oude en nieuwe clients kunnen in dezelfde kamer: snapshot-header `0x46423201` is klassiek, `0x46423203` is v3. Een klassieke client in de kamer houdt de kamer op de server.
 
-0. **Meten.** Een netwerksimulator in de tests (latency, jitter, verlies; profielen "EU–SA 200 ms ±20, 1%" en "slechte wifi") met meetwaarden: correcties van je eigen speler (px), sprongen van de bal (px), percentage kicks dat de server registreert, en freezes > 100 ms. Eerst meten we de huidige versie, daarna elke stap. "200 ping voelt goed" wordt zo een getal en geen gevoel.
-1. **Laag A + B** over de bestaande WebSocket. Grootste winst, kleinste ingreep: verloren kicks en correcties door jitter verdwijnen.
-2. **Laag D-smoothing + compacte snapshots (C).** Geen teleports meer en minder bandbreedte.
-3. **Onbetrouwbaar transport (E1).** Weg met de TCP-freezes.
-4. **Regio's + room-plaatsing (E2).** Dit is vooral hosting (meerdere VPS'en); de code-kant is ping-meting en een room-redirect.
-5. Experimenten: input-voorspelling met de bot-policy, server-rollback voor late kicks, relays.
+## 6. Tests en volgende stappen
 
-Na stap 1–3 zou 200 ms op één server al prima speelbaar moeten zijn. Stap 4 maakt het eerlijk tussen continenten.
+Tests:
 
-Ontwerpregels die blijven gelden: de physics-engine en de parameters veranderen niet, de server blijft autoritatief, en extrapolatie/smoothing zitten alleen in de weergave of op kopieën van de staat.
+- `tests/netcode.cjs`: timeline, voorsprong, smoothing, verkiezing, server-onderhandeling en een EU–ZA-simulatie.
+- `tests/handover.cjs`: één tick per stap, en bit-exacte voortzetting na overdracht.
+- `tests/peer-hosting.cjs`: echte server plus drie gesimuleerde browsers. Server→A→B, joinen tijdens peer-hosting, verborgen tab, failover, en een echte verkiezing op gemeten pings.
+- `npm run test:browser`: echte Chromium, echte WebRTC en een echte worker-host, met overdrachten en failover. Draait ook in CI.
+
+Volgende stappen, in volgorde van opbrengst:
+
+1. **Onbetrouwbaar transport ook naar de server** (WebRTC-datakanaal of WebTransport aan de serverkant), zodat ook server-kamers geen TCP-haperingen meer hebben. Dat vraagt een native Node-dependency; dit project heeft er nu geen.
+2. **Meerdere serverregio's** (bijv. Frankfurt, Virginia/Miami, São Paulo, Singapore). Dit is vooral hosting. De verkiezing werkt al met de server als kandidaat; met meerdere servers worden dat meerdere kandidaten.
+3. **Een TURN-server**, zodat ook spelers achter strenge NAT direct kunnen verbinden.
+4. Experimenten: tegenstanders voorspellen met de bot-AI in plaats van "laatste input vasthouden".
