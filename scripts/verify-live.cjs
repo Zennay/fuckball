@@ -62,14 +62,17 @@ async function get(base, pathname) {
   return response;
 }
 
+// A healthy 60 Hz server must advance its authoritative clock between pongs.
+// A frozen tick loop can serve /health, correct assets and an initial welcome.
 async function probeRoom(base, release) {
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(base.replace(/^http/, 'ws') + '/ws');
-    let settled = false;
+    let settled = false, firstFrame = null, secondPingTimer = null;
     const finish = error => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (secondPingTimer !== null) clearTimeout(secondPingTimer);
       try { ws.close(); } catch {}
       if (error) reject(error); else resolve();
     };
@@ -79,19 +82,29 @@ async function probeRoom(base, release) {
       type: 'join', create: true, name: 'Release verification', netcode: 3
     }));
     ws.onmessage = event => {
-      if (typeof event.data !== 'string') return;
+      if (settled || typeof event.data !== 'string') return;
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'error') return finish(Error(data.message));
         if (data.type === 'welcome') {
           assert.match(data.room, release ? /^[A-HJ-NP-Z2-9]{8}$/ :
             /^(?:[A-F0-9]{6}|[A-HJ-NP-Z2-9]{8})$/, 'expected real shareable room ID');
-          if (!release) return finish();
           ws.send(JSON.stringify({type: 'ping', t: 1}));
         } else if (data.type === 'pong') {
           assert(Number.isFinite(data.frame) && data.frame >= 0,
-            'pong must carry a finite server tick for the native clock');
-          finish();
+            'pong must carry a finite authoritative server tick');
+          if (firstFrame === null) {
+            assert.equal(data.t, 1, 'first room pong must echo the first ping');
+            firstFrame = data.frame;
+            secondPingTimer = setTimeout(() => {
+              if (!settled) ws.send(JSON.stringify({type: 'ping', t: 2}));
+            }, 160);
+          } else {
+            assert.equal(data.t, 2, 'second room pong must echo the later ping');
+            assert(data.frame > firstFrame,
+              'authoritative 60 Hz room clock must advance between two pongs');
+            finish();
+          }
         }
       } catch (error) { finish(error); }
     };
