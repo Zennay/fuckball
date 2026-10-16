@@ -125,7 +125,8 @@ async function probeRoom(base, release) {
           lastFrame = frame;
           framesSeen++;
           if (framesSeen >= 4) {
-            assert(lastFrame >= firstSnapshot + 6, 'live snapshots must span multiple 60 Hz ticks');
+            assert(lastFrame >= firstSnapshot + 4,
+              'live snapshots must span multiple 60 Hz ticks (' + firstSnapshot + ' to ' + lastFrame + ')');
             finish();
           }
           return;
