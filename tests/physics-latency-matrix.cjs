@@ -60,6 +60,8 @@ function equalPhysics(actual, expected, label) {
 // native tick. Replay local inputs on their recorded frame, never as one
 // giant dt update.
 function nativeTruth(state, frames, events = [], baseFrame = 0) {
+  // Zero lookahead returns the current snapshot without any simulation.
+  if (!(frames > 0)) return state.copy();
   const copy = state.copy();
   const full = Math.floor(frames);
   let nextEvent = 0;
