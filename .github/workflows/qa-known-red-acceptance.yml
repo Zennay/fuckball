@@ -6,6 +6,8 @@ on:
       - 'tests/known-red-classification.cjs'
       - 'scripts/qa-known-red-classifier.cjs'
       - 'tests/room-roster-acceptance.cjs'
+      - 'tests/roster-red-classification.cjs'
+      - 'scripts/qa-roster-overflow.cjs'
       - 'dist/render-timing.js'
       - 'dist/room-core.js'
       - '.github/workflows/qa-known-red-acceptance.yml'
@@ -31,7 +33,7 @@ jobs:
           cat "$RUNNER_TEMP/roster.txt"
           if [ "$result" -eq 0 ]; then
             echo "4v4 roster acceptance: GREEN" >> "$GITHUB_STEP_SUMMARY"
-          elif grep -Fq "12-person lobby: exactly four active red players" "$RUNNER_TEMP/roster.txt"; then
+          elif grep -Eq "^KNOWN_RED_31_ACTIVE_OVERFLOW red=[0-9]+ blue=[0-9]+ connected=12$" "$RUNNER_TEMP/roster.txt"; then
             echo "::warning title=4v4 roster known RED::Issue #31 not yet implemented"
             echo "4v4 roster acceptance: known RED (#31); do not treat as release-ready" >> "$GITHUB_STEP_SUMMARY"
           else
