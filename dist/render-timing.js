@@ -41,23 +41,48 @@ function extrapolate(state,frames,events=[],baseFrame=0){
 /* Frames ahead of the latest simulated tick for a locally simulated room (offline or host). */
 function localFrames({now,roomStart,currentFrame,extrapolation=0}){return Math.max(0,Math.min(MAX_FRAMES,(now-roomStart+extrapolation)*XE-currentFrame));}
 
-/* Online guest: confirmed snapshots + clock estimate + own pending inputs. */
-function createPredictor(){const pingClock=createClock(),snapshotClock=createClock(),pending=[];let snapshotFrame=0;
+/* Correction smoothing (visual only). When a snapshot changes the predicted present,
+   each disc keeps the jump as an offset that fades out (half-life ~45 ms) instead of
+   teleporting. Big jumps (kickoff, goal reset, teleports) snap immediately. The offset is
+   measured exactly: the prediction for the same moment before and after the snapshot.
+   The engine reuses one buffer for every copy (`AE`), so the "before" prediction must be
+   captured as plain positions (`positions(state)`) before the next prediction is made. */
+const discsOf=s=>s?.gameState?.physicsState?.discs||[];
+function positions(state){return discsOf(state).map(d=>[d.pos.x,d.pos.y]);}
+function createSmoother({halfLife=45,snap=60}={}){let offsets=[],last=0;
+ function decay(now){const k=Math.pow(.5,Math.max(0,now-last)/halfLife);last=now;let live=false;for(const o of offsets){o[0]*=k;o[1]*=k;if(Math.abs(o[0])+Math.abs(o[1])>.01)live=true;else o[0]=o[1]=0;}if(!live)offsets=[];}
  return{
-  pingClock,snapshotClock,pending,
+  /* before: positions() captured from the old prediction; after: the new prediction. */
+  correct(before,after,now){decay(now);const b=discsOf(after);if(!Array.isArray(before)||before.length!==b.length){offsets=[];return;}
+   if(offsets.length!==b.length)offsets=b.map(()=>[0,0]);
+   for(let i=0;i<b.length;i++){const o=offsets[i];o[0]+=before[i][0]-b[i].pos.x;o[1]+=before[i][1]-b[i].pos.y;if(Math.hypot(o[0],o[1])>snap)o[0]=o[1]=0;}},
+  /* Shifts the shown discs of a predicted copy; never touches `source` (the confirmed state). */
+  apply(state,now,source){decay(now);if(!offsets.length)return state;const d=discsOf(state);if(d.length!==offsets.length){offsets=[];return state;}
+   if(state===source){state=copyState(state);}const out=discsOf(state);for(let i=0;i<out.length;i++){out[i].pos.x+=offsets[i][0];out[i].pos.y+=offsets[i][1];}return state;},
+  get active(){return offsets.some(o=>o[0]||o[1]);},
+  reset(){offsets=[];}
+ };}
+
+/* Online guest: confirmed snapshots + clock estimate + own pending inputs.
+   `lead` is the percentile of the clock window used as target. 0.5 (HaxBall) stamps inputs at
+   the median arrival frame; a higher value stamps a little later so that, with the server
+   holding early inputs until their frame, most inputs run exactly where they were predicted. */
+function createPredictor({lead=.5}={}){const pingClock=createClock(),snapshotClock=createClock(),pending=[];let snapshotFrame=0;
+ return{
+  pingClock,snapshotClock,pending,lead,
   get snapshotFrame(){return snapshotFrame;},
   reset(){pingClock.reset();snapshotClock.reset();pending.length=0;snapshotFrame=0;},
   /* Host frame (may be fractional) reported in the pong for a ping sent at `sentAt` (local ms). */
   pong(hostFrame,sentAt){pingClock.add(hostFrame-sentAt*XE);},
   /* Snapshot of host frame `frame` arrived at `now`; `ack` = last own input seq it already contains. */
   snapshot(frame,now,ack){snapshotFrame=frame;snapshotClock.add(frame-now*XE);let n=0;while(n<pending.length&&pending[n].seq<=ack)n++;if(n)pending.splice(0,n);},
-  offset(){return pingClock.size?pingClock.percentile(.5):snapshotClock.percentile(.5);},
+  offset(){return pingClock.size?pingClock.percentile(this.lead):snapshotClock.percentile(.5);},
   targetFrame(now,extrapolation=0){return (now+extrapolation)*XE+this.offset();},
   /* Own input, stamped like HaxBall at the frame the client is currently predicting. */
-  input(seq,id,input,now){pending.push({seq,id,input,frame:Math.max(snapshotFrame,Math.floor(this.targetFrame(now)))});if(pending.length>240)pending.splice(0,pending.length-240);},
+  input(seq,id,input,now){const frame=Math.max(snapshotFrame,Math.floor(this.targetFrame(now)),pending.length?pending[pending.length-1].frame:0);pending.push({seq,id,input,frame});if(pending.length>240)pending.splice(0,pending.length-240);return frame;},
   frames(now,extrapolation=0){return Math.max(0,Math.min(MAX_FRAMES,this.targetFrame(now,extrapolation)-snapshotFrame));},
   predict(state,now,extrapolation=0){return extrapolate(state,this.frames(now,extrapolation),pending,snapshotFrame);}
  };}
 
-root.FuckballRenderTiming={TICK,XE,MAX_FRAMES,createClock,extrapolate,localFrames,createPredictor};if(typeof module!=='undefined')module.exports=root.FuckballRenderTiming;
+root.FuckballRenderTiming={TICK,XE,MAX_FRAMES,createClock,extrapolate,localFrames,createPredictor,createSmoother,positions};if(typeof module!=='undefined')module.exports=root.FuckballRenderTiming;
 })(typeof globalThis!=='undefined'?globalThis:this);

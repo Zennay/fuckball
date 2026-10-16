@@ -46,6 +46,15 @@ Rendering uses the same prediction as the official HaxBall client, ported from t
 
 `tests/render-timing.cjs` checks positions against the engine's own tick through a ball/player contact, the fractional tick, own-input replay, the cap, isolation and the clock estimator.
 
+## Online stability (October 2026)
+
+Measured with `node tests/net-jitter.cjs` (real server, scripted client behind a simulated link with delay, jitter and TCP-style 200–300 ms stalls; 4 seeds × 25 s per link). Snapshots are only ~1 KB (≈32 KB/s), so bandwidth was never the problem; the lag players feel is mispredicted inputs and visible snapping when a snapshot corrects the picture.
+
+- **Inputs run on the frame the client predicted them.** The client sends the frame it stamped each input with. The server holds an early input until that frame and runs a late one immediately (never rewound; stamps more than 30 frames ahead are ignored). Snapshot acks only count inputs that have actually run. Online clients stamp at the 75th percentile of measured arrival time instead of the median, so most inputs arrive early and run exactly where you saw them. 1v1, 45 ms ± 30 ms: own-player error p90 1.25 → 0.55 px; 25 ms ± 15 ms: 0.41 → 0 px.
+- **Correction smoothing (visual only).** When a snapshot changes the predicted present (another player kicked, turned or bumped you), each disc keeps the jump as an offset that fades with a 45 ms half-life instead of teleporting. Jumps over 60 px (kickoff, goal reset) snap. The confirmed state is never touched. 4v4, largest per-frame snap: opponent 27 → 5 px and own player 8 → 2.4 px at 45 ms ± 30 ms; ball 27 → 9 px at 20 ms ± 4 ms.
+- 30 Hz snapshots stay: 60 Hz gave no measurable gain for twice the traffic.
+- TCP stalls after packet loss (200 ms+) still freeze the picture briefly; only a UDP transport (WebRTC to the server) would remove those.
+
 ## VPS training
 
 `node training/continuous.cjs /opt/fuckball-training 12` runs a 12-hour window in batches of 192 matches. It fine-tunes the previous checkpoint and uses it for the next rollout; normalization changes are compensated when weights resume. Checkpoints, metrics and arena results persist, while only two recent generated datasets are retained. A STOP file or service stop ends training. Low disk space pauses generation. Candidates never overwrite live gameplay automatically.
