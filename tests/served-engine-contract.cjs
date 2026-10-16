@@ -100,7 +100,8 @@ async function receiveWelcome(url) {
     assert(room, 'a real native authoritative room was created');
     assert.equal(room.hb._room.state.stadium.name, 'BFF Big v4');
     assert.equal(room.v3, true, 'authoritative room uses native frame-timed network input');
-    assert.equal(room.hb._room.state.stadium.bg.width > 0, true);
+    assert(room.hb.getPlayerList().some(player => player.id === welcome.id),
+      'native room roster must contain the joining human player');
 
     console.log('PASS served native physics contract: live HTTP engine/stadium hashes, ' +
       scripts.length + ' active browser assets, 4 rejected legacy solver paths, 60/30Hz, ' +
