@@ -14,19 +14,45 @@ const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 // Deliberately narrow *served-asset* contract, not a claim that pending input
 // replay works (#28) or the user's preferred Work physics is restored (#9).
 // Keep this in sync with legitimate renderer refactors rather than deleting it.
+// Ignore inert comments and quoted literals when matching required renderer
+// structure. A marker copied into a comment/string must not authorize release.
+// This remains a source-structure check, not full behavioral physics parity.
+function executableCode(source) {
+  let out='', mode='code';
+  for(let i=0;i<source.length;i++) {
+    const ch=source[i],next=source[i+1];
+    if(mode==='code') {
+      if(ch==='/'&&next==='*'){mode='block';out+='  ';i++;continue;}
+      if(ch==='/'&&next==='/'){mode='line';out+='  ';i++;continue;}
+      if(ch==="'"||ch==='"'||ch==='\u0060'){mode=ch;out+=' ';continue;}
+      out+=ch;
+    } else if(mode==='line') {
+      if(ch==='\n'){mode='code';out+='\n';}else out+=' ';
+    } else if(mode==='block') {
+      if(ch==='*'&&next==='/'){mode='code';out+='  ';i++;}else out+=ch==='\n'?'\n':' ';
+    } else {
+      if(ch==='\\'){out+=' ';if(i+1<source.length){out+=' ';i++;}continue;}
+      if(ch===mode)mode='code';
+      out+=ch==='\n'?'\n':' ';
+    }
+  }
+  return out;
+}
+
 function assertPredictionAsset(source) {
   assert.equal(typeof source, 'string', 'served renderer must be JavaScript text');
-  assert.match(source, /function\s+extrapolate\s*\(/, 'renderer must export tick extrapolation');
-  assert.match(source, /MAX_FRAMES\s*=\s*120\b/, 'prediction horizon must be capped at 120 frames');
-  assert.match(source, /const\s+out\s*=\s*copyState\(state\)/, 'prediction must copy the authoritative state');
-  assert.match(source, /for\s*\(\s*let\s+f\s*=\s*baseFrame\s*;\s*f\s*<=\s*last\s*;\s*f\+\+\s*\)/,
+  const active=executableCode(source);
+  assert.match(active, /function\s+extrapolate\s*\(/, 'renderer must export tick extrapolation');
+  assert.match(active, /MAX_FRAMES\s*=\s*120\b/, 'prediction horizon must be capped at 120 frames');
+  assert.match(active, /const\s+out\s*=\s*copyState\(state\)/, 'prediction must copy the authoritative state');
+  assert.match(active, /for\s*\(\s*let\s+f\s*=\s*baseFrame\s*;\s*f\s*<=\s*last\s*;\s*f\+\+\s*\)/,
     'renderer must advance a 60 Hz tick timeline, not one giant integration');
-  assert.match(source, /out\.nM\(\s*f\s*!==\s*last\s*\?\s*1\s*:\s*frames\s*-\s*whole\s*\)/,
+  assert.match(active, /out\.nM\(\s*f\s*!==\s*last\s*\?\s*1\s*:\s*frames\s*-\s*whole\s*\)/,
     'whole native ticks plus one fractional tick must be simulated');
-  assert.doesNotMatch(source, /\.nM\(\s*(?:frames|whole)\s*\)/,
+  assert.doesNotMatch(active, /\.nM\(\s*(?:frames|whole)\s*\)/,
     'legacy one-big-dt native extrapolation is forbidden');
-  assert.match(source, /function\s+createPredictor\s*\(/, 'online guest predictor must be served');
-  assert.match(source, /pending\.splice\(/, 'prediction must retain pending unacked inputs');
+  assert.match(active, /function\s+createPredictor\s*\(/, 'online guest predictor must be served');
+  assert.match(active, /pending\.splice\(/, 'prediction must retain pending unacked inputs');
 }
 
 async function get(base, pathname) {
