@@ -42,6 +42,9 @@ class WebSocket extends EventEmitter {
       let len=b&127,pos=2;
       if(len===126){if(this.buf.length<4)return;len=this.buf.readUInt16BE(2);pos=4;}
       else if(len===127){if(this.buf.length<10)return;const size=this.buf.readBigUInt64BE(2);if(size>BigInt(this.maxPayload)){this.close(1009,'Too large');return;}len=Number(size);pos=10;}
+      // RFC 6455 section 5.5: ALL control frames (close, ping, pong) are
+      // limited to 125 bytes. Do not emit invalid oversized pong replies.
+      if((opcode&8)&&len>125){this.close(1002,'Invalid control frame');return;}
       if(len>this.maxPayload){this.close(1009,'Too large');return;}
       if(this.buf.length<pos+4+len)return;
       const key=this.buf.subarray(pos,pos+4),payload=Buffer.from(this.buf.subarray(pos+4,pos+4+len));
@@ -49,7 +52,7 @@ class WebSocket extends EventEmitter {
       for(let i=0;i<payload.length;i++)payload[i]^=key[i&3];
       if(opcode===1){this.emit('message',payload,false);}
       else if(opcode===2){this.emit('message',payload,true);}
-      else if(opcode===8){this.close(1000);return;}
+      else if(opcode===8){if(payload.length===1){this.close(1002,'Invalid close frame');return;}this.close(1000);return;}
       else if(opcode===9){this.frame(10,payload);}
       else if(opcode!==10){this.close(1003,'Unsupported opcode');return;}
     }
