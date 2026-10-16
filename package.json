@@ -10,6 +10,7 @@
     "build:solo": "python3 scripts/build-sdk.py",
     "test:browser": "node tests/browser-peer-hosting.cjs",
     "test:roster-acceptance": "node tests/room-roster-acceptance.cjs",
+    "test:input-replay-acceptance": "node tests/input-replay-acceptance.cjs",
     "netsim": "node scripts/netsim.cjs"
   },
   "engines": {"node": ">=22"},
