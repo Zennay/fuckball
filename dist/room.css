@@ -65,8 +65,7 @@ body{background:#0d1113}
 .rm-player .name{flex:1;min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rm-player .tag{font-size:8.5px;font-weight:800;letter-spacing:.6px;padding:2px 5px;border-radius:4px;background:#ffffff1a;color:#cbd6d3}
 .rm-player .tag.you{background:var(--rm-lime);color:#17250a}
-.rm-player .bot-level{display:none;width:auto;margin:0;padding:2px 4px;font-size:10px;background:#0b1217;border-radius:4px}
-.show-advanced .rm-player .bot-level{display:block}
+.rm-player .bot-level{display:block;width:auto;margin:0;padding:2px 4px;font-size:10px;background:#0b1217;border-radius:4px}
 .rm-remove{padding:0 6px;border:0;background:none;color:#ffb0a8;font-size:15px;line-height:1}
 .rm-ghost{position:fixed;left:0;top:0;z-index:50;pointer-events:none;width:200px;background:#1c2b33;border:1px solid var(--rm-lime);box-shadow:0 10px 30px #0008}
 .rm-team-foot{display:flex;gap:6px;padding:0 8px 8px}
@@ -119,10 +118,41 @@ body{background:#0d1113}
  .rm-foot{display:none}
  .hud-chat{font-size:12px;max-height:110px}
  .hud-top-right{right:12px}
- .show-advanced .rm-player .bot-level{max-width:66px}
+ .rm-player .bot-level{max-width:66px}
 }
 #chatForm.hud-chat-form{display:block;background:none;border:0;padding:0}
 #chatForm.hud-chat-form input{margin:0}
 
 /* Score centred at the top of the pitch. */
 #matchView .scoreboard{left:50%;transform:translateX(-50%)}
+
+/* Lobby: before kick-off the pitch is hidden so a waiting room never looks paused. */
+body.lobby #gameCanvas{visibility:hidden}
+body.lobby #matchView{background:radial-gradient(ellipse at 50% 35%,#1d2a31,#0d1316 70%)}
+body.lobby .scoreboard{opacity:.35}
+.lobby-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(420px,calc(100vw - 32px));padding:28px 28px 22px;text-align:center;background:#0e161ce6;border:1px solid #ffffff22;border-radius:14px;box-shadow:0 24px 70px #0007;display:flex;flex-direction:column;gap:10px}
+.lobby-card h2{font-size:26px;font-weight:900;font-style:italic;letter-spacing:-.5px;margin:2px 0}
+.lobby-card p{margin:0 0 6px;color:#a9b8ba}
+.lobby-card .eyebrow{color:var(--rm-lime);letter-spacing:3px}
+.lobby-card button{border-radius:9px;padding:12px 16px;font-size:14px}
+.lobby-card button.primary{font-size:16px;font-weight:800}
+.lobby-card kbd{margin-left:6px}
+
+/* Join screen for room links */
+.join-screen{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at 50% 30%,#1c2a30f2,#0b1013f7)}
+.join-card{width:min(400px,100%);display:flex;flex-direction:column;gap:12px;padding:28px;background:#121b21;border:1px solid #ffffff22;border-radius:16px;box-shadow:0 30px 90px #000a}
+.join-card h2{font-size:24px;font-weight:900;font-style:italic;margin:0}
+.join-card h2 b{color:var(--rm-lime);font-style:normal;letter-spacing:2px}
+.join-card .eyebrow{color:var(--rm-lime);letter-spacing:3px}
+.join-card label{color:#9fb0b2;font-size:12px}
+.join-card input{margin-top:6px;border-radius:8px;padding:12px!important;font-size:15px}
+.join-card #joinPlay,.join-card form{display:flex;flex-direction:column;gap:10px}
+.join-card button{border-radius:9px;padding:11px 14px;font-size:14px}
+.join-card button.primary{font-weight:800}
+.join-or{text-align:center;margin:0;font-size:11px;color:#71858a}
+.join-account{margin:0;font-size:12px;color:#c6e98f}
+.join-card .error{margin:0;min-height:0}
+.rm-account{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--rm-muted);padding:8px 10px;border:1px solid var(--rm-line);border-radius:8px}
+.rm-account button{border-radius:7px;font-size:12px;padding:7px 10px}
+.rm-settings input[type=number]{margin-top:5px;border-radius:7px;background:#0b1217cc;border:1px solid #ffffff26;color:#e5eaec;padding:9px;width:100%}
+.rm-settings small{color:#71858a;font-size:10px}
