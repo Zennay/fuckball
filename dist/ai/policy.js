@@ -18,7 +18,7 @@ if(!laneClear(aimX,aimY)){const mates=team.filter(q=>q.id!==id&&sign*(q.disc.pos
 const ax=aimX-ball.pos.x,ay=aimY-ball.pos.y,al=Math.hypot(ax,ay)||1,dx=ball.pos.x-d.pos.x,dy=ball.pos.y-d.pos.y,dist=Math.hypot(dx,dy);if(role==='striker'){tx=bx-ax/al*(ball.radius+d.radius+3);ty=by-ay/al*(ball.radius+d.radius+3);if(dx*sign<0&&Math.abs(dy)<35){ty=by+(d.pos.y>=by?1:-1)*45;}}
 const aligned=(dx*ax+dy*ay)/Math.max(1,dist*al)>.78;const close=dist<d.radius+ball.radius+3.8;const kick=close&&aligned&&!(p.input&16);if(dist<45&&aligned&&role==='striker'){tx=ball.pos.x;ty=ball.pos.y;}
 tx=Math.max(-width+20,Math.min(width-20,tx));ty=Math.max(-height+20,Math.min(height-20,ty));const mx=tx-d.pos.x-d.speed.x*5,my=ty-d.pos.y-d.speed.y*5;return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);}
-const levels={easy:{reaction:18,lead:5,aim:.93,teamwork:false},normal:{reaction:8,lead:12,aim:.85,teamwork:true},hard:{reaction:4,lead:18,aim:.78,teamwork:true},elite:{reaction:2,lead:24,aim:.72,teamwork:true}};
+const levels={easy:{reaction:18,lead:5,aim:.93,teamwork:false},normal:{reaction:6,lead:12,aim:.88,teamwork:true},hard:{reaction:2,lead:18,aim:.84,teamwork:true},elite:{reaction:1,lead:24,aim:.84,teamwork:true}};
 const defaultProfile={support:115,spread:115,cover:150,press:110,screen:55};
 function profile(raw={}){const out={};for(const k of Object.keys(defaultProfile)){const n=Number(raw[k]);out[k]=Number.isFinite(n)?Math.max(k==='screen'?30:60,Math.min(k==='screen'?90:220,n)):defaultProfile[k];}return out;}
 // Engine player movement from rest (plus current velocity) after k frames.
@@ -89,24 +89,134 @@ function buildPlan(state,teamId,tick=0,raw={}){
   plan[p.id]={role,clear,x:Math.max(-Math.abs(gx)+22,Math.min(Math.abs(gx)-22,x)),y:Math.max(-height+22,Math.min(height-22,y)),leader:leader.id};
  }return plan;
 }
-function tactical(state,id,tick=0,options={}){
- const p=state.players.find(p=>p.id===id),b=state.gameState?.physicsState.discs[0];if(!p?.disc||!b)return 0;const level=levels[options.difficulty]||levels.hard;if(tick%level.reaction!==0)return (p.input||0)&15;
- const team=state.players.filter(q=>q.disc&&q.team.id===p.team.id);if(team.length<3||!level.teamwork)return legacyTactical(state,id,tick);
- const plan=teamPlan(state,p.team.id,tick,options.profile),intent=plan[id],d=p.disc,sign=p.team.id===1?1:-1;let x=intent.x,y=intent.y;const dx=b.pos.x-d.pos.x,dy=b.pos.y-d.pos.y,dist=Math.hypot(dx,dy),g=state.gameState.stadium.goals.find(q=>q.team.id!==p.team.id);let ax=(g?(g.p0.x+g.p1.x)/2:sign*700)-b.pos.x,ay=(g?(g.p0.y+g.p1.y)/2:0)-b.pos.y;
- const opponents=state.players.filter(q=>q.disc&&q.team.id===3-p.team.id);const clear=(vx,vy)=>!opponents.some(o=>{const t=((o.disc.pos.x-b.pos.x)*vx+(o.disc.pos.y-b.pos.y)*vy)/(vx*vx+vy*vy||1);return t>.03&&t<1&&Math.hypot(o.disc.pos.x-b.pos.x-vx*t,o.disc.pos.y-b.pos.y-vy*t)<o.disc.radius+b.radius+5;});
- if(!clear(ax,ay)){const mate=team.filter(q=>q.id!==id&&sign*(q.disc.pos.x-b.pos.x)>30&&clear(q.disc.pos.x-b.pos.x,q.disc.pos.y-b.pos.y)).sort((a,c)=>sign*(c.disc.pos.x-a.disc.pos.x))[0];if(mate){ax=mate.disc.pos.x-b.pos.x;ay=mate.disc.pos.y-b.pos.y;}else ay+=(b.pos.y>0?-1:1)*50;}
- const len=Math.hypot(ax,ay)||1,aligned=(dx*ax+dy*ay)/Math.max(1,dist*len)>level.aim;
- if(intent.role==='chaser'){const lead=Math.min(level.lead,dist/8),decay=b.damping||.99,travel=Math.abs(1-decay)<1e-6?lead:(1-Math.pow(decay,lead))/(1-decay);x=b.pos.x+b.speed.x*travel-ax/len*(b.radius+d.radius+3);y=b.pos.y+b.speed.y*travel-ay/len*(b.radius+d.radius+3);if(dx*sign<0&&Math.abs(dy)<35)y=b.pos.y+(d.pos.y>=b.pos.y?1:-1)*45;if(dist<45&&aligned){x=b.pos.x;y=b.pos.y;}}
- // Separate supporting teammates without changing engine collisions or applying forces.
- if(intent.role!=='chaser'&&intent.role!=='screen'&&!intent.clear)for(const q of team)if(q.id!==id){const vx=d.pos.x-q.disc.pos.x,vy=d.pos.y-q.disc.pos.y,l=Math.hypot(vx,vy);if(l>0&&l<45){x+=vx/l*(45-l);y+=vy/l*(45-l);}}
- if(intent.clear){
-  // Attack the ball from the goal side so contact sends it away, then clear.
-  const og=state.gameState.stadium.goals.find(q=>q.team.id===p.team.id),ox=og?(og.p0.x+og.p1.x)/2:-sign*700,ux=b.pos.x-ox,uy=b.pos.y,ul=Math.hypot(ux,uy)||1;
-  if(dist<40){x=b.pos.x-ux/ul*4;y=b.pos.y-uy/ul*4;}else{x-=ux/ul*(b.radius+d.radius-4);y-=uy/ul*(b.radius+d.radius-4);}
-  const away=(dx*ux+dy*uy)/Math.max(1,dist*ul)>-.2;
-  const mx=x-d.pos.x-d.speed.x*(dist<60?2:5),my=y-d.pos.y-d.speed.y*(dist<60?2:5),kick=dist<d.radius+b.radius+4&&away&&!(p.input&16);return key(Math.abs(mx)<1.5?0:Math.sign(mx),Math.abs(my)<1.5?0:Math.sign(my),kick);
+// Assess a *moving* passing lane, not just whether today's straight line is empty.
+// Receiver and opponents advance while the ball is travelling. Positive clearance
+// means the ball is likely to pass the defender with space to spare.
+function laneMargin(ball,tx,ty,opponents){
+ const vx=tx-ball.pos.x,vy=ty-ball.pos.y,length=Math.hypot(vx,vy);
+ if(length<1)return -Infinity;
+ let margin=Infinity;
+ for(const o of opponents){
+  const d=o.disc;const t=Math.max(0,Math.min(1,((d.pos.x-ball.pos.x)*vx+(d.pos.y-ball.pos.y)*vy)/(length*length)));
+  if(t<.035||t>.97)continue;
+  const travel=Math.min(28,t*length/6.8);
+  const px=d.pos.x+d.speed.x*travel*.65,py=d.pos.y+d.speed.y*travel*.65;
+  const predictedT=Math.max(0,Math.min(1,((px-ball.pos.x)*vx+(py-ball.pos.y)*vy)/(length*length)));
+  if(predictedT<.04||predictedT>.97)continue;
+  const gap=Math.hypot(px-ball.pos.x-vx*predictedT,py-ball.pos.y-vy*predictedT)-(d.radius+ball.radius+6);
+  margin=Math.min(margin,gap);
  }
- const mx=x-d.pos.x-d.speed.x*5,my=y-d.pos.y-d.speed.y*5,kick=dist<d.radius+b.radius+3.8&&aligned&&!(p.input&16);return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);
+ return margin;
 }
-root.FuckballAI={intercept,playerPhysics,levels,defaultProfile,profile,teamPlan,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
+// Keep the puck-like HaxBall physics intact: only select a target/direction;
+// physical kicks remain radial and must be aligned by moving behind the ball.
+function chooseDelivery(state,p,options={}){
+ const g=state.gameState,b=g?.physicsState.discs[0];
+ if(!p?.disc||!b)return null;
+ const sign=p.team.id===1?1:-1,s=g.stadium,ops=state.players.filter(q=>q.disc&&q.team.id===3-p.team.id);
+ const goal=s.goals.find(q=>q.team.id===3-p.team.id),own=s.goals.find(q=>q.team.id===p.team.id);
+ const gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),gy=goal?(goal.p0.y+goal.p1.y)/2:0;
+ const ox=own?(own.p0.x+own.p1.x)/2:-gx;
+ const x=b.pos.x,y=b.pos.y,goalDistance=Math.hypot(gx-x,gy-y);
+ const threat=Math.min(Infinity,...ops.map(o=>Math.min(Math.hypot(o.disc.pos.x-x,o.disc.pos.y-y),Math.hypot(o.disc.pos.x-p.disc.pos.x,o.disc.pos.y-p.disc.pos.y))));
+ const pressured=threat<85,defending=sign*(x-ox)<(Math.abs(gx-ox)*.36);
+ const shotMargin=laneMargin(b,gx,gy,ops),shotOpen=shotMargin>2&&sign*(gx-x)>0;
+ const height=s.bgHeight||s.height-30,width=Math.abs(gx)-30;
+ let best=null;
+ for(const q of state.players){
+  if(q.id===p.id||!q.disc||q.team.id!==p.team.id)continue;
+  const d=q.disc,initial=Math.hypot(d.pos.x-x,d.pos.y-y);
+  if(initial<65||initial>820)continue;
+  const lead=Math.min(22,Math.max(3,initial/8));
+  const tx=Math.max(-width,Math.min(width,d.pos.x+d.speed.x*lead));
+  const ty=Math.max(-height,Math.min(height,d.pos.y+d.speed.y*lead));
+  const length=Math.hypot(tx-x,ty-y);
+  if(length<65)continue;
+  const forward=sign*(tx-x);
+  // A backwards safety pass is useful, but don't ping-pong to a deeply
+  // positioned keeper while everyone else is already in the attacking half.
+  if(forward< -190&&!pressured&&!options.keeper)continue;
+  const margin=laneMargin(b,tx,ty,ops);
+  if(margin<(pressured?8:3))continue;
+  const openness=Math.min(180,...ops.map(o=>Math.hypot(o.disc.pos.x-tx,o.disc.pos.y-ty)));
+  if(openness<42)continue;
+  const keeperPenalty=sign*(tx-ox)<90?70:0;
+  const score=forward*.65+Math.min(openness,155)*.63+Math.min(margin,75)*.40-length*.17-keeperPenalty+
+    (forward>20&&forward<370?42:0);
+  if(!best||score>best.score)best={type:'pass',x:tx,y:ty,receiverId:q.id,score,margin,pressure:pressured};
+ }
+ // A clear shot from scoring range beats a speculative extra pass. Otherwise
+ // use the best safe teammate; even an open distant goal is not an instruction
+ // to shoot from midfield when teammates can make progress.
+ if(!options.keeper&&shotOpen&&goalDistance<270&&(!best||!pressured&&goalDistance<195))
+  return {type:'shot',x:gx,y:gy,margin:shotMargin,pressure:pressured};
+ if(best&&(options.keeper||goalDistance>270||!shotOpen||pressured||best.score>145))
+  return best;
+ if(shotOpen&&!options.keeper)
+  return {type:'shot',x:gx,y:gy,margin:shotMargin,pressure:pressured};
+ if(best)return best;
+ // Emergency clearance: drive OUT of the defensive zone and AWAY from a
+ // central opponent. Do not aim into our goal or the nearest attacker.
+ const flank=ops.length?(ops.reduce((a,o)=>a+Math.sign(y-o.disc.pos.y),0)>=0?1:-1):(y>=0?1:-1);
+ const tx=Math.max(-width,Math.min(width,x+sign*(options.keeper||defending?430:320)));
+ const ty=Math.max(-height,Math.min(height,y+flank*(options.keeper||pressured?190:120)));
+ return {type:'clear',x:tx,y:ty,pressure:pressured,margin:laneMargin(b,tx,ty,ops)};
+}
+function tactical(state,id,tick=0,options={}){
+ const p=state.players.find(p=>p.id===id),b=state.gameState?.physicsState.discs[0];if(!p?.disc||!b)return 0;
+ const level=levels[options.difficulty]||levels.hard;
+ if(tick%level.reaction!==0)return (p.input||0)&15;
+ const team=state.players.filter(q=>q.disc&&q.team.id===p.team.id);
+ if(team.length<3||!level.teamwork)return legacyTactical(state,id,tick);
+ const plan=teamPlan(state,p.team.id,tick,options.profile),intent=plan[id],d=p.disc,sign=p.team.id===1?1:-1;
+ let x=intent.x,y=intent.y;
+ const dx=b.pos.x-d.pos.x,dy=b.pos.y-d.pos.y,dist=Math.hypot(dx,dy);
+ const target=chooseDelivery(state,p,{keeper:intent.role==='keeper'});
+ const ax=target.x-b.pos.x,ay=target.y-b.pos.y,len=Math.hypot(ax,ay)||1;
+ const alignment=(dx*ax+dy*ay)/Math.max(1,dist*len);
+ const aligned=alignment>level.aim;
+ if(intent.role==='chaser'){
+  const lead=Math.min(level.lead,dist/8),decay=b.damping||.99;
+  const travel=Math.abs(1-decay)<1e-6?lead:(1-Math.pow(decay,lead))/(1-decay);
+  x=b.pos.x+b.speed.x*travel-ax/len*(b.radius+d.radius+3);
+  y=b.pos.y+b.speed.y*travel-ay/len*(b.radius+d.radius+3);
+  if(dx*sign<0&&Math.abs(dy)<35)y=b.pos.y+(d.pos.y>=b.pos.y?1:-1)*45;
+  if(dist<45&&aligned){x=b.pos.x;y=b.pos.y;}
+ }
+ // Keep teammates wide and available instead of letting receivers bunch up
+ // behind an opponent. This affects intention only, not engine collisions.
+ if(intent.role==='support'||intent.role==='cover'){
+  const ops=state.players.filter(q=>q.disc&&q.team.id===3-p.team.id);
+  const obstruction=ops.find(q=>Math.hypot(q.disc.pos.x-x,q.disc.pos.y-y)<65);
+  if(obstruction){
+   const side=y>=obstruction.disc.pos.y?1:-1;
+   y+=side*70;
+   x+=sign*35;
+  }
+ }
+ if(intent.role!=='chaser'&&intent.role!=='screen'&&!intent.clear)
+  for(const q of team)if(q.id!==id){const vx=d.pos.x-q.disc.pos.x,vy=d.pos.y-q.disc.pos.y,l=Math.hypot(vx,vy);if(l>0&&l<45){x+=vx/l*(45-l);y+=vy/l*(45-l);}}
+ if(intent.clear){
+  // The sweeper must meet the incoming shot first. Once close enough to kick,
+  // use the SAME aimed distribution decision as the field players.
+  if(dist<55){x=b.pos.x-ax/len*(b.radius+d.radius-3);y=b.pos.y-ay/len*(b.radius+d.radius-3);}
+  const goalSide=sign*dx>=-3;
+  const urgent=target.type==='clear'&&goalSide&&alignment>.42;
+  const mx=x-d.pos.x-d.speed.x*(dist<60?2:5),my=y-d.pos.y-d.speed.y*(dist<60?2:5);
+  const kick=dist<d.radius+b.radius+4.2&&(aligned||urgent)&&!(p.input&16);
+  return key(Math.abs(mx)<1.5?0:Math.sign(mx),Math.abs(my)<1.5?0:Math.sign(my),kick);
+ }
+ // A keeper who collects without an emergency sweep must distribute too.
+ if(intent.role==='keeper'&&dist<65){
+  x=b.pos.x-ax/len*(b.radius+d.radius-3);
+  y=b.pos.y-ay/len*(b.radius+d.radius-3);
+  if(dist<44&&aligned){x=b.pos.x;y=b.pos.y;}
+ }
+ const mx=x-d.pos.x-d.speed.x*(dist<65?3:5),my=y-d.pos.y-d.speed.y*(dist<65?3:5);
+ const contact=dist<d.radius+b.radius+3.8;
+ const kick=contact&&aligned&&!(p.input&16)&&intent.role!=='screen'&&
+   (intent.role==='chaser'||intent.role==='keeper'||dist<34);
+ return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);
+}
+root.FuckballAI={intercept,playerPhysics,levels,defaultProfile,profile,teamPlan,chooseDelivery,laneMargin,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
 })(typeof window!=='undefined'?window:globalThis);
