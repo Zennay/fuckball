@@ -4,6 +4,7 @@
 // today's server admits >8 active players, so this contract is expected RED.
 const assert = require('node:assert/strict');
 const {createServer} = require('../headless/server.cjs');
+const {activeRosterOverflow} = require('../scripts/qa-roster-overflow.cjs');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function until(check, description) {
@@ -45,6 +46,11 @@ function assertFourAside(room, connected, label) {
   assert.equal(room.clients.size, connected, label + ': keep every client connected');
   assert.equal(room.sockets.size, connected, label + ': keep every WebSocket in the room');
   assert.equal(teams.humans.length, connected, label + ': never silently remove or replace a human');
+  const evidence = activeRosterOverflow(label, {
+    connected:room.clients.size, sockets:room.sockets.size,
+    humans:teams.humans.length, red:teams.red.length, blue:teams.blue.length
+  });
+  if (evidence) console.error(evidence);
   assert.equal(teams.red.length, 4, label + ': exactly four active red players');
   assert.equal(teams.blue.length, 4, label + ': exactly four active blue players');
   assert.equal(teams.inactive.length, connected - 8,
