@@ -47,7 +47,28 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
       assert.throws(() => assertPredictionAsset(source), assert.AssertionError,
         label + ': public verifier must reject the faulty served asset');
     }
-    console.log('PASS public-release renderer probe: actual HTTP+WS room and 9 adversarial old-physics/prediction asset mutations rejected');
+    // An upstream proxy can return index HTML or strip protective response
+    // headers despite all JavaScript source markers remaining unchanged.
+    const networkFetch = globalThis.fetch;
+    for (const [label, mutate] of [
+      ['HTML fallback', headers => headers.set('content-type', 'text/html; charset=utf-8')],
+      ['missing nosniff', headers => headers.delete('x-content-type-options')]
+    ]) {
+      globalThis.fetch = async (...args) => {
+        const upstream = await networkFetch(...args);
+        if (String(args[0]) !== base + '/render-timing.js') return upstream;
+        const headers = new Headers(upstream.headers);
+        mutate(headers);
+        return new Response(await upstream.arrayBuffer(), {status: upstream.status, headers});
+      };
+      try {
+        await assert.rejects(verifyLive(base), assert.AssertionError,
+          label + ': public verifier must reject unusable served JavaScript');
+      } finally {
+        globalThis.fetch = networkFetch;
+      }
+    }
+    console.log('PASS public-release renderer probe: real HTTP+WS room, 9 inert/legacy source mutations and 2 invalid response headers rejected');
   } finally {
     await app.close();
   }
