@@ -9,6 +9,7 @@
     "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/team-ai.cjs && node tests/high-refresh.cjs",
     "build:solo": "python3 scripts/build-sdk.py",
     "test:browser": "node tests/browser-peer-hosting.cjs",
+    "test:roster-acceptance": "node tests/room-roster-acceptance.cjs",
     "netsim": "node scripts/netsim.cjs"
   },
   "engines": {"node": ">=22"},
