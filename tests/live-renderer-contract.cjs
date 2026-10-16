@@ -14,6 +14,7 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
     assert.equal(result.verified, true);
     assert(result.checks.includes('active 60 Hz renderer contract'));
     assert(result.checks.includes('advancing authoritative 60 Hz room clock'));
+    assert(result.checks.includes('live v3 snapshots over advancing frames'));
     const response = await fetch(base + '/render-timing.js');
     assert.equal(response.status, 200);
     const served = await response.text();
@@ -111,7 +112,63 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
         globalThis.WebSocket = NativeWebSocket;
       }
     }
-    console.log('PASS public-release renderer probe: real HTTP+WS room, 9 inert/legacy source mutations, 2 invalid headers and 2 clock-protocol attacks rejected');
+    // Real WebSocket byte injection: a healthy HTTP service and pong clock
+    // cannot be green when actual gameplay snapshots are stale or corrupt.
+    for (const [label, mutate, expected] of [
+      ['invalid v3 snapshot magic', (view) => view.setUint32(0, 0x46423201),
+        /native snapshot v3 magic/],
+      ['replayed snapshot sequence', (view, first) => view.setUint32(4, first.seq),
+        /snapshot sequence must increase/],
+      ['frozen snapshot frame', (view, first) => view.setUint32(12, first.frame),
+        /authoritative snapshot frames must advance/],
+      ['corrupt native replay payload', view => {
+        const wire = new Uint8Array(view.buffer, view.byteOffset + 20, view.byteLength - 20);
+        wire.fill(0);
+      }, /native snapshot replay must decode successfully|live gameplay snapshot/]
+    ]) {
+      let started = false, count = 0, first = null;
+      class SnapshotTamperWebSocket {
+        constructor(url) {
+          this.real = new NativeWebSocket(url);
+          this.real.binaryType = 'arraybuffer';
+          this.real.onopen = event => this.onopen?.(event);
+          this.real.onerror = event => this.onerror?.(event);
+          this.real.onclose = event => this.onclose?.(event);
+          this.real.onmessage = event => {
+            if (typeof event.data === 'string') {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'status' && msg.started === true) started = true;
+              this.onmessage?.(event);
+              return;
+            }
+            if (!started || !(event.data instanceof ArrayBuffer)) {
+              this.onmessage?.(event);
+              return;
+            }
+            const clone = event.data.slice(0), view = new DataView(clone);
+            if (view.byteLength > 20) {
+              count++;
+              if (!first) first = {seq:view.getUint32(4),frame:view.getUint32(12)};
+              if (count >= (['replayed snapshot sequence', 'frozen snapshot frame'].includes(label) ? 2 : 1))
+                mutate(view, first);
+            }
+            this.onmessage?.({data:clone});
+          };
+        }
+        set binaryType(value) { this.real.binaryType = value; }
+        get binaryType() { return this.real.binaryType; }
+        send(data) { this.real.send(data); }
+        close() { this.real.close(); }
+      }
+      globalThis.WebSocket = SnapshotTamperWebSocket;
+      try {
+        await assert.rejects(verifyLive(base), expected,
+          label + ': stale/incompatible gameplay packets are not a healthy release');
+        assert(count >= (['replayed snapshot sequence', 'frozen snapshot frame'].includes(label) ? 2 : 1),
+          label + ': binary snapshot tamper must actually be injected');
+      } finally { globalThis.WebSocket = NativeWebSocket; }
+    }
+    console.log('PASS public-release probe: real HTTP+WS room, 9 source mutations, 2 bad headers, 2 clock faults and 4 binary snapshot attacks rejected');
   } finally {
     await app.close();
   }
