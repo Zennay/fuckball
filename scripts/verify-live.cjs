@@ -62,12 +62,15 @@ async function get(base, pathname) {
   return response;
 }
 
-// A healthy 60 Hz server must advance its authoritative clock between pongs.
-// A frozen tick loop can serve /health, correct assets and an initial welcome.
+// Release acceptance: an actual joined room must advance its 60 Hz clock
+// AND stream fresh binary v3 snapshots at its advertised 30 Hz rate once
+// started. /health + two pongs alone can conceal a broken snapshot loop.
 async function probeRoom(base, release) {
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(base.replace(/^http/, 'ws') + '/ws');
+    ws.binaryType = 'arraybuffer';
     let settled = false, firstFrame = null, secondPingTimer = null;
+    let phase = 'joining', firstSnapshot = null, lastSeq = null, lastFrame = null, framesSeen = 0;
     const finish = error => {
       if (settled) return;
       settled = true;
@@ -76,21 +79,48 @@ async function probeRoom(base, release) {
       try { ws.close(); } catch {}
       if (error) reject(error); else resolve();
     };
-    const timer = setTimeout(() => finish(Error('WebSocket timeout')), 10000);
-    ws.onerror = () => finish(Error('WebSocket failure'));
+    const timer = setTimeout(() => finish(Error('WebSocket room/snapshot timeout')), 10000);
+    ws.onerror = () => finish(Error('WebSocket room/snapshot failure'));
+    ws.onclose = () => finish(Error('WebSocket closed before live snapshots were verified'));
     ws.onopen = () => ws.send(JSON.stringify({
       type: 'join', create: true, name: 'Release verification', netcode: 3
     }));
     ws.onmessage = event => {
-      if (settled || typeof event.data !== 'string') return;
+      if (settled) return;
       try {
+        if (typeof event.data !== 'string') {
+          if (phase !== 'snapshots') return; // Ignore initial lobby snapshot.
+          const bytes = event.data;
+          assert(bytes instanceof ArrayBuffer || ArrayBuffer.isView(bytes),
+            'binary WebSocket snapshots must be ArrayBuffer data');
+          const view = bytes instanceof ArrayBuffer ?
+            new DataView(bytes) : new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          assert(view.byteLength > 20, 'snapshot must contain binary v3 header and native room data');
+          assert.equal(view.getUint32(0), 0x46423203, 'native snapshot v3 magic must be served');
+          const seq = view.getUint32(4), frame = view.getUint32(12);
+          assert(seq > 0 && Number.isSafeInteger(frame), 'snapshot sequence/frame must be valid');
+          if (lastSeq !== null) {
+            assert(seq > lastSeq, 'snapshot sequence must increase, not replay stale packets');
+            assert(frame > lastFrame, 'authoritative snapshot frames must advance');
+          } else firstSnapshot = frame;
+          lastSeq = seq;
+          lastFrame = frame;
+          framesSeen++;
+          if (framesSeen >= 4) {
+            assert(lastFrame >= firstSnapshot + 6, 'live snapshots must span multiple 60 Hz ticks');
+            finish();
+          }
+          return;
+        }
         const data = JSON.parse(event.data);
         if (data.type === 'error') return finish(Error(data.message));
-        if (data.type === 'welcome') {
+        if (data.type === 'welcome' && phase === 'joining') {
           assert.match(data.room, release ? /^[A-HJ-NP-Z2-9]{8}$/ :
             /^(?:[A-F0-9]{6}|[A-HJ-NP-Z2-9]{8})$/, 'expected real shareable room ID');
+          assert.equal(data.netcode, 3, 'room must negotiate binary snapshot v3');
+          phase = 'clock';
           ws.send(JSON.stringify({type: 'ping', t: 1}));
-        } else if (data.type === 'pong') {
+        } else if (data.type === 'pong' && phase === 'clock') {
           assert(Number.isFinite(data.frame) && data.frame >= 0,
             'pong must carry a finite authoritative server tick');
           if (firstFrame === null) {
@@ -103,8 +133,11 @@ async function probeRoom(base, release) {
             assert.equal(data.t, 2, 'second room pong must echo the later ping');
             assert(data.frame > firstFrame,
               'authoritative 60 Hz room clock must advance between two pongs');
-            finish();
+            phase = 'starting';
+            ws.send(JSON.stringify({type: 'start'}));
           }
+        } else if (data.type === 'status' && phase === 'starting' && data.started === true) {
+          phase = 'snapshots';
         }
       } catch (error) { finish(error); }
     };
@@ -155,7 +188,7 @@ async function verifyLive(base, expectedRelease) {
   await probeRoom(base, release);
   return {verified: true, url: base, release: health.release, engine: health.engine,
     checks: ['served engine hash', 'original BFF hash', 'active 60 Hz renderer contract',
-      'browser script order', '60/30Hz v3', 'real room creation', 'advancing authoritative 60 Hz room clock'].concat(
+      'browser script order', '60/30Hz v3', 'real room creation', 'advancing authoritative 60 Hz room clock', 'live v3 snapshots over advancing frames'].concat(
       release ? ['invite-link UI', '8-char room id', 'server tick in pong', 'approved release SHA'] : [])};
 }
 
