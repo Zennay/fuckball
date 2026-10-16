@@ -12,9 +12,14 @@ npm start
 # HOST and PORT can override the listen address.
 ```
 
-The field fills the browser viewport. Esc opens the FC-inspired pause menu: teams/match, camera/network, replays, chat and controls. Browser full-screen is optional under Beeld & verbinding. The default camera fits the complete stadium. Choose Speler volgen for a closer camera.
+The field fills the browser viewport. Esc opens a translucent, HaxBall-style room menu on top of the running match — the game never stops for it (P pauses). The menu opens on the teams: Red, Spectators and Blue, and the host drags players (and bots) between them, adds bots with **+ Bot** or removes them with ×. Below the teams: Start/Stop, Pause, Restart, Record, **Copy room link** (online) or **Create online room** (offline), and time limit, score limit and stadium. Team setup presets, bot difficulty (global and per bot), stadium import/edit, replays and direct WebRTC connections sit under **Advanced**. Teams you arrange survive restarts and limit changes.
 
-On a self-hosted server, choose Online, then Create room. The game shows an invite link (`/?room=XXXXXXXX`) and copies it; anyone who opens the link joins that room directly, with no code to type. Expired or full rooms show a clear message and the link is removed from the address bar. Room IDs are 8 random characters (~40 bits) and are no longer listed by `/api/rooms`. The server supports up to eight humans, fills 1v1/2v2/4v4 with tactical bots, and authorizes match changes only for the room owner. The owner transfers when they leave. Rooms disappear after the last person leaves. Player names and rooms are ephemeral; no accounts are implemented.
+- **Controls** tab: every action (up, down, left, right, kick, open chat) has two rebindable key slots. Defaults: arrows/WASD, Space/X, Enter for chat.
+- **Chat** sits in the bottom-left corner, always visible but small; messages fade after a few seconds. Press the chat key to type, Enter to send, Esc to close.
+- **Ping and FPS** are shown under the chat (local games show LOCAL).
+- **Settings** tab: name, camera, zoom, rendering, FPS limit, sound, extrapolation, fullscreen.
+
+On a self-hosted server, choose Online (or Esc → Create online room). The room menu opens with the room link (`/?room=XXXXXXXX`) and **Copy room link**; copying also works on plain-HTTP servers (where the browser clipboard API is unavailable) through a fallback; anyone who opens the link joins that room directly, with no code to type. Expired or full rooms show a clear message and the link is removed from the address bar. Room IDs are 8 random characters (~40 bits) and are no longer listed by `/api/rooms`. The server supports up to eight humans, fills 1v1/2v2/4v4 with tactical bots, and authorizes match changes only for the room owner. The owner transfers when they leave. Rooms disappear after the last person leaves. Player names and rooms are ephemeral; no accounts are implemented.
 
 Static hosting (including the private Site) supports local play; invite links need the Node server. Direct WebRTC 1v1 with manual connection codes remains available under Play online → Advanced connection. The separate Node server requires its own hosting. HTTPS clients require a `wss://` endpoint. A reverse proxy can terminate TLS. Cross-origin room connections are disabled by default; set `ALLOW_CROSS_ORIGIN=1` only when deliberately exposing the server to another origin. Direct WebRTC has STUN but no TURN fallback.
 
@@ -121,9 +126,24 @@ These are executable application and native Canvas tests, not visual browser ins
 VPS publication must deploy an explicit tested commit into a new release directory. Never reset a live Work-session working tree and never re-enable automatic legacy deployment as a side effect. The old solver may remain in repository history/legacy files but must never be used by the active entry point.
 
 
+## Goalkeeper and AI evaluation (October 2026)
+
+The 4v4 keeper no longer hugs its line. It stands on the ball–goal line to narrow the angle (far out when its team has the ball), leaves the box to sweep any loose ball it can reach before every opponent (engine-accurate interception: player acceleration/damping, ball damping), steps onto the path of shots instead of backing into the net, and attacks the ball from the goal side so contact clears it. Targets and inputs only — no physics changes. The team plan is computed once per tick and shared, which keeps eight bots cheap.
+
+`node training/duel.cjs <policyA.js> <policyB.js> [matches] [frames] [workers]` plays alternating-side 4v4 matches on BFF and Classic. Results over 200 matches of 60 s:
+
+| Matchup | Goals | W–D–L |
+| --- | --- | --- |
+| New keeper vs previous policy | 115–28 | 79–107–14 |
+| VPS self-play profile (cycle 291, "promoted") vs default profile, previous keeper | 86–99 | 45–99–56 |
+| VPS neural model steering vs tactical, previous keeper (100 matches) | 34–54 | 19–48–33 |
+| VPS profile vs default profile, both with the new keeper | 29–29 | 22–157–21 |
+
+The VPS run had promoted a profile and a neural model on four validation games each; over 200 matches both were weaker, so the live game keeps the default tactical profile with the new keeper. Self-play promotion now validates on 16 games (four seeds × two maps × both sides) and requires a positive goal difference and more wins than losses.
+
 ## 4v4 team AI and HaxLab self-play
 
-Home → **4v4** starts you plus seven bots. Esc → Teams → **Watch 4v4 bots** starts eight bots. Set Easy, Normal, Hard or Elite globally or on each bot's roster entry. Online room hosts can change difficulty; guests cannot. Levels change decision frequency and tactics, never player speed, kick power or collision rules.
+Home → **4v4** starts you plus seven bots. Esc → Advanced → **Watch 4v4 bots** starts eight bots. Set Easy, Normal, Hard or Elite globally or per bot under Advanced. Online room hosts can change difficulty; guests cannot. Levels change decision frequency and tactics, never player speed, kick power or collision rules.
 
 Team AI assigns a ball carrier/chaser, passing support, cover and keeper. A supporting player screens a nearby opponent only when the team has possession under pressure; otherwise it keeps a passing lane or covers behind the ball. This is a heuristic team controller, not a claim of human-level play.
 
