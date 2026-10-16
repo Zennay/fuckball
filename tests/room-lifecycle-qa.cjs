@@ -82,6 +82,12 @@ async function main(){
     assert(!codes.has(recovered.room),'new room must not reuse a currently known link');
     assert.equal(app.rooms.size,16,'room count recovers to exact maximum');
     assert(!app.rooms.has(expired.id),'expired room link remains invalid');
+    const staleGuest=await open(url,sockets);
+    const staleReply=await join(staleGuest,{room:expired.id,name:'Stale invitation'});
+    assert.equal(staleReply.type,'error','expired invite must fail even while server is full');
+    assert.match(staleReply.message,/room not found/i,
+      'stale link must not redirect into another active room');
+    assert.equal(app.rooms.size,16,'failed stale-link join must not allocate a room');
 
     // Closing the host of a room with a guest must not delete that room early.
     owners[0].ws.close();
