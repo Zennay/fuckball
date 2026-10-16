@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),RTC=require('./rtc.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -16,7 +16,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/register','/api/login','/api/logout','/api/me'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/register','/api/login','/api/logout','/api/me'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting,udp:RTC.available}));return;}
   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.clients.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
@@ -33,7 +33,7 @@ function createServer(options={}){
  const toWire=data=>data instanceof Uint8Array?Buffer.from(data.buffer,data.byteOffset,data.byteLength):data;
  function createRoom(){if(rooms.size>=16)throw Error('Server is full.');let id;do{id=Array.from(crypto.randomBytes(8),b=>ROOM_ALPHABET[b%ROOM_ALPHABET.length]).join('');}while(rooms.has(id));const hb=HBInit({noPlayer:true,roomName:'Fuckball '+id});hb.setCustomStadium(bff);hb.setScoreLimit(3);hb.setTimeLimit(7);
   // While a browser hosts, this copy is only a standby: it must not talk to the clients.
-  const sockets=new Map(),r=RoomCore.createRoomCore({hb,id,AI,Netcode,v3:v3Enabled,send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
+  const sockets=new Map(),r=RoomCore.createRoomCore({hb,id,AI,Netcode,v3:v3Enabled,send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(!ws)return;const out=toWire(data);if(Buffer.isBuffer(out)&&ws.rtc?.ready&&ws.rtc.send(out))return;send(ws,out);},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&(ws.rtc?.ready||ws.socket.writableLength<65536);}});
   Object.assign(r,{sockets,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
@@ -79,14 +79,19 @@ function createServer(options={}){
    const announceServer=!m||m.to!=='server';resume(r,state);if(announceServer){r.epoch++;r.migration={frame:state.frame};announce(r,'server');r.migration=null;}return;}
   // Not a candidate again until a fresh report says it can host (e.g. its tab is visible again).
   if(d.type==='hostRelease'){const rep=r.reports.get(ws.playerId);if(rep)rep.eligible=false;if(!r.migration)migrate(r,'server',d.reason||'host released');}}
- wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{leave(ws);clients.delete(ws);});ws.on('message',(raw,binary)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
+ wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{ws.rtc?.close();ws.rtc=null;leave(ws);clients.delete(ws);});ws.handle=(raw,binary,rtc)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
    // Snapshot bytes from a browser host for a client without a direct channel to it.
    if(binary){if(r0&&r0.authority===ws.playerId&&raw.length>8&&raw.readUInt32BE(0)===RELAY){const to=r0.sockets.get(raw.readUInt32BE(4));if(to&&to.socket.writableLength<65536)send(to,raw.subarray(8));}return;}
    const d=JSON.parse(raw.toString());
-   if(d.type==='ping'){send(ws,ws.room?{type:'pong',t:d.t,frame:roomTime(ws.room)}:{type:'pong',t:d.t,frame:frame+fraction()});return;}
+   // Over the data channel only realtime traffic is accepted: inputs and pings.
+   if(rtc&&d.type!=='in'&&d.type!=='ping')return;
+   if(d.type==='ping'){const pong=ws.room?{type:'pong',t:d.t,frame:roomTime(ws.room)}:{type:'pong',t:d.t,frame:frame+fraction()};if(!(rtc&&ws.rtc?.send(JSON.stringify(pong))))send(ws,pong);return;}
    if(d.type==='sping'){send(ws,{type:'spong',t:d.t,frame:ws.room?roomTime(ws.room):null});return;}
    if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');ws.name=name;ws.account=account||null;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
+   // UDP-style transport (headless/rtc.cjs): snapshots, inputs and pings over an unordered data channel without retransmits.
+   if(d.type==='rtc'){if(ws.rtc)return;if(!RTC.available||!v3Enabled){send(ws,{type:'rtcState',open:false});return;}ws.rtc=RTC.open(m=>send(ws,m),buf=>ws.handle(buf,false,true),open=>send(ws,{type:'rtcState',open}));return;}
+   if(d.type==='rtcSignal'){ws.rtc?.remote(d);return;}
    if(d.type==='signal'){const to=r.sockets.get(Number(d.to));if(to&&to.mesh&&ws.mesh)send(to,{type:'signal',from:ws.playerId,data:d.data});return;}
    if(d.type==='rtt'){const peers={};for(const [k,v]of Object.entries(d.peers||{}))if(r.sockets.has(Number(k))&&Number.isFinite(v)&&v>=0&&v<5000)peers[k]=v;r.reports.set(ws.playerId,{server:Number.isFinite(d.server)?d.server:null,peers,eligible:d.eligible===true,at:now});return;}
    if(['hostOut','standby','released','hostRelease'].includes(d.type)){fromHost(r,ws,d);return;}
@@ -95,7 +100,7 @@ function createServer(options={}){
     if(d.type==='in'){try{r.message(ws.playerId,d,r.frame);}catch{}if(ws.playerId!==r.authority)send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
     send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
    r.message(ws.playerId,d,r.hostTime(fraction()));
-  }catch(e){send(ws,{type:'error',message:e.message});}});});
+  }catch(e){if(!rtc)send(ws,{type:'error',message:e.message});}};ws.on('message',(raw,binary)=>ws.handle(raw,binary,false));});
  const fraction=()=>accumulator/(1000/60);
  function tickRoom(r){r.clock++;
   if(r.authority==='server'){let n=0;while(r.frame<r.clock&&n++<240)r.step();

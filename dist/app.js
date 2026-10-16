@@ -84,7 +84,7 @@ function updatePrediction(now=performance.now()){
  renderer.extrapolation=0;const lead=Math.round(predictionFrames(now)/FuckballRenderTiming.XE);
  if(now-frameStats.lastUi>=100){
    $('hudPing').textContent=peerConnected?'PING '+Math.round(net.rtt)+' ms':'LOCAL';$('hudPing').className=!peerConnected?'':net.rtt<60?'good':net.rtt<130?'ok':'bad';
-   $('netStats').textContent=peerConnected?'RTT '+Math.round(net.rtt)+' ms · jitter '+Math.round(net.jitter)+' ms'+(net.v3?' · v3 lead '+Math.round(predictor.lead/FuckballRenderTiming.XE)+' ms':'')+' · rendering '+lead+' ms ahead of last server state':'Local · rendering '+lead+' ms ahead';
+   $('netStats').textContent=peerConnected?(serverLink?(serverLink.dc?'UDP · ':'TCP · '):'')+'RTT '+Math.round(net.rtt)+' ms · jitter '+Math.round(net.jitter)+' ms'+(net.v3?' · v3 lead '+Math.round(predictor.lead/FuckballRenderTiming.XE)+' ms':'')+' · rendering '+lead+' ms ahead of last server state':'Local · rendering '+lead+' ms ahead';
  }
 }
 function drawFrame(){
