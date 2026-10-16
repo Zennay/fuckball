@@ -8,13 +8,14 @@ function menuPane(id,button){for(const [b,pane]of Object.entries(menuPanes)){$(p
 function openMatchMenu(pane='menuMatchPane',button='menuMatch'){if($('matchView').hidden)showView('play');if(!$('chatForm').hidden)closeChat();if(!menuOpen){releaseInputs();menuOpen=true;$('pauseMenu').hidden=false;document.body.classList.add('menu-open');}rosterKey='';updateRoster();refreshMenu();menuPane(pane,button);}
 function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;document.body.classList.remove('menu-open');$('gameCanvas').focus();}
 function toggleMatchMenu(){if(menuOpen)closeMatchMenu();else openMatchMenu();}
-const originalShowView=showView;showView=function(view){if(view!=='play')closeMatchMenu();originalShowView(view);document.body.classList.toggle('match-active',view==='play');updateCamera();if(view==='play'&&!started&&!replay&&!menuOpen)openMatchMenu();};
+const originalShowView=showView;showView=function(view){if(view!=='play')closeMatchMenu();originalShowView(view);document.body.classList.toggle('match-active',view==='play');updateCamera();scheduleFastFrames();if(view==='play'&&!started&&!replay&&!menuOpen)openMatchMenu();};
+document.addEventListener('visibilitychange',scheduleFastFrames);
 // Starting from the menu drops you straight into the match.
 const originalStartStop=startStop;startStop=function(){const wasStarted=started;originalStartStop();if(!wasStarted)closeMatchMenu();};
 let cameraSignature='';function updateCamera(render=true){if(!renderer)return;const rect=$('gameCanvas').getBoundingClientRect(),map=replay?.state?.stadium||stadium;if((settings.camera||'stadium')==='stadium'){renderer.followPlayerId=-1;renderer.zoomCoeff=Math.max(.1,Math.min(rect.width/(map.width*2+90),rect.height/(map.height*2+100)))*settings.zoom;}else{renderer.followPlayerId=peerRole==='guest'?networkPlayerId:1;renderer.zoomCoeff=settings.zoom;}if(render)renderer.render();}
 // Refit from the active state on every frame, including remote snapshots and replay seeks.
 const originalRender=renderer.render;renderer.render=function(...args){const map=replay?.state?.stadium||stadium,key=[map?.width,map?.height,settings.camera,settings.zoom,peerRole,networkPlayerId].join(':');if(key!==cameraSignature){cameraSignature=key;updateCamera(false);}return originalRender.apply(this,args);};
-$('matchMenuButton').onclick=toggleMatchMenu;$('menuResume').onclick=()=>closeMatchMenu();for(const b of Object.keys(menuPanes))$(b).onclick=()=>menuPane(menuPanes[b],b);
+$('matchMenuButton').onclick=toggleMatchMenu;for(const b of Object.keys(menuPanes))$(b).onclick=()=>menuPane(menuPanes[b],b);
 $('menuHome').onclick=()=>{if(serverLink||peerConnected)disconnect();showView('home');};$('compatButton').onclick=()=>openDialog('compatDialog');
 $('menuFullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('matchView').requestFullscreen();}catch{notify('Fullscreen is unavailable.');}};
 $('helpButton').onclick=()=>{showView('play');openMatchMenu('menuControlsPane','menuHelp');};
