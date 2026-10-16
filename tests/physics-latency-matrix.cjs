@@ -69,7 +69,10 @@ function nativeTruth(state, frames, events = [], baseFrame = 0) {
       copy.Go(event.id, event.input);
     }
     const delta = f < full ? 1 : frames - full;
-    if (delta > 0) copy.nM(delta);
+    // Native HaxBall's render sampler calls nM(0) for an exact whole-frame
+    // horizon. That zero-dt call still applies damping to stored velocities
+    // (but not position). Mirror the renderer, not an idealised integrator.
+    copy.nM(delta);
   }
   return copy;
 }
