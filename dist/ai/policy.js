@@ -86,6 +86,10 @@ function buildPlan(state,teamId,tick=0,raw={}){
    if(i===1&&attacking&&underPressure&&Math.hypot(nearest.disc.pos.x-p.disc.pos.x,nearest.disc.pos.y-p.disc.pos.y)<240){role='screen';const vx=nearest.disc.pos.x-carrier.disc.pos.x,vy=nearest.disc.pos.y-carrier.disc.pos.y,len=Math.hypot(vx,vy)||1;x=carrier.disc.pos.x+vx/len*Math.min(cfg.screen,len*.65);y=carrier.disc.pos.y+vy/len*Math.min(cfg.screen,len*.65);}
    else if(i===0&&!carrier&&underPressure&&ownDanger){role='press';x=b.pos.x-sign*35;y=b.pos.y+(p.disc.pos.y>b.pos.y?1:-1)*35;}
   }
+  if(role==='support'||role==='cover'){
+   const pocket=supportTarget(b,p,ops,x,y,sign,Math.abs(gx)-35,height-35);
+   x=pocket.x;y=pocket.y;
+  }
   plan[p.id]={role,clear,x:Math.max(-Math.abs(gx)+22,Math.min(Math.abs(gx)-22,x)),y:Math.max(-height+22,Math.min(height-22,y)),leader:leader.id};
  }return plan;
 }
@@ -110,6 +114,37 @@ function laneMargin(ball,tx,ty,opponents){
 }
 // Keep the puck-like HaxBall physics intact: only select a target/direction;
 // physical kicks remain radial and must be aligned by moving behind the ball.
+// Select an actual gap *inside* the posts instead of always shooting centrally.
+// Prefer the centre on ties, but move the shot towards an unblocked corner.
+function shotTarget(ball,goal,opponents){
+ const gx=(goal.p0.x+goal.p1.x)/2,gy=(goal.p0.y+goal.p1.y)/2;
+ const half=Math.max(0,Math.abs(goal.p0.y-goal.p1.y)/2-ball.radius-9);
+ let best=null;
+ for(const fraction of [0,-.55,.55,-.85,.85]){
+  const y=gy+half*fraction,margin=laneMargin(ball,gx,y,opponents);
+  const score=Math.min(100,margin)*1.5-Math.abs(fraction)*8;
+  if(!best||score>best.score)best={x:gx,y,margin,score};
+ }
+ return best;
+}
+// Find a receiving pocket rather than waiting for a static formation marker.
+// Nearby markers and interception paths both matter; small moves win ties to
+// prevent perpetual lateral zig-zagging when already open.
+function supportTarget(ball,p,opponents,baseX,baseY,sign,width,height){
+ const clamp=(n,lo,hi)=>Math.max(lo,Math.min(hi,n));
+ let best=null;
+ for(const forward of [0,65,-45])for(const wide of [0,-75,75,-135,135]){
+  const x=clamp(baseX+sign*forward,-width,width);
+  const y=clamp(baseY+wide,-height,height);
+  const gap=Math.min(190,...opponents.map(o=>Math.hypot(o.disc.pos.x-x,o.disc.pos.y-y)));
+  const margin=laneMargin(ball,x,y,opponents);
+  const value=gap*.85+Math.min(90,margin)*.6-
+    Math.hypot(x-baseX,y-baseY)*.17-
+    Math.hypot(x-p.disc.pos.x,y-p.disc.pos.y)*.045;
+  if(!best||value>best.value)best={x,y,value,gap,margin};
+ }
+ return best;
+}
 function chooseDelivery(state,p,options={}){
  const g=state.gameState,b=g?.physicsState.discs[0];
  if(!p?.disc||!b)return null;
@@ -119,8 +154,9 @@ function chooseDelivery(state,p,options={}){
  const ox=own?(own.p0.x+own.p1.x)/2:-gx;
  const x=b.pos.x,y=b.pos.y,goalDistance=Math.hypot(gx-x,gy-y);
  const threat=Math.min(Infinity,...ops.map(o=>Math.min(Math.hypot(o.disc.pos.x-x,o.disc.pos.y-y),Math.hypot(o.disc.pos.x-p.disc.pos.x,o.disc.pos.y-p.disc.pos.y))));
- const pressured=threat<85,defending=sign*(x-ox)<(Math.abs(gx-ox)*.36);
- const shotMargin=laneMargin(b,gx,gy,ops),shotOpen=shotMargin>2&&sign*(gx-x)>0;
+ const pressured=threat<(options.keeper?115:85),defending=sign*(x-ox)<(Math.abs(gx-ox)*.36);
+ const shot=goal?shotTarget(b,goal,ops):{x:gx,y:gy,margin:laneMargin(b,gx,gy,ops)};
+ const shotMargin=shot.margin,shotOpen=shotMargin>2&&sign*(gx-x)>0;
  const height=s.bgHeight||s.height-30,width=Math.abs(gx)-30;
  let best=null;
  for(const q of state.players){
@@ -135,7 +171,8 @@ function chooseDelivery(state,p,options={}){
   const forward=sign*(tx-x);
   // A backwards safety pass is useful, but don't ping-pong to a deeply
   // positioned keeper while everyone else is already in the attacking half.
-  if(forward< -190&&!pressured&&!options.keeper)continue;
+  if(options.keeper&&forward<25)continue; // Never gift a goal-side backpass.
+  if(forward< -190&&!pressured)continue;
   const margin=laneMargin(b,tx,ty,ops);
   if(margin<(pressured?8:3))continue;
   const openness=Math.min(180,...ops.map(o=>Math.hypot(o.disc.pos.x-tx,o.disc.pos.y-ty)));
@@ -149,18 +186,32 @@ function chooseDelivery(state,p,options={}){
  // use the best safe teammate; even an open distant goal is not an instruction
  // to shoot from midfield when teammates can make progress.
  if(!options.keeper&&shotOpen&&goalDistance<270&&(!best||!pressured&&goalDistance<195))
-  return {type:'shot',x:gx,y:gy,margin:shotMargin,pressure:pressured};
+  return {type:'shot',x:shot.x,y:shot.y,margin:shotMargin,pressure:pressured};
  if(best&&(options.keeper||goalDistance>270||!shotOpen||pressured||best.score>145))
   return best;
  if(shotOpen&&!options.keeper)
-  return {type:'shot',x:gx,y:gy,margin:shotMargin,pressure:pressured};
+  return {type:'shot',x:shot.x,y:shot.y,margin:shotMargin,pressure:pressured};
  if(best)return best;
- // Emergency clearance: drive OUT of the defensive zone and AWAY from a
- // central opponent. Do not aim into our goal or the nearest attacker.
+ // A goalkeeper may wait briefly for a teammate to break free when safe.
+ // Never stall with an attacker approaching, a ball headed into our goal or
+ // during an emergency sweep. The caller caps this wait at 24 engine ticks.
+ const atKeeper=Math.hypot(x-p.disc.pos.x,y-p.disc.pos.y)<70;
+ const incoming=sign*b.speed.x<-.9&&sign*(x-ox)<340;
+ if(options.keeper&&!options.forceClear&&!pressured&&!incoming&&atKeeper&&sign*(x-ox)>135)
+  return {type:'hold',x:x+sign*160,y,pressure:false,margin:0};
+ // Search several CLEARING LANES, not just the nearest attacker's feet.
+ // When no pass exists and pressure is real, pick the least interceptable
+ // forward flank immediately rather than requiring a perfect opportunity.
  const flank=ops.length?(ops.reduce((a,o)=>a+Math.sign(y-o.disc.pos.y),0)>=0?1:-1):(y>=0?1:-1);
  const tx=Math.max(-width,Math.min(width,x+sign*(options.keeper||defending?430:320)));
- const ty=Math.max(-height,Math.min(height,y+flank*(options.keeper||pressured?190:120)));
- return {type:'clear',x:tx,y:ty,pressure:pressured,margin:laneMargin(b,tx,ty,ops)};
+ let safest=null;
+ for(const side of [flank,-flank])for(const offset of [125,195,260]){
+  const ty=Math.max(-height,Math.min(height,y+side*offset));
+  const margin=laneMargin(b,tx,ty,ops);
+  const score=Math.min(135,margin)-Math.abs(ty-y)*.085+(side===flank?5:0);
+  if(!safest||score>safest.score)safest={type:'clear',x:tx,y:ty,pressure:pressured,margin,score};
+ }
+ return safest;
 }
 function tactical(state,id,tick=0,options={}){
  const p=state.players.find(p=>p.id===id),b=state.gameState?.physicsState.discs[0];if(!p?.disc||!b)return 0;
@@ -171,7 +222,18 @@ function tactical(state,id,tick=0,options={}){
  const plan=teamPlan(state,p.team.id,tick,options.profile),intent=plan[id],d=p.disc,sign=p.team.id===1?1:-1;
  let x=intent.x,y=intent.y;
  const dx=b.pos.x-d.pos.x,dy=b.pos.y-d.pos.y,dist=Math.hypot(dx,dy);
- const target=chooseDelivery(state,p,{keeper:intent.role==='keeper'});
+ const keeper=intent.role==='keeper';
+ const memory=tactics.get(state)||{};
+ const waitingKey='distributionWait'+id;
+ let target=chooseDelivery(state,p,{keeper});
+ if(keeper&&target.type==='hold'){
+  if(!Number.isFinite(memory[waitingKey])||tick<memory[waitingKey])memory[waitingKey]=tick;
+  if(tick-memory[waitingKey]>=24){
+   target=chooseDelivery(state,p,{keeper:true,forceClear:true});
+   // Limit waiting even when the receiver stays covered: the goalkeeper
+   // must distribute decisively instead of oscillating indefinitely.
+  }
+ }else delete memory[waitingKey];
  const ax=target.x-b.pos.x,ay=target.y-b.pos.y,len=Math.hypot(ax,ay)||1;
  const alignment=(dx*ax+dy*ay)/Math.max(1,dist*len);
  const aligned=alignment>level.aim;
@@ -203,7 +265,7 @@ function tactical(state,id,tick=0,options={}){
   const goalSide=sign*dx>=-3;
   const urgent=target.type==='clear'&&goalSide&&alignment>.42;
   const mx=x-d.pos.x-d.speed.x*(dist<60?2:5),my=y-d.pos.y-d.speed.y*(dist<60?2:5);
-  const kick=dist<d.radius+b.radius+4.2&&(aligned||urgent)&&!(p.input&16);
+  const kick=dist<d.radius+b.radius+4.2&&target.type!=='hold'&&(aligned||urgent)&&!(p.input&16);
   return key(Math.abs(mx)<1.5?0:Math.sign(mx),Math.abs(my)<1.5?0:Math.sign(my),kick);
  }
  // A keeper who collects without an emergency sweep must distribute too.
@@ -214,7 +276,7 @@ function tactical(state,id,tick=0,options={}){
  }
  const mx=x-d.pos.x-d.speed.x*(dist<65?3:5),my=y-d.pos.y-d.speed.y*(dist<65?3:5);
  const contact=dist<d.radius+b.radius+3.8;
- const kick=contact&&aligned&&!(p.input&16)&&intent.role!=='screen'&&
+ const kick=contact&&aligned&&target.type!=='hold'&&!(p.input&16)&&intent.role!=='screen'&&
    (intent.role==='chaser'||intent.role==='keeper'||dist<34);
  return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);
 }
