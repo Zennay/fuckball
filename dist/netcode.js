@@ -41,7 +41,7 @@ function createInputTimeline(){
   reset(value=0){changes.length=0;current=value;slack=Infinity;lastFrame=-Infinity;lastValue=value;lastShifted=false;},
   /* Host handover: the full timeline moves with the room, so the next host applies the same inputs at the same frames. */
   export(){return{current,appliedSeq,lastSeq,late,total,lastFrame:Number.isFinite(lastFrame)?lastFrame:null,lastValue,lastShifted,changes:changes.map(c=>[c.seq,c.frame,c.value])};},
-  import(o){changes.length=0;for(const [seq,frame,value]of o.changes||[])changes.push({seq,frame,value});current=o.current|0;appliedSeq=o.appliedSeq|0;lastSeq=o.lastSeq|0;late=o.late|0;total=o.total|0;lastFrame=o.lastFrame==null?-Infinity:o.lastFrame;lastValue=o.lastValue|0;lastShifted=!!o.lastShifted;slack=Infinity;},
+  import(o){changes.length=0;for(const [seq,frame,value]of o.changes||[])changes.push({seq,frame,value});current=o.current|0;appliedSeq=o.appliedSeq>>>0;lastSeq=o.lastSeq>>>0;late=o.late|0;total=o.total|0;lastFrame=o.lastFrame==null?-Infinity:o.lastFrame;lastValue=o.lastValue|0;lastShifted=!!o.lastShifted;slack=Infinity;},
   /* Standby: everything up to `seq` is already inside the host's state (applied); `value` is the input in force. */
   prune(seq,value){for(let i=changes.length-1;i>=0;i--)if(changes[i].seq<=seq)changes.splice(i,1);if(seq>appliedSeq){appliedSeq=seq;current=value;}else if(seq===appliedSeq)current=value;},
   get pending(){return changes.length;}
