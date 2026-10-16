@@ -92,7 +92,13 @@ async function main(){
     await until(()=>!app.rooms.has(owners[0].id),
       'room is removed after final remaining guest leaves');
     assert.equal(app.rooms.size,15);
-    console.log('PASS room lifecycle: 16 distinct rooms, deny room 17, join existing when full, 1-slot reuse, invite privacy, owner handover, final cleanup');
+    // Exhaust the remainder of the live room set. The last socket in *every*
+    // room must release its slot, not merely disappear during app.close().
+    for (const entry of owners.slice(1,-1)) entry.ws.close();
+    full.close();
+    await until(() => app.rooms.size === 0,'all 16 eventual rooms removed');
+    assert.equal(app.rooms.size,0,'no room map leaks after all clients depart');
+    console.log('PASS room lifecycle: 16 distinct rooms, deny room 17, join existing when full, 1-slot reuse, invite privacy, owner handover, complete cleanup');
   } finally {
     for(const ws of sockets)try{ws.close();}catch{}
     await app.close();
