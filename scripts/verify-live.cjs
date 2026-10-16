@@ -4,6 +4,7 @@
 // right version string and still make gameplay feel wrong.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const {createRuntime} = require('../headless/runtime.cjs');
 
 const SHA = {
   vendor: 'a0f4dbef90090f6b5c85bc48d4645e8cd3159023bc91af2b8de8225da6840a4b',
@@ -66,11 +67,12 @@ async function get(base, pathname) {
 // AND stream fresh binary v3 snapshots at its advertised 30 Hz rate once
 // started. /health + two pongs alone can conceal a broken snapshot loop.
 async function probeRoom(base, release) {
+  const Replay = createRuntime().API.Replay;
   await new Promise((resolve, reject) => {
     const ws = new WebSocket(base.replace(/^http/, 'ws') + '/ws');
     ws.binaryType = 'arraybuffer';
     let settled = false, firstFrame = null, secondPingTimer = null;
-    let phase = 'joining', firstSnapshot = null, lastSeq = null, lastFrame = null, framesSeen = 0;
+    let phase = 'joining', ownId = null, firstSnapshot = null, lastSeq = null, lastFrame = null, framesSeen = 0;
     const finish = error => {
       if (settled) return;
       settled = true;
@@ -97,6 +99,22 @@ async function probeRoom(base, release) {
             new DataView(bytes) : new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
           assert(view.byteLength > 20, 'snapshot must contain binary v3 header and native room data');
           assert.equal(view.getUint32(0), 0x46423203, 'native snapshot v3 magic must be served');
+          // Decode the actual engine payload: a server could send perfect header
+          // counters and still ship unreadable or wrong-stadium physics frames.
+          let nativeState;
+          try {
+            const wire = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+            nativeState = Replay.readAll(wire.subarray(20)).roomData;
+          } catch (error) {
+            assert.fail('native snapshot replay must decode successfully: ' + error.message);
+          }
+          assert.equal(nativeState?.stadium?.name, 'BFF Big v4',
+            'live gameplay snapshot must use the original BFF Big v4 stadium');
+          assert(nativeState.players?.some(player => player.id === ownId && player.disc),
+            'live snapshot must include the joined human with a native disc');
+          const ball = nativeState.gameState?.physicsState?.discs?.[0];
+          assert(ball && Number.isFinite(ball.pos?.x) && Number.isFinite(ball.pos?.y),
+            'live snapshot must include a finite native ball position');
           const seq = view.getUint32(4), frame = view.getUint32(12);
           assert(seq > 0 && Number.isSafeInteger(frame), 'snapshot sequence/frame must be valid');
           if (lastSeq !== null) {
@@ -118,6 +136,8 @@ async function probeRoom(base, release) {
           assert.match(data.room, release ? /^[A-HJ-NP-Z2-9]{8}$/ :
             /^(?:[A-F0-9]{6}|[A-HJ-NP-Z2-9]{8})$/, 'expected real shareable room ID');
           assert.equal(data.netcode, 3, 'room must negotiate binary snapshot v3');
+          ownId = data.id;
+          assert(Number.isInteger(ownId) && ownId > 0, 'room must assign a real player id');
           phase = 'clock';
           ws.send(JSON.stringify({type: 'ping', t: 1}));
         } else if (data.type === 'pong' && phase === 'clock') {
