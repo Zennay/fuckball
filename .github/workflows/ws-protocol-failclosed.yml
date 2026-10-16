@@ -5,6 +5,7 @@ on:
       - 'tests/ws-protocol-failclosed.cjs'
       - 'tests/ws-control-frame-qa.cjs'
       - 'tests/ws-utf8-close-qa.cjs'
+      - 'tests/ws-utf8-network-qa.cjs'
       - 'tests/ws-upgrade-protocol-qa.cjs'
       - 'headless/websocket.cjs'
       - '.github/workflows/ws-protocol-failclosed.yml'
@@ -25,4 +26,4 @@ jobs:
         with:
           node-version: '22'
       - name: Validate WebSocket protocol without VPS access
-        run: node tests/ws-protocol-failclosed.cjs && node tests/ws-control-frame-qa.cjs && node tests/ws-upgrade-protocol-qa.cjs && node tests/ws-utf8-close-qa.cjs
+        run: node tests/ws-protocol-failclosed.cjs && node tests/ws-control-frame-qa.cjs && node tests/ws-upgrade-protocol-qa.cjs && node tests/ws-utf8-close-qa.cjs && node tests/ws-utf8-network-qa.cjs
