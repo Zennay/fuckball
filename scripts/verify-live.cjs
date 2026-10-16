@@ -104,7 +104,7 @@ async function probeRoom(base, release) {
           let nativeState;
           try {
             const wire = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-            nativeState = Replay.readAll(wire.subarray(20)).roomData;
+            nativeState = Replay.readAll(wire.slice(20)).roomData;
           } catch (error) {
             assert.fail('native snapshot replay must decode successfully: ' + error.message);
           }
