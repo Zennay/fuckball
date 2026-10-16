@@ -1,0 +1,32 @@
+name: QA Real v3 Input Integrity
+on:
+  pull_request:
+    paths:
+      - 'tests/room-untrusted-input-qa.cjs'
+      - 'dist/netcode.js'
+      - 'dist/room-core.js'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-room-input-integrity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/room-untrusted-input-qa.cjs'
+      - 'dist/netcode.js'
+      - 'dist/room-core.js'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-room-input-integrity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  input-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/netcode-handover-integrity.cjs
+      - run: node tests/room-untrusted-input-qa.cjs
