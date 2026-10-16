@@ -148,6 +148,19 @@ for (const scenario of scenarios) {
     if (events.length) {
       const played = Render.extrapolate(source, 12, events);
       const idle = Render.extrapolate(source, 12);
+      if (JSON.stringify(readings(played)) === JSON.stringify(readings(idle))) {
+        const player = source.players.find(p => p.id === 1);
+        const direct = source.copy();
+        direct.Go(1, 16);
+        const changed = direct.players.find(p => p.id === 1);
+        console.error('INPUT_DIAG', JSON.stringify({
+          scenario: scenario.name, team: player?.team?.id,
+          sourceInput: player?.input, afterGoInput: changed?.input,
+          phase: source.gameState?.phase, scored: source.gameState?.redScore,
+          playerPosition: player?.disc?.pos,
+          kickImpulse: played.gameState.physicsState.discs[0].speed
+        }));
+      }
       assert.notDeepEqual(readings(played), readings(idle),
         scenario.name + ': queued input must materially affect native physics');
     }
