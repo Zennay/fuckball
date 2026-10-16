@@ -24,7 +24,17 @@ async function exchange(port, {key, connection='Upgrade', version='13', upgrade=
     for(let i=0;i<300&&!response.includes('\r\n\r\n');i++)await sleep(10);
     assert(response.includes('\r\n\r\n'), 'HTTP handshake response received');
     return response.split('\r\n')[0];
-  } finally {socket.destroy();}
+  } finally {
+    // An upgraded socket may still be registered with the HTTP server for a
+    // microtask after destroy(). Wait for close before server teardown.
+    await Promise.race([
+      new Promise(resolve => {
+        socket.once('close', resolve);
+        socket.destroy();
+      }),
+      sleep(2000).then(() => {throw Error('TCP fixture close timeout');})
+    ]);
+  }
 }
 async function main() {
   const app = createServer({peerHosting:false});
