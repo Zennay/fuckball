@@ -153,11 +153,18 @@ for (const scenario of scenarios) {
         const direct = source.copy();
         direct.Go(1, 16);
         const changed = direct.players.find(p => p.id === 1);
+        const moved = source.copy();
+        moved.Go(1, 8);
+        moved.nM(1);
+        room.setPlayerInput(1, 16);
+        room.step(1);
         console.error('INPUT_DIAG', JSON.stringify({
           scenario: scenario.name, team: player?.team?.id,
           sourceInput: player?.input, afterGoInput: changed?.input,
           phase: source.gameState?.phase, scored: source.gameState?.redScore,
           playerPosition: player?.disc?.pos,
+          simulatedMovement: moved.players.find(p => p.id === 1)?.disc?.pos,
+          roomKick: room.getDiscProperties(0),
           kickImpulse: played.gameState.physicsState.discs[0].speed
         }));
       }
