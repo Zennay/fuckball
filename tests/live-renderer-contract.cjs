@@ -15,6 +15,8 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
     assert(result.checks.includes('active 60 Hz renderer contract'));
     assert(result.checks.includes('advancing authoritative 60 Hz room clock'));
     assert(result.checks.includes('live v3 snapshots over advancing frames'));
+    assert(result.checks.includes('acknowledged native input movement'));
+
     const response = await fetch(base + '/render-timing.js');
     assert.equal(response.status, 200);
     const served = await response.text();
@@ -124,7 +126,9 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
       ['corrupt native replay payload', view => {
         const wire = new Uint8Array(view.buffer, view.byteOffset + 20, view.byteLength - 20);
         wire.fill(0);
-      }, /native snapshot replay must decode successfully|live gameplay snapshot/]
+      }, /native snapshot replay must decode successfully|live gameplay snapshot/],
+      ['input ACK is never delivered', view => view.setUint32(8,0),
+        /native room must acknowledge the frame-stamped test input/]
     ]) {
       let started = false, count = 0, first = null;
       class SnapshotTamperWebSocket {
@@ -168,7 +172,7 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
           label + ': binary snapshot tamper must actually be injected');
       } finally { globalThis.WebSocket = NativeWebSocket; }
     }
-    console.log('PASS public-release probe: real HTTP+WS room, 9 source mutations, 2 bad headers, 2 clock faults and 4 binary snapshot attacks rejected');
+    console.log('PASS public-release probe: real HTTP+WS room, 9 source mutations, 2 bad headers, 2 clock faults and 5 binary snapshot/input-ACK attacks rejected');
   } finally {
     await app.close();
   }
