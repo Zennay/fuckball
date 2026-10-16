@@ -13,6 +13,7 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
     const result = await verifyLive(base);
     assert.equal(result.verified, true);
     assert(result.checks.includes('active 60 Hz renderer contract'));
+    assert(result.checks.includes('advancing authoritative 60 Hz room clock'));
     const response = await fetch(base + '/render-timing.js');
     assert.equal(response.status, 200);
     const served = await response.text();
