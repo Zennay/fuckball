@@ -12,7 +12,7 @@ services:
     healthCheckPath: /health
     # An explicit release avoids overwriting the verified game while physics
     # recovery issue #9 is still open. Deploy intentionally from Render.
-    autoDeployTrigger: off
+    autoDeployTrigger: 'off'
     envVars:
       # Match the CI runtime instead of drifting to Render's latest Node major.
       - key: NODE_VERSION
@@ -22,7 +22,7 @@ services:
       - key: FUCKBALL_NETCODE
         value: v3
       - key: FUCKBALL_PEER_HOSTING
-        value: off
+        value: 'off'
       # Render free plans have no persistent disk: accounts are *not* durable.
       - key: FUCKBALL_DATA_DIR
         value: /tmp/fuckball-data
