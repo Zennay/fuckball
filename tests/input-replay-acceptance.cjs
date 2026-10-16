@@ -39,31 +39,43 @@ function check(label, block) {
   }
 }
 
-check('speculative direction changes prediction at 50/100/200ms', () => {
+for (const ms of [50, 100, 200]) {
+  check('speculative direction affects movement at ' + ms + 'ms', () => {
+    const room = openRoom();
+    try {
+      const source = room._room.state;
+      const initialX = playerX(source);
+      const sourceBefore = JSON.stringify({red:playerX(source),ball:ballSpeed(source)});
+      const frames = ms * 60 / 1000;
+      const idle = Render.extrapolate(source, frames);
+      const moved = Render.extrapolate(source, frames, [{frame:0,id:1,input:8}], 0);
+      const difference = playerX(moved) - playerX(idle);
+      assert(difference > 0.05,
+        ms + 'ms must predict rightward input; observed movement difference ' +
+          difference.toFixed(6));
+      assert.equal(JSON.stringify({red:playerX(source),ball:ballSpeed(source)}),
+        sourceBefore, 'rendering must never modify authoritative physics');
+
+      room.setPlayerInput(1, 8);
+      room.step(Math.ceil(frames));
+      assert(playerX(room._room.state) > initialX + 0.05,
+        ms + 'ms: authoritative native control must physically move');
+    } finally { room.destroy(); }
+  });
+}
+
+check('future-stamped direction is applied after its scheduled frame', () => {
   const room = openRoom();
   try {
     const source = room._room.state;
-    const original = playerX(source);
-    const sourceBefore = JSON.stringify({
-      red:playerX(source),ball:ballSpeed(source)
-    });
-    for (const ms of [50, 100, 200]) {
-      const ahead = ms * 60 / 1000;
-      const idle = Render.extrapolate(source, ahead);
-      const moved = Render.extrapolate(source, ahead,
-        [{frame:0,id:1,input:8}], 0);
-      assert(Math.abs(playerX(moved) - playerX(idle)) > 0.05,
-        ms + 'ms prediction must reflect pending rightward direction input');
-    }
-    assert.equal(JSON.stringify({red:playerX(source),ball:ballSpeed(source)}),
-      sourceBefore, 'render extrapolation may not mutate authoritative state');
-
-    // Prove this same stadium/player does move when the native authoritative
-    // room receives the same input; otherwise the fixture is not meaningful.
-    room.setPlayerInput(1, 8);
-    room.step(12);
-    assert(playerX(room._room.state) > original + 0.05,
-      'native authoritative 12 ticks must move the red player');
+    const first = Render.extrapolate(source, 3, [{frame:5,id:1,input:8}]);
+    const idle3 = Render.extrapolate(source, 3);
+    assert.equal(playerX(first), playerX(idle3),
+      'stamped frame 5 must never affect frame 3');
+    const late = Render.extrapolate(source, 12, [{frame:5,id:1,input:8}]);
+    const idle12 = Render.extrapolate(source, 12);
+    assert(playerX(late) > playerX(idle12) + 0.05,
+      'future frame 5 must change movement by frame 12');
   } finally { room.destroy(); }
 });
 
