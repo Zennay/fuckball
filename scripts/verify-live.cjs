@@ -119,7 +119,13 @@ async function verifyLive(base, expectedRelease) {
     'browser must load native engine then tick prediction before app startup');
   assert.equal(scripts.filter(x => x === 'render-timing.js').length, 1,
     'do not ship duplicate render timing implementations');
-  assertPredictionAsset(await (await get(base, '/render-timing.js')).text());
+  const renderer = await get(base, '/render-timing.js');
+  assert.match(renderer.headers.get('content-type') || '',
+    /^\\s*(?:text|application)\\/javascript(?:\\s*;|$)/i,
+    'served prediction asset must have a JavaScript MIME type, not HTML fallback');
+  assert.equal((renderer.headers.get('x-content-type-options') || '').toLowerCase(),
+    'nosniff', 'browser must not be asked to MIME-sniff the prediction script');
+  assertPredictionAsset(await renderer.text());
   const release = !!expectedRelease;
   if (release) {
     assert(html.includes('id="inviteLink"'), 'shareable invite UI served');
