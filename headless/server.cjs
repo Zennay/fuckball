@@ -20,6 +20,13 @@ function createServer(options={}){
   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.clients.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
+ // Track the underlying TCP sockets as well as admitted WebSockets: HTTP
+ // upgrades and early handshake rejections can outlive the room client set.
+ const openSockets=new Set();
+ server.on('connection',socket=>{
+  openSockets.add(socket);
+  socket.once('close',()=>openSockets.delete(socket));
+ });
  const wss=new WebSocketServer({server,maxPayload:2*1024*1024});
  const send=(ws,data)=>{if(ws.readyState===1&&ws.socket.writableLength<262144)ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
  const RoomCore=require('../dist/room-core.js'),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','error','recordingStatus','recording']);
@@ -111,6 +118,7 @@ function createServer(options={}){
   for(const r of rooms.values())r.destroy();rooms.clear();
   const watchdog=setTimeout(()=>{
    for(const ws of clients)ws.socket.destroy();
+   for(const socket of openSockets)socket.destroy();
    server.closeAllConnections?.();
   },500);
   server.close(()=>{clearTimeout(watchdog);resolve();});
