@@ -3,10 +3,10 @@
 // Opening it never pauses the game; P (or the Pause button) does that.
 let menuOpen=false;
 const menuPanes={menuMatch:'menuMatchPane',menuHelp:'menuControlsPane',menuVideo:'menuVideoPane'};
-function refreshMenu(){const g=(replay||room).gameState;$('menuScore').textContent=(g?.redScore||0)+' : '+(g?.blueScore||0);$('menuClock').textContent=fmt(g?.timeElapsed);$('menuStadium').textContent=(replay?.state?.stadium||stadium).name;$('cameraMode').value=settings.camera||'stadium';$('matchZoom').value=settings.zoom;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';$('matchSound').checked=settings.sound;if(document.activeElement!==$('menuName'))$('menuName').value=settings.name;const online=!!serverLink;$('menuCopyLink').hidden=!online;$('inviteButton').hidden=!online;$('menuOnline').hidden=online||peerConnected;$('disconnectPeer').hidden=!online&&!peerConnected;}
+function refreshMenu(){const g=(replay||room).gameState;$('menuScore').textContent=(g?.redScore||0)+' : '+(g?.blueScore||0);$('menuClock').textContent=fmt(g?.timeElapsed);$('menuStadium').textContent=(replay?.state?.stadium||stadium).name;$('cameraMode').value=settings.camera||'stadium';$('matchZoom').value=settings.zoom;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';$('matchSound').checked=settings.sound;if(document.activeElement!==$('menuName'))$('menuName').value=settings.name;const online=!!serverLink;$('menuCopyLink').hidden=!online;$('inviteButton').hidden=!online;$('menuOnline').hidden=online||peerConnected;$('disconnectPeer').hidden=true;}
 function menuPane(id,button){for(const [b,pane]of Object.entries(menuPanes)){$(pane).hidden=pane!==id;$(b).classList.toggle('selected',b===button);}if(id==='menuControlsPane')renderBindings();}
-function openMatchMenu(pane='menuMatchPane',button='menuMatch'){if($('matchView').hidden)showView('play');if(!$('chatForm').hidden)closeChat();if(!menuOpen){releaseInputs();menuOpen=true;$('pauseMenu').hidden=false;document.body.classList.add('menu-open');}rosterKey='';updateRoster();refreshMenu();menuPane(pane,button);}
-function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;document.body.classList.remove('menu-open');$('gameCanvas').focus();}
+function openMatchMenu(pane='menuMatchPane',button='menuMatch'){if($('matchView').hidden)showView('play');if(!$('chatForm').hidden)closeChat();if(!menuOpen){releaseInputs();menuOpen=true;$('pauseMenu').hidden=false;document.body.classList.add('menu-open');}updateLobby();rosterKey='';updateRoster();refreshMenu();menuPane(pane,button);}
+function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;document.body.classList.remove('menu-open');updateLobby();$('gameCanvas').focus();}
 function toggleMatchMenu(){if(menuOpen)closeMatchMenu();else openMatchMenu();}
 const originalShowView=showView;showView=function(view){if(view!=='play')closeMatchMenu();originalShowView(view);document.body.classList.toggle('match-active',view==='play');updateCamera();scheduleFastFrames();if(view==='play'&&!started&&!replay&&!menuOpen)openMatchMenu();};
 document.addEventListener('visibilitychange',scheduleFastFrames);
@@ -21,7 +21,7 @@ $('menuFullscreen').onclick=async()=>{try{if(document.fullscreenElement)await do
 $('helpButton').onclick=()=>{showView('play');openMatchMenu('menuControlsPane','menuHelp');};
 $('cameraMode').onchange=()=>{settings.camera=$('cameraMode').value;savePrefs();updateCamera();};$('matchZoom').oninput=()=>{settings.zoom=+$('matchZoom').value;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';savePrefs();updateCamera();};$('matchSound').onchange=()=>{settings.sound=$('matchSound').checked;savePrefs();};
 $('menuName').onchange=()=>setName($('menuName').value);
-$('advancedSection').addEventListener('toggle',()=>document.body.classList.toggle('show-advanced',!!$('advancedSection').open));
+$('lobbyStart').onclick=()=>{if(!started)startStop();};$('lobbyMenu').onclick=()=>openMatchMenu();
 const originalLoadReplay=loadReplay;loadReplay=function(bytes,name){closeMatchMenu();showView('play');originalLoadReplay(bytes,name);updateCamera();};const originalCloseReplay=closeReplay;closeReplay=function(){originalCloseReplay();updateCamera();};
 
 // Drag players between Red, Spectators and Blue. Pointer events cover mouse,
@@ -46,7 +46,7 @@ $('resetBindings').onclick=()=>{settings.keys=Object.fromEntries(Object.entries(
 renderBindings();
 
 // Capture before gameplay input. Menu keys never move a player.
-window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]'))return;if(binding){e.preventDefault();e.stopImmediatePropagation();if(e.code==='Escape')cancelBinding();else assignBinding(e.code==='Backspace'||e.code==='Delete'?'':e.code);return;}
+window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||!$('joinScreen').hidden)return;if(binding){e.preventDefault();e.stopImmediatePropagation();if(e.code==='Escape')cancelBinding();else assignBinding(e.code==='Backspace'||e.code==='Delete'?'':e.code);return;}
  if(e.code==='Escape'){if(e.target===$('chatInput'))return;e.preventDefault();e.stopImmediatePropagation();if($('matchView').hidden)showView('play');else toggleMatchMenu();return;}
  if(menuOpen){if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(e.code==='KeyP'&&!e.repeat){e.preventDefault();togglePause();}e.stopImmediatePropagation();}},true);
 window.addEventListener('resize',updateCamera);document.addEventListener('fullscreenchange',updateCamera);
