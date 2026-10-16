@@ -30,7 +30,12 @@ function createRoomCore(opts){
  /* id: unique client/player id, chosen by the server and never reused for a bot. */
  function join(id,{name='Player',netcode=2,account=null}={}){if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
-  const red=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===1).length,blue=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===2).length;hb.addPlayer(id,c.name,red<=blue?1:2);
+  const red=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===1).length,blue=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
+  // Connected clients are unlimited, but only four HUMANS may be active per
+  // side. Extra participants start on the spectator/bench slot (team 0).
+  // bots(false) below yields a bot slot to an admitted human immediately.
+  const assigned=red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
+  hb.addPlayer(id,c.name,assigned);
   send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
  function leave(id){if(!r.clients.delete(id))return !r.clients.size;hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
@@ -40,10 +45,14 @@ function createRoomCore(opts){
   if(d.type==='chat'){const name=hb.getPlayer(id)?.name||'Player';for(const peer of r.clients.keys())if(peer!==id)send(peer,{type:'chat',text:name+': '+String(d.text||'').replace(/^.*?: /,'').slice(0,140)});return;}
   if(r.owner!==id)throw Error('Only the host can change the match.');
   if(d.type==='difficulty'){if(!AI.levels[d.difficulty])throw Error('Invalid difficulty.');r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);status();return;}
-  if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');hb.setPlayerTeam(pid,team);status();snapshot();return;}
+  if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');
+   if(team!==0&&hb.getPlayer(pid).team!==team&&hb.getPlayerList().filter(p=>p.team===team&&p.id!==pid).length>=4)throw Error('Team is full; move an active player to the bench first.');
+   hb.setPlayerTeam(pid,team);status();snapshot();return;}
   if(d.type==='swap'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);status();snapshot();return;}
   if(d.type==='specAll'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,0);status();snapshot();return;}
-  if(d.type==='addBot'){const team=Number(d.team);if(![0,1,2].includes(team))throw Error('Invalid team.');addBot(team);status();snapshot();return;}
+  if(d.type==='addBot'){const team=Number(d.team);if(![0,1,2].includes(team))throw Error('Invalid team.');
+   if(team!==0&&hb.getPlayerList().filter(p=>p.team===team).length>=4)throw Error('Team is full; add this bot to spectators instead.');
+   addBot(team);status();snapshot();return;}
   if(d.type==='removeBot'){const bid=Number(d.id);if(!r.botIds.has(bid)||!hb.getPlayer(bid))throw Error('Invalid bot.');hb._room.playerLeave(bid);r.botIds.delete(bid);status();snapshot();return;}
   if(d.type==='start')reset(true);else if(d.type==='stop'){r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);status();snapshot();}else if(d.type==='configure'){
    const mode=d.mode||r.mode;if(!['bot','2v2','4v4'].includes(mode))throw Error('Choose 1v1, 2v2 or 4v4.');let parsed=null;if(d.stadium){if(typeof d.stadium!=='string'||d.stadium.length>2*1024*1024)throw Error('Stadium too large.');parsed=API.Utils.parseStadium(d.stadium);if(!parsed)throw Error('Invalid stadium.');}
