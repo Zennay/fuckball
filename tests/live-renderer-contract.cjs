@@ -68,7 +68,49 @@ const {assertPredictionAsset, verifyLive} = require('../scripts/verify-live.cjs'
         globalThis.fetch = networkFetch;
       }
     }
-    console.log('PASS public-release renderer probe: real HTTP+WS room, 9 inert/legacy source mutations and 2 invalid response headers rejected');
+    // Exercise the actual public checker against a live room whose WebSocket
+    // clock data is tampered in transit; /health and static assets stay valid.
+    const NativeWebSocket = globalThis.WebSocket;
+    for (const [label, tamper, errorPattern] of [
+      ['frozen authoritative room tick', (() => {
+        let first;
+        return data => {
+          if (data.type !== 'pong') return;
+          if (first === undefined) first = data.frame;
+          else data.frame = first;
+        };
+      })(), /room clock must advance/],
+      ['wrong second ping correlation', data => {
+        if (data.type === 'pong' && data.t === 2) data.t = 1;
+      }, /second room pong must echo/]
+    ]) {
+      class TamperedWebSocket {
+        constructor(url) {
+          this.real = new NativeWebSocket(url);
+          this.real.onopen = event => this.onopen?.(event);
+          this.real.onerror = event => this.onerror?.(event);
+          this.real.onmessage = event => {
+            if (typeof event.data !== 'string') {
+              this.onmessage?.(event);
+              return;
+            }
+            const data = JSON.parse(event.data);
+            tamper(data);
+            this.onmessage?.({data: JSON.stringify(data)});
+          };
+        }
+        send(data) { this.real.send(data); }
+        close() { this.real.close(); }
+      }
+      globalThis.WebSocket = TamperedWebSocket;
+      try {
+        await assert.rejects(verifyLive(base), errorPattern,
+          label + ': static health cannot substitute for an advancing 60 Hz clock');
+      } finally {
+        globalThis.WebSocket = NativeWebSocket;
+      }
+    }
+    console.log('PASS public-release renderer probe: real HTTP+WS room, 9 inert/legacy source mutations, 2 invalid headers and 2 clock-protocol attacks rejected');
   } finally {
     await app.close();
   }
