@@ -108,7 +108,25 @@ async function main() {
     for (const p of players.slice(3)) {
       assert.equal(room.hb.getPlayer(p.id).team, 0, 'handover keeps spectator state');
     }
-    console.log('PASS #31 precursor: 12 online, 33 forged guest controls denied, spectate-all, selective team moves and owner handover');
+    // After the owner disconnects, stale/fake owner metadata cannot grant
+    // spectators control of the successor's room. The new rightful owner can
+    // still start the match without reconnecting or changing the share link.
+    const postHandoverGuests = players.slice(2);
+    const previousErrors = postHandoverGuests.map(p =>
+      p.ws.messages.filter(m => m.type === 'error').length);
+    for (const guest of postHandoverGuests) guest.ws.send(JSON.stringify({
+      type:'start', owner:host.id, admin:true
+    }));
+    await until(() => postHandoverGuests.every((guest,index) =>
+      guest.ws.messages.filter(m => m.type === 'error').length > previousErrors[index]),
+    'all stale-owner forgeries denied after handover');
+    assert.equal(room.started,false,'spectator forgeries cannot start the match');
+    assert.equal(room.owner,players[1].id,'successor keeps authority');
+    players[1].ws.send(JSON.stringify({type:'start'}));
+    await until(() => room.started === true,'legitimate successor starts match');
+    assert.equal(room.clients.size,11,'successor start cannot disconnect spectators');
+    assert.equal(app.rooms.get(host.room),room,'room link survives handover and start');
+    console.log('PASS #31 precursor: 12 online, 33 initial + 10 stale-owner forgeries denied, spectator flow, owner handover and successor start');
   } finally {
     for (const ws of connections) ws.close();
     await app.close();
