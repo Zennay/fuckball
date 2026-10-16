@@ -111,13 +111,16 @@ const scenarios = [
     }
   },
   {
-    name: 'delayed direction with transient kick input',
+    name: 'input changes after an already active player move',
     setup(room) {
-      room.setPlayerDiscProperties(1, {x: -29, y: 0, xspeed: 0, yspeed: 0});
+      room.setPlayerDiscProperties(1, {x: -100, y: -60, xspeed: 0, yspeed: 0});
       room.setDiscProperties(0, {x: 0, y: 0, xspeed: 0, yspeed: 0});
+      room.setPlayerInput(1, 8);
+      room.step(1);
     },
-    events: [{frame: 2, id: 1, input: 8}, {frame: 3, id: 1, input: 24},
-      {frame: 4, id: 1, input: 8}, {frame: 8, id: 1, input: 0}]
+    events: [{frame: 2, id: 1, input: 4}, {frame: 3, id: 1, input: 20},
+      {frame: 4, id: 1, input: 4}, {frame: 8, id: 1, input: 0}]
+
   }
 ];
 
