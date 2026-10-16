@@ -49,8 +49,21 @@ class WebSocket extends EventEmitter {
       const a=this.buf[0],b=this.buf[1],opcode=a&15,fin=(a&128)!==0,masked=(b&128)!==0;
       if(!fin||!masked||(a&0x70)){this.close(1002,'Unsupported frame');return;}
       let len=b&127,pos=2;
-      if(len===126){if(this.buf.length<4)return;len=this.buf.readUInt16BE(2);pos=4;}
-      else if(len===127){if(this.buf.length<10)return;const size=this.buf.readBigUInt64BE(2);if(size>BigInt(this.maxPayload)){this.close(1009,'Too large');return;}len=Number(size);pos=10;}
+      if(len===126){
+        if(this.buf.length<4)return;
+        len=this.buf.readUInt16BE(2);pos=4;
+        // RFC 6455 §5.2: use the shortest possible length encoding.
+        if(len<126){this.close(1002,'Non-minimal frame length');return;}
+      }
+      else if(len===127){
+        if(this.buf.length<10)return;
+        const size=this.buf.readBigUInt64BE(2);
+        // 64-bit lengths have a reserved high bit and represent >= 65536.
+        // Reject noncanonical wire format before waiting for the payload.
+        if(size<65536n||size>0x7fffffffffffffffn){this.close(1002,'Invalid frame length');return;}
+        if(size>BigInt(this.maxPayload)){this.close(1009,'Too large');return;}
+        len=Number(size);pos=10;
+      }
       // RFC 6455 section 5.5: ALL control frames (close, ping, pong) are
       // limited to 125 bytes. Do not emit invalid oversized pong replies.
       if((opcode&8)&&len>125){this.close(1002,'Invalid control frame');return;}
