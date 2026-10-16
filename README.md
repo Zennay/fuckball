@@ -1,5 +1,11 @@
 # Fuckball 26
 
+## Play online on free hosting
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Zennay/fuckball)
+
+Use the **Free** Render web-service plan for the complete multiplayer game (HTTPS and WebSocket rooms), not just a static demo. Details, verification steps and important cold-start / account-storage limitations: [free-hosting guide](docs/free-hosting.md). This option does **not** replace or interrupt the current VPS until the new instance has been verified. No Render URL exists until the service is created.
+
 A full-viewport football game, using the same unmodified node-haxball 2.3.1 physics engine in the browser, headless training and the authoritative multiplayer server. The original BFF Big v4 stadium is preserved byte-for-byte.
 
 ## Play and host
