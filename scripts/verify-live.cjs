@@ -155,7 +155,7 @@ async function verifyLive(base, expectedRelease) {
   await probeRoom(base, release);
   return {verified: true, url: base, release: health.release, engine: health.engine,
     checks: ['served engine hash', 'original BFF hash', 'active 60 Hz renderer contract',
-      'browser script order', '60/30Hz v3', 'real room creation'].concat(
+      'browser script order', '60/30Hz v3', 'real room creation', 'advancing authoritative 60 Hz room clock'].concat(
       release ? ['invite-link UI', '8-char room id', 'server tick in pong', 'approved release SHA'] : [])};
 }
 
