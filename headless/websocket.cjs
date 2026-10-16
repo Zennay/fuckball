@@ -63,13 +63,20 @@ class WebSocketServer extends EventEmitter{
     super();this.maxPayload=maxPayload;
     server.on('upgrade',(req,socket,head)=>{
       const key=req.headers['sec-websocket-key'],version=req.headers['sec-websocket-version'];
+      // RFC 6455: the Connection header must carry an Upgrade token and
+      // Sec-WebSocket-Key is canonical base64 encoding of exactly 16 bytes.
+      // Noncanonical padding and URL-safe base64 must fail closed.
+      const connection=req.headers.connection;
+      const validConnection=typeof connection==='string'&&connection.split(',').some(token=>token.trim().toLowerCase()==='upgrade');
+      const validKey=typeof key==='string'&&/^[A-Za-z0-9+/]{22}==$/.test(key)&&
+        Buffer.from(key,'base64').length===16&&Buffer.from(key,'base64').toString('base64')===key;
       const origin=req.headers.origin;
       let allowedOrigin=true;
       if(origin&&process.env.ALLOW_CROSS_ORIGIN!=='1'){
         try{allowedOrigin=new URL(origin).host===req.headers.host;}catch{allowedOrigin=false;}
       }
       if(req.url?.split('?')[0]!=='/ws'||req.headers.upgrade?.toLowerCase()!=='websocket'||version!=='13'||
-        typeof key!=='string'||!/^[-\w+/]{22}==$/.test(key)||!allowedOrigin){
+        !validConnection||!validKey||!allowedOrigin){
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;
       }
       socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+crypto.createHash('sha1').update(key+MAGIC).digest('base64')+'\r\n\r\n');
