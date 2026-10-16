@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'tests/input-replay-acceptance.cjs'
+      - 'tests/prediction-high-refresh-qa.cjs'
       - 'tests/known-red-classification.cjs'
       - 'scripts/qa-known-red-classifier.cjs'
       - 'tests/room-roster-acceptance.cjs'
