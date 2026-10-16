@@ -27,6 +27,10 @@ jobs:
           node-version: '22'
       - run: npm install --no-save --package-lock=false @napi-rs/canvas@0.1.100
       - run: npm run test:ui
+      # Renderer regression: the native AE cache cannot be published as a
+      # stable frame, and guest input/ACK replay must remain distinguishable.
+      - run: node tests/prediction-snapshot-independence.cjs
+      - run: node tests/input-replay-acceptance.cjs
   peer-hosting-chromium:
     # Real Chromium: WebRTC data channels between two pages, the room hosted in a page's Web Worker,
     # handovers server <-> page and failover when the hosting page closes (docs/netcode-plan.md).
