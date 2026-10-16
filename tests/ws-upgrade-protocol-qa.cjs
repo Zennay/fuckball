@@ -47,12 +47,16 @@ async function main() {
   try {
     for (const [name, request, allowed] of cases) {
       const line = await exchange(port, request);
+      console.log('HANDSHAKE ' + name + ': ' + line);
       if(allowed) assert.match(line,/^HTTP\/1\.1 101 Switching Protocols$/,name);
       else assert.doesNotMatch(line,/^HTTP\/1\.1 101 /,
         name+': invalid upgrade must not create an accepted WebSocket');
       assert.equal(app.rooms.size,0,name+': no game room on any handshake');
     }
     console.log('PASS WebSocket handshake: '+cases.length+' valid/invalid raw HTTP upgrade cases');
+  } catch(error) {
+    console.error('HANDSHAKE ASSERTION FAILED:', error.stack||error);
+    throw error;
   } finally {
     // A bare await app.close() can strand the test promise while Node exits
     // successfully with an empty event loop: never silently turn RED green.
