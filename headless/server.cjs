@@ -60,10 +60,10 @@ function createServer(options={}){
   const candidates=['server',...players.filter(id=>{const rep=r.reports.get(id);return rep&&now-rep.at<6000&&rep.eligible&&r.sockets.get(id)?.mesh&&!(r.penalty.get(id)>now);})];
   const forced=options.forceHost?.(r,candidates);if(forced!==undefined){if(forced!==r.authority&&(forced==='server'||candidates.includes(forced)))migrate(r,forced,'forced');return;}
   const d=r.election.decide({rtt,players,candidates,current:r.authority,now});if(d.switch)migrate(r,d.host,d.reason);}
- function join(ws,r){if(r.sockets.size>=8)throw Error('Room is full.');
+ function join(ws,r){
   // A browser host cannot add players; take the room back first (a seamless handover), then join.
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
-  const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
+  while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);}
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;r.sockets.delete(id);r.reports.delete(id);
