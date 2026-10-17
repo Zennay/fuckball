@@ -1,0 +1,29 @@
+name: QA Private Replay Recording
+on:
+  pull_request:
+    paths:
+      - 'tests/room-recording-qa.cjs'
+      - 'dist/room-core.js'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-private-replays.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/room-recording-qa.cjs'
+      - 'dist/room-core.js'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-private-replays.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/room-recording-qa.cjs
