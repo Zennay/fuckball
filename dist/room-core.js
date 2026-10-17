@@ -72,6 +72,11 @@ function createRoomCore(opts){
    status();snapshot();return;
   }
   if(r.owner!==id)throw Error('Only the host can change the match.');
+  // Normal owner controls must not bypass the approved, pause-gated swap flow
+  // in a live game. Future referee-authorized live changes need an explicit
+  // separate policy; unreviewed client flags grant no such exception.
+  if(r.started&&!r.paused&&['team','swap','specAll','addBot','removeBot'].includes(d.type))
+   throw Error('Pause the match before changing the active lineup.');
   if(d.type==='bench'){
    if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
    for(const [team,p]of r.pendingSubs)if(p.inId===d.id||p.outId===d.id)r.pendingSubs.delete(team);
