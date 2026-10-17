@@ -119,7 +119,34 @@ async function main() {
     assert.equal(room.clients.size,3);
     assert.equal(room.owner,successor.id);
     assert.equal(app.rooms.get(host.room),room);
-    console.log('PASS #31 paused owner failover: native freeze, preserved room, late join, spoofed-resume denial and legitimate successor resume');
+
+    // A second host leaves at another pause boundary: no ghost authority,
+    // lost room or inadvertent unpause after consecutive disconnects.
+    successor.ws.send(JSON.stringify({type:'pause',value:true}));
+    await until(() => room.paused,'first successor pauses again');
+    const secondFrozen = game(room,observer.id);
+    successor.ws.close();
+    await until(() => room.owner === observer.id && room.clients.size === 2,
+      'second ownership handover');
+    assert.equal(room.started,true);
+    assert.equal(room.paused,true);
+    assert.deepEqual(game(room,observer.id),secondFrozen,
+      'second host departure preserves native physics and timer');
+    const deniedBefore = newcomer.ws.messages.filter(m => m.type === 'error').length;
+    newcomer.ws.send(JSON.stringify({type:'pause',value:false,owner:successor.id,admin:true}));
+    const denial = await until(() => newcomer.ws.messages.filter(m => m.type === 'error')[deniedBefore],
+      'stale second-host claim refused');
+    assert.match(denial.message,/Only the host/i);
+    assert.equal(room.paused,true);
+    observer.ws.send(JSON.stringify({type:'pause',value:false}));
+    await until(() => !room.paused,'second legitimate successor resumes');
+    const secondResumeFrame = observer.ws.frames.at(-1);
+    await until(() => observer.ws.frames.at(-1) > secondResumeFrame,
+      'native snapshots resume after second host departure');
+    assert.equal(room.owner,observer.id);
+    assert.equal(room.clients.size,2);
+    assert.equal(app.rooms.get(host.room),room);
+    console.log('PASS #31 paused owner failover: two successive host exits preserve native freeze, room and v3 resume while stale authority is denied');
   } finally {
     for (const ws of sockets) try { ws.close(); } catch {}
     await app.close();
