@@ -11,9 +11,13 @@ async function until(fn,what){
 }
 async function open(url,sockets){
   const ws=new WebSocket(url);
-  ws.messages=[];
+  ws.binaryType='arraybuffer';ws.messages=[];ws.acks=[];
   ws.onmessage=event=>{
-    if(typeof event.data==='string')ws.messages.push(JSON.parse(event.data));
+    if(typeof event.data==='string'){ws.messages.push(JSON.parse(event.data));return;}
+    if(event.data instanceof ArrayBuffer&&event.data.byteLength>=20){
+      const v=new DataView(event.data);
+      if(v.getUint32(0)===0x46423203)ws.acks.push(v.getUint32(8));
+    }
   };
   sockets.push(ws);
   await Promise.race([
@@ -99,6 +103,25 @@ async function main(){
     b.ws.send(JSON.stringify({type:'start'}));
     await until(()=>rb.started===true,'beta starts');
     assert.equal(ra.started,true,'beta start does not reset alpha');
+    // Both room owners have player ID 1. Independent frame-stamped input
+    // timelines and binary snapshot ACKs must never cross the room boundary.
+    assert.equal(a.id,b.id,'fixtures must intentionally overlap numeric player ID');
+    const nativeInput=(room,id)=>room.hb._room.state.players.find(p=>p.id===id).input;
+    assert.equal(ra.clients.get(a.id).timeline.appliedSeq,0);
+    assert.equal(rb.clients.get(b.id).timeline.appliedSeq,0);
+    a.ws.send(JSON.stringify({type:'in',c:[[1,ra.frame+2,8]]}));
+    await until(()=>a.ws.acks.includes(1),'alpha native ACK 1');
+    assert.equal(nativeInput(ra,a.id),8,'alpha owner moves right');
+    assert.equal(rb.clients.get(b.id).timeline.appliedSeq,0,
+      'beta timeline cannot acknowledge alpha input');
+    assert.equal(nativeInput(rb,b.id),0,'beta owner remains unaffected');
+    assert.equal(b.ws.acks.at(-1),0,'beta snapshot ACK is still zero');
+    b.ws.send(JSON.stringify({type:'in',c:[[1,rb.frame+2,4]]}));
+    await until(()=>b.ws.acks.includes(1),'beta native ACK 1');
+    assert.equal(nativeInput(rb,b.id),4,'beta owner independently moves left');
+    assert.equal(nativeInput(ra,a.id),8,'beta input never changes alpha direction');
+    assert.equal(ra.clients.get(a.id).timeline.appliedSeq,1);
+    assert.equal(rb.clients.get(b.id).timeline.appliedSeq,1);
     a.ws.close();
     await until(()=>ra.owner===ag.id,'alpha owner handover');
     assert.equal(app.rooms.get(b.room),rb,'beta room unchanged by alpha leave');
@@ -125,7 +148,7 @@ async function main(){
     await until(()=>rb.owner===bg.id,'beta owner handover after alpha cleanup');
     bg.ws.close();
     await until(()=>app.rooms.size===0,'beta room cleanup');
-    console.log('PASS custom room isolation: independent chat, controls, team/AI state, owner transfer and cleanup across 2 live rooms');
+    console.log('PASS custom room isolation: independent chat, controls, team/AI state, overlapping player IDs and binary ACKs, owner transfer and cleanup across 2 live rooms');
   } finally {
     for(const ws of sockets)try{ws.close();}catch{}
     await app.close();
