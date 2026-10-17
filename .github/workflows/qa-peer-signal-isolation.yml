@@ -1,0 +1,29 @@
+name: QA Casual Peer Signaling Isolation
+on:
+  pull_request:
+    paths:
+      - 'tests/peer-signal-isolation-qa.cjs'
+      - 'headless/server.cjs'
+      - 'dist/peer-net.js'
+      - '.github/workflows/qa-peer-signal-isolation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/peer-signal-isolation-qa.cjs'
+      - 'headless/server.cjs'
+      - 'dist/peer-net.js'
+      - '.github/workflows/qa-peer-signal-isolation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  peer-signaling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/peer-signal-isolation-qa.cjs
