@@ -134,6 +134,22 @@ async function main() {
     // until the server-controlled pause boundary is actually reached.
     host.ws.send(JSON.stringify({type:'start'}));
     await until(()=>room.started===true,'host starts 4v4 match');
+    // Even the rightful host cannot bypass pause/consent by issuing the old
+    // direct-team or blanket-roster messages while the match is running.
+    const originalRoster=room.hb.getPlayerList().map(p=>[p.id,p.team]);
+    for(const bypass of [
+      {type:'team',id:entering,team:0},
+      {type:'swap'},
+      {type:'specAll'},
+      {type:'addBot',team:0},
+      {type:'removeBot',id:999}
+    ]){
+      const beforeBypassErrors=host.ws.messages.filter(m=>m.type==='error').length;
+      host.ws.send(JSON.stringify(bypass));
+      const denial=await until(()=>host.ws.messages.filter(m=>m.type==='error')[beforeBypassErrors],'live '+bypass.type+' denied');
+      assert.match(denial.message,/pause|match|lineup/i,'live roster mutation needs pause');
+      assert.deepEqual(room.hb.getPlayerList().map(p=>[p.id,p.team]),originalRoster,'denied bypass leaves authoritative teams untouched');
+    }
     const nextIncoming=12, nextOutgoing=entering;
     assert.equal(room.hb.getPlayer(nextIncoming).team,0);
     host.ws.send(JSON.stringify({type:'bench',id:nextIncoming,team:1}));
