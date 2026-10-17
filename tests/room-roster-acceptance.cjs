@@ -113,14 +113,16 @@ async function main() {
     await until(()=>room.benches.get(entering)===1,'owner assigned red bench');
     host.ws.send(JSON.stringify({type:'subRequest',outId:departing,inId:entering}));
     await until(()=>room.pendingSubs.get(1)?.inId===entering,'red substitution proposed');
+    const firstRequestId=room.pendingSubs.get(1).requestId;
+    assert(Number.isSafeInteger(firstRequestId)&&firstRequestId>0,'request must carry a unique integer id');
     const adversary=sockets[11];
     const beforeErrors=adversary.messages.filter(m=>m.type==='error').length;
-    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:departing,accept:true,admin:true}));
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:departing,requestId:firstRequestId,accept:true,admin:true}));
     const impersonation=await until(()=>adversary.messages.filter(m=>m.type==='error')[beforeErrors],'fake consent denied');
     assert.match(impersonation.message,/current substitution|player|consent/i);
     assert.equal(room.hb.getPlayer(entering).team,0,'third-party consent has no effect');
     assert.equal(room.pendingSubs.get(1).accepted,false,'forgery does not flip consent');
-    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:departing,accept:true}));
+    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:departing,requestId:firstRequestId,accept:true}));
     await until(()=>room.hb.getPlayer(entering).team===1,'accepted pregame substitution');
     assert.equal(room.hb.getPlayer(departing).team,0);
     assert.equal(room.benches.get(departing),1,'outgoing player takes a red bench seat');
@@ -138,7 +140,9 @@ async function main() {
     await until(()=>room.benches.get(nextIncoming)===1,'second red bench assigned');
     host.ws.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming}));
     await until(()=>room.pendingSubs.get(1)?.inId===nextIncoming,'live substitution proposed');
-    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,accept:true}));
+    const secondRequestId=room.pendingSubs.get(1).requestId;
+    assert(secondRequestId>firstRequestId,'request sequence must increase');
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,requestId:secondRequestId,accept:true}));
     await until(()=>room.pendingSubs.get(1)?.accepted===true,'incoming player consent recorded');
     assert.equal(room.hb.getPlayer(nextIncoming).team,0,'accepted candidate stays benched during live play');
     assert.equal(room.hb.getPlayer(nextOutgoing).team,1,'outgoing player stays on field during live play');
@@ -156,10 +160,41 @@ async function main() {
     assert.equal(room.owner,departing,'benching owner never transfers host privileges');
     assert.equal(room.pendingSubs.size,0,'no replayable pending request after accepted swap');
     const errorCount=adversary.messages.filter(m=>m.type==='error').length;
-    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,accept:true}));
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,requestId:secondRequestId,accept:true}));
     await until(()=>adversary.messages.filter(m=>m.type==='error')[errorCount],'duplicate consent denied');
     assert.equal(room.hb.getPlayer(nextIncoming).team,1);
     assertFourAside(room,13,'duplicate consent cannot make ninth player');
+
+    // An expired request must release the side without allowing replay of
+    // old consent for the exact same outgoing/incoming pair.
+    host.ws.send(JSON.stringify({type:'subRequest',outId:nextIncoming,inId:nextOutgoing}));
+    await until(()=>room.pendingSubs.get(1)?.inId===nextOutgoing,'first post-pause nomination');
+    const expiredRequestId=room.pendingSubs.get(1).requestId;
+    room.pendingSubs.get(1).expiresAt=Date.now()-1;
+    host.ws.send(JSON.stringify({type:'subRequest',outId:nextIncoming,inId:nextOutgoing}));
+    await until(()=>room.pendingSubs.get(1)?.requestId>expiredRequestId,'expired nomination replaced without side lock');
+    const renewedRequestId=room.pendingSubs.get(1).requestId;
+    assert.equal(renewedRequestId,expiredRequestId+1,'request sequence increases across expiry');
+    const expiredErrors=spectator.ws.messages.filter(m=>m.type==='error').length;
+    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:nextIncoming,requestId:expiredRequestId,accept:true}));
+    const stale=await until(()=>spectator.ws.messages.filter(m=>m.type==='error')[expiredErrors],'stale consent rejected');
+    assert.match(stale.message,/substitution|consent|current|invalid/i);
+    assert.equal(room.pendingSubs.get(1)?.requestId,renewedRequestId);
+    assert.equal(room.pendingSubs.get(1)?.accepted,false,'old consent cannot approve new request');
+    assert.equal(room.hb.getPlayer(nextOutgoing).team,0,'stale consent does not promote a player');
+    assert.equal(room.hb.getPlayer(nextIncoming).team,1,'stale consent does not bench active player');
+
+    const malformedErrors=spectator.ws.messages.filter(m=>m.type==='error').length;
+    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:nextIncoming,requestId:String(renewedRequestId),accept:true}));
+    await until(()=>spectator.ws.messages.filter(m=>m.type==='error')[malformedErrors],'string nonce denied');
+    assert.equal(room.pendingSubs.get(1)?.accepted,false,'noninteger nonce is invalid');
+    assert.equal(room.exportState({final:false}).subSeq,renewedRequestId,'monotonic ID persists across handover export');
+
+    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:nextIncoming,requestId:renewedRequestId,accept:true}));
+    await until(()=>room.hb.getPlayer(nextOutgoing).team===1,'fresh consent accepted at paused boundary');
+    assert.equal(room.hb.getPlayer(nextIncoming).team,0);
+    assert.equal(room.pendingSubs.size,0,'completed request cannot replay');
+    assertFourAside(room,13,'renewed consent preserves team caps and all connections');
 
     console.log('PASS #31 4v4 roster acceptance: 12+ connected, four per team, spectator join, owner and authorization invariant');
   } finally {
