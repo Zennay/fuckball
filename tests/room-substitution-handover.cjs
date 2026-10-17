@@ -76,13 +76,16 @@ try {
   assert.equal(new Map(frozen.activeFrames).get(9),nineFrames);
   // Peer-host handover is not a grant source: a malformed or oversized
   // history must never grant pending consent or grow memory without a cap.
-  const oversized={...frozen,subEvents:Array.from({length:202},(_,n)=>({
+  const oversized={...frozen,subSeq:202,subEvents:Array.from({length:202},(_,n)=>({
     team:2,outId:2,inId:10,requestedBy:1,requestId:n+1,frame:frozen.frame
   }))};
   oversized.subEvents.push({team:99,outId:'2',inId:10,requestedBy:1,requestId:999,frame:0});
   oversized.subEvents.push({team:2,outId:2,inId:10,requestedBy:1,requestId:'bad',frame:0});
+  oversized.subEvents.push({team:2,outId:2,inId:10,requestedBy:1,requestId:201,frame:frozen.frame});
+  oversized.subEvents.push({team:2,outId:2,inId:10,requestedBy:1,requestId:203,frame:frozen.frame+100});
   bounded=RoomCore.importRoomCore(oversized,{hb:createEngine(),AI,Netcode,v3:true,send:()=>{}});
-  assert(bounded.subEvents.length<=128,'untrusted host cannot grow completed-match history without limit');
+  assert.equal(bounded.subEvents.length,124,'bounded receipt loader drops four invalid/duplicate entries');
+  assert.equal(bounded.subEvents[0].requestId,79,'only last 128 source entries considered');
   assert(bounded.subEvents.every(e=>[1,2].includes(e.team)&&Number.isSafeInteger(e.requestId)),
     'malformed event receipts dropped');
   assert.equal(bounded.pendingSubs.size,0,'old event receipts cannot create authorization');
