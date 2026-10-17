@@ -14,7 +14,7 @@ function createEngine(){
   hb.setTimeLimit(0);
   return hb;
 }
-let original=null,restored=null,legacy=null;
+let original=null,restored=null,legacy=null,bounded=null;
 try {
   original=RoomCore.createRoomCore({
     hb:createEngine(),id:'HANDOVER1',AI,Netcode,v3:true,send:()=>{}
@@ -74,6 +74,18 @@ try {
   assert.equal(new Map(frozen.captains).get(1),3);
   assert.equal(new Map(frozen.benches).get(1),1);
   assert.equal(new Map(frozen.activeFrames).get(9),nineFrames);
+  // Peer-host handover is not a grant source: a malformed or oversized
+  // history must never grant pending consent or grow memory without a cap.
+  const oversized={...frozen,subEvents:Array.from({length:202},(_,n)=>({
+    team:2,outId:2,inId:10,requestedBy:1,requestId:n+1,frame:frozen.frame
+  }))};
+  oversized.subEvents.push({team:99,outId:'2',inId:10,requestedBy:1,requestId:999,frame:0});
+  oversized.subEvents.push({team:2,outId:2,inId:10,requestedBy:1,requestId:'bad',frame:0});
+  bounded=RoomCore.importRoomCore(oversized,{hb:createEngine(),AI,Netcode,v3:true,send:()=>{}});
+  assert(bounded.subEvents.length<=128,'untrusted host cannot grow completed-match history without limit');
+  assert(bounded.subEvents.every(e=>[1,2].includes(e.team)&&Number.isSafeInteger(e.requestId)),
+    'malformed event receipts dropped');
+  assert.equal(bounded.pendingSubs.size,0,'old event receipts cannot create authorization');
   const legacyExport={...frozen};
   delete legacyExport.botIds;
   legacy=RoomCore.importRoomCore(legacyExport,{
@@ -170,6 +182,7 @@ try {
   console.log('PASS #31 native handover preserves captain/bench/playtime and prevents stale consent/overflow');
 } finally {
   restored?.destroy();
+  bounded?.destroy();
   legacy?.destroy();
   original?.destroy();
 }
