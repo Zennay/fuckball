@@ -14,7 +14,7 @@ function createEngine(){
   hb.setTimeLimit(0);
   return hb;
 }
-let original=null,restored=null;
+let original=null,restored=null,legacy=null;
 try {
   original=RoomCore.createRoomCore({
     hb:createEngine(),id:'HANDOVER1',AI,Netcode,v3:true,send:()=>{}
@@ -26,6 +26,11 @@ try {
   original.join(highHuman,{name:'Real human 200',netcode:3});
   assert(original.clients.has(highHuman),'explicit high-ID human was admitted');
   assert(!original.botIds.has(highHuman),'client is not in the bot registry');
+  original.message(1,{type:'addBot',team:0}); // historical rooms can retain spectator AI
+  const actualBot=[...original.botIds][0];
+  assert(Number.isInteger(actualBot)&&actualBot>=100,'legacy bot identity exists');
+  assert(original.hb._room.state.players.find(p=>p.id===actualBot).aiControlled,
+    'spectator bot actually uses AI before handover');
   assert.equal(original.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false,
     'human 200 is not AI on the original host');
   assert.equal(original.hb.getPlayerList().filter(p=>p.team===1).length,4);
@@ -54,6 +59,17 @@ try {
   assert.equal(new Map(frozen.captains).get(1),3);
   assert.equal(new Map(frozen.benches).get(1),1);
   assert.equal(new Map(frozen.activeFrames).get(9),nineFrames);
+  const legacyExport={...frozen};
+  delete legacyExport.botIds;
+  legacy=RoomCore.importRoomCore(legacyExport,{
+    hb:createEngine(),AI,Netcode,v3:true,send:()=>{}
+  });
+  assert(legacy.botIds.has(actualBot),'legacy handover without botIds retains genuine spectator AI');
+  assert(!legacy.botIds.has(highHuman),'legacy fallback excludes high-ID connected humans');
+  assert.equal(legacy.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false,
+    'legacy handover with absent botIds still restores human 200 as human');
+  assert.equal(legacy.hb._room.state.players.find(p=>p.id===actualBot).aiControlled,true,
+    'legacy handover preserves actual bot AI behavior');
 
   // Rebuild on a fresh native room, not another reference to the same engine.
   const successorEngine=createEngine();
@@ -130,5 +146,6 @@ try {
   console.log('PASS #31 native handover preserves captain/bench/playtime and prevents stale consent/overflow');
 } finally {
   restored?.destroy();
+  legacy?.destroy();
   original?.destroy();
 }
