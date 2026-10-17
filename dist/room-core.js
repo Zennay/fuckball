@@ -135,8 +135,10 @@ function createRoomCore(opts){
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
  function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
   for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.clients.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.pendingSubs.clear();r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;r.botIds=new Set(s.botIds||hb._room.state.players.filter(p=>p.id>=100).map(p=>p.id));
-  // Not part of the engine snapshot: which players the room's AI controls, and the AI's tactical memory.
-  for(const p of hb._room.state.players)p.aiControlled=p.id>=100;AI.setMemory?.(hb._room.state,s.ai);
+  // Numeric player IDs are NOT AI identities: a persistent room can admit
+  // real humans with IDs >= 100. Restore only the authoritative bot membership
+  // from the exported room, never infer it from an id threshold.
+  for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);AI.setMemory?.(hb._room.state,s.ai);
   for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);for(const entry of s.captains||[])if(Array.isArray(entry)&&entry.length===2&&[1,2].includes(entry[0])&&r.clients.has(entry[1])&&hb.getPlayer(entry[1])?.team===entry[0])r.captains.set(entry[0],entry[1]);for(const entry of s.activeFrames||[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&entry[0]>0&&Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<=r.frame)r.activeFrames.set(entry[0],entry[1]);}
  return Object.assign(r,{status,snapshot,join,leave,message,step,exportState,restore,bots,reset,
   hostTime:fraction=>r.frame+Math.max(0,Math.min(1,fraction||0)),
