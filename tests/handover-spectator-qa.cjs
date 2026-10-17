@@ -14,8 +14,8 @@ const newRoom=()=>{
   return RC.createRoomCore({hb,id:'HANDOVER',AI,Netcode,send:()=>{}});
 };
 function teams(r){
-  return r.hb.getPlayerList().filter(p=>p.id<=12)
-    .map(p=>[p.id,p.team]).sort((a,b)=>a[0]-b[0]);
+  return Array.from(r.hb.getPlayerList(),p=>[p.id,p.team])
+    .filter(p=>p[0]<=12).sort((a,b)=>a[0]-b[0]);
 }
 function state(r){
   const state=r.hb._room.state;
