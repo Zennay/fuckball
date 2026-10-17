@@ -54,6 +54,8 @@ function state(room){
    ['array team profile',{teamProfile:[],started:false}],
    ['string team profile',{teamProfile:'invalid',started:false}],
    ['number team profile',{teamProfile:100,started:false}],
+   ['nested uncoercible team profile',{teamProfile:{support:{toString:3,valueOf:2}},started:false}],
+   ['nested uncoercible screen value',{teamProfile:{screen:{toString:false,valueOf:null}},started:false}],
   ];
   for(const [label,params]of checks){
    const errors=host.ws.messages.filter(m=>m.type==='error').length;
