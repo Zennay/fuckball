@@ -128,7 +128,7 @@ function createRoomCore(opts){
   // Use authoritative 60 Hz game steps, not wall clock or total socket lifetime.
   // Spectators, benches, paused frames and bots never gain human play time.
   if(r.started&&!r.paused)for(const p of hb.getPlayerList())if(r.clients.has(p.id)&&[1,2].includes(p.team))r.activeFrames.set(p.id,(r.activeFrames.get(p.id)||0)+1);
-  hb.step(1);r.frame++;if(r.frame%60===0&&expireSubs())status();if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
+  hb.step(1);r.frame++;if(r.frame%60===0){if(expireSubs())status();if(r.started&&!r.paused)broadcast({type:'playingTime',frame:r.frame,activeFrames:[...r.activeFrames]});}if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
  /* final: the room really moves (a recording cannot move with it); standby copies leave it running. */
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
   return{v:1,recording:!final&&recording,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],subSeq:r.subSeq,
