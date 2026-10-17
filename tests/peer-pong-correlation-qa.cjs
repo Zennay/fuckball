@@ -90,6 +90,9 @@ try {
   assert.deepEqual(peer.rtts,[],'late response from replaced channel is rejected');
   now=11001; net.tick();
   assert(probes.some(d=>d.type==='pp'&&d.t===11001),'new channel sends fresh probe');
+  oldChannel.onmessage({data:JSON.stringify({type:'pq',t:11001})});
+  assert.deepEqual(peer.rtts,[],
+    'stale channel callback must not consume even a CURRENT new-channel ping token');
   now=11006; pong(11001);
   assert.deepEqual(peer.rtts,[5],'new channel can gather clean fresh RTT');
 
