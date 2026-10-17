@@ -20,6 +20,14 @@ try {
     hb:createEngine(),id:'HANDOVER1',AI,Netcode,v3:true,send:()=>{}
   });
   for(let id=1;id<=12;id++)original.join(id,{name:'Human '+id,netcode:3});
+  // More than 100 participants legitimately exhaust low-numbered IDs.
+  // A high-ID connected human is not AI, even when the same room has bots.
+  const highHuman=200;
+  original.join(highHuman,{name:'Real human 200',netcode:3});
+  assert(original.clients.has(highHuman),'explicit high-ID human was admitted');
+  assert(!original.botIds.has(highHuman),'client is not in the bot registry');
+  assert.equal(original.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false,
+    'human 200 is not AI on the original host');
   assert.equal(original.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.equal(original.hb.getPlayerList().filter(p=>p.team===2).length,4);
   assert.equal(original.hb.getPlayer(9).team,0);
@@ -49,6 +57,13 @@ try {
   restored=RoomCore.importRoomCore(frozen,{hb:successorEngine,AI,Netcode,v3:true,send:()=>{}});
   assert.notEqual(restored.hb,original.hb);
   assert.equal(restored.owner,1,'the original host still owns the room');
+  assert(restored.clients.has(highHuman),'migration retains high-ID connection');
+  assert(!restored.botIds.has(highHuman),'migration does not invent a bot');
+  assert.equal(restored.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false,
+    'high-ID real person must not become AI on the new host');
+  for(const p of restored.hb._room.state.players)
+    assert.equal(p.aiControlled,restored.botIds.has(p.id),
+      'native AI membership matches botIds for player '+p.id);
   assert.equal(restored.captains.get(1),3,'authorized captain survives handover');
   assert.equal(restored.benches.get(1),1,'side-specific bench survives handover');
   assert.equal(restored.activeFrames.get(9),nineFrames,'active frames survive handover');
@@ -76,6 +91,22 @@ try {
   for(let i=0;i<24;i++)restored.step();
   assert.equal(restored.activeFrames.get(1),24,'incoming human earns only resumed active time');
   assert.equal(restored.activeFrames.get(9),after,'benched human stops earning time after handover');
+  assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
+  assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
+  // The restored high-ID spectator must still be allowed to become a real
+  // substitute with a normal consent-bearing human WebSocket identity.
+  restored.message(1,{type:'pause',value:true});
+  restored.message(1,{type:'bench',id:highHuman,team:1});
+  restored.message(3,{type:'subRequest',outId:1,inId:highHuman});
+  const highRequestId=restored.pendingSubs.get(1).requestId;
+  restored.message(highHuman,{type:'subAccept',team:1,outId:1,requestId:highRequestId,accept:true});
+  assert.equal(restored.hb.getPlayer(highHuman).team,1);
+  assert.equal(restored.hb.getPlayer(1).team,0);
+  assert.equal(restored.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false);
+  assert.equal(restored.activeFrames.get(highHuman)||0,0,'no bench time credited to high-ID human');
+  restored.message(1,{type:'pause',value:false});
+  for(let i=0;i<30;i++)restored.step();
+  assert.equal(restored.activeFrames.get(highHuman),30,'newly active high-ID human earns 30 live frames');
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
   console.log('PASS #31 native handover preserves captain/bench/playtime and prevents stale consent/overflow');
