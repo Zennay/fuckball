@@ -119,7 +119,11 @@ function createRoomCore(opts){
    addBot(team);status();snapshot();return;}
   if(d.type==='removeBot'){const bid=Number(d.id);if(!r.botIds.has(bid)||!hb.getPlayer(bid))throw Error('Invalid bot.');hb._room.playerLeave(bid);r.botIds.delete(bid);status();snapshot();return;}
   if(d.type==='start')reset(true);else if(d.type==='stop'){r.pendingSubs.clear();r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);if(r.paused)for(const side of [...r.pendingSubs.keys()])completeSub(side);status();snapshot();}else if(d.type==='configure'){
-   const mode=d.mode||r.mode;if(!['bot','2v2','4v4'].includes(mode))throw Error('Choose 1v1, 2v2 or 4v4.');let parsed=null;if(d.stadium){if(typeof d.stadium!=='string'||d.stadium.length>2*1024*1024)throw Error('Stadium too large.');parsed=API.Utils.parseStadium(d.stadium);if(!parsed)throw Error('Invalid stadium.');}
+   const mode=d.mode==null?r.mode:d.mode;if(!['bot','2v2','4v4'].includes(mode))throw Error('Choose 1v1, 2v2 or 4v4.');let parsed=null;if(d.stadium!=null){if(typeof d.stadium!=='string'||!d.stadium.trim()||d.stadium.length>2*1024*1024)throw Error('Invalid stadium.');
+    // Native parser failures can be strings, null or implementation details.
+    // Fail closed with a fixed message, before touching any live match state.
+    try{parsed=API.Utils.parseStadium(d.stadium);}catch{throw Error('Invalid stadium.');}
+    if(!parsed)throw Error('Invalid stadium.');}
    for(const key of ['scoreLimit','timeLimit'])if(d[key]!=null&&(!Number.isInteger(d[key])||d[key]<0||d[key]>99))throw Error('Invalid limit.');const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(AI.levels[d.difficulty])r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
  }
