@@ -68,7 +68,8 @@ async function main(){
       owner.ws.send(JSON.stringify({type:'configure',...data}));
       const err=await until(()=>owner.ws.messages.filter(m=>m.type==='error')[beforeError],
         label+' validation error');
-      assert(err.message.length>0,label+': server supplies diagnostic');
+      assert.equal(typeof err.message,'string',label+': error must include a diagnostic: '+JSON.stringify(err));
+      assert(err.message.length>0,label+': nonempty diagnostic');
       assert.deepEqual(checkConfig(room),baseline,
         label+': invalid setup must not reset/start/stop or change BFF configuration');
       await until(()=>room.frame>beforeTick,label+': native clock still progresses');
