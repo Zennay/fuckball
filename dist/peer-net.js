@@ -13,6 +13,8 @@ function createPeerNet(o){
  const {selfId,sendServer,sendServerBinary,deliverJson,deliverSnapshot,createPeerConnection,createWorker,now,absNow,createClock}=o;
  const iceServers=o.iceServers||[{urls:'stun:stun.l.google.com:19302'}];
  const peers=new Map(),serverRtts=[],serverClock=createClock(),unacked=[];
+ // Correlate peer pong samples to genuinely transmitted probes; never treat a
+ // fabricated future/replayed timestamp as an instantaneous RTT.
  let authority='server',pending=null,hosting=false,hostClock=null,worker=null,closed=false,switchSamples=[],lastReport=0;
  const st={get authority(){return authority;},get pending(){return pending;},get hosting(){return hosting;},peers,unacked};
  const serverRtt=()=>median(serverRtts);
@@ -22,7 +24,7 @@ function createPeerNet(o){
  function sendPeer(id,data){const p=openPeer(id);if(!p)return false;try{if(p.ch.bufferedAmount>262144)return false;p.ch.send(typeof data==='string'||data instanceof ArrayBuffer||ArrayBuffer.isView(data)?data:JSON.stringify(data));return true;}catch{return false;}}
 
  /* ---------- mesh ---------- */
- function connect(id){if(peers.has(id)||id===selfId)return;const pc=createPeerConnection({iceServers}),p={id,pc,ch:null,rtts:[],queue:[]};peers.set(id,p);
+ function connect(id){if(peers.has(id)||id===selfId)return;const pc=createPeerConnection({iceServers}),p={id,pc,ch:null,rtts:[],queue:[],pingSent:new Map()};peers.set(id,p);
   pc.onicecandidate=e=>{if(e.candidate)sendServer({type:'signal',to:id,data:{ice:e.candidate.toJSON?e.candidate.toJSON():e.candidate}});};
   pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'||pc.connectionState==='closed')p.failed=true;};
   const setup=ch=>{p.ch=ch;ch.binaryType='arraybuffer';ch.onmessage=e=>onPeerMessage(id,e.data);ch.onclose=()=>{if(p.ch===ch)p.ch=null;};};
@@ -38,7 +40,12 @@ function createPeerNet(o){
   if(data instanceof ArrayBuffer){fromSource(id,data);return;}
   let d;try{d=JSON.parse(data);}catch{return;}
   if(d.type==='pp'){sendPeer(id,{type:'pq',t:d.t,frame:roomTimeNow()});return;}
-  if(d.type==='pq'){const p=peers.get(id);if(!p||!Number.isFinite(d.t))return;const rtt=Math.max(0,now()-d.t);p.rtts.push(rtt);if(p.rtts.length>9)p.rtts.shift();if(pending&&pending.host===id&&Number.isFinite(d.frame))switchSamples.push({frame:d.frame,sentAt:d.t});return;}
+  if(d.type==='pq'){const p=peers.get(id);if(!p||!Number.isFinite(d.t)||!p.pingSent.has(d.t))return;
+   const rtt=now()-d.t;
+   p.pingSent.delete(d.t); // a probe contributes at most once
+   if(!Number.isFinite(rtt)||rtt<0||rtt>3000)return; // clock skew / stale reply
+   p.rtts.push(rtt);if(p.rtts.length>9)p.rtts.shift();
+   if(pending&&pending.host===id&&Number.isFinite(d.frame))switchSamples.push({frame:d.frame,sentAt:d.t});return;}
   if(d.type==='ping'&&hosting){sendPeer(id,{type:'pong',t:d.t,frame:roomTimeNow()});return;}
   if(d.type==='pong'&&id===authority){deliverJson(d);return;}
   if(d.type==='in'&&worker)worker.postMessage({cmd:'msg',from:id,d});}
@@ -94,7 +101,12 @@ function createPeerNet(o){
  let lastPing=0;
  function tick(){if(closed)return;const t=now();
   if(inputHost()!=null&&inputHost()!==selfId)sendInputsToHost(); // redundant resend over the unreliable channel
-  if(t-lastPing>=1000){lastPing=t;sendServer({type:'sping',t});for(const id of peers.keys())sendPeer(id,{type:'pp',t});}
+  if(t-lastPing>=1000){lastPing=t;sendServer({type:'sping',t});
+   for(const [id,p]of peers){if(sendPeer(id,{type:'pp',t})){
+    p.pingSent.set(t,true);
+    if(p.pingSent.size>4)p.pingSent.delete(p.pingSent.keys().next().value);
+   }}
+  }
   if(t-lastReport>=2000){lastReport=t;const rtts={};for(const [id,p]of peers)if(openPeer(id)&&p.rtts.length)rtts[id]=Math.round(median(p.rtts));
    const meshed=[...peers.keys()].every(id=>openPeer(id));sendServer({type:'rtt',server:Math.round(serverRtt())||null,peers:rtts,eligible:!!(o.canHost?.()&&meshed)});}
   if(hosting)worker?.postMessage({cmd:'tick'});}
