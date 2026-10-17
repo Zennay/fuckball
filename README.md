@@ -191,13 +191,15 @@ Team AI plays positions: a keeper and three outfield lines — **DM** (defensive
 
 The player on the ball searches its options every decision: passes to a teammate's feet, passes into space and shots at six points of the goal mouth. For each it simulates the real ball (kick impulse = kickStrength × ball invMass along the contact normal, added to the ball's velocity; ball damping; wall bounces) and asks who reaches it first with engine-accurate player acceleration. Value = where we keep the ball (closer to their goal is better) or what losing it there costs; a shot is valued by how narrowly the keeper can still reach it; a ball that would roll into our own goal is never an option. Kicks that need a long walk around the ball cost more under pressure, so the team plays quickly when pressed and takes the time to line up a shot when there is space. Right before contact the kick that will actually happen (the real contact normal) is checked again; it only goes if it is still good, otherwise the player keeps the ball. Steering picks the one of eight directions closest to what is needed, so runs go straight. The keeper steps up toward the edge of its third when the ball is deep in the other half.
 
-Measured with `training/match-stats.cjs` (mirrored seeds, BFF and Classic, elite, 60 s games) and `training/finishing-drill.cjs`:
+Measured with `training/match-stats.cjs` (mirrored seeds, BFF and Classic, elite, 60 s games) and `training/finishing-drill.cjs`. `chooseDelivery(state, player)` exposes the same option search (shot / pass / clear with target, receiver and frame margin).
 
 | Comparison | Result |
 | --- | --- |
-| New AI vs previous tactical AI, 384 matches | 98–52 goals, 77 W / 36 L, 4576 vs 2511 passes |
+| New AI vs previous tactical AI, 384 matches | 101–42 goals, 90 W / 32 L, 4585 vs 2617 passes |
+| New AI vs the pass-first/keeper-distribution AI of #60, 384 matches | 256–13 goals, 181 W / 8 L (that AI lost 11–193 to the previous tactical AI) |
 | New AI vs first option-search version, 384 matches | 94–64 goals, 82 W / 54 L |
 | Empty goal from 120–380 px, 300 attempts, BFF / Classic | 95% / 83% scored (previous AI 73% / 55%) |
+| Same drill against the previous AI's keeper, 200 attempts, BFF | 14% for both: placing shots past a set keeper is not better yet |
 | Keeper gallery, 300 shots, BFF / Classic | 85% / 93% saved (unchanged) |
 | Careful run-up for every kick instead of only shots, 384 matches | 65–86 vs the first version, not adopted |
 | Neural candidates from the VPS training (291 cycles), arena total | 456–837 vs tactical, not adopted |
