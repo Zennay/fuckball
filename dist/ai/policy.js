@@ -29,7 +29,12 @@ function intercept(b,p,ph,max=90){if(!p?.disc)return null;let x=b.pos.x,y=b.pos.
 function teamPlan(state,teamId,tick=0,raw={}){
  // All teammates share one plan per tick; computing it once keeps the
  // keeper's interception search cheap with eight bots.
- let cache=plans.get(state);if(!cache)plans.set(state,cache={});const ball=state.gameState?.physicsState.discs[0],sig=tick+':'+JSON.stringify(raw)+':'+(ball?ball.pos.x+','+ball.pos.y+','+ball.speed.x+','+ball.speed.y:'')+':'+state.players.map(p=>p.id+'.'+p.team.id+(p.disc?'.'+p.disc.pos.x+'.'+p.disc.pos.y:'')).join('|');
+ let cache=plans.get(state);if(!cache)plans.set(state,cache={});const ball=state.gameState?.physicsState.discs[0];
+ // Same-tick host handovers can change whether a human is AI-controlled
+ // without moving anyone. Keeper/interception also depends on individual
+ // speed and collision radii. All of these must invalidate cached tactics;
+ // unchanged snapshots still share one plan to bound eight-bot CPU work.
+ const sig=tick+':'+JSON.stringify(raw)+':'+(ball?ball.pos.x+','+ball.pos.y+','+ball.speed.x+','+ball.speed.y+','+ball.radius+','+ball.damping:'')+':'+state.players.map(p=>p.id+'.'+p.team.id+'.'+(p.aiControlled===false?'human':'ai')+(p.disc?'.'+p.disc.pos.x+'.'+p.disc.pos.y+'.'+p.disc.speed.x+'.'+p.disc.speed.y+'.'+p.disc.radius:'')).join('|');
  if(cache[teamId]?.sig===sig)return cache[teamId].plan;const plan=buildPlan(state,teamId,tick,raw);cache[teamId]={sig,plan};return plan;
 }
 function buildPlan(state,teamId,tick=0,raw={}){
