@@ -213,6 +213,52 @@ async function main() {
     assert.equal(room.pendingSubs.size,0,'completed request cannot replay');
     assertFourAside(room,13,'renewed consent preserves team caps and all connections');
 
+    // The owner can appoint one CURRENT player as side captain. Captain
+    // authority is server-owned, strictly limited to proposing own-team swaps.
+    const captainId=3,captainSocket=sockets[captainId-1],outsider=sockets[1];
+    const invalidCaptainError=host.ws.messages.filter(m=>m.type==='error').length;
+    host.ws.send(JSON.stringify({type:'appointCaptain',team:2,id:captainId}));
+    await until(()=>host.ws.messages.filter(m=>m.type==='error')[invalidCaptainError],'off-team appointment rejected');
+    assert.equal(room.captains.size,0,'cannot appoint out-of-team captain');
+
+    host.ws.send(JSON.stringify({type:'appointCaptain',team:1,id:captainId}));
+    await until(()=>room.captains.get(1)===captainId,'host appoints red captain');
+    assert.equal(room.exportState({final:false}).captains[0][1],captainId,'captain assignment survives standby serialization');
+
+    const forgedCaptainError=outsider.messages.filter(m=>m.type==='error').length;
+    outsider.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming,admin:true,captain:true}));
+    const forbidden=await until(()=>outsider.messages.filter(m=>m.type==='error')[forgedCaptainError],'noncaptain denied');
+    assert.match(forbidden.message,/captain|host|team/i);
+    assert.equal(room.pendingSubs.size,0);
+
+    const captainCrossTeamError=captainSocket.messages.filter(m=>m.type==='error').length;
+    captainSocket.send(JSON.stringify({type:'subRequest',outId:2,inId:nextIncoming,admin:true}));
+    await until(()=>captainSocket.messages.filter(m=>m.type==='error')[captainCrossTeamError],'red captain cannot request blue');
+    assert.equal(room.pendingSubs.size,0,'cross-side request has no side effects');
+
+    captainSocket.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming}));
+    await until(()=>room.pendingSubs.get(1)?.requestedBy===captainId,'red captain may nominate red pair');
+    const captainRequestId=room.pendingSubs.get(1).requestId;
+    assert(captainRequestId>renewedRequestId,'captain uses same monotonic nonce sequence');
+    outsider.send(JSON.stringify({type:'appointCaptain',team:2,id:2,admin:true}));
+    await until(()=>outsider.messages.filter(m=>m.type==='error').length>forgedCaptainError+1,'guest cannot self-appoint');
+    assert.equal(room.captains.get(2),undefined);
+
+    sockets[nextIncoming-1].send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,requestId:captainRequestId,accept:true}));
+    await until(()=>room.hb.getPlayer(nextIncoming).team===1,'captain nomination applied with actual entrant consent');
+    assert.equal(room.hb.getPlayer(nextOutgoing).team,0);
+    assert.equal(room.pendingSubs.size,0);
+    assertFourAside(room,13,'captain substitution does not lose player or connection');
+    assert.equal(room.captains.get(1),captainId,'unaffected captain remains assigned');
+
+    host.ws.send(JSON.stringify({type:'appointCaptain',team:1,id:0}));
+    await until(()=>!room.captains.has(1),'captain appointment revoked');
+    const revokedError=captainSocket.messages.filter(m=>m.type==='error').length;
+    captainSocket.send(JSON.stringify({type:'subRequest',outId:nextIncoming,inId:nextOutgoing}));
+    const revoked=await until(()=>captainSocket.messages.filter(m=>m.type==='error')[revokedError],'revoked captain denied');
+    assert.match(revoked.message,/captain|host|team/i);
+    assert.equal(room.pendingSubs.size,0,'revoked captain cannot queue a swap');
+
     console.log('PASS #31 4v4 roster acceptance: 12+ connected, four per team, spectator join, owner and authorization invariant');
   } finally {
     for (const ws of sockets) ws.close();
