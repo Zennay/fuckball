@@ -67,6 +67,20 @@ function state(room){
    assert.deepEqual(state(room),baseline,label+' cannot mutate approved running match');
    await until(()=>room.frame>frame&&host.ws.binary>packets,label+' native game remains active');
   }
+  // Source-bound error-envelope negative test. A native API may throw a
+  // string rather than Error; never stringify that untrusted payload or
+  // silently send JSON without a message.
+  const originalHandler=room.message;
+  try{
+   room.message=()=>{throw 'synthetic-secret-must-not-leak';};
+   const errorCount=host.ws.messages.filter(m=>m.type==='error').length;
+   host.ws.send(JSON.stringify({type:'chat',text:'test non-Error fallback'}));
+   const fallback=await until(()=>host.ws.messages.filter(m=>m.type==='error')[errorCount],
+    'non-Error fallback envelope');
+   assert.equal(fallback.message,'Invalid room request.');
+   assert(!JSON.stringify(fallback).includes('synthetic-secret'),'synthetic exception payload stays private');
+   assert.deepEqual(state(room),baseline,'bad internal exception must not reset active room');
+  }finally{room.message=originalHandler;}
   const previous=host.ws.messages.filter(m=>m.type==='error').length;
   host.ws.send(JSON.stringify({type:'configure',mode:'4v4',scoreLimit:5,timeLimit:8,started:true}));
   await until(()=>room.hb.getScores().scoreLimit===5&&room.hb.getScores().timeLimit===8,'valid configuration');
