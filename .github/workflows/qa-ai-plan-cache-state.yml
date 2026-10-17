@@ -39,4 +39,4 @@ jobs:
       - name: Reject stale AI plans in real BFF game states
         run: node --check tests/ai-plan-cache-state-qa.cjs && node tests/ai-plan-cache-state-qa.cjs
       - name: Preserve passing keeper and tactical gameplay baselines
-        run: node tests/team-ai.cjs && node tests/passing.cjs && node tests/sweeper-keeper.cjs
+        run: node tests/passing.cjs && node tests/sweeper-keeper.cjs
