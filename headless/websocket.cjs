@@ -35,7 +35,13 @@ class WebSocket extends EventEmitter {
   send(s){this.frame(Buffer.isBuffer(s)?2:1,s);}
   close(code=1000,reason=''){
     if(this.readyState!==1)return;
-    const reasonBytes=Buffer.from(String(reason)).subarray(0,123),buf=Buffer.alloc(2+reasonBytes.length);
+    // RFC 6455 close control frames allow at most 125 bytes including the
+    // two-byte status. Never split a multi-byte UTF-8 codepoint at byte 123:
+    // a truncated trailing sequence would make our own close frame invalid.
+    const encoded=Buffer.from(String(reason));
+    let boundary=Math.min(123,encoded.length);
+    while(boundary>0&&!validUtf8(encoded.subarray(0,boundary)))boundary--;
+    const reasonBytes=encoded.subarray(0,boundary),buf=Buffer.alloc(2+reasonBytes.length);
     buf.writeUInt16BE(code,0);reasonBytes.copy(buf,2);
     this.frame(8,buf);this.readyState=2;this.socket.end();
     // On abnormal peer disconnect do not leave a socket hanging indefinitely.
