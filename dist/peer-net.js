@@ -108,7 +108,7 @@ function createPeerNet(o){
    }}
   }
   if(t-lastReport>=2000){lastReport=t;const rtts={};for(const [id,p]of peers)if(openPeer(id)&&p.rtts.length)rtts[id]=Math.round(median(p.rtts));
-   const meshed=[...peers.keys()].every(id=>openPeer(id));sendServer({type:'rtt',server:Math.round(serverRtt())||null,peers:rtts,eligible:!!(o.canHost?.()&&meshed)});}
+   const meshed=[...peers.keys()].every(id=>openPeer(id));const measured=serverRtt();sendServer({type:'rtt',server:Number.isFinite(measured)?Math.round(measured):null,peers:rtts,eligible:!!(o.canHost?.()&&meshed)});}
   if(hosting)worker?.postMessage({cmd:'tick'});}
  /* This browser can no longer host well (tab hidden): ask the server to take the room back now. */
  function relinquish(reason){if(hosting||pending?.host===selfId)sendServer({type:'hostRelease',reason});}
