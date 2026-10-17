@@ -1,0 +1,42 @@
+name: QA Fuckball Account File Admission
+on:
+  pull_request:
+    paths:
+      - headless/accounts.cjs
+      - tests/account-file-admission-qa.cjs
+      - .github/workflows/qa-account-file-admission.yml
+  push:
+    branches: [main]
+    paths:
+      - headless/accounts.cjs
+      - tests/account-file-admission-qa.cjs
+      - .github/workflows/qa-account-file-admission.yml
+permissions:
+  contents: read
+jobs:
+  account-ingress:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # immutable v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact triggering checkout
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Native bounded account-store input acceptance
+        run: |
+          node --check tests/account-file-admission-qa.cjs
+          node --check headless/accounts.cjs
+          node tests/account-file-admission-qa.cjs
+          node tests/account-state-integrity-qa.cjs
+          node tests/account-persistence-write-failure-qa.cjs
+          node tests/account-prototype-name-qa.cjs
+          node tests/accounts.cjs
