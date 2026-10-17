@@ -177,7 +177,25 @@ Self-play promotion validates on 16 games (four seeds × two maps × both sides)
 
 Home → **4v4** starts you plus seven bots. Esc → Advanced → **Watch 4v4 bots** starts eight bots. Set Easy, Normal, Hard or Elite globally or per bot under Advanced. Online room hosts can change difficulty; guests cannot. Levels change decision frequency and tactics, never player speed, kick power or collision rules.
 
-Team AI assigns a ball carrier/chaser, passing support, cover and keeper. A supporting player screens a nearby opponent only when the team has possession under pressure; otherwise it keeps a passing lane or covers behind the ball. This is a heuristic team controller, not a claim of human-level play.
+Team AI plays positions: a keeper and three outfield lines — **DM** (defensive midfielder, covers goal-side of the ball), **AM** (attacking midfielder, offers the short pass on the other side of the ball and marks the most dangerous free opponent when defending) and **ST** (striker, stays high for the through ball and the counter). Only the player who reaches the ball first goes for it; the others hold their line. In possession the AM and striker search around their spot for a clear passing lane and room to receive. This is a heuristic team controller, not a claim of human-level play.
+
+**Bots have names and characters.** Every bot gets a name from a cast of sixteen (Yuki Arai, Mats Brandt, Lio Santos, Rico Vela, …), shown in the room menu with its style (Sweeper keeper, The Wall, Playmaker, Finisher, …) and a short bio on hover. A character takes its favourite position when it is free and has small decision preferences — a Playmaker values passes more, a Finisher shoots from tighter chances, a Dribbler keeps the ball a little longer. Speed, kick power and physics are the same for every bot.
+
+### Passing, shooting and clearing (October 2026)
+
+The player on the ball searches its options every decision: passes to a teammate's feet, passes into space and shots at six points of the goal mouth. For each it simulates the real ball (kick impulse = kickStrength × ball invMass along the contact normal, added to the ball's velocity; ball damping; wall bounces) and asks who reaches it first with engine-accurate player acceleration. Value = where we keep the ball (closer to their goal is better) or what losing it there costs; a shot is valued by how narrowly the keeper can still reach it; a ball that would roll into our own goal is never an option. Kicks that need a long walk around the ball cost more under pressure, so the team plays quickly when pressed and takes the time to line up a shot when there is space. Right before contact the kick that will actually happen (the real contact normal) is checked again; it only goes if it is still good, otherwise the player keeps the ball. Steering picks the one of eight directions closest to what is needed, so runs go straight. The keeper steps up toward the edge of its third when the ball is deep in the other half.
+
+Measured with `training/match-stats.cjs` (mirrored seeds, BFF and Classic, elite, 60 s games) and `training/finishing-drill.cjs`:
+
+| Comparison | Result |
+| --- | --- |
+| New AI vs previous tactical AI, 384 matches | 98–52 goals, 77 W / 36 L, 4576 vs 2511 passes |
+| New AI vs first option-search version, 384 matches | 94–64 goals, 82 W / 54 L |
+| Empty goal from 120–380 px, 300 attempts, BFF / Classic | 95% / 83% scored (previous AI 73% / 55%) |
+| Keeper gallery, 300 shots, BFF / Classic | 85% / 93% saved (unchanged) |
+| Careful run-up for every kick instead of only shots, 384 matches | 65–86 vs the first version, not adopted |
+| Neural candidates from the VPS training (291 cycles), arena total | 456–837 vs tactical, not adopted |
+| Evolved team profile from the VPS training, 400 matches | 51–63 vs default profile, not adopted |
 
 HaxLab self-play (CLI/VPS only) runs real 4v4 simulations with the bundled engine. It evolves five team-tactic parameters, tests on separate seeds and both team sides on BFF and Classic, then generates disjoint match datasets for a portable neural policy. Results are written to the training output directory; nothing is applied to the live game automatically.
 
