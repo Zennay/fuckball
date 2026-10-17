@@ -105,6 +105,62 @@ async function main() {
     assert.deepEqual(room.hb.getPlayerList().map(p => [p.id, p.team]), before,
       'forged authorization must not change the active roster');
 
+    // Assign an explicit red bench slot; spectators cannot consent for peers.
+    // These requests use actual per-client WebSocket identities, not trusted
+    // host-provided input IDs or mocked callback authorization.
+    const entering=spectator.welcome.id, departing=host.welcome.id;
+    host.ws.send(JSON.stringify({type:'bench',id:entering,team:1}));
+    await until(()=>room.benches.get(entering)===1,'owner assigned red bench');
+    host.ws.send(JSON.stringify({type:'subRequest',outId:departing,inId:entering}));
+    await until(()=>room.pendingSubs.get(1)?.inId===entering,'red substitution proposed');
+    const adversary=sockets[11];
+    const beforeErrors=adversary.messages.filter(m=>m.type==='error').length;
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:departing,accept:true,admin:true}));
+    const impersonation=await until(()=>adversary.messages.filter(m=>m.type==='error')[beforeErrors],'fake consent denied');
+    assert.match(impersonation.message,/current substitution|player|consent/i);
+    assert.equal(room.hb.getPlayer(entering).team,0,'third-party consent has no effect');
+    assert.equal(room.pendingSubs.get(1).accepted,false,'forgery does not flip consent');
+    spectator.ws.send(JSON.stringify({type:'subAccept',team:1,outId:departing,accept:true}));
+    await until(()=>room.hb.getPlayer(entering).team===1,'accepted pregame substitution');
+    assert.equal(room.hb.getPlayer(departing).team,0);
+    assert.equal(room.benches.get(departing),1,'outgoing player takes a red bench seat');
+    assert(!room.benches.has(entering),'incoming player vacates bench');
+    assert.equal(room.pendingSubs.size,0,'completed substitution consumed exactly once');
+    assertFourAside(room,13,'pregame substitution keeps full room');
+
+    // A second consent during live play queues, but cannot rewrite players
+    // until the server-controlled pause boundary is actually reached.
+    host.ws.send(JSON.stringify({type:'start'}));
+    await until(()=>room.started===true,'host starts 4v4 match');
+    const nextIncoming=12, nextOutgoing=entering;
+    assert.equal(room.hb.getPlayer(nextIncoming).team,0);
+    host.ws.send(JSON.stringify({type:'bench',id:nextIncoming,team:1}));
+    await until(()=>room.benches.get(nextIncoming)===1,'second red bench assigned');
+    host.ws.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming}));
+    await until(()=>room.pendingSubs.get(1)?.inId===nextIncoming,'live substitution proposed');
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,accept:true}));
+    await until(()=>room.pendingSubs.get(1)?.accepted===true,'incoming player consent recorded');
+    assert.equal(room.hb.getPlayer(nextIncoming).team,0,'accepted candidate stays benched during live play');
+    assert.equal(room.hb.getPlayer(nextOutgoing).team,1,'outgoing player stays on field during live play');
+
+    host.ws.send(JSON.stringify({type:'pause',value:true}));
+    await until(()=>room.paused===true&&room.hb.getPlayer(nextIncoming).team===1,'pause applies authorized swap');
+    assert.equal(room.hb.getPlayer(nextOutgoing).team,0);
+    assertFourAside(room,13,'pause-gated substitution preserves active slots');
+    const scoreBefore=room.hb._room.gameState;
+    const score=[scoreBefore.redScore,scoreBefore.blueScore];
+    await sleep(80);
+    assert.deepEqual([room.hb._room.gameState.redScore,room.hb._room.gameState.blueScore],score,
+      'pause/substitution preserves match score without resetting');
+    assert.equal(room.started,true,'substitution never resets match lifecycle');
+    assert.equal(room.owner,departing,'benching owner never transfers host privileges');
+    assert.equal(room.pendingSubs.size,0,'no replayable pending request after accepted swap');
+    const errorCount=adversary.messages.filter(m=>m.type==='error').length;
+    adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,accept:true}));
+    await until(()=>adversary.messages.filter(m=>m.type==='error')[errorCount],'duplicate consent denied');
+    assert.equal(room.hb.getPlayer(nextIncoming).team,1);
+    assertFourAside(room,13,'duplicate consent cannot make ninth player');
+
     console.log('PASS #31 4v4 roster acceptance: 12+ connected, four per team, spectator join, owner and authorization invariant');
   } finally {
     for (const ws of sockets) ws.close();
