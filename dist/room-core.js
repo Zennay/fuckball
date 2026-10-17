@@ -24,6 +24,18 @@ function createRoomCore(opts){
   if(raw!==undefined&&(raw===null||typeof raw!=='object'||Array.isArray(raw)))throw Error('Invalid team profile.');
   try{return AI.profile(raw||{});}catch{throw Error('Invalid team profile.');}
  }
+ // Unknown bot IDs are ignored for compatibility with clients that cache
+ // old bot rosters. An existing bot cannot receive a prototype-inherited or
+ // malformed difficulty: reject BEFORE changing any live settings.
+ function normalizeBotLevels(raw){
+  if(raw!==undefined&&raw!==null&&(typeof raw!=='object'||Array.isArray(raw)))throw Error('Invalid bot levels.');
+  const levels={};
+  for(const [bid,level]of Object.entries(raw||{}))if(r.botIds.has(Number(bid))){
+   if(typeof level!=='string'||!Object.hasOwn(AI.levels,level))throw Error('Invalid bot levels.');
+   levels[bid]=level;
+  }
+  return levels;
+ }
  function roomBytes(){return API.Replay.writeAll(Object.assign(new API.Replay.ReplayData(),{roomData:hb._room.takeSnapshot(),events:[],goalMarkers:[],totalFrames:0,version:3}));}
  /* Snapshot header v2: magic, seq, ack, frame. v3 adds the input slack in 1/1000 frame. */
  function snapshot(){const bytes=roomBytes();r.seq++;let v2=null,v3=null;
@@ -109,7 +121,7 @@ function createRoomCore(opts){
    if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
    status();return;
   }
-  if(d.type==='difficulty'){if(typeof d.difficulty!=='string'||!Object.hasOwn(AI.levels,d.difficulty))throw Error('Invalid difficulty.');const profile=normalizeProfile(d.teamProfile);const levels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&typeof level==='string'&&Object.hasOwn(AI.levels,level))levels[bid]=level;r.difficulty=d.difficulty;r.botLevels=levels;r.teamProfile=profile;status();return;}
+  if(d.type==='difficulty'){if(typeof d.difficulty!=='string'||!Object.hasOwn(AI.levels,d.difficulty))throw Error('Invalid difficulty.');const profile=normalizeProfile(d.teamProfile);const levels=normalizeBotLevels(d.botLevels);r.difficulty=d.difficulty;r.botLevels=levels;r.teamProfile=profile;status();return;}
   if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');
    if(team!==0&&hb.getPlayer(pid).team!==team&&hb.getPlayerList().filter(p=>p.team===team&&p.id!==pid).length>=4)throw Error('Team is full; move an active player to the bench first.');
    const previous=hb.getPlayer(pid).team;for(const [side,p]of r.pendingSubs)if(p.inId===pid||p.outId===pid)r.pendingSubs.delete(side);
@@ -133,8 +145,9 @@ function createRoomCore(opts){
    for(const key of ['scoreLimit','timeLimit'])if(d[key]!=null&&(!Number.isInteger(d[key])||d[key]<0||d[key]>99))throw Error('Invalid limit.');
    // Do not interrupt an ongoing game before the same validated profile preflight.
    const nextProfile=normalizeProfile(d.teamProfile);
+   const nextLevels=normalizeBotLevels(d.botLevels);
    if(d.difficulty!=null&&(typeof d.difficulty!=='string'||!Object.hasOwn(AI.levels,d.difficulty)))throw Error('Invalid difficulty.');
-   const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(typeof d.difficulty==='string'&&Object.hasOwn(AI.levels,d.difficulty))r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&typeof level==='string'&&Object.hasOwn(AI.levels,level))r.botLevels[bid]=level;r.teamProfile=nextProfile;if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
+   const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(typeof d.difficulty==='string'&&Object.hasOwn(AI.levels,d.difficulty))r.difficulty=d.difficulty;r.botLevels=nextLevels;r.teamProfile=nextProfile;if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
  }
  /* One 60 Hz step: buffered inputs for this frame, the engine tick, then (every other frame) snapshots. */
