@@ -1,0 +1,29 @@
+name: QA Paused Owner Failover
+on:
+  pull_request:
+    paths:
+      - 'tests/room-paused-owner-failover-qa.cjs'
+      - 'headless/server.cjs'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-paused-owner-failover.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/room-paused-owner-failover-qa.cjs'
+      - 'headless/server.cjs'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-paused-owner-failover.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  failover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/room-paused-owner-failover-qa.cjs
