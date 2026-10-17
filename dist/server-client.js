@@ -124,6 +124,15 @@ function renderSubPanel(){
 }
 const baseOnlineRefreshMenu=refreshMenu;
 refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};
+// Room-status can arrive before the subsequent native player snapshot. Refresh
+// selectors only when the real roster signature changes, not on every 30Hz
+// snapshot (which would disrupt the player's in-progress selection).
+const baseOnlineUpdateRoster=updateRoster;
+updateRoster=function(){
+ const previous=rosterKey;
+ baseOnlineUpdateRoster();
+ if(menuOpen&&serverLink?.roomState&&rosterKey!==previous)renderSubPanel();
+};
 $('subTeam').onchange=renderSubPanel;
 $('subAssignBench').onclick=()=>{
  if(serverLink?.isOwner)serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
