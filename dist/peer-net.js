@@ -27,7 +27,7 @@ function createPeerNet(o){
  function connect(id){if(peers.has(id)||id===selfId)return;const pc=createPeerConnection({iceServers}),p={id,pc,ch:null,rtts:[],queue:[],pingSent:new Map()};peers.set(id,p);
   pc.onicecandidate=e=>{if(e.candidate)sendServer({type:'signal',to:id,data:{ice:e.candidate.toJSON?e.candidate.toJSON():e.candidate}});};
   pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'||pc.connectionState==='closed')p.failed=true;};
-  const setup=ch=>{p.pingSent.clear();p.rtts.length=0;p.ch=ch;ch.binaryType='arraybuffer';ch.onmessage=e=>onPeerMessage(id,e.data);ch.onclose=()=>{if(p.ch===ch){p.ch=null;p.pingSent.clear();p.rtts.length=0;}};};
+  const setup=ch=>{p.pingSent.clear();p.rtts.length=0;p.ch=ch;ch.binaryType='arraybuffer';ch.onmessage=e=>{if(p.ch===ch)onPeerMessage(id,e.data);};ch.onclose=()=>{if(p.ch===ch){p.ch=null;p.pingSent.clear();p.rtts.length=0;}};};
   if(selfId<id){setup(pc.createDataChannel('fb',{ordered:false,maxRetransmits:0}));pc.createOffer().then(d=>pc.setLocalDescription(d)).then(()=>sendServer({type:'signal',to:id,data:{sdp:pc.localDescription.toJSON?pc.localDescription.toJSON():pc.localDescription}})).catch(()=>{p.failed=true;});}
   else pc.ondatachannel=e=>setup(e.channel);}
  function disconnect(id){const p=peers.get(id);if(!p)return;peers.delete(id);try{p.ch?.close();}catch{}try{p.pc.close();}catch{}}
