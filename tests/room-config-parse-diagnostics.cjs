@@ -35,6 +35,7 @@ function state(room){
   const room=app.rooms.get(host.room);
   host.ws.send(JSON.stringify({type:'start'}));
   await until(()=>room.started&&host.ws.binary>5,'active native match');
+  assert(room.botIds.has(100),'BFF lobby has genuine bot 100 for per-bot level validation');
   const baseline=state(room),checks=[
    ['invalid stadium bytes',{stadium:'not-a-valid-hbs-stadium',started:false}],
    ['truncated JSON',{stadium:'{"name":',started:false}],
@@ -60,6 +61,12 @@ function state(room){
    ['prototype constructor difficulty',{difficulty:'constructor',started:false}],
    ['prototype toString difficulty',{difficulty:'toString',started:false}],
    ['prototype __proto__ difficulty',{difficulty:'__proto__',started:false}],
+   ['bot levels scalar',{botLevels:'easy',started:false}],
+   ['bot levels array',{botLevels:[],started:false}],
+   ['bot levels number',{botLevels:42,started:false}],
+   ['bot level inherited constructor',{botLevels:{100:'constructor'},started:false}],
+   ['bot level inherited prototype',{botLevels:{100:'__proto__'},started:false}],
+   ['bot level wrong type',{botLevels:{100:{value:'hard'}},started:false}],
   ];
   for(const [label,params]of checks){
    const errors=host.ws.messages.filter(m=>m.type==='error').length;
@@ -71,6 +78,7 @@ function state(room){
    if(Object.hasOwn(params,'stadium'))assert.equal(e.message,'Invalid stadium.',label+' hides parser details');
    if(Object.hasOwn(params,'teamProfile'))assert.equal(e.message,'Invalid team profile.',label+' rejects invalid profile before reset');
    if(Object.hasOwn(params,'difficulty'))assert.equal(e.message,'Invalid difficulty.',label+' rejects inherited prototype names');
+   if(Object.hasOwn(params,'botLevels'))assert.equal(e.message,'Invalid bot levels.',label+' rejects bot-specific malformed inputs');
    assert.deepEqual(state(room),baseline,label+' cannot mutate approved running match');
    await until(()=>room.frame>frame&&host.ws.binary>packets,label+' native game remains active');
   }
@@ -81,6 +89,10 @@ function state(room){
    ['inherited constructor',{difficulty:'constructor'}],
    ['inherited toString',{difficulty:'toString'}],
    ['inherited __proto__',{difficulty:'__proto__'}],
+   ['invalid scalar bot levels',{botLevels:'hard'}],
+   ['invalid array bot levels',{botLevels:[]}],
+   ['invalid existing bot level',{botLevels:{100:'constructor'}}],
+   ['invalid nested bot level',{botLevels:{100:{level:'elite'}}}],
    ['null',{teamProfile:null}],
    ['array',{teamProfile:[]}],
    ['scalar',{teamProfile:'hard'}],
@@ -93,7 +105,7 @@ function state(room){
    host.ws.send(JSON.stringify({type:'difficulty',difficulty:'elite',botLevels:{100:'elite'},...fields}));
    const failure=await until(()=>host.ws.messages.filter(m=>m.type==='error')[beforeError],
       'difficulty/'+label+' rejected');
-   assert.equal(failure.message,fields.difficulty?'Invalid difficulty.':'Invalid team profile.',
+   assert.equal(failure.message,fields.difficulty?'Invalid difficulty.':fields.botLevels?'Invalid bot levels.':'Invalid team profile.',
      'generic failure before difficulty settings are changed');
    assert.deepEqual(state(room),baseline,'rejected difficulty/'+label+' leaves all settings unchanged');
    await until(()=>room.frame>beforeFrame&&host.ws.binary>beforePackets,
