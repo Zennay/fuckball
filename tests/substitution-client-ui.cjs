@@ -72,6 +72,11 @@ async function joinHuman(url,room,sockets,index){
   assert.equal(r.hb.getPlayer(1).team,0);
   assert.equal(r.benches.get(1),1);
   assert.equal(r.captains.get(1),3);
+  assert.equal(r.subEvents.length,1,'only completed swap becomes a match event');
+  assert.equal(r.subEvents[0].requestedBy,1,'owner is recorded as proposer');
+  await until(()=>b.elements.get('subPending').textContent.includes('Last completed swap'),
+    'spectator sees completed swap history from authoritative room status');
+  assert.match(b.elements.get('subPending').textContent,/Red:/);
   assert.equal(r.clients.size,9);
   assert.equal(r.sockets.size,9);
 
@@ -79,6 +84,7 @@ async function joinHuman(url,room,sockets,index){
   // promote them; the server must receive a real pause from the host.
   a.elements.get('startButton').click();
   await until(()=>r.started,'host started real game');
+  assert.equal(r.subEvents.length,0,'new match history begins empty');
   // Room menu displays server-sourced time updates while the match is
   // running, without requiring a goal, pause or room refresh.
   await until(()=>r.activeFrames.get(9)>=60,'active entrant accrues one second');
@@ -100,6 +106,10 @@ async function joinHuman(url,room,sockets,index){
   await until(()=>r.paused&&r.hb.getPlayer(1).team===1,'server pause executes accepted swap');
   assert.equal(r.hb.getPlayer(9).team,0);
   assert.equal(r.pendingSubs.size,0);
+  assert.equal(r.subEvents.length,1,'pause completes exactly one match receipt');
+  assert.equal(r.subEvents[0].inId,1);
+  await until(()=>b.elements.get('subPending').textContent.includes('Last completed swap'),
+    'player-facing room menu shows paused match completed swap');
   assert.equal(r.clients.size,9);
   assert.equal(r.sockets.size,9);
   assert.equal(r.hb.getPlayerList().filter(p=>p.team===1).length,4);
