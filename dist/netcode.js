@@ -90,7 +90,7 @@ function createSmoother({ball=45,player=80,own=40,snap=90}={}){
    - the worst delay between two players' actions through it, (rtt(a,host) + rtt(host,b)) / 2, and
    - half the worst prediction horizon, max rtt(player,host) (how far ahead a player must predict).
    A player hosting plays at 0 ms; that is what makes peer hosting attractive within one region. */
-function hostCost(rtt,host,players){const d=[];for(const p of players){if(p===host){d.push(0);continue;}const v=get(rtt,host,p)??get(rtt,p,host);if(!Number.isFinite(v))return Infinity;d.push(v);}
+function hostCost(rtt,host,players){const d=[];for(const p of players){if(p===host){d.push(0);continue;}const v=get(rtt,host,p)??get(rtt,p,host);if(!Number.isFinite(v)||v<0)return Infinity;d.push(v);}
  if(!d.length)return 0;const s=[...d].sort((a,b)=>b-a),pair=s.length>1?(s[0]+s[1])/2:s[0]/2;return pair+s[0]/2;}
 function get(m,a,b){const row=m instanceof Map?m.get(a):m?.[a];return row instanceof Map?row.get(b):row?.[b];}
 /* Hysteresis: switch only when the best candidate beats the current host by `minGain` ms and `ratio`,
