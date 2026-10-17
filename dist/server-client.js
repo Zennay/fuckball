@@ -114,10 +114,14 @@ function renderSubPanel(){
   ' · '+teamName+' captain: '+(roleCaptain?nameOf(roleCaptain):'not assigned')+
   ' · Your active time: '+total.toFixed(1)+'s';
  const requests=state.pendingSubs||[];
+ const recent=Array.isArray(state.recentSubs)?state.recentSubs.at(-1):null;
  $('subPending').textContent=requests.length?
   requests.map(p=>(p.team===1?'Red':'Blue')+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
    (p.accepted?' · accepted, waiting for pause':' · awaiting player consent')).join(' | '):
-  'No substitution pending.';
+  recent&&[1,2].includes(recent.team)&&Number.isSafeInteger(recent.frame)?
+   'Last completed swap · '+(recent.team===1?'Red':'Blue')+': '+
+   nameOf(recent.outId)+' → '+nameOf(recent.inId)+' · frame '+recent.frame:
+   'No substitution pending.';
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
  $('subConsentText').textContent=yourRequest?
