@@ -1,0 +1,85 @@
+'use strict';
+// #31 native state handover: roles/time survive; pending consent never does.
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {HBInit}=require('../headless/runtime.cjs');
+const RoomCore=require('../dist/room-core.js');
+const AI=require('../dist/ai/policy.js');
+const Netcode=require('../dist/netcode.js');
+
+function createEngine(){
+  const hb=HBInit({noPlayer:true});
+  hb.setCustomStadium(fs.readFileSync('dist/stadiums/bff-big-v4.hbs','utf8'));
+  hb.setScoreLimit(0);
+  hb.setTimeLimit(0);
+  return hb;
+}
+let original=null,restored=null;
+try {
+  original=RoomCore.createRoomCore({
+    hb:createEngine(),id:'HANDOVER1',AI,Netcode,v3:true,send:()=>{}
+  });
+  for(let id=1;id<=12;id++)original.join(id,{name:'Human '+id,netcode:3});
+  assert.equal(original.hb.getPlayerList().filter(p=>p.team===1).length,4);
+  assert.equal(original.hb.getPlayerList().filter(p=>p.team===2).length,4);
+  assert.equal(original.hb.getPlayer(9).team,0);
+  original.message(1,{type:'bench',id:9,team:1});
+  original.message(1,{type:'appointCaptain',team:1,id:3});
+  original.message(3,{type:'subRequest',outId:1,inId:9});
+  const first=original.pendingSubs.get(1).requestId;
+  original.message(9,{type:'subAccept',team:1,outId:1,requestId:first,accept:true});
+  assert.equal(original.hb.getPlayer(9).team,1);
+  assert.equal(original.hb.getPlayer(1).team,0);
+  original.message(1,{type:'start'});
+  for(let i=0;i<35;i++)original.step();
+  const nineFrames=original.activeFrames.get(9);
+  assert.equal(nineFrames,35,'human playing time matches authoritative frames');
+  assert.equal(original.activeFrames.get(1)||0,0,'bench must not gain time');
+  original.message(1,{type:'pause',value:true});
+  for(let i=0;i<20;i++)original.step();
+  assert.equal(original.activeFrames.get(9),nineFrames,'pause does not advance playing time');
+  const frozen=original.exportState({final:false});
+  assert.equal(frozen.subSeq,first);
+  assert.equal(new Map(frozen.captains).get(1),3);
+  assert.equal(new Map(frozen.benches).get(1),1);
+  assert.equal(new Map(frozen.activeFrames).get(9),nineFrames);
+
+  // Rebuild on a fresh native room, not another reference to the same engine.
+  const successorEngine=createEngine();
+  restored=RoomCore.importRoomCore(frozen,{hb:successorEngine,AI,Netcode,v3:true,send:()=>{}});
+  assert.notEqual(restored.hb,original.hb);
+  assert.equal(restored.owner,1,'the original host still owns the room');
+  assert.equal(restored.captains.get(1),3,'authorized captain survives handover');
+  assert.equal(restored.benches.get(1),1,'side-specific bench survives handover');
+  assert.equal(restored.activeFrames.get(9),nineFrames,'active frames survive handover');
+  assert.equal(restored.activeFrames.get(1)||0,0);
+  assert.equal(restored.pendingSubs.size,0,'unconfirmed approvals must NOT survive handover');
+  assert.equal(restored.subSeq,first,'nonce high-water mark is persisted');
+  assert.equal(restored.paused,true);
+  assert.equal(restored.started,true);
+  assert.throws(()=>restored.message(2,{type:'subRequest',outId:9,inId:1}),
+    /captain|host|team/i,'blue participant cannot nominate red substitution');
+
+  restored.message(3,{type:'subRequest',outId:9,inId:1});
+  const second=restored.pendingSubs.get(1).requestId;
+  assert(second>first,'fresh request after handover has a different nonce');
+  assert.throws(()=>restored.message(1,{type:'subAccept',team:1,outId:9,requestId:first,accept:true}),
+    /current substitution/i,'delayed pre-handover consent must fail');
+  assert.equal(restored.pendingSubs.get(1).accepted,false);
+  restored.message(1,{type:'subAccept',team:1,outId:9,requestId:second,accept:true});
+  assert.equal(restored.hb.getPlayer(1).team,1);
+  assert.equal(restored.hb.getPlayer(9).team,0);
+  assert.equal(restored.pendingSubs.size,0);
+  assert.equal(restored.captains.get(1),3,'unaffected captain remains appointed');
+  const after=restored.activeFrames.get(9);
+  restored.message(1,{type:'pause',value:false});
+  for(let i=0;i<24;i++)restored.step();
+  assert.equal(restored.activeFrames.get(1),24,'incoming human earns only resumed active time');
+  assert.equal(restored.activeFrames.get(9),after,'benched human stops earning time after handover');
+  assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
+  assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
+  console.log('PASS #31 native handover preserves captain/bench/playtime and prevents stale consent/overflow');
+} finally {
+  restored?.destroy();
+  original?.destroy();
+}
