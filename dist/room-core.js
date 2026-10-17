@@ -174,10 +174,17 @@ function createRoomCore(opts){
   for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);for(const entry of s.captains||[])if(Array.isArray(entry)&&entry.length===2&&[1,2].includes(entry[0])&&r.clients.has(entry[1])&&hb.getPlayer(entry[1])?.team===entry[0])r.captains.set(entry[0],entry[1]);for(const entry of s.activeFrames||[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&entry[0]>0&&Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<=r.frame)r.activeFrames.set(entry[0],entry[1]);
   // Completed swap receipts are bounded match history, not pending authority.
   // Never restore consent grants from another browser's handover payload.
-  if(Array.isArray(s.subEvents))for(const e of s.subEvents.slice(-128))
-   if(e&&[1,2].includes(e.team)&&[e.outId,e.inId,e.requestedBy,e.requestId].every(n=>Number.isSafeInteger(n)&&n>0)&&
-      e.outId!==e.inId&&Number.isSafeInteger(e.frame)&&e.frame>=0&&e.frame<=r.frame)
+  if(Array.isArray(s.subEvents)){
+   const seen=new Set();let previousFrame=-1;
+   for(const e of s.subEvents.slice(-128)){
+    if(!e||![1,2].includes(e.team)||![e.outId,e.inId,e.requestedBy,e.requestId].every(n=>Number.isSafeInteger(n)&&n>0)||
+       e.outId===e.inId||!Number.isSafeInteger(e.frame)||e.frame<previousFrame||e.frame>r.frame||
+       e.requestId>r.subSeq||seen.has(e.requestId))continue;
+    // Valid executed order follows frames, not nomination/request ID order.
+    seen.add(e.requestId);previousFrame=e.frame;
     r.subEvents.push({team:e.team,outId:e.outId,inId:e.inId,requestedBy:e.requestedBy,requestId:e.requestId,frame:e.frame});
+   }
+  }
  }
  return Object.assign(r,{status,snapshot,join,leave,message,step,exportState,restore,bots,reset,
   hostTime:fraction=>r.frame+Math.max(0,Math.min(1,fraction||0)),
