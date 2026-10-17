@@ -102,7 +102,7 @@ function createServer(options={}){
     if(d.type==='in'){try{r.message(ws.playerId,d,r.frame);}catch{}if(ws.playerId!==r.authority)send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
     send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
    r.message(ws.playerId,d,r.hostTime(fraction()));
-  }catch(e){send(ws,{type:'error',message:e.message});}});});
+  }catch(e){const message=typeof e?.message==='string'&&e.message.trim()?e.message:'Invalid room request.';send(ws,{type:'error',message});}});});
  const fraction=()=>accumulator/(1000/60);
  function tickRoom(r){r.clock++;
   if(r.authority==='server'){let n=0;while(r.frame<r.clock&&n++<240)r.step();
