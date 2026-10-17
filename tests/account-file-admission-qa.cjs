@@ -52,6 +52,37 @@ try {
   const corrupt = path.join(root, 'corrupt'); fs.mkdirSync(corrupt);
   fs.writeFileSync(path.join(corrupt, 'accounts.json'), '{"users":', 'utf8');
   rejectsQuickly(corrupt);
+
+  const invalidUtf8 = path.join(root, 'invalid-utf8'); fs.mkdirSync(invalidUtf8);
+  fs.writeFileSync(path.join(invalidUtf8,'accounts.json'),
+    Buffer.concat([Buffer.from('{"users":{},"sessions":{},"note":"'),Buffer.from([0xff]),Buffer.from('"}')]));
+  rejectsQuickly(invalidUtf8);
+
+  // A same-size pathname replacement DURING an admitted FD read must not
+  // validate content from a stale inode, even when new bytes look identical.
+  const swap = path.join(root, 'swap'); fs.mkdirSync(swap);
+  const swapFile = path.join(swap,'accounts.json');
+  fs.writeFileSync(swapFile,saved,'utf8');
+  const replacementPath = path.join(swap,'new.json');
+  fs.writeFileSync(replacementPath,saved,'utf8');
+  const originalReadSync = fs.readSync;
+  let swapped=false;
+  try {
+    fs.readSync = function(...args) {
+      const n=originalReadSync(...args);
+      if(!swapped) {
+        swapped=true;
+        fs.renameSync(replacementPath,swapFile);
+      }
+      return n;
+    };
+    assert.throws(()=>createAccounts(swap),/Account state unavailable/,
+      'changed inode while reading must be rejected before sessions are exposed');
+  } finally {
+    fs.readSync=originalReadSync;
+  }
+  assert.equal(swapped,true,'the race actually replaced the read source');
+
   assert.equal(fs.readFileSync(path.join(fresh,'accounts.json'),'utf8'),saved,
     'none of the rejection paths may modify a healthy account file');
   console.log('PASS bounded regular account admission, FIFO no-hang, symlink, directory, corrupt JSON, normal sessions');
