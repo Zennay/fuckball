@@ -1,0 +1,35 @@
+name: QA Custom Rooms lifecycle isolation and phases
+on:
+  pull_request:
+    paths:
+      - 'tests/room-lifecycle-qa.cjs'
+      - 'tests/room-isolation-qa.cjs'
+      - 'tests/room-phase-freeze-qa.cjs'
+      - 'headless/**'
+      - 'dist/room-core.js'
+      - '.github/workflows/room-lifecycle-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/room-lifecycle-qa.cjs'
+      - 'tests/room-isolation-qa.cjs'
+      - 'tests/room-phase-freeze-qa.cjs'
+      - 'headless/**'
+      - 'dist/room-core.js'
+      - '.github/workflows/room-lifecycle-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  room-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/room-lifecycle-qa.cjs
+      - run: node tests/room-isolation-qa.cjs
+      - run: node tests/room-phase-freeze-qa.cjs

@@ -3,10 +3,10 @@
 // goal, a red attacker starts 40-160 px away from it, and the goal is empty
 // (or defended by the policy's own keeper with "keeper"). Counts goals
 // within four seconds.
-//   node training/finishing-drill.cjs [policy.js] [attempts=300] [BFF|Classic] [keeper]
+//   node training/finishing-drill.cjs [policy.js] [attempts=300] [BFF|Classic] [keeper [keeperPolicy.js]]
 const path=require('node:path'),{makeRoom}=require('./selfplay.cjs');
 function rng(seed){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
-function drill(AI,attempts=300,mapName='BFF',withKeeper=false,seed=7){
+function drill(AI,attempts=300,mapName='BFF',withKeeper=false,seed=7,Keeper=AI){
  const random=rng(seed),env=makeRoom(),r=env.room;let goals=0,frames=0;
  const kickoff=()=>{r.startGame(0);env.step(2);for(const p of r.state.players)p.aiControlled=true;r.gameState.physicsState.discs[0].speed.x=.01;env.step(1);};
  try{
@@ -21,7 +21,7 @@ function drill(AI,attempts=300,mapName='BFF',withKeeper=false,seed=7){
    const ball=r.gameState.physicsState.discs[0];ball.pos.x=bx;ball.pos.y=by;ball.speed.x=0;ball.speed.y=0;
    const start=r.gameState.redScore;
    for(let t=0;t<240;t++){
-    if(t%2===0){r.playerInput(AI.tactical(r.state,2,t,{difficulty:'elite'}),2);for(const id of [1,3,4])r.playerInput(0,id);if(withKeeper)r.playerInput(AI.tactical(r.state,5,t,{difficulty:'elite'}),5);}
+    if(t%2===0){r.playerInput(AI.tactical(r.state,2,t,{difficulty:'elite'}),2);for(const id of [1,3,4])r.playerInput(0,id);if(withKeeper)r.playerInput(Keeper.tactical(r.state,5,t,{difficulty:'elite'}),5);}
     env.step(1);if(r.gameState.redScore!==start){goals++;frames+=t;break;}
    }
    if(r.gameState.redScore!==start||r.gameState.blueScore){r.stopGame(0);kickoff();}
@@ -29,5 +29,5 @@ function drill(AI,attempts=300,mapName='BFF',withKeeper=false,seed=7){
  }finally{r.destroy();}
  return{map:mapName,keeper:withKeeper,attempts,goals,rate:+(goals/attempts).toFixed(3),avgFrames:goals?Math.round(frames/goals):null};
 }
-if(require.main===module){const AI=require(path.resolve(process.argv[2]||path.join(__dirname,'../dist/ai/policy.js')));console.log(JSON.stringify(drill(AI,Number(process.argv[3]||300),process.argv[4]||'BFF',process.argv[5]==='keeper')));}
+if(require.main===module){const AI=require(path.resolve(process.argv[2]||path.join(__dirname,'../dist/ai/policy.js')));console.log(JSON.stringify(drill(AI,Number(process.argv[3]||300),process.argv[4]||'BFF',process.argv[5]==='keeper',7,process.argv[6]?require(path.resolve(process.argv[6])):AI)));}
 module.exports={drill};

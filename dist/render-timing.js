@@ -22,8 +22,13 @@ function createClock(capacity=WINDOW,decay=DECAY){const items=[];let total=0;
   reset(){items.length=0;total=0;}
  };}
 
-let copyId=-1; // engine copy caches start with id -1; internal ids are positive
-function copyState(state){return typeof state.AE==='function'?state.AE(--copyId):state.copy();}
+/* Native RoomState.AE() reuses its own WM buffer even when passed a new cache id.
+   Never publish that aliased buffer: a later prediction would rewrite an earlier
+   frame, hiding real pending-input movement in comparisons and consumers. */
+function copyState(state){
+ if(typeof state.copy!=='function')throw new TypeError('render prediction requires independent state.copy()');
+ return state.copy();
+}
 function applyInput(state,id,input){if(typeof state.Go==='function')state.Go(id,input);}
 
 /* events: [{frame,id,input}] in frame order; baseFrame: host frame number of `state`. */

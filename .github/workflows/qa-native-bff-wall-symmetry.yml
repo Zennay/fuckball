@@ -1,0 +1,42 @@
+name: Native BFF physics symmetry QA
+on:
+  pull_request:
+    paths:
+      - 'tests/native-bff-wall-symmetry.cjs'
+      - '.github/workflows/qa-native-bff-wall-symmetry.yml'
+      - 'dist/vendor/haxball.js'
+      - 'dist/stadiums/bff-big-v4.hbs'
+      - 'headless/runtime.cjs'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/native-bff-wall-symmetry.cjs'
+      - '.github/workflows/qa-native-bff-wall-symmetry.yml'
+      - 'dist/vendor/haxball.js'
+      - 'dist/stadiums/bff-big-v4.hbs'
+      - 'headless/runtime.cjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-bff-symmetry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact triggering source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert tested commit identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate native BFF symmetry and deterministic 60Hz playback
+        run: node tests/native-bff-wall-symmetry.cjs

@@ -1,0 +1,35 @@
+name: Fuckball negative RTT admission QA
+
+on:
+  pull_request:
+    paths:
+      - dist/netcode.js
+      - tests/netcode-negative-rtt-qa.cjs
+      - .github/workflows/qa-netcode-negative-rtt.yml
+
+permissions:
+  contents: read
+
+jobs:
+  negative-rtt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify immutable PR source identity
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Validate network and malformed RTT admission
+        run: |
+          node --check dist/netcode.js
+          node tests/netcode-negative-rtt-qa.cjs
+          node tests/netcode-handover-integrity.cjs
+          node tests/netcode.cjs

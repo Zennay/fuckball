@@ -46,7 +46,7 @@ if(!laneClear(aimX,aimY)){const mates=team.filter(q=>q.id!==id&&sign*(q.disc.pos
 const ax=aimX-ball.pos.x,ay=aimY-ball.pos.y,al=Math.hypot(ax,ay)||1,dx=ball.pos.x-d.pos.x,dy=ball.pos.y-d.pos.y,dist=Math.hypot(dx,dy);if(role==='striker'){tx=bx-ax/al*(ball.radius+d.radius+3);ty=by-ay/al*(ball.radius+d.radius+3);if(dx*sign<0&&Math.abs(dy)<35){ty=by+(d.pos.y>=by?1:-1)*45;}}
 const aligned=(dx*ax+dy*ay)/Math.max(1,dist*al)>.78;const close=dist<d.radius+ball.radius+3.8;const kick=close&&aligned&&!(p.input&16);if(dist<45&&aligned&&role==='striker'){tx=ball.pos.x;ty=ball.pos.y;}
 tx=Math.max(-width+20,Math.min(width-20,tx));ty=Math.max(-height+20,Math.min(height-20,ty));const mx=tx-d.pos.x-d.speed.x*5,my=ty-d.pos.y-d.speed.y*5;return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);}
-const levels={easy:{reaction:18,lead:5,aim:.93,teamwork:false},normal:{reaction:8,lead:12,aim:.85,slack:.3,teamwork:true},hard:{reaction:4,lead:18,aim:.78,slack:.18,teamwork:true},elite:{reaction:2,lead:24,aim:.72,slack:.08,teamwork:true}};
+const levels={easy:{reaction:18,lead:5,aim:.93,teamwork:false},normal:{reaction:6,lead:12,aim:.85,slack:.3,teamwork:true},hard:{reaction:2,lead:18,aim:.78,slack:.18,teamwork:true},elite:{reaction:1,lead:24,aim:.72,slack:.08,teamwork:true}};
 const defaultProfile={support:115,spread:115,cover:150,press:110,screen:55};
 function profile(raw={}){const out={};for(const k of Object.keys(defaultProfile)){const n=Number(raw[k]);out[k]=Number.isFinite(n)?Math.max(k==='screen'?30:60,Math.min(k==='screen'?90:220,n)):defaultProfile[k];}return out;}
 // Engine player movement from rest (plus current velocity) after k frames.
@@ -64,7 +64,9 @@ function fieldOf(state,teamId){
  const gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,width=Math.abs(gx);
  const ph=playerPhysics(s),G=[0];for(let k=1;k<=260;k++)G[k]=(G[k-1]+1)*ph.d;
  const players=state.players.filter(p=>p.disc&&(p.team.id===1||p.team.id===2)).map(p=>({id:p.id,mine:p.team.id===teamId,x:p.disc.pos.x,y:p.disc.pos.y,vx:p.disc.speed.x,vy:p.disc.speed.y,r:p.disc.radius}));
- return{sign,gx,ox,width,wallX:Math.min(width,s.bgWidth||width),height:s.bgHeight||s.height-30,gy:goal?Math.abs(goal.p0.y-goal.p1.y)/2:85,
+ // Their keeper: the opponent closest to their goal; it reacts to shots a little later than outfield players chase.
+ const foes=players.filter(p=>!p.mine).sort((a,c)=>Math.hypot(a.x-gx,a.y)-Math.hypot(c.x-gx,c.y));
+ return{theirKeeper:foes[0]&&Math.hypot(foes[0].x-gx,foes[0].y)<width*.5?foes[0].id:null,keeperDelay:4,sign,gx,ox,width,wallX:Math.min(width,s.bgWidth||width),height:s.bgHeight||s.height-30,gy:goal?Math.abs(goal.p0.y-goal.p1.y)/2:85,
   rb:b.radius,damp:b.damping||.99,bounce:.5,K:(Number(pp.pW??pp.kickStrength)||5)*(b.invMass||1),ph,G,players,delay:4,passBonus:.06,turn:.1,spread:.09,shotWindow:10,myDelay:4,holdCost:.18,turnover:.3,approach:1.5,hoof:.05,urgency:1,calm:.15};
 }
 // Roll the ball forward and find who can first play it (engine player
@@ -84,7 +86,7 @@ function rollout(F,x,y,vx,vy,skip,t0=0){
   if(t&1||ours&&theirs)continue;
   for(const p of F.players){
    if(p.mine?ours||p.id===F.keeper:theirs)continue;if(p.id===skip&&t<14)continue;
-   const k=Math.min(260,t+t0+(p.mine?F.myDelay:F.delay)),dx=x-p.x,dy=y-p.y,l=Math.hypot(dx,dy)||1,v0=(p.vx*dx+p.vy*dy)/l;
+   const k=Math.min(260,t+t0+(p.mine?F.myDelay:p.id===F.theirKeeper?F.keeperDelay:F.delay)),dx=x-p.x,dy=y-p.y,l=Math.hypot(dx,dy)||1,v0=(p.vx*dx+p.vy*dy)/l;
    if(l-p.r-F.rb-3<=F.ph.vmax*(k-F.G[k])+v0*F.G[k]){const hit={t,id:p.id,x,y};if(p.mine)ours=hit;else theirs=hit;}
   }
  }
@@ -111,7 +113,7 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
  // walking around the ball costs time the opponents use.
  const me=F.players.find(p=>p.id===kicker),mx=me?x-me.x:0,my=me?y-me.y:0,ml=Math.hypot(mx,my)||1,near=ml<120?1:.4;
  const score=(dx,dy)=>{const n=kickNormal(vx,vy,dx,dy,F.K),o=rollout(F,x,y,dx*n.speed,dy*n.speed,kicker,t0);let v=outcome(F,o);if(o.ours&&o.ours.id!==kicker&&!o.goal)v+=F.passBonus;if(me)v-=F.approach*near*F.urgency*(1-(n.nx*mx+n.ny*my)/ml);return{v,o};};
- const scored=dirs.map(([dx,dy,kind])=>{const {v,o}=score(dx,dy);return{dx,dy,kind:o.goal>0?'shot':o.ours&&o.ours.id!==kicker?'pass':kind,raw:v,to:o.ours?.id};});
+ const scored=dirs.map(([dx,dy,kind])=>{const {v,o}=score(dx,dy);return{dx,dy,kind:o.goal>0||o.shotT?'shot':o.ours&&o.ours.id!==kicker?'pass':kind,raw:v,to:o.ours?.id,roll:o};});
  // Players steer in eight directions, so prefer kicks that still work a
  // few degrees off target: rate the best few by their worst neighbour.
  scored.sort((a,c)=>c.raw-a.raw);let best=null;
@@ -119,10 +121,29 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
   v=(v*2+c.raw)/3;if(keep)v-=F.turn*(1-c.dx*keep[0]-c.dy*keep[1]);if(!best||v>best.value)best={...c,value:v};}
  return best;
 }
+// What the player on the ball would do with it right now: {type:'shot'|'pass'
+// |'clear', x, y, receiverId, margin, value}. x/y is where the ball is
+// expected to be played (receiver's touch, goal mouth, or landing spot);
+// margin is how many frames earlier our receiver gets there than any opponent.
+function chooseDelivery(state,p,options={}){
+ const g=state.gameState,b=g?.physicsState.discs[0];if(!p?.disc||!b||!(p.team.id===1||p.team.id===2))return null;
+ const F=fieldOf(state,p.team.id);F.keeper=options.keeper?null:keeperOf(state,p.team.id);Object.assign(F,characterOf(p.name)?.traits);
+ const k=bestKick(F,b.pos.x,b.pos.y,b.speed.x,b.speed.y,p.id,0),o=k.roll,to=o.ours?o.ours.t:Infinity,tt=o.theirs?o.theirs.t:Infinity;
+ const hit=o.ours&&o.ours.id!==p.id?o.ours:null;
+ if(k.kind==='shot'&&F.sign*b.pos.x>0){const t=(F.gx-b.pos.x)/(k.dx||1e-9);return{type:'shot',x:F.gx,y:b.pos.y+k.dy*t,receiverId:null,margin:tt-(o.shotT||o.t||0),value:k.value,dx:k.dx,dy:k.dy};}
+ if(hit&&to<tt)return{type:'pass',x:hit.x,y:hit.y,receiverId:hit.id,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
+ const end=o.theirs||o;return{type:'clear',x:end.x,y:end.y,receiverId:null,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
+}
+function keeperOf(state,teamId){const m=tactics.get(state);return m?.['keeper'+teamId]??null;}
 function teamPlan(state,teamId,tick=0,raw={}){
  // All teammates share one plan per tick; computing it once keeps the
  // passing and interception searches cheap with eight bots.
- let cache=plans.get(state);if(!cache)plans.set(state,cache={});const ball=state.gameState?.physicsState.discs[0],sig=tick+':'+JSON.stringify(raw)+':'+(ball?ball.pos.x+','+ball.pos.y+','+ball.speed.x+','+ball.speed.y:'')+':'+state.players.map(p=>p.id+'.'+p.team.id+(p.disc?'.'+p.disc.pos.x+'.'+p.disc.pos.y:'')).join('|');
+ let cache=plans.get(state);if(!cache)plans.set(state,cache={});const ball=state.gameState?.physicsState.discs[0];
+ // Same-tick host handovers can change whether a human is AI-controlled
+ // without moving anyone. Keeper/interception also depends on individual
+ // speed and collision radii, and characters on names. All of these must
+ // invalidate cached tactics; unchanged snapshots still share one plan.
+ const sig=tick+':'+JSON.stringify(raw)+':'+(ball?ball.pos.x+','+ball.pos.y+','+ball.speed.x+','+ball.speed.y+','+ball.radius+','+ball.damping:'')+':'+state.players.map(p=>p.id+'.'+p.team.id+'.'+p.name+'.'+(p.aiControlled===false?'human':'ai')+(p.disc?'.'+p.disc.pos.x+'.'+p.disc.pos.y+'.'+p.disc.speed.x+'.'+p.disc.speed.y+'.'+p.disc.radius:'')).join('|');
  if(cache[teamId]?.sig===sig)return cache[teamId].plan;const plan=buildPlan(state,teamId,tick,raw);cache[teamId]={sig,plan};return plan;
 }
 function buildPlan(state,teamId,tick=0,raw={}){
@@ -288,5 +309,5 @@ function tactical(state,id,tick=0,options={}){
  const vx=d.pos.x-b.pos.x,vy=d.pos.y-b.pos.y,l=Math.hypot(vx,vy),R=d.radius+b.radius+14,behind=(b.pos.x-plan.field.ox)*vx+b.pos.y*vy>0;if(behind&&l>0&&l<R+20){x+=vx/l*(R+20-l)*1.5;y+=vy/l*(R+20-l)*1.5;}
  const [sx,sy]=steer(d,x,y,5,1.5);return key(sx,sy,false);
 }
-root.FuckballAI={characters,characterOf,botName,intercept,playerPhysics,levels,defaultProfile,profile,teamPlan,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
+root.FuckballAI={characters,characterOf,botName,chooseDelivery,intercept,playerPhysics,levels,defaultProfile,profile,teamPlan,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
 })(typeof window!=='undefined'?window:globalThis);

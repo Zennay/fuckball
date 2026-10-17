@@ -5,6 +5,15 @@
 const crypto=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const MAGIC='258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+// Client text and close-reason payloads must be valid UTF-8 (RFC 6455 §8.1).
+// Validate raw bytes before a lossy Buffer.toString() can replace malformed
+// input with U+FFFD. Binary messages deliberately bypass UTF-8 validation.
+const utf8Decoder=new TextDecoder('utf-8',{fatal:true});
+function validUtf8(bytes){try{utf8Decoder.decode(bytes);return true;}catch{return false;}}
+function validPeerCloseCode(code){
+ return code>=3000&&code<=4999||
+   code>=1000&&code<=1014&&code!==1004&&code!==1005&&code!==1006;
+}
 class WebSocket extends EventEmitter {
   static OPEN=1;
   constructor(socket,maxPayload){
@@ -26,7 +35,13 @@ class WebSocket extends EventEmitter {
   send(s){this.frame(Buffer.isBuffer(s)?2:1,s);}
   close(code=1000,reason=''){
     if(this.readyState!==1)return;
-    const reasonBytes=Buffer.from(String(reason)).subarray(0,123),buf=Buffer.alloc(2+reasonBytes.length);
+    // RFC 6455 close control frames allow at most 125 bytes including the
+    // two-byte status. Never split a multi-byte UTF-8 codepoint at byte 123:
+    // a truncated trailing sequence would make our own close frame invalid.
+    const encoded=Buffer.from(String(reason));
+    let boundary=Math.min(123,encoded.length);
+    while(boundary>0&&!validUtf8(encoded.subarray(0,boundary)))boundary--;
+    const reasonBytes=encoded.subarray(0,boundary),buf=Buffer.alloc(2+reasonBytes.length);
     buf.writeUInt16BE(code,0);reasonBytes.copy(buf,2);
     this.frame(8,buf);this.readyState=2;this.socket.end();
     // On abnormal peer disconnect do not leave a socket hanging indefinitely.
@@ -40,16 +55,42 @@ class WebSocket extends EventEmitter {
       const a=this.buf[0],b=this.buf[1],opcode=a&15,fin=(a&128)!==0,masked=(b&128)!==0;
       if(!fin||!masked||(a&0x70)){this.close(1002,'Unsupported frame');return;}
       let len=b&127,pos=2;
-      if(len===126){if(this.buf.length<4)return;len=this.buf.readUInt16BE(2);pos=4;}
-      else if(len===127){if(this.buf.length<10)return;const size=this.buf.readBigUInt64BE(2);if(size>BigInt(this.maxPayload)){this.close(1009,'Too large');return;}len=Number(size);pos=10;}
+      if(len===126){
+        if(this.buf.length<4)return;
+        len=this.buf.readUInt16BE(2);pos=4;
+        // RFC 6455 §5.2: use the shortest possible length encoding.
+        if(len<126){this.close(1002,'Non-minimal frame length');return;}
+      }
+      else if(len===127){
+        if(this.buf.length<10)return;
+        const size=this.buf.readBigUInt64BE(2);
+        // 64-bit lengths have a reserved high bit and represent >= 65536.
+        // Reject noncanonical wire format before waiting for the payload.
+        if(size<65536n||size>0x7fffffffffffffffn){this.close(1002,'Invalid frame length');return;}
+        if(size>BigInt(this.maxPayload)){this.close(1009,'Too large');return;}
+        len=Number(size);pos=10;
+      }
+      // RFC 6455 section 5.5: ALL control frames (close, ping, pong) are
+      // limited to 125 bytes. Do not emit invalid oversized pong replies.
+      if((opcode&8)&&len>125){this.close(1002,'Invalid control frame');return;}
       if(len>this.maxPayload){this.close(1009,'Too large');return;}
       if(this.buf.length<pos+4+len)return;
       const key=this.buf.subarray(pos,pos+4),payload=Buffer.from(this.buf.subarray(pos+4,pos+4+len));
       this.buf=this.buf.subarray(pos+4+len);
       for(let i=0;i<payload.length;i++)payload[i]^=key[i&3];
-      if(opcode===1){this.emit('message',payload,false);}
+      if(opcode===1){
+        if(!validUtf8(payload)){this.close(1007,'Invalid UTF-8 text');return;}
+        this.emit('message',payload,false);
+      }
       else if(opcode===2){this.emit('message',payload,true);}
-      else if(opcode===8){this.close(1000);return;}
+      else if(opcode===8){
+        if(payload.length===1){this.close(1002,'Invalid close frame');return;}
+        if(payload.length>=2){
+          if(!validPeerCloseCode(payload.readUInt16BE(0))){this.close(1002,'Invalid close code');return;}
+          if(!validUtf8(payload.subarray(2))){this.close(1007,'Invalid UTF-8 close');return;}
+        }
+        this.close(1000);return;
+      }
       else if(opcode===9){this.frame(10,payload);}
       else if(opcode!==10){this.close(1003,'Unsupported opcode');return;}
     }
@@ -60,13 +101,22 @@ class WebSocketServer extends EventEmitter{
     super();this.maxPayload=maxPayload;
     server.on('upgrade',(req,socket,head)=>{
       const key=req.headers['sec-websocket-key'],version=req.headers['sec-websocket-version'];
+      // RFC 6455: the Connection header must carry an Upgrade token and
+      // Sec-WebSocket-Key is canonical base64 encoding of exactly 16 bytes.
+      // Noncanonical padding and URL-safe base64 must fail closed.
+      const connection=req.headers.connection;
+      const validConnection=typeof connection==='string'&&connection.split(',').some(token=>token.trim().toLowerCase()==='upgrade');
+      const validKey=typeof key==='string'&&/^[A-Za-z0-9+/]{22}==$/.test(key)&&
+        Buffer.from(key,'base64').length===16&&Buffer.from(key,'base64').toString('base64')===key;
       const origin=req.headers.origin;
       let allowedOrigin=true;
       if(origin&&process.env.ALLOW_CROSS_ORIGIN!=='1'){
         try{allowedOrigin=new URL(origin).host===req.headers.host;}catch{allowedOrigin=false;}
       }
-      if(req.url?.split('?')[0]!=='/ws'||req.headers.upgrade?.toLowerCase()!=='websocket'||version!=='13'||
-        typeof key!=='string'||!/^[-\w+/]{22}==$/.test(key)||!allowedOrigin){
+      // RFC 6455 section 4.1 requires GET; arbitrary upgraded POST/HEAD/etc.
+      // must never be admitted as a game WebSocket, even with valid headers.
+      if(req.method!=='GET'||req.url?.split('?')[0]!=='/ws'||req.headers.upgrade?.toLowerCase()!=='websocket'||version!=='13'||
+        !validConnection||!validKey||!allowedOrigin){
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;
       }
       socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+crypto.createHash('sha1').update(key+MAGIC).digest('base64')+'\r\n\r\n');

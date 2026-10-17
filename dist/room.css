@@ -50,15 +50,15 @@ body{background:#0d1113}
 .rm-small{font-size:11px;color:var(--rm-muted);margin:6px 0}
 
 /* Teams */
-.rm-teams{display:grid;grid-template-columns:1fr .8fr 1fr;gap:10px}
-.rm-team{display:flex;flex-direction:column;min-height:168px;background:#ffffff08;border:1px solid var(--rm-line);border-radius:10px;overflow:hidden;transition:border-color .12s,background .12s}
+.rm-teams{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr);gap:10px;align-items:stretch}
+.rm-team{display:flex;flex-direction:column;min-width:0;min-height:168px;background:#ffffff08;border:1px solid var(--rm-line);border-radius:10px;overflow:hidden;transition:border-color .12s,background .12s}
 .rm-team.red{box-shadow:inset 0 3px 0 var(--rm-red)}.rm-team.blue{box-shadow:inset 0 3px 0 var(--rm-blue)}.rm-team.spec{box-shadow:inset 0 3px 0 #9aa7ab}
 .rm-team.rm-drop{border-color:var(--rm-lime);background:#c6ff4214}
 .rm-team-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px 6px;font-weight:800;font-size:13px;letter-spacing:.3px}
 .rm-team.red .rm-team-head>span:first-child{color:var(--rm-red)}.rm-team.blue .rm-team-head>span:first-child{color:var(--rm-blue)}.rm-team.spec .rm-team-head>span:first-child{color:#c4cfd1}
 .rm-count{font-size:11px;font-weight:600;color:var(--rm-muted);background:#ffffff12;border-radius:20px;padding:2px 8px}
-.rm-players{flex:1;display:flex;flex-direction:column;gap:4px;padding:4px 8px 8px;min-height:60px}
-.rm-player{color:var(--rm-text);display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;background:#ffffff0d;font-size:12.5px;min-width:0;user-select:none;touch-action:none}
+.rm-players{flex:1 1 auto;display:flex;flex-direction:column;gap:4px;padding:4px 8px 8px;min-height:60px;max-height:clamp(128px,32vh,270px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#ffffff55 transparent}
+.rm-player{flex-shrink:0;color:var(--rm-text);display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;background:#ffffff0d;font-size:12.5px;min-width:0;user-select:none;touch-action:pan-y}
 .rm-player.draggable{cursor:grab}
 .rm-player.draggable:hover{background:#ffffff1a}
 .rm-player.rm-dragging{opacity:.35}
@@ -111,8 +111,9 @@ body{background:#0d1113}
  .rm-head{flex-wrap:wrap;gap:10px;padding:12px}
  .rm-score{order:3;width:100%;justify-content:center;margin:0}
  .rm-head-actions{margin-left:auto}
- .rm-teams{grid-template-columns:1fr 1fr}
+ .rm-teams{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .rm-team.spec{grid-column:1/-1;min-height:0;order:3}
+ .rm-players{max-height:min(220px,30vh)}
  .rm-settings,.rm-form,.rm-adv-grid{grid-template-columns:1fr 1fr}
  .rm-settings .rm-stadium{grid-column:1/-1}
  .rm-binding{grid-template-columns:1fr 1fr 1fr;font-size:12px}

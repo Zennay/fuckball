@@ -1,0 +1,60 @@
+name: QA tracked known-red acceptance
+on:
+  pull_request:
+    paths:
+      - 'tests/input-replay-acceptance.cjs'
+      - 'tests/prediction-high-refresh-qa.cjs'
+      - 'tests/known-red-classification.cjs'
+      - 'scripts/qa-known-red-classifier.cjs'
+      - 'tests/room-roster-acceptance.cjs'
+      - 'tests/roster-red-classification.cjs'
+      - 'scripts/qa-roster-overflow.cjs'
+      - 'scripts/qa-known-red-log-gate.cjs'
+      - 'tests/qa-known-red-log-gate.cjs'
+      - 'dist/render-timing.js'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-known-red-acceptance.yml'
+  workflow_dispatch:
+jobs:
+  check-known-red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build native client SDK
+        run: npm run build:solo
+      - name: Execute tracked 4v4 acceptance
+        shell: bash
+        run: |
+          set +e
+          npm run test:roster-acceptance > "$RUNNER_TEMP/roster.txt" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/roster.txt"
+          node scripts/qa-known-red-log-gate.cjs roster "$result" "$RUNNER_TEMP/roster.txt"
+          if [ "$result" -eq 0 ]; then
+            echo "4v4 roster acceptance: GREEN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=4v4 roster known RED::Issue #31 not yet implemented"
+            echo "4v4 roster acceptance: known RED (#31); do not treat as release-ready" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Execute tracked speculative-input acceptance
+        shell: bash
+        run: |
+          set +e
+          npm run test:input-replay-acceptance > "$RUNNER_TEMP/input-replay.txt" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/input-replay.txt"
+          node scripts/qa-known-red-log-gate.cjs input "$result" "$RUNNER_TEMP/input-replay.txt"
+          if [ "$result" -eq 0 ]; then
+            echo "Speculative input acceptance: GREEN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning title=Speculative input known RED::Issue #28 not yet implemented"
+            echo "Speculative input acceptance: known RED (#28); do not treat as release-ready" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Full deterministic core regression
+        run: npm test

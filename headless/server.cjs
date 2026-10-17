@@ -20,6 +20,13 @@ function createServer(options={}){
   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.clients.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
+ // Track the underlying TCP sockets as well as admitted WebSockets: HTTP
+ // upgrades and early handshake rejections can outlive the room client set.
+ const openSockets=new Set();
+ server.on('connection',socket=>{
+  openSockets.add(socket);
+  socket.once('close',()=>openSockets.delete(socket));
+ });
  const wss=new WebSocketServer({server,maxPayload:2*1024*1024});
  const send=(ws,data)=>{if(ws.readyState===1&&ws.socket.writableLength<262144)ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
  const RoomCore=require('../dist/room-core.js'),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','error','recordingStatus','recording']);
@@ -60,10 +67,10 @@ function createServer(options={}){
   const candidates=['server',...players.filter(id=>{const rep=r.reports.get(id);return rep&&now-rep.at<6000&&rep.eligible&&r.sockets.get(id)?.mesh&&!(r.penalty.get(id)>now);})];
   const forced=options.forceHost?.(r,candidates);if(forced!==undefined){if(forced!==r.authority&&(forced==='server'||candidates.includes(forced)))migrate(r,forced,'forced');return;}
   const d=r.election.decide({rtt,players,candidates,current:r.authority,now});if(d.switch)migrate(r,d.host,d.reason);}
- function join(ws,r){if(r.sockets.size>=8)throw Error('Room is full.');
+ function join(ws,r){
   // A browser host cannot add players; take the room back first (a seamless handover), then join.
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
-  const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
+  while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);}
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;r.sockets.delete(id);r.reports.delete(id);
@@ -103,6 +110,18 @@ function createServer(options={}){
   else{const m=r.migration,late=m?Date.now()-m.started>3000+standbyTimeout:Date.now()-r.standbyAt>standbyTimeout;if(late)failover(r,m?'release timeout':'standby timeout');}
   if(r.clock%60===0)election(r);}
  let previous=performance.now(),accumulator=0,frame=0;const timer=setInterval(()=>{const now=performance.now();accumulator+=Math.min(250,now-previous);previous=now;let advanced=false;while(accumulator>=1000/60){for(const r of rooms.values())tickRoom(r);accumulator-=1000/60;frame++;advanced=true;}if(advanced&&frame%600===0)for(const ws of clients)if(Date.now()-ws.lastSeen>45000)ws.close(1001,'Timeout');},4);timer.unref();
- const close=()=>new Promise(resolve=>{clearInterval(timer);for(const ws of clients)ws.close();for(const r of rooms.values())r.destroy();rooms.clear();server.close(resolve);});return{server,rooms,close,listen:(port=options.port||3417,host=options.host||'127.0.0.1')=>new Promise(resolve=>server.listen(port,host,()=>resolve(server.address())))};
+ const close=()=>new Promise(resolve=>{
+  clearInterval(timer);
+  // Graceful WebSocket close first; do not strand shutdown forever if a raw
+  // upgrade or HTTP keep-alive client ignores the closing handshake.
+  for(const ws of clients)ws.close();
+  for(const r of rooms.values())r.destroy();rooms.clear();
+  const watchdog=setTimeout(()=>{
+   for(const ws of clients)ws.socket.destroy();
+   for(const socket of openSockets)socket.destroy();
+   server.closeAllConnections?.();
+  },500);
+  server.close(()=>{clearTimeout(watchdog);resolve();});
+ });return{server,rooms,close,listen:(port=options.port||3417,host=options.host||'127.0.0.1')=>new Promise(resolve=>server.listen(port,host,()=>resolve(server.address())))};
 }
 module.exports={createServer};if(require.main===module){const app=createServer();app.listen(Number(process.env.PORT)||3417,process.env.HOST||'0.0.0.0').then(a=>console.log('Fuckball headless server: http://'+a.address+':'+a.port));for(const s of ['SIGINT','SIGTERM'])process.on(s,()=>app.close().then(()=>process.exit(0)));}

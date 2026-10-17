@@ -1,0 +1,32 @@
+name: Fuckball headless RAF cancellation QA
+on:
+  pull_request:
+    paths:
+      - headless/runtime.cjs
+      - tests/headless-raf-cancellation-qa.cjs
+      - .github/workflows/qa-headless-raf-cancellation.yml
+permissions:
+  contents: read
+jobs:
+  headless-raf-cancellation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 audited pin
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact source identity
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$EXPECTED_HEAD" ]; then test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"; fi
+      - name: Headless RAF cancellation regression
+        run: |
+          node --check headless/runtime.cjs
+          node tests/headless-raf-cancellation-qa.cjs
+      - name: Existing headless engine smoke
+        run: node tests/engine.cjs
