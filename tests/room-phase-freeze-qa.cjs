@@ -10,10 +10,14 @@ async function until(fn,label){
   throw Error('Timed out: '+label);
 }
 async function connect(url,connections,join){
-  const ws=new WebSocket(url);ws.binaryType='arraybuffer';ws.messages=[];ws.packets=0;
+  const ws=new WebSocket(url);ws.binaryType='arraybuffer';ws.messages=[];ws.packets=0;ws.acks=[];
   ws.onmessage=event=>{
-    if(typeof event.data==='string')ws.messages.push(JSON.parse(event.data));
-    else ws.packets++;
+    if(typeof event.data==='string'){ws.messages.push(JSON.parse(event.data));return;}
+    ws.packets++;
+    if(event.data instanceof ArrayBuffer&&event.data.byteLength>=20){
+      const v=new DataView(event.data);
+      if(v.getUint32(0)===0x46423203)ws.acks.push(v.getUint32(8));
+    }
   };
   connections.push(ws);
   await Promise.race([
@@ -90,6 +94,26 @@ async function main(){
     assert.equal(room.paused,true);
     assert.equal(app.rooms.get(host.room),room);
 
+    // A future-stamped guest direction is acknowledged on the native input
+    // timeline while paused, but must never move the player's actual disc.
+    const guestFrozen=capture(room,guest.id),timeline=room.clients.get(guest.id).timeline;
+    assert(timeline,'guest negotiated stamped v3 input');
+    guest.ws.send(JSON.stringify({type:'in',c:[[1,room.frame+3,8]]}));
+    await until(()=>timeline.appliedSeq===1,'paused future frame input enters timeline');
+    assert.equal(timeline.current,8);
+    assert.deepEqual(capture(room,guest.id),guestFrozen,
+      'pending input cannot move guest or game clock during the pause');
+    // Duplicate packets with the same sequence cannot override the already
+    // accepted pending direction at the pause boundary.
+    guest.ws.send(JSON.stringify({type:'in',c:[[1,room.frame+2,4]]}));
+    await sleep(85);
+    assert.equal(timeline.appliedSeq,1,'replayed seq1 input cannot overwrite ACK');
+    assert.equal(timeline.current,8,'replayed seq1 does not reverse direction');
+    assert.deepEqual(capture(room,guest.id),guestFrozen,
+      'duplicate/replayed input never advances paused physics');
+    assert(!guest.ws.acks.includes(1),
+      'paused game suppresses new gameplay snapshots until resumed');
+
     host.ws.send(JSON.stringify({type:'pause',value:false}));
     await until(()=>room.paused===false,'host resumes');
     const resumedAt=room.frame;
@@ -99,6 +123,11 @@ async function main(){
     assert(resumed.scores[2]>=later.scores[2],
       'resuming cannot rewind match time');
     await until(()=>host.ws.packets>pausedPacketCount,'binary snapshots resume');
+    await until(()=>guest.ws.acks.includes(1),'guest receives replay ACK after resume');
+    const beforeMoved=guestFrozen.player[0];
+    await until(()=>capture(room,guest.id).player[0]>beforeMoved+0.25,
+      'queued rightward input moves only after authoritative resume');
+    assert.equal(timeline.appliedSeq,1);
 
     host.ws.send(JSON.stringify({type:'stop'}));
     await until(()=>room.started===false,'host stops match');
@@ -122,7 +151,7 @@ async function main(){
     assert.equal(room.sockets.get(host.id),hostSocket,'host socket never reconnects');
     const restarted=capture(room,host.id);
     assert.deepEqual(restarted.scores.slice(0,2),[0,0],'new game starts with zero score');
-    console.log('PASS authoritative match phases: guest denial, native pause/stop freeze, resume, new-game reset and stable sockets');
+    console.log('PASS authoritative match phases: guest denial, native pause/stop freeze, queued v3 input and post-resume ACK, new-game reset and stable sockets');
   }finally{
     for(const ws of connections)try{ws.close();}catch{}
     await app.close();
