@@ -1,0 +1,42 @@
+name: QA native AI team-plan cache identity
+on:
+  pull_request:
+    paths:
+      - 'dist/ai/policy.js'
+      - 'tests/ai-plan-cache-state-qa.cjs'
+      - '.github/workflows/qa-ai-plan-cache-state.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'dist/ai/policy.js'
+      - 'tests/ai-plan-cache-state-qa.cjs'
+      - '.github/workflows/qa-ai-plan-cache-state.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-ai-plan-cache:
+    name: Native BFF 4v4 AI cache regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact commit without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify source commit identity
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Build reproducible native solo runtime
+        run: npm run build:solo
+      - name: Reject stale AI plans in real BFF game states
+        run: node --check tests/ai-plan-cache-state-qa.cjs && node tests/ai-plan-cache-state-qa.cjs
+      - name: Preserve passing keeper and tactical gameplay baselines
+        run: node tests/team-ai.cjs && node tests/passing.cjs && node tests/sweeper-keeper.cjs
