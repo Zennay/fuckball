@@ -176,6 +176,28 @@ async function main() {
     assert.equal(room.started,true,'substitution never resets match lifecycle');
     assert.equal(room.owner,departing,'benching owner never transfers host privileges');
     assert.equal(room.pendingSubs.size,0,'no replayable pending request after accepted swap');
+    // A substitute's minutes start only after joining the pitch; the
+    // departing bench player stops accruing time, including during pauses.
+    const outgoingPausedFrames=room.activeFrames.get(nextOutgoing)||0;
+    const incomingPausedFrames=room.activeFrames.get(nextIncoming)||0;
+    assert.equal(incomingPausedFrames,0,'incoming bench member earned no live time before substitution');
+    assert(outgoingPausedFrames>0,'outgoing player earned active time before being benched');
+    assert.equal(room.activeFrames.get(departing)||0,0,'host benched before kickoff gets no minutes');
+    await sleep(100);
+    assert.equal(room.activeFrames.get(nextOutgoing)||0,outgoingPausedFrames,'bench time stays frozen while paused');
+    assert.equal(room.activeFrames.get(nextIncoming)||0,incomingPausedFrames,'new player gets no paused time');
+    host.ws.send(JSON.stringify({type:'pause',value:false}));
+    await until(()=>!room.paused&&(room.activeFrames.get(nextIncoming)||0)>=incomingPausedFrames+3,'incoming player accrues live play time');
+    assert.equal(room.activeFrames.get(nextOutgoing)||0,outgoingPausedFrames,'outgoing bench player never accrues live time');
+    assert.equal(room.activeFrames.get(departing)||0,0,'inactive host never accrues live time');
+    host.ws.send(JSON.stringify({type:'pause',value:true}));
+    await until(()=>room.paused===true,'pause again after playing-time check');
+    const currentFrames=room.activeFrames.get(nextIncoming);
+    await sleep(100);
+    assert.equal(room.activeFrames.get(nextIncoming),currentFrames,'paused match does not award extra frames');
+    const exportedTimes=new Map(room.exportState({final:false}).activeFrames);
+    assert.equal(exportedTimes.get(nextIncoming),currentFrames,'active time travels with peer-host standby');
+    assert.equal(exportedTimes.get(nextOutgoing),outgoingPausedFrames,'bench player history survives standby export');
     const errorCount=adversary.messages.filter(m=>m.type==='error').length;
     adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,requestId:secondRequestId,accept:true}));
     await until(()=>adversary.messages.filter(m=>m.type==='error')[errorCount],'duplicate consent denied');
