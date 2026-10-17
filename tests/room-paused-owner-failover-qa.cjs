@@ -102,9 +102,17 @@ async function main() {
 
     successor.ws.send(JSON.stringify({type:'pause',value:false}));
     await until(() => !room.paused,'new legitimate host resumes');
-    const oldTime = game(room,successor.id).score[2];
-    await until(() => game(room,successor.id).score[2] > oldTime,
-      'native clock advances after authorized resume');
+    // The native clock may remain at 0 during kickoff before a ball touch:
+    // require monotonic elapsed match time, and independently prove that
+    // native player physics (not just the server frame counter) resumed.
+    const baseline = game(room,successor.id), frameAtResume = room.frame;
+    successor.ws.send(JSON.stringify({type:'in',c:[[1,room.frame+3,8]]}));
+    await until(() => room.frame > frameAtResume + 6,
+      '60Hz room frames continue after authorized resume');
+    await until(() => game(room,successor.id).player[0] > baseline.player[0] + 0.3,
+      'native successor player moves on real rightward v3 input after resume');
+    assert(game(room,successor.id).score[2] >= baseline.score[2],
+      'native elapsed time must never rewind after resume');
     await until(() => successor.ws.frames.at(-1) > lastFrame,
       'new gameplay snapshots advance after resume');
     assert.equal(room.started,true);
