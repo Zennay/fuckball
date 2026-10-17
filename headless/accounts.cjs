@@ -59,6 +59,24 @@ function createAccounts(dir){
    const record=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
    if(!record(loaded)||!record(loaded.users)||!record(loaded.sessions))
     throw Error('Account state invalid; refusing to start.');
+   // A structurally valid top-level object is not sufficient: malformed
+   // persisted hashes, sessions or names otherwise fail later during login or
+   // token handling, after the service has already accepted connections.
+   // Reject the entire existing registry before exposing any partial state.
+   const invalid=()=>{throw Error('Account state invalid; refusing to start.');};
+   for(const [id,u] of Object.entries(loaded.users)){
+    if(!/^[a-z0-9_-]{3,20}$/.test(id)||!record(u)||
+       typeof u.name!=='string'||!NAME.test(u.name)||
+       u.name.toLowerCase()!==id||
+       typeof u.salt!=='string'||!/^[0-9a-f]{32}$/.test(u.salt)||
+       typeof u.hash!=='string'||!/^[0-9a-f]{64}$/.test(u.hash)||
+       !Number.isSafeInteger(u.created)||u.created<0)invalid();
+   }
+   for(const [digest,session] of Object.entries(loaded.sessions)){
+    if(!/^[0-9a-f]{64}$/.test(digest)||!record(session)||
+       typeof session.u!=='string'||!Object.hasOwn(loaded.users,session.u)||
+       !Number.isSafeInteger(session.exp)||session.exp<=0)invalid();
+   }
    // Prototype-free dictionaries allow legitimate names such as `constructor`
    // and `__proto__` without inheritance or prototype mutation.
    data={users:Object.assign(Object.create(null),loaded.users),
