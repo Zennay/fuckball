@@ -1,0 +1,27 @@
+name: QA High-ID Human Host Handover
+on:
+  pull_request:
+    paths:
+      - 'tests/room-high-id-human-acceptance.cjs'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-high-id-human.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/room-high-id-human-acceptance.cjs'
+      - 'dist/room-core.js'
+      - '.github/workflows/qa-high-id-human.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  high-id-human:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/room-high-id-human-acceptance.cjs
