@@ -1,0 +1,30 @@
+name: QA Account-to-Room Session Integrity
+on:
+  pull_request:
+    paths:
+      - 'tests/account-room-session-qa.cjs'
+      - 'headless/accounts.cjs'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-account-room-sessions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/account-room-session-qa.cjs'
+      - 'headless/accounts.cjs'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-account-room-sessions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  account-room:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/accounts.cjs
+      - run: node tests/account-room-session-qa.cjs
