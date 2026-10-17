@@ -10,11 +10,11 @@ function b64(bytes){if(typeof Buffer!=='undefined')return Buffer.from(bytes).toS
 /* opts: {hb, id, AI, Netcode, v3=true, send(clientId, objectOrUint8Array), canSend(clientId)} */
 function createRoomCore(opts){
  const {hb,AI,Netcode}=opts,send=opts.send,canSend=opts.canSend||(()=>true),API=hb._runtime.API;
- const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false};
+ const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map()};
  const broadcast=data=>{for(const id of r.clients.keys())send(id,data);};
  hb.onGameTick=()=>{r.tick++;if(!r.started||r.paused)return;if(r.tick%2===0)for(const p of hb._room.state.players)if(r.botIds.has(p.id))hb.setPlayerInput(p.id,AI.tactical(hb._room.state,p.id,r.tick,{difficulty:r.botLevels[p.id]||r.difficulty,profile:r.teamProfile}));};
  hb.onTeamGoal=team=>broadcast({type:'goal',team});hb.onTeamVictory=()=>{r.started=false;status();snapshot();};
- function status(){broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size,map:hb._room.state.stadium.name});}
+ function status(){broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size,map:hb._room.state.stadium.name,benches:[...r.benches],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,accepted:s.accepted}))});}
  function roomBytes(){return API.Replay.writeAll(Object.assign(new API.Replay.ReplayData(),{roomData:hb._room.takeSnapshot(),events:[],goalMarkers:[],totalFrames:0,version:3}));}
  /* Snapshot header v2: magic, seq, ack, frame. v3 adds the input slack in 1/1000 frame. */
  function snapshot(){const bytes=roomBytes();r.seq++;let v2=null,v3=null;
@@ -26,7 +26,7 @@ function createRoomCore(opts){
  // host arranged by dragging survive restarts.
  function addBot(team){let id=100;const used=new Set(hb._room.state.players.map(p=>p.id));while(used.has(id))id++;hb.addPlayer(id,'AI '+(id-99),team);r.botIds.add(id);hb._room.state.players.find(p=>p.id===id).aiControlled=true;}
  function bots(refill=true){const size=r.mode==='4v4'?4:r.mode==='2v2'?2:1;if(refill)for(const p of [...hb._room.state.players])if(r.botIds.has(p.id)){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}for(const team of [1,2]){const list=hb.getPlayerList().filter(p=>p.team===team);for(let i=list.length;i<size;i++)addBot(team);if(!refill)for(const p of list.filter(p=>r.botIds.has(p.id)).slice(0,Math.max(0,list.length-size))){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}}for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);}
- function reset(start=true){hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
+ function reset(start=true){r.pendingSubs.clear();hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
  /* id: unique client/player id, chosen by the server and never reused for a bot. */
  function join(id,{name='Player',netcode=2,account=null}={}){if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
@@ -38,23 +38,66 @@ function createRoomCore(opts){
   hb.addPlayer(id,c.name,assigned);
   send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
- function leave(id){if(!r.clients.delete(id))return !r.clients.size;hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.benches.delete(id);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ // An approved substitute executes only while the game is stopped/paused.
+ // It changes team slots atomically in one JavaScript turn: no score, clock,
+ // session id, room id or physics state reset.
+ function completeSub(team){
+  const p=r.pendingSubs.get(team);if(!p||!p.accepted)return false;
+  if(r.started&&!r.paused)return false;
+  const valid=Date.now()<=p.expiresAt&&r.clients.has(p.inId)&&r.clients.has(p.outId)&&
+   r.benches.get(p.inId)===team&&hb.getPlayer(p.inId)?.team===0&&hb.getPlayer(p.outId)?.team===team;
+  r.pendingSubs.delete(team);
+  if(!valid)return false;
+  hb.setPlayerTeam(p.outId,0);hb.setPlayerTeam(p.inId,team);
+  r.benches.delete(p.inId);r.benches.set(p.outId,team);
+  broadcast({type:'subApplied',team,outId:p.outId,inId:p.inId,frame:r.frame});
+  return true;
+ }
  function message(id,d,hostTime=r.frame){const c=r.clients.get(id);if(!c)throw Error('Join a room first.');
   if(d.type==='in'){if(!c.timeline||!Array.isArray(d.c)||d.c.length>64)throw Error('Invalid input.');c.timeline.receive(d.c,r.frame,hostTime);return;}
   if(d.type==='input'){if(c.timeline)throw Error('Invalid input.');if(!Number.isInteger(d.value)||d.value<0||d.value>31)throw Error('Invalid input.');hb.setPlayerInput(id,d.value);if(Number.isInteger(d.seq)&&d.seq>=0&&d.seq<=0xffffffff)c.lastInputSeq=d.seq;return;}
   if(d.type==='chat'){const name=hb.getPlayer(id)?.name||'Player';for(const peer of r.clients.keys())if(peer!==id)send(peer,{type:'chat',text:name+': '+String(d.text||'').replace(/^.*?: /,'').slice(0,140)});return;}
+  // Consent comes from the named incoming human's own authenticated socket,
+  // never from a host-provided arbitrary player id or client-supplied admin flag.
+  if(d.type==='subAccept'){
+   if(!Number.isSafeInteger(d.team)||!Number.isSafeInteger(d.outId)||![1,2].includes(d.team)||typeof d.accept!=='boolean')throw Error('Invalid substitution consent.');
+   const p=r.pendingSubs.get(d.team);
+   if(!p||p.inId!==id||p.outId!==d.outId||Date.now()>p.expiresAt)throw Error('No current substitution for this player.');
+   if(!d.accept)r.pendingSubs.delete(d.team);
+   else{if(p.accepted)throw Error('Substitution already accepted.');p.accepted=true;completeSub(d.team);}
+   status();snapshot();return;
+  }
   if(r.owner!==id)throw Error('Only the host can change the match.');
+  if(d.type==='bench'){
+   if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
+   for(const [team,p]of r.pendingSubs)if(p.inId===d.id||p.outId===d.id)r.pendingSubs.delete(team);
+   if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
+   status();return;
+  }
+  if(d.type==='subRequest'){
+   if(!Number.isSafeInteger(d.outId)||!Number.isSafeInteger(d.inId)||d.outId===d.inId||!r.clients.has(d.outId)||!r.clients.has(d.inId))throw Error('Invalid substitution participants.');
+   const team=hb.getPlayer(d.outId)?.team;
+   if(![1,2].includes(team)||hb.getPlayer(d.inId)?.team!==0||r.benches.get(d.inId)!==team)throw Error('Incoming player must be on the outgoing team bench.');
+   if(r.pendingSubs.has(team))throw Error('Substitution already pending for this side.');
+   r.pendingSubs.set(team,{team,outId:d.outId,inId:d.inId,accepted:false,expiresAt:Date.now()+60000});
+   status();return;
+  }
   if(d.type==='difficulty'){if(!AI.levels[d.difficulty])throw Error('Invalid difficulty.');r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);status();return;}
   if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');
    if(team!==0&&hb.getPlayer(pid).team!==team&&hb.getPlayerList().filter(p=>p.team===team&&p.id!==pid).length>=4)throw Error('Team is full; move an active player to the bench first.');
-   hb.setPlayerTeam(pid,team);status();snapshot();return;}
-  if(d.type==='swap'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);status();snapshot();return;}
-  if(d.type==='specAll'){for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,0);status();snapshot();return;}
+   const previous=hb.getPlayer(pid).team;for(const [side,p]of r.pendingSubs)if(p.inId===pid||p.outId===pid)r.pendingSubs.delete(side);
+   hb.setPlayerTeam(pid,team);
+   if(team===0&&[1,2].includes(previous)&&r.clients.has(pid))r.benches.set(pid,previous);
+   else if(team!==0)r.benches.delete(pid);
+   status();snapshot();return;}
+  if(d.type==='swap'){r.pendingSubs.clear();for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);for(const [pid,team]of r.benches)r.benches.set(pid,3-team);status();snapshot();return;}
+  if(d.type==='specAll'){r.pendingSubs.clear();for(const p of hb.getPlayerList())if(p.team){if(r.clients.has(p.id))r.benches.set(p.id,p.team);hb.setPlayerTeam(p.id,0);}status();snapshot();return;}
   if(d.type==='addBot'){const team=Number(d.team);if(![0,1,2].includes(team))throw Error('Invalid team.');
    if(team!==0&&hb.getPlayerList().filter(p=>p.team===team).length>=4)throw Error('Team is full; add this bot to spectators instead.');
    addBot(team);status();snapshot();return;}
   if(d.type==='removeBot'){const bid=Number(d.id);if(!r.botIds.has(bid)||!hb.getPlayer(bid))throw Error('Invalid bot.');hb._room.playerLeave(bid);r.botIds.delete(bid);status();snapshot();return;}
-  if(d.type==='start')reset(true);else if(d.type==='stop'){r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);status();snapshot();}else if(d.type==='configure'){
+  if(d.type==='start')reset(true);else if(d.type==='stop'){r.pendingSubs.clear();r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);if(r.paused)for(const side of [...r.pendingSubs.keys()])completeSub(side);status();snapshot();}else if(d.type==='configure'){
    const mode=d.mode||r.mode;if(!['bot','2v2','4v4'].includes(mode))throw Error('Choose 1v1, 2v2 or 4v4.');let parsed=null;if(d.stadium){if(typeof d.stadium!=='string'||d.stadium.length>2*1024*1024)throw Error('Stadium too large.');parsed=API.Utils.parseStadium(d.stadium);if(!parsed)throw Error('Invalid stadium.');}
    for(const key of ['scoreLimit','timeLimit'])if(d[key]!=null&&(!Number.isInteger(d[key])||d[key]<0||d[key]>99))throw Error('Invalid limit.');const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(AI.levels[d.difficulty])r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
@@ -64,13 +107,13 @@ function createRoomCore(opts){
   hb.step(1);r.frame++;if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
  /* final: the room really moves (a recording cannot move with it); standby copies leave it running. */
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
-  return{v:1,recording:!final&&recording,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,
+  return{v:1,recording:!final&&recording,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
  function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
-  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.clients.clear();r.botIds=new Set(s.botIds||hb._room.state.players.filter(p=>p.id>=100).map(p=>p.id));
+  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.clients.clear();r.benches.clear();r.pendingSubs.clear();r.botIds=new Set(s.botIds||hb._room.state.players.filter(p=>p.id>=100).map(p=>p.id));
   // Not part of the engine snapshot: which players the room's AI controls, and the AI's tactical memory.
   for(const p of hb._room.state.players)p.aiControlled=p.id>=100;AI.setMemory?.(hb._room.state,s.ai);
-  for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}}
+  for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);}
  return Object.assign(r,{status,snapshot,join,leave,message,step,exportState,restore,bots,reset,
   hostTime:fraction=>r.frame+Math.max(0,Math.min(1,fraction||0)),
   pong:(t,fraction)=>({type:'pong',t,frame:r.frame+Math.max(0,Math.min(1,fraction||0))}),
