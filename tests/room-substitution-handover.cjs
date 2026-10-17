@@ -46,7 +46,10 @@ try {
   original.message(1,{type:'pause',value:true});
   for(let i=0;i<20;i++)original.step();
   assert.equal(original.activeFrames.get(9),nineFrames,'pause does not advance playing time');
-  const frozen=original.exportState({final:false});
+  // Emulate actual peer-host transport: the room travels as JSON/base64,
+  // not only as an in-memory native object reference.
+  const frozen=RoomCore.decodeState(JSON.parse(JSON.stringify(
+    RoomCore.encodeState(original.exportState({final:false})))));
   assert.equal(frozen.subSeq,first);
   assert.equal(new Map(frozen.captains).get(1),3);
   assert.equal(new Map(frozen.benches).get(1),1);
