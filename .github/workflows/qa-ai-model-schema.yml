@@ -1,0 +1,29 @@
+name: QA AI Model Schema Admission
+on:
+  pull_request:
+    paths:
+      - 'tests/ai-model-schema-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/ai/trained-model.json'
+      - '.github/workflows/qa-ai-model-schema.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/ai-model-schema-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/ai/trained-model.json'
+      - '.github/workflows/qa-ai-model-schema.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  model-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/ai-model-schema-qa.cjs
