@@ -5,6 +5,7 @@ on:
       - 'headless/accounts.cjs'
       - 'tests/account-state-integrity-qa.cjs'
       - 'tests/account-persistence-write-failure-qa.cjs'
+      - 'tests/account-prototype-name-qa.cjs'
       - '.github/workflows/qa-account-state-integrity.yml'
   push:
     branches: [main]
@@ -33,8 +34,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --check headless/accounts.cjs && node --check tests/account-state-integrity-qa.cjs && node --check tests/account-persistence-write-failure-qa.cjs
+      - run: node --check headless/accounts.cjs && node --check tests/account-state-integrity-qa.cjs && node --check tests/account-persistence-write-failure-qa.cjs && node --check tests/account-prototype-name-qa.cjs
       - run: node tests/account-state-integrity-qa.cjs
       - run: node tests/account-persistence-write-failure-qa.cjs
+      - run: node tests/account-prototype-name-qa.cjs
       - run: node tests/accounts.cjs
       - run: node tests/account-room-session-qa.cjs
