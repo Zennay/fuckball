@@ -57,7 +57,10 @@ try {
 
   // Rebuild on a fresh native room, not another reference to the same engine.
   const successorEngine=createEngine();
-  restored=RoomCore.importRoomCore(frozen,{hb:successorEngine,AI,Netcode,v3:true,send:()=>{}});
+  const delivered=[];
+  restored=RoomCore.importRoomCore(frozen,{hb:successorEngine,AI,Netcode,v3:true,
+    send:(id,data)=>{if(data?.type==='playingTime')delivered.push({id,...data});}
+  });
   assert.notEqual(restored.hb,original.hb);
   assert.equal(restored.owner,1,'the original host still owns the room');
   assert(restored.clients.has(highHuman),'migration retains high-ID connection');
@@ -93,6 +96,8 @@ try {
   restored.message(1,{type:'pause',value:false});
   for(let i=0;i<24;i++)restored.step();
   assert.equal(restored.activeFrames.get(1),24,'incoming human earns only resumed active time');
+  assert(delivered.some(event=>event.frame===60&&event.activeFrames.some(([pid,n])=>pid===1&&n>0)),
+    'authoritative 1Hz event reports accrued live human frames');
   assert.equal(restored.activeFrames.get(9),after,'benched human stops earning time after handover');
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
@@ -110,6 +115,16 @@ try {
   restored.message(1,{type:'pause',value:false});
   for(let i=0;i<30;i++)restored.step();
   assert.equal(restored.activeFrames.get(highHuman),30,'newly active high-ID human earns 30 live frames');
+  const beforePauseEvents=delivered.length;
+  restored.message(1,{type:'pause',value:true});
+  for(let i=0;i<25;i++)restored.step(); // cross 120, but never publish fake live minutes
+  assert.equal(delivered.length,beforePauseEvents,'a paused room emits no played-time advances');
+  assert.equal(restored.activeFrames.get(highHuman),30,'paused frames do not count as played');
+  restored.message(1,{type:'pause',value:false});
+  for(let i=0;i<48;i++)restored.step(); // cross 180, the next authoritative stats pulse
+  assert.equal(restored.activeFrames.get(highHuman),78,'resumed live time is continuous');
+  assert(delivered.some(e=>e.frame===180&&e.activeFrames.some(([pid,n])=>pid===highHuman&&n>=78)),
+    'later stats pulse carries high-ID human active time after migration');
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
   console.log('PASS #31 native handover preserves captain/bench/playtime and prevents stale consent/overflow');
