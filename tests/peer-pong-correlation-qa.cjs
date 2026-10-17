@@ -45,8 +45,11 @@ try {
   assert.deepEqual(peer.rtts,[12],'a replay cannot skew the RTT median');
 
   now=2000;
-  net.tick(); // report peer RTT to server, send next fresh ping
+  net.handleServer({type:'spong',t:2000,frame:120}); // valid zero-ms server RTT
+  net.tick(); // report peer and server RTT, send next fresh ping
   const report=reports.filter(r=>r.type==='rtt').at(-1);
+  assert.equal(report.server,0,
+    'valid zero-ms server RTT must remain zero, never become unknown/null');
   assert.equal(report.peers[2],12,
     'only correlated positive RTT samples may influence election');
   assert(probes.some(d=>d.type==='pp'&&d.t===2000));
