@@ -7,15 +7,51 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const NAME=/^[A-Za-z0-9_-]{3,20}$/,TOKEN_DAYS=90;
 function createAccounts(dir){
  const file=dir?path.join(dir,'accounts.json'):null;let data={users:Object.create(null),sessions:Object.create(null)};
- // Only ENOENT means a true first run. A damaged or unreadable existing
- // account file must never be mistaken for an empty registry: the next
- // registration would otherwise overwrite it and destroy nickname ownership.
- if(file){
-  let raw;
-  try{raw=fs.readFileSync(file,'utf8');}
+ // One bounded, non-following, nonblocking descriptor for an existing store.
+ // A FIFO/symlink must never hang startup or read outside the chosen root.
+ // ENOENT alone denotes a genuinely absent first-install registry.
+ const MAX_REGISTRY_BYTES=8*1024*1024;
+ function sameFile(a,b){
+  return a.dev===b.dev&&a.ino===b.ino&&a.size===b.size&&
+   a.mtimeMs===b.mtimeMs&&a.ctimeMs===b.ctimeMs;
+ }
+ function readExisting(filePath){
+  let before;
+  try{before=fs.lstatSync(filePath);}
   catch(e){
-   if(e.code!=='ENOENT')throw Error('Account state unavailable; refusing to start.');
+   if(e?.code==='ENOENT')return undefined;
+   throw Error('Account state unavailable; refusing to start.');
   }
+  if(!before.isFile()||before.size>MAX_REGISTRY_BYTES||
+     typeof fs.constants.O_NOFOLLOW!=='number'||
+     typeof fs.constants.O_NONBLOCK!=='number')
+   throw Error('Account state unavailable; refusing to start.');
+  let fd;
+  try{
+   fd=fs.openSync(filePath,fs.constants.O_RDONLY|fs.constants.O_NONBLOCK|
+                  fs.constants.O_NOFOLLOW);
+   const opened=fs.fstatSync(fd);
+   if(!opened.isFile()||!sameFile(before,opened))
+    throw Error('Account source identity changed.');
+   const chunks=[];let count=0;
+   while(count<=MAX_REGISTRY_BYTES){
+    const chunk=Buffer.alloc(Math.min(65536,MAX_REGISTRY_BYTES+1-count));
+    const n=fs.readSync(fd,chunk,0,chunk.length,null);
+    if(n===0)break;
+    count+=n;chunks.push(chunk.subarray(0,n));
+   }
+   if(count>MAX_REGISTRY_BYTES)throw Error('Account file too large.');
+   const finished=fs.fstatSync(fd),after=fs.lstatSync(filePath);
+   if(!after.isFile()||!sameFile(opened,finished)||!sameFile(opened,after))
+    throw Error('Account source changed during read.');
+   return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks,count));
+  }catch{
+   // No filesystem pathname or account bytes in operator/client messages.
+   throw Error('Account state unavailable; refusing to start.');
+  }finally{if(fd!==undefined)fs.closeSync(fd);}
+ }
+ if(file){
+  const raw=readExisting(file);
   if(raw!==undefined){
    let loaded;
    try{loaded=JSON.parse(raw);}
