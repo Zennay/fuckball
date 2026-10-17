@@ -5,7 +5,6 @@ on:
       - headless/runtime.cjs
       - tests/headless-raf-cancellation-qa.cjs
       - .github/workflows/qa-headless-raf-cancellation.yml
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
