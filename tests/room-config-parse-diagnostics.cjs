@@ -57,6 +57,9 @@ function state(room){
    ['number team profile',{teamProfile:100,started:false}],
    ['nested uncoercible team profile',{teamProfile:{support:{toString:3,valueOf:2}},started:false}],
    ['nested uncoercible screen value',{teamProfile:{screen:{toString:false,valueOf:null}},started:false}],
+   ['prototype constructor difficulty',{difficulty:'constructor',started:false}],
+   ['prototype toString difficulty',{difficulty:'toString',started:false}],
+   ['prototype __proto__ difficulty',{difficulty:'__proto__',started:false}],
   ];
   for(const [label,params]of checks){
    const errors=host.ws.messages.filter(m=>m.type==='error').length;
@@ -67,6 +70,7 @@ function state(room){
    assert(e.message.length>0&&e.message.length<200,label+' nonsecret bounded diagnostic');
    if(Object.hasOwn(params,'stadium'))assert.equal(e.message,'Invalid stadium.',label+' hides parser details');
    if(Object.hasOwn(params,'teamProfile'))assert.equal(e.message,'Invalid team profile.',label+' rejects invalid profile before reset');
+   if(Object.hasOwn(params,'difficulty'))assert.equal(e.message,'Invalid difficulty.',label+' rejects inherited prototype names');
    assert.deepEqual(state(room),baseline,label+' cannot mutate approved running match');
    await until(()=>room.frame>frame&&host.ws.binary>packets,label+' native game remains active');
   }
@@ -74,6 +78,9 @@ function state(room){
   // same atomicity boundary: invalid AI profile must never partially apply
   // a difficulty/individual bot level while the match is progressing.
   const difficultyChecks=[
+   ['inherited constructor',{difficulty:'constructor'}],
+   ['inherited toString',{difficulty:'toString'}],
+   ['inherited __proto__',{difficulty:'__proto__'}],
    ['null',{teamProfile:null}],
    ['array',{teamProfile:[]}],
    ['scalar',{teamProfile:'hard'}],
@@ -86,7 +93,8 @@ function state(room){
    host.ws.send(JSON.stringify({type:'difficulty',difficulty:'elite',botLevels:{100:'elite'},...fields}));
    const failure=await until(()=>host.ws.messages.filter(m=>m.type==='error')[beforeError],
       'difficulty/'+label+' rejected');
-   assert.equal(failure.message,'Invalid team profile.','generic profile failure before mutation');
+   assert.equal(failure.message,fields.difficulty?'Invalid difficulty.':'Invalid team profile.',
+     'generic failure before difficulty settings are changed');
    assert.deepEqual(state(room),baseline,'rejected difficulty/'+label+' leaves all settings unchanged');
    await until(()=>room.frame>beforeFrame&&host.ws.binary>beforePackets,
      'native room survives rejected difficulty/'+label);
