@@ -1,0 +1,36 @@
+name: QA RFC6455 GET Handshake
+on:
+  pull_request:
+    paths:
+      - 'headless/websocket.cjs'
+      - 'tests/ws-handshake-method-qa.cjs'
+      - '.github/workflows/qa-ws-get-handshake.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'headless/websocket.cjs'
+      - 'tests/ws-handshake-method-qa.cjs'
+      - '.github/workflows/qa-ws-get-handshake.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  handshake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # immutable v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind source to immutable triggering SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check headless/websocket.cjs && node --check tests/ws-handshake-method-qa.cjs
+      - run: node tests/ws-handshake-method-qa.cjs
