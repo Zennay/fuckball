@@ -157,3 +157,20 @@ body.lobby .scoreboard{opacity:.35}
 .rm-account button{border-radius:7px;font-size:12px;padding:7px 10px}
 .rm-settings input[type=number]{margin-top:5px;border-radius:7px;background:#0b1217cc;border:1px solid #ffffff26;color:#e5eaec;padding:9px;width:100%}
 .rm-settings small{color:#71858a;font-size:10px}
+
+/* Dedicated online 4v4 roster permissions; never shown in offline practice. */
+.rm-sub-panel{margin:12px 0 10px;padding:12px;background:#111e24dc;border:1px solid #ffffff24;border-radius:10px;display:flex;flex-direction:column;gap:10px}
+.rm-sub-panel[hidden],.rm-sub-consent[hidden]{display:none!important}
+.rm-sub-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.rm-sub-title strong{font-size:12px;letter-spacing:.3px;color:#eef3ec}
+.rm-sub-title span{font-size:11px;color:#afc5c3}
+.rm-sub-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}
+.rm-sub-controls label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#c7d6d1;min-width:0}
+.rm-sub-controls select{height:34px;width:100%;min-width:0;background:#0d181ee8;color:#f3f8ef;border:1px solid #ffffff33;border-radius:7px;padding:0 8px}
+.rm-sub-controls button,.rm-sub-consent button{min-height:34px;padding:7px 10px;font-size:11px;border:1px solid #ffffff32;border-radius:7px;color:#f1f6ef;background:#24333a}
+.rm-sub-controls button:disabled,.rm-sub-consent button:disabled{opacity:.4;cursor:not-allowed}
+.rm-sub-controls button.primary,.rm-sub-consent button.primary{background:#c6ff42;color:#172117;border-color:#c6ff42;font-weight:800}
+.rm-sub-consent{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px;border-radius:8px;border:1px solid #c6ff4266;background:#c6ff4214;font-size:12px}
+.rm-sub-consent span{flex:1;min-width:160px}
+.rm-sub-panel .rm-small{margin:0;line-height:1.5}
+@media(max-width:620px){.rm-sub-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.rm-sub-title{flex-direction:column;gap:3px}}
