@@ -79,6 +79,13 @@ async function joinHuman(url,room,sockets,index){
   // promote them; the server must receive a real pause from the host.
   a.elements.get('startButton').click();
   await until(()=>r.started,'host started real game');
+  // Room menu displays server-sourced time updates while the match is
+  // running, without requiring a goal, pause or room refresh.
+  await until(()=>r.activeFrames.get(9)>=60,'active entrant accrues one second');
+  await until(()=>/Your active time: [1-9][0-9]*\.[0-9]s/.test(
+    b.elements.get('subSummary').textContent),'entrants live play clock updates in spectator UI');
+  assert.match(a.elements.get('subSummary').textContent,/Your active time: 0\.0s/,
+    'benched former host must not be credited playing time');
   await until(()=>a.elements.get('subInPlayer').children.some(x=>x.value==='1'),'former host appears on red bench');
   a.elements.get('subOutPlayer').value='9';
   a.elements.get('subInPlayer').value='1';
