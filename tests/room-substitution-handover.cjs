@@ -43,7 +43,10 @@ try {
   original.message(9,{type:'subAccept',team:1,outId:1,requestId:first,accept:true});
   assert.equal(original.hb.getPlayer(9).team,1);
   assert.equal(original.hb.getPlayer(1).team,0);
+  assert.deepEqual(original.subEvents,[{team:1,outId:1,inId:9,requestedBy:3,requestId:first,frame:original.frame}],
+    'accepted captain nomination produces one precise executed-swap receipt');
   original.message(1,{type:'start'});
+  assert.equal(original.subEvents.length,0,'new game never carries old match receipts');
   for(let i=0;i<35;i++)original.step();
   const nineFrames=original.activeFrames.get(9);
   assert.equal(nineFrames,35,'human playing time matches authoritative frames');
@@ -51,11 +54,23 @@ try {
   original.message(1,{type:'pause',value:true});
   for(let i=0;i<20;i++)original.step();
   assert.equal(original.activeFrames.get(9),nineFrames,'pause does not advance playing time');
+  // Complete one genuine blue-team swap during the paused game. Unlike an
+  // outstanding consent, this historical event should cross the host handover.
+  original.message(1,{type:'bench',id:10,team:2});
+  original.message(1,{type:'subRequest',outId:2,inId:10});
+  const blueRequest=original.pendingSubs.get(2).requestId;
+  original.message(10,{type:'subAccept',team:2,outId:2,requestId:blueRequest,accept:true});
+  assert.equal(original.hb.getPlayer(10).team,2);
+  assert.equal(original.hb.getPlayer(2).team,0);
+  assert.deepEqual(original.subEvents,[{team:2,outId:2,inId:10,requestedBy:1,requestId:blueRequest,frame:original.frame}],
+    'only completed pause-bound swap receives match history');
   // Emulate actual peer-host transport: the room travels as JSON/base64,
   // not only as an in-memory native object reference.
   const frozen=RoomCore.decodeState(JSON.parse(JSON.stringify(
     RoomCore.encodeState(original.exportState({final:false})))));
-  assert.equal(frozen.subSeq,first);
+  assert.equal(frozen.subSeq,blueRequest);
+  assert.equal(frozen.subEvents.length,1);
+  assert.equal(frozen.subEvents[0].requestId,blueRequest);
   assert.equal(new Map(frozen.captains).get(1),3);
   assert.equal(new Map(frozen.benches).get(1),1);
   assert.equal(new Map(frozen.activeFrames).get(9),nineFrames);
@@ -91,7 +106,10 @@ try {
   assert.equal(restored.activeFrames.get(9),nineFrames,'active frames survive handover');
   assert.equal(restored.activeFrames.get(1)||0,0);
   assert.equal(restored.pendingSubs.size,0,'unconfirmed approvals must NOT survive handover');
-  assert.equal(restored.subSeq,first,'nonce high-water mark is persisted');
+  assert.equal(restored.subSeq,blueRequest,'nonce high-water mark is persisted');
+  assert.deepEqual(restored.subEvents,frozen.subEvents,'verified completed event history survives JSON/base64 handover');
+  assert.equal(restored.pendingSubs.size,0,'history is never an outstanding consent');
+  assert.equal(restored.subEvents[0].requestedBy,1,'legitimate requester attribution preserved');
   assert.equal(restored.paused,true);
   assert.equal(restored.started,true);
   assert.throws(()=>restored.message(2,{type:'subRequest',outId:9,inId:1}),
@@ -107,6 +125,9 @@ try {
   assert.equal(restored.hb.getPlayer(1).team,1);
   assert.equal(restored.hb.getPlayer(9).team,0);
   assert.equal(restored.pendingSubs.size,0);
+  assert.equal(restored.subEvents.length,2,'second completed swap appended without repeating the prior receipt');
+  assert.equal(restored.subEvents[1].requestId,second);
+  assert.equal(restored.subEvents[1].requestedBy,3,'captain attributed to post-handover executed swap');
   assert.equal(restored.captains.get(1),3,'unaffected captain remains appointed');
   const after=restored.activeFrames.get(9);
   restored.message(1,{type:'pause',value:false});
@@ -126,6 +147,9 @@ try {
   restored.message(highHuman,{type:'subAccept',team:1,outId:1,requestId:highRequestId,accept:true});
   assert.equal(restored.hb.getPlayer(highHuman).team,1);
   assert.equal(restored.hb.getPlayer(1).team,0);
+  assert.equal(restored.subEvents.length,3,'high-ID human generates a third and only third completed receipt');
+  assert.deepEqual(restored.subEvents.at(-1),{team:1,outId:1,inId:highHuman,requestedBy:3,requestId:highRequestId,frame:restored.frame},
+    'sensitive host identity and consent never inferred from client-provided flags');
   assert.equal(restored.hb._room.state.players.find(p=>p.id===highHuman).aiControlled,false);
   assert.equal(restored.activeFrames.get(highHuman)||0,0,'no bench time credited to high-ID human');
   restored.message(1,{type:'pause',value:false});
