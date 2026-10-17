@@ -7,7 +7,25 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const NAME=/^[A-Za-z0-9_-]{3,20}$/,TOKEN_DAYS=90;
 function createAccounts(dir){
  const file=dir?path.join(dir,'accounts.json'):null;let data={users:{},sessions:{}};
- if(file){try{data=JSON.parse(fs.readFileSync(file,'utf8'));data.users??={};data.sessions??={};}catch{}}
+ // Only ENOENT means a true first run. A damaged or unreadable existing
+ // account file must never be mistaken for an empty registry: the next
+ // registration would otherwise overwrite it and destroy nickname ownership.
+ if(file){
+  let raw;
+  try{raw=fs.readFileSync(file,'utf8');}
+  catch(e){
+   if(e.code!=='ENOENT')throw Error('Account state unavailable; refusing to start.');
+  }
+  if(raw!==undefined){
+   let loaded;
+   try{loaded=JSON.parse(raw);}
+   catch{throw Error('Account state invalid; refusing to start.');}
+   const record=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
+   if(!record(loaded)||!record(loaded.users)||!record(loaded.sessions))
+    throw Error('Account state invalid; refusing to start.');
+   data=loaded;
+  }
+ }
  let dirty=false;
  function save(){if(!file){return;}dirty=false;try{fs.mkdirSync(dir,{recursive:true});const tmp=file+'.'+process.pid+'.tmp';fs.writeFileSync(tmp,JSON.stringify(data),{mode:0o600});fs.renameSync(tmp,file);}catch(e){console.error('accounts: save failed',e.message);}}
  const key=name=>String(name).toLowerCase(),sha=t=>crypto.createHash('sha256').update(t).digest('hex');
