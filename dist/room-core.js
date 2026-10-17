@@ -18,6 +18,12 @@ function createRoomCore(opts){
  hb.onGameTick=()=>{r.tick++;if(!r.started||r.paused)return;if(r.tick%2===0)for(const p of hb._room.state.players)if(r.botIds.has(p.id))hb.setPlayerInput(p.id,AI.tactical(hb._room.state,p.id,r.tick,{difficulty:r.botLevels[p.id]||r.difficulty,profile:r.teamProfile}));};
  hb.onTeamGoal=team=>broadcast({type:'goal',team});hb.onTeamVictory=()=>{r.started=false;status();snapshot();};
  function status(){expireSubs();broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
+ // The same preflight is required for BOTH match configuration and live
+ // difficulty changes. Never mutate a running room before reading user data.
+ function normalizeProfile(raw){
+  if(raw!==undefined&&(raw===null||typeof raw!=='object'||Array.isArray(raw)))throw Error('Invalid team profile.');
+  try{return AI.profile(raw||{});}catch{throw Error('Invalid team profile.');}
+ }
  function roomBytes(){return API.Replay.writeAll(Object.assign(new API.Replay.ReplayData(),{roomData:hb._room.takeSnapshot(),events:[],goalMarkers:[],totalFrames:0,version:3}));}
  /* Snapshot header v2: magic, seq, ack, frame. v3 adds the input slack in 1/1000 frame. */
  function snapshot(){const bytes=roomBytes();r.seq++;let v2=null,v3=null;
@@ -103,7 +109,7 @@ function createRoomCore(opts){
    if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
    status();return;
   }
-  if(d.type==='difficulty'){if(!AI.levels[d.difficulty])throw Error('Invalid difficulty.');r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=AI.profile(d.teamProfile);status();return;}
+  if(d.type==='difficulty'){if(!AI.levels[d.difficulty])throw Error('Invalid difficulty.');const profile=normalizeProfile(d.teamProfile);const levels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])levels[bid]=level;r.difficulty=d.difficulty;r.botLevels=levels;r.teamProfile=profile;status();return;}
   if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');
    if(team!==0&&hb.getPlayer(pid).team!==team&&hb.getPlayerList().filter(p=>p.team===team&&p.id!==pid).length>=4)throw Error('Team is full; move an active player to the bench first.');
    const previous=hb.getPlayer(pid).team;for(const [side,p]of r.pendingSubs)if(p.inId===pid||p.outId===pid)r.pendingSubs.delete(side);
@@ -125,10 +131,8 @@ function createRoomCore(opts){
     try{parsed=API.Utils.parseStadium(d.stadium);}catch{throw Error('Invalid stadium.');}
     if(!parsed)throw Error('Invalid stadium.');}
    for(const key of ['scoreLimit','timeLimit'])if(d[key]!=null&&(!Number.isInteger(d[key])||d[key]<0||d[key]>99))throw Error('Invalid limit.');
-   // The policy normalizer must run before hb.stopGame(): a null/array/other
-   // invalid profile used to throw only after the live match was interrupted.
-   if(d.teamProfile!==undefined&&(d.teamProfile===null||typeof d.teamProfile!=='object'||Array.isArray(d.teamProfile)))throw Error('Invalid team profile.');
-   let nextProfile;try{nextProfile=AI.profile(d.teamProfile||{});}catch{throw Error('Invalid team profile.');}
+   // Do not interrupt an ongoing game before the same validated profile preflight.
+   const nextProfile=normalizeProfile(d.teamProfile);
    const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(AI.levels[d.difficulty])r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=nextProfile;if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
  }
