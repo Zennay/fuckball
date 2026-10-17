@@ -22,7 +22,8 @@ function state(room){
  const s=room.hb.getScores();
  return {id:room.id,owner:room.owner,mode:room.mode,started:room.started,
   paused:room.paused,stadium:room.hb._room.state.stadium.name,
-  scoreLimit:s.scoreLimit,timeLimit:s.timeLimit,
+  scoreLimit:s.scoreLimit,timeLimit:s.timeLimit,difficulty:room.difficulty,
+  botLevels:{...room.botLevels},teamProfile:{...room.teamProfile},
   players:room.hb.getPlayerList().map(p=>[p.id,p.team]).sort((a,b)=>a[0]-b[0])};
 }
 (async()=>{
@@ -69,6 +70,36 @@ function state(room){
    assert.deepEqual(state(room),baseline,label+' cannot mutate approved running match');
    await until(()=>room.frame>frame&&host.ws.binary>packets,label+' native game remains active');
   }
+  // Difficulty is a distinct API path from configure, but must respect the
+  // same atomicity boundary: invalid AI profile must never partially apply
+  // a difficulty/individual bot level while the match is progressing.
+  const difficultyChecks=[
+   ['null',{teamProfile:null}],
+   ['array',{teamProfile:[]}],
+   ['scalar',{teamProfile:'hard'}],
+   ['nested uncoercible',{teamProfile:{support:{toString:3,valueOf:2}}}],
+   ['nested screen coercion',{teamProfile:{screen:{toString:false,valueOf:null}}}]
+  ];
+  for(const [label,fields]of difficultyChecks){
+   const beforeError=host.ws.messages.filter(m=>m.type==='error').length;
+   const beforeFrame=room.frame,beforePackets=host.ws.binary;
+   host.ws.send(JSON.stringify({type:'difficulty',difficulty:'elite',botLevels:{100:'elite'},...fields}));
+   const failure=await until(()=>host.ws.messages.filter(m=>m.type==='error')[beforeError],
+      'difficulty/'+label+' rejected');
+   assert.equal(failure.message,'Invalid team profile.','generic profile failure before mutation');
+   assert.deepEqual(state(room),baseline,'rejected difficulty/'+label+' leaves all settings unchanged');
+   await until(()=>room.frame>beforeFrame&&host.ws.binary>beforePackets,
+     'native room survives rejected difficulty/'+label);
+  }
+  const unauthorized=host.ws.messages.filter(m=>m.type==='error').length;
+  host.ws.send(JSON.stringify({type:'difficulty',difficulty:'elite',
+    teamProfile:{support:125},botLevels:{100:'elite'}}));
+  await until(()=>room.difficulty==='elite'&&room.teamProfile.support===125,
+    'valid difficulty and policy applied');
+  assert.equal(host.ws.messages.filter(m=>m.type==='error').length,unauthorized,
+    'valid difficulty reports no error');
+  assert.equal(room.started,true,'valid difficulty never interrupts the live match');
+  const validState=state(room);
   // Source-bound error-envelope negative test. A native API may throw a
   // string rather than Error; never stringify that untrusted payload or
   // silently send JSON without a message.
@@ -81,7 +112,7 @@ function state(room){
     'non-Error fallback envelope');
    assert.equal(fallback.message,'Invalid room request.');
    assert(!JSON.stringify(fallback).includes('synthetic-secret'),'synthetic exception payload stays private');
-   assert.deepEqual(state(room),baseline,'bad internal exception must not reset active room');
+   assert.deepEqual(state(room),validState,'bad internal exception must not reset active room');
   }finally{room.message=originalHandler;}
   const previous=host.ws.messages.filter(m=>m.type==='error').length;
   host.ws.send(JSON.stringify({type:'configure',mode:'4v4',scoreLimit:5,timeLimit:8,started:true}));
@@ -91,7 +122,7 @@ function state(room){
   assert.equal(room.hb._room.state.stadium.name,'BFF Big v4');
   assert.equal(room.owner,host.id);
   assert.equal(room.clients.size,2);
-  console.log('PASS #73 native custom stadium diagnostics: '+checks.length+' malformed requests fail atomically; valid match change succeeds');
+  console.log('PASS native room atomicity: '+checks.length+' config + '+difficultyChecks.length+' difficulty rejections; valid live updates succeed');
  } finally {
   for(const ws of sockets)ws.close();
   await app.close();
