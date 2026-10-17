@@ -78,8 +78,12 @@ try{
   assert.equal(a.clients.size,11);
   assert.deepEqual(teams(a).filter(p=>p[1]===0).map(p=>p[0]),[4,8,11,12],
     'later substitutions preserve four explicit inactive humans');
-  assert.equal(teams(a).filter(p=>p[1]===1).length,4);
+  assert.equal(teams(a).filter(p=>p[1]===1).length,3,
+    'host departure leaves three remaining human red players');
   assert.equal(teams(a).filter(p=>p[1]===2).length,4);
+  assert.equal(a.hb.getPlayerList().filter(p=>p.team===1).length,4,
+    'native room refills the departed owner with a bot, not a bench player');
+  assert.equal(b.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.deepEqual(teams(b),teams(a));
   console.log('PASS host migration: 12 members/4 bench, future input, pause/resume, slot transfers and owner failover across '+checked+' deterministic frames');
 }finally{
