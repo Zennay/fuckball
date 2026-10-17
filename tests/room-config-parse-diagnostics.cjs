@@ -50,6 +50,10 @@ function state(room){
    ['fractional score',{scoreLimit:0.5,started:false}],
    ['noninteger time',{timeLimit:'3',started:false}],
    ['negative time',{timeLimit:-1,started:false}],
+   ['null team profile',{teamProfile:null,started:false}],
+   ['array team profile',{teamProfile:[],started:false}],
+   ['string team profile',{teamProfile:'invalid',started:false}],
+   ['number team profile',{teamProfile:100,started:false}],
   ];
   for(const [label,params]of checks){
    const errors=host.ws.messages.filter(m=>m.type==='error').length;
@@ -59,6 +63,7 @@ function state(room){
    assert.equal(typeof e.message,'string',label+' must include a diagnostic');
    assert(e.message.length>0&&e.message.length<200,label+' nonsecret bounded diagnostic');
    if(Object.hasOwn(params,'stadium'))assert.equal(e.message,'Invalid stadium.',label+' hides parser details');
+   if(Object.hasOwn(params,'teamProfile'))assert.equal(e.message,'Invalid team profile.',label+' rejects invalid profile before reset');
    assert.deepEqual(state(room),baseline,label+' cannot mutate approved running match');
    await until(()=>room.frame>frame&&host.ws.binary>packets,label+' native game remains active');
   }
