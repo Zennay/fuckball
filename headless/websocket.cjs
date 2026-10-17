@@ -107,7 +107,9 @@ class WebSocketServer extends EventEmitter{
       if(origin&&process.env.ALLOW_CROSS_ORIGIN!=='1'){
         try{allowedOrigin=new URL(origin).host===req.headers.host;}catch{allowedOrigin=false;}
       }
-      if(req.url?.split('?')[0]!=='/ws'||req.headers.upgrade?.toLowerCase()!=='websocket'||version!=='13'||
+      // RFC 6455 section 4.1 requires GET; arbitrary upgraded POST/HEAD/etc.
+      // must never be admitted as a game WebSocket, even with valid headers.
+      if(req.method!=='GET'||req.url?.split('?')[0]!=='/ws'||req.headers.upgrade?.toLowerCase()!=='websocket'||version!=='13'||
         !validConnection||!validKey||!allowedOrigin){
         socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;
       }
