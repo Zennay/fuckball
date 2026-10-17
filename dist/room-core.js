@@ -127,7 +127,7 @@ function createRoomCore(opts){
    for(const key of ['scoreLimit','timeLimit'])if(d[key]!=null&&(!Number.isInteger(d[key])||d[key]<0||d[key]>99))throw Error('Invalid limit.');
    // The policy normalizer must run before hb.stopGame(): a null/array/other
    // invalid profile used to throw only after the live match was interrupted.
-   if(d.teamProfile!=null&&(typeof d.teamProfile!=='object'||Array.isArray(d.teamProfile)))throw Error('Invalid team profile.');
+   if(d.teamProfile!==undefined&&(d.teamProfile===null||typeof d.teamProfile!=='object'||Array.isArray(d.teamProfile)))throw Error('Invalid team profile.');
    const nextProfile=AI.profile(d.teamProfile||{});
    const modeChanged=mode!==r.mode;hb.stopGame();if(parsed)hb._room.setCurrentStadium(parsed,0);if(d.scoreLimit!=null)hb.setScoreLimit(d.scoreLimit);if(d.timeLimit!=null)hb.setTimeLimit(d.timeLimit);r.mode=mode;if(AI.levels[d.difficulty])r.difficulty=d.difficulty;r.botLevels={};for(const [bid,level]of Object.entries(d.botLevels||{}))if(r.botIds.has(Number(bid))&&AI.levels[level])r.botLevels[bid]=level;r.teamProfile=nextProfile;if(modeChanged||d.refill)bots(true);reset(typeof d.started==='boolean'?d.started:r.started);if(d.paused&&r.started){r.paused=true;hb.pauseGame(true);status();snapshot();}
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
