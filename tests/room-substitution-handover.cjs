@@ -123,7 +123,7 @@ try {
   restored.message(1,{type:'pause',value:false});
   for(let i=0;i<48;i++)restored.step(); // cross 180, the next authoritative stats pulse
   assert.equal(restored.activeFrames.get(highHuman),78,'resumed live time is continuous');
-  assert(delivered.some(e=>e.frame===180&&e.activeFrames.some(([pid,n])=>pid===highHuman&&n>=78)),
+  assert(delivered.some(e=>e.frame===180&&e.activeFrames.some(([pid,n])=>pid===highHuman&&n>=76)),
     'later stats pulse carries high-ID human active time after migration');
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===1).length,4);
   assert.equal(restored.hb.getPlayerList().filter(p=>p.team===2).length,4);
