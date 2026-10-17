@@ -134,8 +134,14 @@ async function main() {
     // until the server-controlled pause boundary is actually reached.
     host.ws.send(JSON.stringify({type:'start'}));
     await until(()=>room.started===true,'host starts 4v4 match');
-    // Even the rightful host cannot bypass pause/consent by issuing the old
-    // direct-team or blanket-roster messages while the match is running.
+    const nextIncoming=12, nextOutgoing=entering;
+    assert.equal(room.hb.getPlayer(nextIncoming).team,0);
+    host.ws.send(JSON.stringify({type:'bench',id:nextIncoming,team:1}));
+    await until(()=>room.benches.get(nextIncoming)===1,'second red bench assigned');
+    host.ws.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming}));
+    await until(()=>room.pendingSubs.get(1)?.inId===nextIncoming,'live substitution proposed');
+    // Even the rightful host cannot bypass an OUTSTANDING consent request by
+    // using the old direct-team or blanket-roster messages mid-match.
     const originalRoster=room.hb.getPlayerList().map(p=>[p.id,p.team]);
     for(const bypass of [
       {type:'team',id:entering,team:0},
@@ -150,12 +156,7 @@ async function main() {
       assert.match(denial.message,/pause|match|lineup/i,'live roster mutation needs pause');
       assert.deepEqual(room.hb.getPlayerList().map(p=>[p.id,p.team]),originalRoster,'denied bypass leaves authoritative teams untouched');
     }
-    const nextIncoming=12, nextOutgoing=entering;
-    assert.equal(room.hb.getPlayer(nextIncoming).team,0);
-    host.ws.send(JSON.stringify({type:'bench',id:nextIncoming,team:1}));
-    await until(()=>room.benches.get(nextIncoming)===1,'second red bench assigned');
-    host.ws.send(JSON.stringify({type:'subRequest',outId:nextOutgoing,inId:nextIncoming}));
-    await until(()=>room.pendingSubs.get(1)?.inId===nextIncoming,'live substitution proposed');
+
     const secondRequestId=room.pendingSubs.get(1).requestId;
     assert(secondRequestId>firstRequestId,'request sequence must increase');
     adversary.send(JSON.stringify({type:'subAccept',team:1,outId:nextOutgoing,requestId:secondRequestId,accept:true}));
