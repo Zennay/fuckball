@@ -43,12 +43,13 @@ const adversarial=[
 ];
 let rejected=0;
 function rejectBad(label,origin,change){
+  const sourceJSON=JSON.stringify(origin);
   const mutant=structuredClone(origin);
   change(mutant);
   assert.throws(()=>AI.validateModel(mutant),Error,
     label+': invalid model must fail before inference or live promotion');
-  assert.equal(JSON.stringify(origin),JSON.stringify(origin===baseline?baseline:origin),
-    label+': fixture must remain unchanged');
+  assert.equal(JSON.stringify(origin),sourceJSON,
+    label+': source fixture must remain unchanged');
   rejected++;
 }
 for(const [label,fn] of adversarial)rejectBad(label,baseline,fn);
