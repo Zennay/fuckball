@@ -59,3 +59,9 @@
 @media(max-width:550px){.series-batch-form{grid-template-columns:1fr}
  .series-batch-body{padding:2px 12px 12px}}
 @media print{.series-batch-schedule{display:none!important}}
+
+/* Player-triggered offline share actions, never public account or verified scores. */
+.best-of-series .series-share-action{background:#285355;color:#ebffda;border-color:#a6d9bd}
+.best-of-series .series-share-action:hover:not(:disabled){background:#356963}
+@media(max-width:440px){.series-actions .series-share-action{flex:1 1 100%}}
+@media print{.series-share-action{display:none!important}}
