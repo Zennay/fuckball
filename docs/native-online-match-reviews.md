@@ -1,0 +1,11 @@
+# Private native online match reviews · My Games
+
+The existing **My Games → Account Match History** panel displays genuine, non-ranked, server-originated recent match receipts. Each eligible receipt now exposes a **Review this match** control for the currently authenticated account. A player can choose an improvement focus (finishing, passing, defending, positioning, teamwork or decisions), add up to 280 characters of private reflection, save and later edit it, or delete this local review without changing the underlying result.
+
+**All notes remain in this browser's localStorage** under a versioned per-handle, per-server-receipt key. Each save requires that the result is still in the authenticated account's verified current result list. The note's format and size are validated. An optimistic concurrency check refuses stale editor overwrites when another tab changed the same review. Maximum 100 saved reviews per handle in this browser, with a visible capacity message instead of automatic deletion of older notes.
+
+A dedicated **Private Online Match Reviews** panel offers an explicit, local JSON download of the current handle's reviews (includes private username and receipt IDs) and an explicitly confirmed clear action that deletes local notes only. Real server history, career totals, rankings, other users' accounts and HBR2 recordings are **never** written to by this feature. Reviews are **self-written opinion**, not a claim that the server measured assists, passing accuracy, player ratings or tactical performance.
+
+Signed-out or changed-account sessions cannot save, export or delete stale review data from the previous signed-in account. Deleting actual server match history is a separate existing control; local reviews must be cleared via their own button. Because the server only returns the latest 50 receipts, older reviews can persist locally even after they are no longer visible as result cards; they can still be exported or removed from the vault. Browser-private mode or disabled storage may refuse saves.
+
+This feature introduces no new server API calls, account tokens in localStorage, external share requests, native physics/AI/ranked modifications or new QA suites.
