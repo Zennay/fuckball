@@ -134,13 +134,20 @@
    status.textContent='Imported '+proposal.length+' pinned room codes on this device; join still requires server admission.';
   }catch(error){status.textContent='Import refused: '+(error.message||'Invalid bookmark file.');}
  };
+ function busyWithMatch(){
+  return !!serverLink?.room||!!peerConnected||
+   !!document.querySelector('.quick-queue-actions button:not([hidden])')||
+   !!document.querySelector('.quick-ready:not([hidden])');
+ }
  function openSavedRoom(code){
-  if(serverLink?.room){status.textContent='Leave your current room first.';return;}
-  // A pinned code is not evidence that a room is still open or public.
-  // The native join API makes the current access and room existence checks.
+  if(busyWithMatch()){
+   status.textContent='Finish your active game or cancel the Quick Match queue/ready-check first.';
+   return;
+  }
+  // A pinned code never proves that access is still allowed.
   showJoinScreen(code);
  }
- function renderPinned(pins){
+  function renderPinned(pins){
   savedSection.hidden=!pins.length;
   savedGrid.replaceChildren();
   for(const code of pins){
@@ -149,9 +156,11 @@
    const info=document.createElement('div');info.className='room-browser-info';
    const label=document.createElement('strong');label.textContent='★ '+code;
    const hint=document.createElement('small');
+   const age=lastLoadedAt?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
    hint.textContent=published?
-    'Currently public · '+published.players+' online · '+published.map:
-    'Availability and access unknown · previously pinned code';
+    (age!==null&&age<=45?'Recently advertised public':'Previously advertised public')+
+    ' · last seen '+(age??'?')+'s ago · '+published.players+' players · '+published.map:
+    'Not in the last public listing · access and availability unknown';
    info.append(label,hint);
    const actions=document.createElement('div');actions.className='room-browser-actions';
    const open=button('Open saved room',()=>openSavedRoom(code));
@@ -179,12 +188,9 @@
   return seats!==null&&seats>0;
  }
  function requestJoin(room){
-  if(serverLink?.room||peerConnected){
-   status.textContent='Leave the current match before joining a different room.';return false;
-  }
-  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
-     document.querySelector('.quick-ready:not([hidden])')){
-   status.textContent='Cancel your human Quick Match search or ready-check before joining a room.';return false;
+  if(busyWithMatch()){
+   status.textContent='Leave your current match or cancel Quick Match before joining a different room.';
+   return false;
   }
   // A public listing never grants permission. The native join screen and
   // authoritative server re-check current account, capacity and visibility.
