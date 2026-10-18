@@ -42,7 +42,7 @@
 .launchpad-focus-home #homeView :is(
  .practice-lab,.practice-plan,.practice-circuit,.practice-journal,
  .tournament-desk,.knockout-desk,.matchday-hub,.formation-studio,.game-night-pack,
- .room-browser,.friend-party,.continue-playing){display:none!important}
+ .room-browser,.friend-party,.continue-playing,.matchday-posters){display:none!important}
 @media(max-width:650px){
  .launchpad-open{padding:6px 9px;font-size:.75rem}
  .launchpad-dialog{max-height:90vh}
