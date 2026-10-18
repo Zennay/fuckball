@@ -13,6 +13,32 @@
  const defaultGoals={goals:3,team:2,matches:2};
  const FIRST_TOUCH_KEY='fuckball.first-play-guide.v1',GOAL_BEST_KEY='fuckball-local-goal-rush-v1';
  const GOAL_DURATIONS=['60','120','180'];
+ const CIRCUIT_HISTORY_KEY='fuckball.practice-circuit-history.v1',MAX_CIRCUITS=12;
+ const CIRCUIT_TYPES=['touch','goals','team'];
+ // Completed training summaries only. Never import active in-match circuit state.
+ function normalizeCircuitHistory(raw){
+  if(raw===undefined||raw===null)return[]; // Earlier v1 snapshots omit circuits.
+  if(!Array.isArray(raw)||raw.length>MAX_CIRCUITS)
+   throw Error('Practice circuit backup exceeds 12 completed circuits.');
+  const seen=new Set();
+  return raw.map(x=>{
+   if(!x||typeof x!=='object'||Array.isArray(x)||x.version!==1||
+    !Array.isArray(x.order)||x.order.length!==3||
+    new Set(x.order).size!==3||!x.order.every(id=>CIRCUIT_TYPES.includes(id))||
+    !Number.isSafeInteger(x.startedAt)||x.startedAt<=0||
+    x.startedAt>Date.now()+86400000||
+    !Number.isSafeInteger(x.finishedAt)||x.finishedAt<x.startedAt||
+    x.finishedAt>Date.now()+86400000||x.finishedAt-x.startedAt>86400000)
+    throw Error('Practice backup has an invalid completed training circuit.');
+   if(seen.has(x.finishedAt))
+    throw Error('Practice backup repeats a training circuit completion timestamp.');
+   seen.add(x.finishedAt);
+   return{version:1,startedAt:x.startedAt,finishedAt:x.finishedAt,order:[...x.order]};
+  }).sort((a,b)=>b.finishedAt-a.finishedAt);
+ }
+ function readCircuitHistory(){
+  return normalizeCircuitHistory(readJson(CIRCUIT_HISTORY_KEY));
+ }
  function readMilestones(){
   const first=readJson(FIRST_TOUCH_KEY),best=readJson(GOAL_BEST_KEY),goalRushBest={};
   for(const duration of GOAL_DURATIONS)
@@ -199,15 +225,19 @@
   }
   streak.textContent=streakCount?streakCount+'-day active practice streak · saved local records only':
    'No practice saved today yet. Open a drill or complete a local match to add real progress.';
-  exportButton.disabled=!all.some(x=>x.entries.length);
+  const finished=readJson(CIRCUIT_HISTORY_KEY);
+  exportButton.disabled=!all.some(x=>x.entries.length)&&(!Array.isArray(finished)||!finished.length);
  }
  refreshButton.onclick=()=>{render();notice.textContent='Updated from practice records saved in this browser.';};
  exportButton.onclick=()=>{
   const streams=Object.fromEntries(SOURCES.map(x=>[x.id,records(x)]));
-  if(!Object.values(streams).some(a=>a.length))return;
+  let circuits;
+  try{circuits=readCircuitHistory();}
+  catch(error){notice.textContent=error.message||'Cannot export circuit history.';return;}
+  if(!Object.values(streams).some(a=>a.length)&&!circuits.length)return;
   const pack={format:'fuckball-personal-practice-snapshot',version:1,
    source:'device-local-unverified-practice',exportedAt:new Date().toISOString(),
-   targets:goals(),sessions:streams,milestones:readMilestones(),
+   targets:goals(),sessions:streams,milestones:readMilestones(),circuits,
    note:'Personal backup only. Source records are not signed or online ranked results.'};
   const url=URL.createObjectURL(new Blob([JSON.stringify(pack,null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;
@@ -254,7 +284,8 @@
   }
   if(Object.keys(data.sessions).some(key=>!SOURCES.some(x=>x.id===key)))
    throw Error('Unknown session type in practice backup.');
-  return{targets,streams,milestones:snapshotMilestones(data.milestones)};
+  return{targets,streams,milestones:snapshotMilestones(data.milestones),
+   circuits:normalizeCircuitHistory(data.circuits)};
  }
  function mergeSnapshot(snapshot){
   const updates=new Map();let added=0,skipped=0,milestoneChanges=0,combinedGoals=[];
@@ -290,9 +321,27 @@
   }
   if(JSON.stringify(goalRushBest)!==JSON.stringify(existing.goalRushBest))
    updates.set(GOAL_BEST_KEY,JSON.stringify(goalRushBest));
+  // Merge completed circuits by immutable finish timestamp without replacing
+  // existing history, live circuit state or already saved native drill results.
+  const local=readCircuitHistory(),combined=[...local];
+  const byEnd=new Map(local.map(item=>[item.finishedAt,item]));
+  let addedCircuits=0,skippedCircuits=0;
+  for(const entry of snapshot.circuits){
+   const earlier=byEnd.get(entry.finishedAt);
+   if(earlier){
+    if(JSON.stringify(earlier)!==JSON.stringify(entry))
+     throw Error('Conflicting training circuit finish time; existing history was not changed.');
+    skippedCircuits++;continue;
+   }
+   combined.push(entry);byEnd.set(entry.finishedAt,entry);addedCircuits++;
+  }
+  if(combined.length>MAX_CIRCUITS)
+   throw Error('Training circuit history is full. Export or clear older completed circuits before restoring.');
+  if(addedCircuits)
+   updates.set(CIRCUIT_HISTORY_KEY,JSON.stringify(combined.sort((a,b)=>b.finishedAt-a.finishedAt)));
   if(restoreTargets.checked)
    updates.set(PLAN_KEY,JSON.stringify({version:1,goals:snapshot.targets}));
-  return{updates,added,skipped,milestoneChanges};
+  return{updates,added,skipped,milestoneChanges,addedCircuits,skippedCircuits};
  }
  async function importSnapshot(file){
   if(!file||file.size<=0||file.size>128*1024)throw Error('Choose a valid local snapshot smaller than 128 KB.');
@@ -300,11 +349,12 @@
   catch{throw Error('Practice snapshot is not valid JSON.');}
   const snapshot=preparedSnapshot(parsed),result=mergeSnapshot(snapshot);
   const count=result.added;
-  if(!count&&!restoreTargets.checked&&!result.milestoneChanges){
+  if(!count&&!restoreTargets.checked&&!result.milestoneChanges&&!result.addedCircuits){
    notice.textContent='All practice sessions and milestones are already saved locally.';return;
   }
   const ask='Restore '+count+' new local practice session'+(count===1?'':'s')+
    (result.milestoneChanges?' and '+result.milestoneChanges+' local milestone update(s)':'')+
+   (result.addedCircuits?' and '+result.addedCircuits+' completed training circuits':'')+
    (restoreTargets.checked?' and apply the saved weekly goals':'')+
    '? Existing history remains untouched. These are private, unverified practice records.';
   if(!window.confirm(ask)){notice.textContent='Practice restore cancelled.';return;}
@@ -324,8 +374,11 @@
     'Browser storage failed and rollback could not be guaranteed. Inspect your local journals before retrying.');
   }
   render();
+  if(result.addedCircuits)window.dispatchEvent(new CustomEvent('fuckball-practice-circuits-updated'));
   notice.textContent='Imported '+count+' private practice session'+(count===1?'':'s')+
    (result.skipped?' · '+result.skipped+' duplicates skipped':'')+
+   (result.addedCircuits?' · '+result.addedCircuits+' completed circuits restored':'')+
+   (result.skippedCircuits?' · '+result.skippedCircuits+' existing circuits skipped':'')+
    (result.milestoneChanges?' · local achievements restored (reload for First Touch)':'')+
    (restoreTargets.checked?' · weekly goals restored':'')+'. No server upload.';
  }
