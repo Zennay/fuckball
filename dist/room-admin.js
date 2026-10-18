@@ -15,12 +15,14 @@
  description.textContent='The host can stop new joins without ending the game, remove disruptive players, and suspend signed-in players from this room for 10 minutes. Current players and valid reconnects keep their slots.';
  const controls=document.createElement('div');controls.className='room-admin-actions';
  const lock=document.createElement('button');lock.type='button';lock.className='primary';
+ const listing=document.createElement('button');listing.type='button';
+ listing.className='room-listing-toggle';listing.textContent='List publicly';
  const targetWrap=document.createElement('label');targetWrap.textContent='Connected player';
  const target=document.createElement('select');target.setAttribute('aria-label','Player to moderate');
  targetWrap.append(target);
  const kick=document.createElement('button');kick.type='button';kick.textContent='Remove';
  const ban=document.createElement('button');ban.type='button';ban.className='danger';ban.textContent='Suspend 10 min';
- controls.append(lock,targetWrap,kick,ban);
+ controls.append(lock,listing,targetWrap,kick,ban);
  const notice=document.createElement('p');notice.className='room-admin-notice';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(heading,description,controls,notice);
@@ -30,12 +32,15 @@
   const link=serverLink;
   if(!link?.room){panel.hidden=true;return;}
   panel.hidden=false;
-  const isOwner=!!link.isOwner,locked=link.roomControl?.locked===true;
-  state.textContent=locked?'🔒 Closed to new players':'🔓 Open to invites';
+  const isOwner=!!link.isOwner,locked=link.roomControl?.locked===true,listed=link.roomControl?.listed===true;
+  state.textContent=locked?'🔒 Closed to new players':listed?'🌍 Public room · anyone can discover':'🔗 Unlisted · invite link only';
   state.classList.toggle('locked',locked);
   controls.hidden=!isOwner;
   if(!isOwner){notice.textContent=locked?'The host has locked the room. Your game continues.':'The room host controls entry and moderation.';return;}
   lock.textContent=locked?'Unlock joins':'Lock joins';lock.disabled=false;
+  listing.textContent=listed?'Remove from public rooms':'List room publicly';
+  listing.disabled=locked;listing.setAttribute('aria-pressed',String(listed));
+  listing.title=locked?'Unlock joins to publish this room.':'Anyone can see and join a public room.';
   const current=target.value,players=room?.state?.players||[];
   const eligible=players.filter(p=>Number.isSafeInteger(p.id)&&p.id!==networkPlayerId&&!botIds.has(p.id));
   const signature=JSON.stringify(eligible.map(p=>[p.id,p.name,p.team?.id]));
@@ -56,6 +61,12 @@
   if(!serverLink?.isOwner||!serverLink.room)return;
   serverLink.send({type:'roomAdmin',action,...(id!==undefined?{id}:{})});
  }
+ listing.onclick=()=>{
+  if(!serverLink?.isOwner||serverLink.roomControl?.locked)return;
+  listing.disabled=true;
+  send(serverLink.roomControl?.listed?'unpublish':'publish');
+  notice.textContent='Updating room visibility…';
+ };
  lock.onclick=()=>{if(!serverLink?.isOwner)return;lock.disabled=true;send(serverLink.roomControl?.locked?'unlock':'lock');notice.textContent='Updating room admission…';};
  function selectPlayer(){const id=Number(target.value);return Number.isSafeInteger(id)&&id>0&&id!==networkPlayerId?id:null;}
  kick.onclick=()=>{

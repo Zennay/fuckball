@@ -16,6 +16,14 @@ When a compatible full roster is found, **each player gets a 15-second ready pro
 
 This does not implement friends parties, regional matchmaking, rated rankings, or a persistent match server. The separate persistent match receipts remain server-local and are not anti-cheat-ranked history.
 
+## Browse opt-in public Custom Rooms
+
+On Home, open **Browse rooms** to find Custom Rooms whose current host explicitly selected **List room publicly** under Esc → Room Control. Room IDs, live participant count, stadium, mode and started/lobby state are shown, with Join room and Copy invite actions. Join still uses the existing guest/account join screen and server admission rules. The directory is a snapshot; entries may expire or become full before you join.
+
+**Privacy by default:** every room starts unlisted, including rooms joined through private invitations. The current host alone can publish or unpublish. Locking joins, host succession or room destruction automatically removes a listing. Player names, account identities, room bans, and private invitation IDs are not exposed. Quick Match rooms cannot be published. No client-submitted visibility or player count is trusted by the server.
+
+The optional directory is ephemeral and server-local, not a global lobby service. It does not implement persistent club rooms or ranking.
+
 ## Play and host
 
 Node.js 22 or newer; no Node dependencies required for the game/server:

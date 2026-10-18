@@ -99,7 +99,17 @@ function createServer(options={}){
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
  const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
-  if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.sockets.size,reserved:r.parked.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
+  if(route==='/api/public-rooms'){
+    if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
+    const listings=[...rooms.values()].filter(r=>r.listed===true&&!r.locked&&!r.quickMatch)
+     .slice(0,16).map(r=>({room:r.id,players:r.sockets.size,
+      mode:['bot','1v1','2v2','3v3','4v4'].includes(r.mode)?r.mode:'custom',
+      started:r.started===true,map:String(r.hb._room.state.stadium.name||'Stadium').slice(0,60)}));
+    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
+     'X-Content-Type-Options':'nosniff'});res.end(JSON.stringify({rooms:listings}));
+    return;
+   }
+   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.sockets.size,reserved:r.parked.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
  // Track the underlying TCP sockets as well as admitted WebSockets: HTTP
@@ -147,7 +157,7 @@ function createServer(options={}){
     try{history.append(records);}catch{console.warn('Match history write unavailable; completed round remains unrecorded.');}
    },
    send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -177,7 +187,7 @@ function createServer(options={}){
  // A per-connection bearer ticket is never placed in the room URL, status, or host snapshots.
  function issueTicket(ws,r,id){const ticket=crypto.randomBytes(32).toString('hex');r.sessionTokens.set(id,ticket);send(ws,{type:'resumeTicket',ticket,windowMs:reconnectMs});}
  function roomControl(r){
-  const msg={type:'roomControl',locked:r.locked,owner:r.owner,banMinutes:10};
+  const msg={type:'roomControl',locked:r.locked,listed:r.listed===true,owner:r.owner,banMinutes:10};
   for(const client of r.sockets.values())send(client,msg);
  }
  // Temporary account-scoped ban; never block a shared public IP, and never
@@ -200,7 +210,11 @@ function createServer(options={}){
   if(ws.playerId!==r.owner||!r.sockets.has(ws.playerId))
    throw Error('Only the current room host can moderate this room.');
   if(d.action==='lock'||d.action==='unlock'){
-   r.locked=d.action==='lock';roomControl(r);return;
+   r.locked=d.action==='lock';if(r.locked)r.listed=false;roomControl(r);return;
+  }
+  if(d.action==='publish'||d.action==='unpublish'){
+   if(d.action==='publish'&&r.locked)throw Error('Unlock room joins before publishing.');
+   r.listed=d.action==='publish';roomControl(r);return;
   }
   if(!['kick','ban'].includes(d.action)||!Number.isSafeInteger(d.id)||d.id<1)
    throw Error('Invalid room moderation action.');
@@ -227,7 +241,7 @@ function createServer(options={}){
   const c=r.clients.get(id);c.timeline=r.v3&&ws.netcode===3?Netcode.createInputTimeline():null;c.lastInputSeq=0;
   send(ws,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:claim.account,netcode:c.timeline?3:2,resumed:true});
   issueTicket(ws,r,id);r.setConnected(id,true);
-  send(ws,{type:'roomControl',locked:r.locked,owner:r.owner,banMinutes:10});
+  send(ws,{type:'roomControl',locked:r.locked,listed:r.listed===true,owner:r.owner,banMinutes:10});
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
@@ -285,7 +299,8 @@ function createServer(options={}){
   }
  }
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
-  const id=ws.playerId;r.sockets.delete(id);r.reports.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
+  const id=ws.playerId;if(id===r.owner)r.listed=false; // A new host must consent before re-publishing.
+  r.sockets.delete(id);r.reports.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
   if(r.authority===id){if(!r.sockets.size){r.destroy();rooms.delete(r.id);return;}failover(r,'host left');}
   else if(r.authority!=='server'){send(hostSocket(r),{type:'hostLeave',id});if(!r.sockets.size){r.destroy();rooms.delete(r.id);}meshUpdate(r);return;}
   if(r.leave(id)){r.destroy();rooms.delete(r.id);return;}
