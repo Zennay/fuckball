@@ -20,10 +20,10 @@ function distribute(group,size){
  }
  return{red,blue};
 }
-function createQuickMatch({send,start,clock=()=>Date.now()}){
+function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true}){
  const pools=Object.fromEntries(Object.keys(SIZES).map(mode=>[mode,[]]));
  const active=new Map();
- const available=(ws)=>ws?.readyState===1&&!ws.room;
+ const available=(ws)=>ws?.readyState===1&&!ws.room&&validAccount(ws);
  function broadcast(mode){
   const count=pools[mode].length;
   for(const e of pools[mode])if(available(e.ws))
@@ -51,6 +51,9 @@ function createQuickMatch({send,start,clock=()=>Date.now()}){
  function drain(mode){
   const list=pools[mode],needed=SIZES[mode]*2;
   for(let i=list.length-1;i>=0;i--)if(!available(list[i].ws)){
+   if(list[i].ws?.readyState===1&&!validAccount(list[i].ws))
+    send(list[i].ws,{type:'queueStatus',status:'error',
+     reason:'Your account session expired. Log in before searching again.'});
    active.delete(list[i].ws);list.splice(i,1);
   }
   let matched=false;
