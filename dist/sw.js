@@ -56,6 +56,8 @@ const CORE=[
  "./mobile-controls.css",
  "./match-moments.js",
  "./match-moments.css",
+ "./replay-analysis.js",
+ "./replay-analysis.css",
  "./pwa.js",
  "./pwa.css",
  "./manifest.json",
