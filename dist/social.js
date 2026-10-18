@@ -20,7 +20,7 @@
  const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','Close friends');
  close.onclick=()=>dialog.close();top.append(title,close);
  const intro=document.createElement('p');intro.className='social-intro';
- intro.textContent='Connect with players you trust. Only mutual friends can see when you are playing or receive your room invites.';
+ intro.textContent='Connect with players you trust. Mutual friends can see your presence and exchange invites. Blocking also keeps both accounts out of future Quick Matches together, but cannot remove someone from a match already in progress.';
  const status=document.createElement('p');status.className='social-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const addForm=document.createElement('form');addForm.className='social-add';
  const input=document.createElement('input');input.type='text';input.maxLength=20;
@@ -106,7 +106,7 @@
    ]);
   }
   if(!data.invites?.length)row(invites,'No invitations');
-  const blocked=section('BLOCKED','Blocked players cannot send you friend requests or room invites.');
+  const blocked=section('BLOCKED','Blocked players cannot send friend requests or invites, and will not be paired with you in new human Quick Matches on this server.');
   for(const name of data.blocked||[])row(blocked,name,[button('Unblock',()=>act({action:'unblock',user:name}))]);
   if(!data.blocked?.length)row(blocked,'Nobody blocked');
  }
