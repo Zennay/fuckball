@@ -65,7 +65,15 @@
  slider.setAttribute('aria-label','Gamepad stick deadzone');
  const deadValue=make('output','','30%');
  const sliderRow=make('div','controller-setup-slider');sliderRow.append(slider,deadValue);deadLabel.append(sliderRow);
- fields.append(deviceLabel,mappingLabel,stickLabel,deadLabel,invertLabel);
+ const rumbleGroup=make('fieldset','controller-setup-haptics');
+ const rumbleLegend=make('legend','','Controller vibration · optional, off by default');
+ const kickPulse=make('input');kickPulse.type='checkbox';
+ const goalPulse=make('input');goalPulse.type='checkbox';
+ const kickPulseLabel=make('label','','Vibrate briefly when kicking');kickPulseLabel.prepend(kickPulse);
+ const goalPulseLabel=make('label','','Vibrate when a goal is registered');goalPulseLabel.prepend(goalPulse);
+ const rumbleHint=make('small','','Only the selected controller may vibrate during active play. Unsupported gamepads remain silent. No gameplay or network settings change.');
+ rumbleGroup.append(rumbleLegend,kickPulseLabel,goalPulseLabel,rumbleHint);
+ fields.append(deviceLabel,mappingLabel,stickLabel,deadLabel,invertLabel,rumbleGroup);
  const bindButton=make('button','controller-setup-bind','◎ Press a button to bind kick');
  bindButton.type='button';
  const calibrate=make('button','','◎ Measure resting stick (2s)');calibrate.type='button';
@@ -78,7 +86,8 @@
  dialog.append(heading,privacy,state,board,fields,bindButton,calibrate,hint,actions);
  document.body.append(dialog);
  const kickValid=k=>MODES.some(([key])=>key===k);
- let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false},
+ let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
+  kickPulse:false,goalPulse:false},
   suggestion=null,sampling=null,lastMessage='',active=false;
  let selectedSource=null,deviceSignature='',binding=null;
  const allowedButtons=[0,1,2,3,4,5,6,7,8,10,11];
@@ -132,6 +141,8 @@
    if(['left','right'].includes(saved.stick))config.stick=saved.stick;
    if(typeof saved.invertX==='boolean')config.invertX=saved.invertX;
    if(typeof saved.invertY==='boolean')config.invertY=saved.invertY;
+   if(typeof saved.kickPulse==='boolean')config.kickPulse=saved.kickPulse;
+   if(typeof saved.goalPulse==='boolean')config.goalPulse=saved.goalPulse;
    if(Number.isFinite(saved.deadzone)&&saved.deadzone>=.15&&saved.deadzone<=.65)
     config.deadzone=saved.deadzone;
   }catch{/* Keep safe defaults. */}
@@ -140,6 +151,7 @@
  function fill(){
   mapping.value=config.kick;slider.value=String(config.deadzone);
   stick.value=config.stick;invertX.checked=config.invertX;invertY.checked=config.invertY;
+  kickPulse.checked=config.kickPulse;goalPulse.checked=config.goalPulse;
   deadValue.textContent=Math.round(config.deadzone*100)+'%';
  }
  fill();
@@ -163,6 +175,8 @@
  };
  invertX.onchange=()=>{config.invertX=invertX.checked;persist();};
  invertY.onchange=()=>{config.invertY=invertY.checked;persist();};
+ kickPulse.onchange=()=>{config.kickPulse=kickPulse.checked;persist();};
+ goalPulse.onchange=()=>{config.goalPulse=goalPulse.checked;persist();};
  slider.oninput=()=>{
   const value=Number(slider.value);
   if(!Number.isFinite(value)||value<.15||value>.65)return;
@@ -170,7 +184,8 @@
  };
  reset.onclick=()=>{
   cancelBinding();
-  config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false};suggestion=null;
+  config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
+   kickPulse:false,goalPulse:false};suggestion=null;
   apply.disabled=true;fill();persist();
   hint.textContent='Standard kick mapping and 30% deadzone restored.';
  };
@@ -236,7 +251,8 @@
    return;
   }
   const msg='Connected · '+String(pad.id||'Gamepad').slice(0,72)+
-   ' · '+pad.buttons.length+' buttons · '+pad.axes.length+' axes.';
+   ' · '+pad.buttons.length+' buttons · '+pad.axes.length+' axes · '+
+   (typeof pad.vibrationActuator?.playEffect==='function'?'vibration available':'no vibration support')+'.';
   if(msg!==lastMessage){state.textContent=msg;lastMessage=msg;}
   const index=config.stick==='right'?2:0;
   const rawX=Number.isFinite(pad.axes?.[index])?pad.axes[index]:0;
@@ -308,9 +324,11 @@
   const v=event.detail;
   if(!v||!kickValid(v.kick)||!Number.isFinite(v.deadzone)||v.deadzone<.15||
    v.deadzone>.65||!['left','right'].includes(v.stick)||
-   typeof v.invertX!=='boolean'||typeof v.invertY!=='boolean')return;
+   typeof v.invertX!=='boolean'||typeof v.invertY!=='boolean'||
+   (v.kickPulse!==undefined&&typeof v.kickPulse!=='boolean')||
+   (v.goalPulse!==undefined&&typeof v.goalPulse!=='boolean'))return;
   config={kick:v.kick,deadzone:v.deadzone,stick:v.stick,
-   invertX:v.invertX,invertY:v.invertY};
+   invertX:v.invertX,invertY:v.invertY,kickPulse:v.kickPulse??false,goalPulse:v.goalPulse??false};
   fill();
  });
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
