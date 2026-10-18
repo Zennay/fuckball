@@ -32,17 +32,21 @@
   mode.add(new Option(value==='all'?'All modes':value==='bot'?'Vs AI':value,value));
  modeLabel.append(mode);
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export server results';
+ const csvButton=document.createElement('button');csvButton.type='button';csvButton.textContent='↓ Export shown CSV';
+ csvButton.title='Only current visible result rows, without usernames or receipt IDs';
  const erase=document.createElement('button');erase.type='button';erase.className='server-results-erase';
  erase.textContent='Erase my server history';erase.title='Also removes career totals on this server';
- controls.append(filterLabel,modeLabel,periodLabel,exportButton,erase);
+ controls.append(filterLabel,modeLabel,periodLabel,exportButton,csvButton,erase);
  const status=document.createElement('p');status.className='server-results-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const summary=document.createElement('p');summary.className='server-results-count';
+ const form=document.createElement('div');form.className='server-results-form';
+ form.setAttribute('aria-label','Verified unranked online match form for selected mode and period');
  const list=document.createElement('div');list.className='server-results-grid';list.setAttribute('aria-label','My online match results');
  const divider=document.createElement('h2');divider.className='server-local-heading';divider.textContent='SAVED REPLAYS ON THIS DEVICE';
  const detail=document.createElement('p');detail.className='server-results-note';
  detail.textContent='Online result receipts do not include HBR2 playback. Your local recordings below stay on this device. Account totals may outlive the 50 most recent server receipts.';
- panel.append(heading,controls,status,summary,list,detail);
+ panel.append(heading,controls,status,summary,form,list,detail);
  games.insertBefore(panel,document.getElementById('gamesStatus'));
  games.insertBefore(divider,document.getElementById('gamesStatus'));
  let generation=0,currentToken=null,currentUser=null,items=null,busy=false;
@@ -65,17 +69,35 @@
  }
  function reset(message){
   items=null;currentToken=null;currentUser=null;list.replaceChildren();
-  summary.textContent='';status.textContent=message;
-  exportButton.disabled=true;erase.disabled=true;
+  summary.textContent='';form.replaceChildren();status.textContent=message;
+  exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
  }
  function render(){
   list.replaceChildren();
   if(!items)return;
-  const filtered=items.filter(item=>
-   (filter.value==='all'||outcome(item)===filter.value)&&
+  const scope=items.filter(item=>
    (mode.value==='all'||item.mode===mode.value)&&
    (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
-  summary.textContent=filtered.length+' shown · '+items.length+' recent server results · unranked';
+  const filtered=scope.filter(item=>filter.value==='all'||outcome(item)===filter.value);
+  summary.textContent=filtered.length+' shown · '+scope.length+' in this period and mode · '+
+   items.length+' recent server receipts · unranked';
+  form.replaceChildren();
+  if(scope.length){
+   const count=type=>scope.reduce((n,x)=>n+Number(outcome(x)===type),0);
+   const gf=scope.reduce((n,x)=>n+(x.team===1?x.red:x.blue),0);
+   const ga=scope.reduce((n,x)=>n+(x.team===1?x.blue:x.red),0);
+   const minutes=Math.floor(scope.reduce((n,x)=>n+x.playedFrames,0)/3600);
+   for(const [label,value] of [
+    ['RECENT FORM',count('win')+' W · '+count('draw')+' D · '+count('loss')+' L'],
+    ['GOALS FOR / AGAINST',gf+' / '+ga],
+    ['RECORDED ACTIVE PLAY',minutes+' min']
+   ]){
+    const card=document.createElement('div');card.className='server-form-stat';
+    const title=document.createElement('span');title.textContent=label;
+    const number=document.createElement('strong');number.textContent=value;
+    card.append(title,number);form.append(card);
+   }
+  }
   if(!filtered.length){
    const empty=document.createElement('p');empty.className='server-results-empty';
    empty.textContent=items.length?'No results match those filters.':'No eligible online results yet. Complete a native-server match while signed in.';
@@ -114,9 +136,9 @@
  async function load(){
   const seq=++generation,account=authenticated();
   if(!account){reset('Sign in through the online account menu to see your private server results.');return;}
-  currentToken=null;items=null;list.replaceChildren();summary.textContent='';
+  currentToken=null;items=null;list.replaceChildren();summary.textContent='';form.replaceChildren();
   status.textContent='Loading online results for '+account.username+'…';
-  refresh.disabled=true;exportButton.disabled=true;erase.disabled=true;
+  refresh.disabled=true;exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
   try{
    const response=await fetch('/api/match-history',{
     headers:{Authorization:'Bearer '+account.token},cache:'no-store'
@@ -131,12 +153,37 @@
    currentToken=account.token;currentUser=account.username;
    items=data.items.slice().sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
    status.textContent='Private results for '+currentUser+'. Stored on this server only; never a ranked rating.';
-   exportButton.disabled=false;erase.disabled=false;render();
+   exportButton.disabled=false;csvButton.disabled=false;erase.disabled=false;render();
   }catch(e){if(seq===generation)reset(e.message||'Online results unavailable.');}
   finally{if(seq===generation)refresh.disabled=false;}
  }
  refresh.onclick=()=>load();
  filter.onchange=()=>render();mode.onchange=()=>render();period.onchange=()=>render();
+ csvButton.onclick=()=>{
+  if(!items||!currentToken||authenticated()?.token!==currentToken)return;
+  // Export only the selected rows, not raw account data or match receipt IDs.
+  const shown=items.filter(item=>
+   (filter.value==='all'||outcome(item)===filter.value)&&
+   (mode.value==='all'||item.mode===mode.value)&&
+   (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
+  if(!shown.length){status.textContent='No visible online results to export.';return;}
+  const rows=[['UTC date','Mode','Outcome','Side','Goals for','Goals against','Active seconds','Ranked'],
+   ...shown.map(item=>{
+    const date=new Date(item.at);
+    return [Number.isFinite(date.getTime())?date.toISOString():'',item.mode,outcome(item),
+     item.team===1?'Red':'Blue',item.team===1?item.red:item.blue,
+     item.team===1?item.blue:item.red,Math.floor(item.playedFrames/60),'No'];
+   })];
+  const encode=value=>'"'+String(value).replace(/"/g,'""')+'"';
+  const newline=String.fromCharCode(13,10);
+  const content=String.fromCharCode(0xFEFF)+rows.map(row=>row.map(encode).join(',')).join(newline)+newline;
+  const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));
+  const anchor=document.createElement('a');anchor.href=url;
+  anchor.download='fuckball-unranked-online-form-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.append(anchor);anchor.click();anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent=shown.length+' filtered, unranked server result(s) exported locally without account names or receipt IDs.';
+ };
  exportButton.onclick=()=>{
   if(!items||!currentToken||authenticated()?.token!==currentToken)return;
   const data={source:'fuckball-native-server',ranked:false,account:currentUser,
@@ -169,7 +216,7 @@
  showView=function(next){
   previousShowView(next);
   if(next==='games')load();
-  else{generation++;currentToken=null;items=null;exportButton.disabled=true;erase.disabled=true;}
+  else{generation++;currentToken=null;items=null;form.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&!games.hidden&&authenticated()?.token!==currentToken)load();

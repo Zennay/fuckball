@@ -25,3 +25,12 @@
 .server-local-heading{margin:16px 0 22px}
 .server-results-controls button:focus-visible,.server-results-head button:focus-visible,.server-results-controls select:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 @media(max-width:660px){.server-results-head button{width:100%}.server-results-controls>*{flex:1 1 130px}.server-results-controls select,.server-results-controls button{width:100%}}
+
+/* Honest aggregate form only from real, server-originated receipts for the selected window. */
+.server-results-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 20px}
+.server-form-stat{display:grid;align-content:center;gap:8px;min-width:0;padding:14px 15px;
+ border:1px solid #698981;border-radius:11px;background:#1d3b40}
+.server-form-stat span{font-size:10px;font-weight:800;letter-spacing:.08em;color:#a9d4c5}
+.server-form-stat strong{font-size:clamp(15px,2.1vw,24px);font-weight:900;color:#e8fad7;
+ font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:680px){.server-results-form{grid-template-columns:1fr}}

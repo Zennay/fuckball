@@ -145,7 +145,7 @@
  }
  // Reuse the exact local Poster Designer contract. All text remains optional
  // except both team names, and user-entered results are never server-verified.
- const posterLimits={competition:60,home:30,away:30,venue:60,tagline:84};
+ const posterLimits={competition:60,home:35,away:35,venue:60,tagline:84};
  const posterText=(s,max)=>typeof s==='string'&&s.length<=max&&s===s.trim()&&
   !/[\u0000-\u001f\u007f-\u009f]/.test(s);
  function poster(x){

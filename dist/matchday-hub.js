@@ -270,7 +270,7 @@
        f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')));
      if(f.type!=='Knockout'){
        actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
-       if(f.type!=='Series')actions.append(button('Poster',()=>window.dispatchEvent(
+       actions.append(button('Poster',()=>window.dispatchEvent(
          new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
      }
      card.append(info,actions);controlRows.append(card);
@@ -330,7 +330,9 @@
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
    row.append(dom('time',date),dom('strong',f.name),
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
-   row.append(f.type==='Series'?button('Open series',()=>window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId,gameId:f.gameId,field:'schedule'}}))):button('Design poster',()=>window.dispatchEvent(
+   if(f.type==='Series')row.append(button('Open series',()=>window.dispatchEvent(
+    new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId,gameId:f.gameId,field:'schedule'}}))));
+   row.append(button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
