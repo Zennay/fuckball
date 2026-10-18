@@ -168,11 +168,15 @@
    (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
   if(!shown.length){status.textContent='No visible online results to export.';return;}
   const rows=[['UTC date','Mode','Outcome','Side','Goals for','Goals against','Active seconds','Ranked'],
-   ...shown.map(item=>[new Date(item.at).toISOString(),item.mode,outcome(item),
-    item.team===1?'Red':'Blue',item.team===1?item.red:item.blue,
-    item.team===1?item.blue:item.red,Math.floor(item.playedFrames/60),'No'])];
+   ...shown.map(item=>{
+    const date=new Date(item.at);
+    return [Number.isFinite(date.getTime())?date.toISOString():'',item.mode,outcome(item),
+     item.team===1?'Red':'Blue',item.team===1?item.red:item.blue,
+     item.team===1?item.blue:item.red,Math.floor(item.playedFrames/60),'No'];
+   })];
   const encode=value=>'"'+String(value).replace(/"/g,'""')+'"';
-  const content='\\uFEFF'+rows.map(row=>row.map(encode).join(',')).join('\\r\\n')+'\\r\\n';
+  const newline=String.fromCharCode(13,10);
+  const content=String.fromCharCode(0xFEFF)+rows.map(row=>row.map(encode).join(',')).join(newline)+newline;
   const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));
   const anchor=document.createElement('a');anchor.href=url;
   anchor.download='fuckball-unranked-online-form-'+new Date().toISOString().slice(0,10)+'.csv';
