@@ -27,9 +27,16 @@
  periodLabel.append(period);
  controls.append(searchLabel,focusLabel,periodLabel);
  const overview=e('div','','study-overview'),list=e('ol','','study-results');
+ const reportPanel=e('section','','study-reports');
+ const reportSummary=e('p','Only your currently filtered local notes are exported. This is an annotation report, not a performance score.');
+ const reportActions=e('div','','study-report-actions');
+ const exportCSV=e('button','↓ Filtered notes CSV');exportCSV.type='button';
+ const exportTXT=e('button','↓ Training debrief TXT');exportTXT.type='button';
+ reportActions.append(exportCSV,exportTXT);reportPanel.append(
+  e('h3','YOUR PRIVATE REPLAY DEBRIEF'),reportSummary,reportActions);
  const more=e('button','Show more observations');more.type='button';more.className='study-more';
  const status=e('p','','study-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- main.append(heading,controls,overview,list,more,status);
+ main.append(heading,controls,overview,reportPanel,list,more,status);
  // Keep this separate from replay queue ownership and its auto-next logic.
  const anchor=games.querySelector('.replay-review-queue')||games.querySelector('.replay-compare-studio')||
   document.getElementById('gamesList');
@@ -52,6 +59,7 @@
   const counts=new Map();
   for(const entry of selected)counts.set(entry.category,(counts.get(entry.category)||0)+1);
   overview.replaceChildren();
+  exportCSV.disabled=exportTXT.disabled=!selected.length||loading||opening;
   const intro=e('strong',selected.length+' saved observations · '+recordings+' recordings');
   overview.append(intro);
   for(const [category,total] of [...counts].sort((a,b)=>b[1]-a[1])){
@@ -78,6 +86,72 @@
   if(!loading&&!opening)status.textContent='Showing '+Math.min(visible,selected.length)+' of '+selected.length+' private observations'+
    (invalid?' · '+invalid+' recordings skipped because their notes could not be read':'')+'.';
  }
+ 
+ // Export only actual saved observation metadata; no replay file, image or account is uploaded.
+ function filteredNotes(){return observations.filter(matched);}
+ function downloadReport(content,name,type){
+  const blob=new Blob([content],{type});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ function cleanLine(value){return String(value??'').replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').slice(0,600);}
+ function reportNotes(){
+  const entries=filteredNotes();
+  if(!entries.length||loading||opening)return null;
+  return entries.slice().sort((a,b)=>b.recordedAt-a.recordedAt||a.frameNo-b.frameNo);
+ }
+ function exportObservationsCSV(){
+  const notes=reportNotes();if(!notes)return;
+  const cell=value=>{
+   let value=cleanLine(value);
+   if(/^\s*[=+\-@]/.test(value))value="'"+value;
+   return '"'+value.replace(/"/g,'""')+'"';
+  };
+  const rows=[['Replay name','Date saved (UTC)','Replay time','Theme','Note title','Observation'],
+   ...notes.map(n=>[n.name,new Date(n.recordedAt).toISOString(),frameStamp(n.frameNo),
+    labels[n.category]||'Other',n.label,n.text])];
+  downloadReport('\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n',
+   'fuckball-private-replay-study.csv','text/csv;charset=utf-8');
+  status.textContent='Downloaded '+notes.length+' local observations from the selected filters. No replay content or account information was sent.';
+ }
+ function exportTrainingDebrief(){
+  const notes=reportNotes();if(!notes)return;
+  const unique=new Set(notes.map(n=>n.id)).size;
+  const counts=new Map();
+  for(const n of notes)counts.set(n.category,(counts.get(n.category)||0)+1);
+  const themes=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  const out=[
+   'FUCKBALL · PERSONAL REPLAY DEBRIEF',
+   'Player-written annotations on locally saved HBR2 recordings.',
+   'Not verified match performance, AI analysis, an Elo or an assessment of skill.',
+   '',
+   'Selected filters: '+cleanLine(search.value||'none')+
+    ' | '+cleanLine(focus.selectedOptions[0]?.textContent||'all')+
+    ' | '+cleanLine(period.selectedOptions[0]?.textContent||'all'),
+   'Observations: '+notes.length+' | Source recordings: '+unique,
+   'The most annotated theme is not necessarily the weakest skill.',
+   '',
+   'ANNOTATED THEMES (NUMBER OF SAVED NOTES)',
+   ...themes.map(([theme,count])=>'  '+(labels[theme]||'Other')+': '+count),
+   '',
+   'PERSONAL STUDY TIMELINE'
+  ];
+  for(const n of notes){
+   out.push('');
+   out.push(cleanLine(n.name)+' · '+new Date(n.recordedAt).toISOString().slice(0,10)+
+    ' · '+frameStamp(n.frameNo)+' · '+(labels[n.category]||'Other'));
+   out.push('  '+cleanLine(n.label));
+   if(n.text)out.push('  '+cleanLine(n.text));
+  }
+  out.push('','These notes remain local until you choose to share the downloaded file.');
+  downloadReport(out.join('\r\n')+'\r\n','fuckball-private-replay-debrief.txt',
+   'text/plain;charset=utf-8');
+  status.textContent='Downloaded a personal study debrief from '+notes.length+' saved annotations. No server data changed.';
+ }
+ exportCSV.addEventListener('click',exportObservationsCSV);
+ exportTXT.addEventListener('click',exportTrainingDebrief);
+
  async function jump(note){
   if(opening||loading||!validId(note.id))return;
   opening=true;status.textContent='Opening stored replay at '+frameStamp(note.frameNo)+'…';
