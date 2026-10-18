@@ -121,3 +121,25 @@ up to four players per provisional Red and Blue lineup, Going teammates on
 the bench, Maybe and Out lists and the organiser's own notes. No data is sent
 to online servers. Share the resulting file only with the participants you
 choose, as it can include their names and private notes.
+
+
+## Printable private team sheet and clipboard
+
+Inside a still-unplayed private fixture's attendance panel, **Print team
+sheet** downloads a self-contained, offline-readable HTML document with the
+competition, actual entered kickoff/venue, provisional Red and Blue players,
+Going bench, Maybe and Unavailable groups. Open the HTML file in a browser to
+read it or print it as a normal webpage. This is not a server-generated match
+report or official roster and does not claim anyone actually attended.
+
+**Copy team sheet text** uses the clipboard only when the organiser explicitly
+clicks the button and the browser supports clipboard access. It creates the
+same limited roster summary in plain text; if clipboard access is unavailable,
+download the printable team sheet instead.
+
+Both formats intentionally **exclude the private per-player notes**, account
+identifiers, invites, room URLs, tokens, recorded results and direct network
+calls. Because names and provisional availability are personal, share the
+download or clipboard text only with people you intend to inform. HTML team
+sheets have no scripts, tracking, external fonts or remote resources and
+escape all user-controlled names, competition names and venues.
