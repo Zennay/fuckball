@@ -31,3 +31,19 @@
 .room-browser-filters input:focus-visible,.room-browser-filters select:focus-visible{
  outline:3px solid #e0ffb1;outline-offset:3px}
 @media(max-width:600px){.room-browser-filters input,.room-browser-filters select{flex:1 1 100%}}
+
+/* Explicit device-only bookmarks; never a public/private room directory. */
+.room-browser-saved[hidden]{display:none!important}
+.room-browser-saved{margin:8px 0 19px;padding:15px;border-radius:11px;
+ border:1px solid #6a9179;background:#1c3532}
+.room-browser-saved-heading{display:flex;align-items:center;justify-content:space-between;
+ gap:10px;flex-wrap:wrap}
+.room-browser-saved-heading strong{font-size:12px;letter-spacing:.1em;color:#d3f4a4}
+.room-browser-saved-heading button{border-radius:7px;padding:9px 13px;min-height:40px;
+ border:1px solid #9e777b;background:#452e33;color:#ffd8d8}
+.room-browser-saved>p{font-size:11px;line-height:1.55;color:#c0d5c2;margin:8px 0 13px}
+.room-browser-saved-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:9px}
+.room-browser-saved-card{display:grid;gap:10px;padding:13px;
+ border:1px solid #5b8978;border-radius:10px;background:#254038}
+.room-browser-saved-card .room-browser-actions button{min-height:41px}
+.room-browser-actions button[aria-pressed="true"]{background:#365d3a;border-color:#acda8a;color:#e4ffcb}
