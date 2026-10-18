@@ -646,7 +646,7 @@
     if(ref?.type!=='League'||typeof ref.id!=='string')return;
     const selected=tournaments.find(t=>t.id===ref.id);
     if(!selected)return inform('This local league is no longer available.');
-    activeId=selected.id;filter='pending';message='Opened '+selected.name+' · results are private and unverified.';
+    activeId=selected.id;filter='pending';teamIndex=null;message='Opened '+selected.name+' · results are private and unverified.';
     details.open=true;render();
     panel.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
       'auto':'smooth',block:'start'});
