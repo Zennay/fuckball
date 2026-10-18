@@ -75,3 +75,19 @@
 .knockout-schedule-fields button{min-height:39px}
 .knockout-schedule-fields button:last-child{background:#384646;color:#f9e3d8}
 @media print{.knockout-match-schedule{display:none!important}}
+
+/* Explicit handoff from known private cup finalists into independent best-of games. */
+.knockout-series-handoff:not([hidden]){display:flex;align-items:center;justify-content:space-between;
+ gap:14px;flex-wrap:wrap;margin:18px 0;padding:15px 17px;border:1px solid #9fb17c;
+ border-radius:12px;background:#273e30}
+.knockout-series-handoff[hidden]{display:none!important}
+.knockout-series-handoff-copy{flex:1 1 270px}
+.knockout-series-handoff-copy strong{color:#d8f7ab;font-weight:900;letter-spacing:.04em}
+.knockout-series-handoff-copy p{font-size:.86rem;line-height:1.5;color:#d2e8d5;margin:6px 0 0}
+.knockout-series-handoff-actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+.knockout-series-handoff-actions select,.knockout-series-handoff-actions button{min-height:44px}
+.knockout-series-handoff-actions :focus-visible{outline:3px solid #d8ffab;outline-offset:3px}
+@media(max-width:620px){.knockout-series-handoff:not([hidden]){padding:12px}
+ .knockout-series-handoff-actions{width:100%}
+ .knockout-series-handoff-actions>*{flex:1 1 125px}}
+@media print{.knockout-series-handoff{display:none!important}}
