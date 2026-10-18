@@ -177,12 +177,12 @@ async function renderMyGames(){
     });
    star.className='game-star';star.setAttribute('aria-pressed',String(item.favorite===true));
    controls.append(
-    star,
-    makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      loadReplay(bytes,item.name);gamesMessage('');
     }),
+    star,
+    makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
     makeGameButton('↓ Export','Download '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      saveReplayDownload(bytes,item.name);
