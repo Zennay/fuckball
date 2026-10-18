@@ -29,21 +29,82 @@
  for(const value of ['all','1v1','2v2','3v3','4v4','custom'])
   modeFilter.add(new Option(value==='all'?'Any mode':value==='custom'?'Custom / bots':value,value));
  const order=document.createElement('select');order.setAttribute('aria-label','Sort public rooms');
- for(const [value,label] of [['default','Server order'],['most','Most players'],['fewest','Fewest players'],['stadium','Stadium A–Z']])
+ for(const [value,label] of [['default','Server order'],['pinned','Pinned first'],['most','Most players'],['fewest','Fewest players'],['stadium','Stadium A–Z']])
   order.add(new Option(label,value));
  for(const control of [search,statusFilter,modeFilter,order])filters.append(control);
  const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
  const status=document.createElement('p');status.className='room-browser-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const savedSection=document.createElement('section');savedSection.className='room-browser-saved';
+ const savedHeading=document.createElement('div');savedHeading.className='room-browser-saved-heading';
+ const savedTitle=document.createElement('strong');savedTitle.textContent='PINNED ROOMS';
+ const clearSaved=document.createElement('button');clearSaved.type='button';clearSaved.textContent='Clear pinned';
+ savedHeading.append(savedTitle,clearSaved);
+ const savedNote=document.createElement('p');
+ savedNote.textContent='Only rooms you intentionally pin are saved on this device. A room may later become unavailable or unlisted; opening a saved code still requires server admission.';
+ const savedGrid=document.createElement('div');savedGrid.className='room-browser-saved-list';
+ savedSection.append(savedHeading,savedNote,savedGrid);
  const list=document.createElement('div');list.className='room-browser-list';
- body.append(status,list);section.append(heading,intro,toolbar,filters,body);
+ body.append(savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[];
+ const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
+ const validRoom=code=>typeof code==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(code);
+ function readPinned(){
+  let raw;
+  try{raw=localStorage.getItem(SAVED_KEY);}catch{throw Error('Saved room storage is unavailable.');}
+  if(!raw)return[];
+  let saved;try{saved=JSON.parse(raw);}catch{throw Error('Saved room storage is corrupt.');}
+  if(!Array.isArray(saved)||saved.length>SAVED_LIMIT||
+     saved.some(code=>!validRoom(code))||new Set(saved).size!==saved.length)
+   throw Error('Saved room storage is invalid.');
+  return saved;
+ }
+ function savePinned(list){
+  if(!Array.isArray(list)||list.length>SAVED_LIMIT||
+     list.some(code=>!validRoom(code)))throw Error('Invalid pinned room list.');
+  try{localStorage.setItem(SAVED_KEY,JSON.stringify(list));}
+  catch{throw Error('Could not save room pins to this device.');}
+ }
+ function openSavedRoom(code){
+  if(serverLink?.room){status.textContent='Leave your current room first.';return;}
+  // A pinned code is not evidence that a room is still open or public.
+  // The native join API makes the current access and room existence checks.
+  showJoinScreen(code);
+ }
+ function renderPinned(pins){
+  savedSection.hidden=!pins.length;
+  savedGrid.replaceChildren();
+  for(const code of pins){
+   const published=roomsCache.find(r=>r.room===code);
+   const card=document.createElement('article');card.className='room-browser-saved-card';
+   const info=document.createElement('div');info.className='room-browser-info';
+   const label=document.createElement('strong');label.textContent='★ '+code;
+   const hint=document.createElement('small');
+   hint.textContent=published?
+    'Currently public · '+published.players+' online · '+published.map:
+    'Availability and access unknown · previously pinned code';
+   info.append(label,hint);
+   const actions=document.createElement('div');actions.className='room-browser-actions';
+   const open=button('Open saved room',()=>openSavedRoom(code));
+   const remove=button('Unpin',()=>{
+    try{savePinned(readPinned().filter(value=>value!==code));renderRooms();
+     status.textContent='Unpinned '+code+' from this device.';}
+    catch(e){status.textContent=e.message;}
+   });
+   actions.append(open,remove);card.append(info,actions);savedGrid.append(card);
+  }
+ }
+ clearSaved.onclick=()=>{
+  if(!confirm('Remove all pinned room codes from this device?'))return;
+  try{savePinned([]);renderRooms();status.textContent='Pinned room codes cleared from this device.';}
+  catch(e){status.textContent=e.message;}
+ };
  function button(label,click){
   const item=document.createElement('button');item.type='button';
   item.textContent=label;item.onclick=click;return item;
  }
- function putRoom(room){
+ function putRoom(room,pins){
   if(!room||typeof room.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(room.room)||
     !Number.isSafeInteger(room.players)||room.players<0||room.players>128)return;
   const card=document.createElement('article');card.className='room-browser-entry';
@@ -72,10 +133,24 @@
     await navigator.clipboard.writeText(url);status.textContent='Public room link copied.';
    }catch{status.textContent='Copy this URL to invite a friend: '+url;}
   });
-  actions.append(join,share);card.append(copy,actions);list.append(card);
+  const pin=button(pins.includes(room.room)?'★ Unpin room':'☆ Pin room',()=>{
+   try{
+    const current=readPinned(),exists=current.includes(room.room);
+    if(!exists&&current.length>=SAVED_LIMIT)
+     throw Error('Only twelve room pins can be saved. Unpin an old room first.');
+    savePinned(exists?current.filter(code=>code!==room.room):[...current,room.room]);
+    renderRooms();
+    status.textContent=(exists?'Unpinned ':'Pinned ')+room.room+' on this device.';
+   }catch(e){status.textContent=e.message||'Unable to update pinned rooms.';}
+  });
+  pin.setAttribute('aria-pressed',String(pins.includes(room.room)));
+  actions.append(join,share,pin);card.append(copy,actions);list.append(card);
  }
  function renderRooms(){
   if(!shown)return;
+  let pins=[];
+  try{pins=readPinned();}catch(e){status.textContent=e.message;return;}
+  renderPinned(pins);
   const needle=search.value.trim().toLocaleLowerCase();
   const visible=roomsCache.filter(r=>
    (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
@@ -83,11 +158,12 @@
     !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value))&&
    (!needle||r.room.toLocaleLowerCase().includes(needle)||
     r.map.toLocaleLowerCase().includes(needle)));
-  if(order.value==='most')visible.sort((a,b)=>b.players-a.players||a.room.localeCompare(b.room));
+  if(order.value==='pinned')visible.sort((a,b)=>Number(pins.includes(b.room))-Number(pins.includes(a.room))||a.room.localeCompare(b.room));
+  else if(order.value==='most')visible.sort((a,b)=>b.players-a.players||a.room.localeCompare(b.room));
   else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
   list.replaceChildren();
-  for(const room of visible)putRoom(room);
+  for(const room of visible)putRoom(room,pins);
   status.textContent=roomsCache.length?
    visible.length+' of '+roomsCache.length+' public rooms shown · listings refresh every 20s.':
    'No public rooms right now. You can create a private invite room instead.';
@@ -128,7 +204,7 @@
   if(shown){close();return;}
   shown=true;body.hidden=false;refresh.hidden=false;filters.hidden=false;
   toggle.textContent='Hide rooms';toggle.setAttribute('aria-expanded','true');
-  load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
+  renderRooms();load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
  };
  refresh.onclick=load;
  document.addEventListener('visibilitychange',()=>{
