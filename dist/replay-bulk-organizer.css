@@ -1,0 +1,38 @@
+/* Personal HBR2 metadata bulk organizer. No replay bytes or server writes. */
+.replay-bulk-organizer{margin:0 0 25px;border:1px solid #56746d;border-radius:14px;
+ background:#172d31;color:#ecf6ed;overflow:hidden}
+.replay-bulk-organizer>details>summary{padding:17px 20px;cursor:pointer;
+ font-weight:850;letter-spacing:.06em;color:#d8f9ab}
+.replay-bulk-organizer>details[open]>summary{border-bottom:1px solid #55746a}
+.replay-bulk-body{padding:18px}
+.replay-bulk-body>p{color:#c4d8d2;line-height:1.5;margin:0 0 16px}
+.replay-bulk-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.replay-bulk-tools input,.replay-bulk-tools select,.replay-bulk-tag-tools input{
+ font:inherit;min-height:42px;min-width:0;padding:9px 11px;background:#0f2227;
+ border:1px solid #718f86;color:#f4fbf3;border-radius:8px}
+.replay-bulk-tools input{flex:1 1 170px}
+.replay-bulk-tools select{flex:0 1 190px}
+.replay-bulk-organizer button{font:inherit;min-height:42px;padding:9px 13px;
+ color:#e9f6e8;font-weight:800;background:#31504a;border:1px solid #719183;
+ border-radius:8px;cursor:pointer}
+.replay-bulk-organizer button:disabled{opacity:.47;cursor:not-allowed}
+.replay-bulk-organizer :is(button,input,select,summary):focus-visible{
+ outline:3px solid #ddfa97;outline-offset:2px}
+.replay-bulk-selected{font-size:.85rem;font-weight:700;padding-top:13px}
+.replay-bulk-recordings{display:grid;gap:6px;max-height:340px;overflow:auto}
+.replay-bulk-row{display:flex;align-items:center;gap:12px;min-width:0;
+ border:1px solid #496762;background:#20393b;padding:11px;border-radius:8px;
+ cursor:pointer}
+.replay-bulk-row input{width:18px;height:18px;accent-color:#d2f79e;flex:none}
+.replay-bulk-record{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.replay-bulk-record strong{font-size:.89rem;font-weight:750}
+.replay-bulk-record small{font-size:.74rem;color:#b5d1c1}
+.replay-bulk-tag-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:17px 0 6px}
+.replay-bulk-tag-tools input{flex:1 1 165px}
+.replay-bulk-tag-tools button{flex:0 1 auto}
+.replay-bulk-status{font-size:.85rem;color:#dcf5b7;margin-top:12px!important}
+@media(max-width:680px){
+ .replay-bulk-tools input,.replay-bulk-tools select{flex:1 1 100%}
+ .replay-bulk-tag-tools button{flex:1 1 42%}
+}
+@media print{.replay-bulk-organizer{display:none!important}}
