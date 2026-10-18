@@ -29,3 +29,11 @@ body.match-active{overflow:hidden}.match-active>.club-header{display:none}#match
 .low-menu-motion .room-menu *::before,.low-menu-motion .room-menu *::after{
  scroll-behavior:auto!important;animation:none!important;transition:none!important;
 }
+
+/* Per-player RTT to the trusted room server. No claimed self-reported latency. */
+.rm-player .rm-ping{
+ margin-left:auto;flex-shrink:0;white-space:nowrap;
+ padding:3px 6px;border:1px solid #688086;border-radius:5px;
+ color:#b2d9b5;background:#19302d;font:600 10px/1.4 ui-monospace,monospace;
+}
+.rm-player .rm-ping.rm-ping-poor{color:#ffd0bd;background:#3d2a28;border-color:#a36b61}

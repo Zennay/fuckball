@@ -15,6 +15,20 @@ function connectServer(create,roomId='',joinName='',resumeContext=null){try{cons
   if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1});},delay);}else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(d.type==='resumeTicket'){if(typeof d.ticket==='string'&&/^[0-9a-f]{64}$/.test(d.ticket))link.resumeTicket=d.ticket;return;}
+ // Roster RTT is measured by a server-issued challenge, not by a client's claimed ping.
+ if(d.type==='latencyProbe'){
+  if(typeof d.nonce==='string'&&/^[a-f0-9]{24}$/.test(d.nonce))link.send({type:'latencyReply',nonce:d.nonce});
+  return;
+ }
+ if(d.type==='latencyRoster'){
+  if(Array.isArray(d.samples)&&d.measuredTo==='server'&&d.samples.length<=256){
+   link.serverPings=new Map(d.samples.filter(s=>Array.isArray(s)&&s.length===2&&
+    Number.isSafeInteger(s[0])&&s[0]>0&&(s[1]===null||
+     Number.isSafeInteger(s[1])&&s[1]>=0&&s[1]<=10000)));
+   renderRoomPings();
+  }
+  return;
+ }
  if(d.type==='peering'){if(!link.net)startPeering(link,ws);return;}if(link.net&&link.net.handleServer(d))return;
  if(d.type==='welcome'){link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=false;$('inviteButton').hidden=false;setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else openMatchMenu();if(create)copyInvite(true);else if(!link.reconnect)notify('Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
  else if(d.type==='room'){link.roomState=d;link.isOwner=d.owner===networkPlayerId;botIds=new Set(d.botIds||[]);$('mode').value=d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;updateRoster();link.roomText='Room '+d.room+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();}
@@ -178,11 +192,26 @@ refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};
 // Room-status can arrive before the subsequent native player snapshot. Refresh
 // selectors only when the real roster signature changes, not on every 30Hz
 // snapshot (which would disrupt the player's in-progress selection).
+function renderRoomPings(){
+ const link=serverLink;if(!link?.room)return;
+ for(const row of document.querySelectorAll('#teamColumns .rm-player[data-player]')){
+  const id=Number(row.getAttribute('data-player'));
+  let tag=row.querySelector('.rm-ping');
+  if(botIds.has(id)){tag?.remove();continue;}
+  if(!tag){tag=document.createElement('span');tag.className='rm-ping';row.append(tag);}
+  const ms=link.serverPings?.get(id);
+  tag.textContent=Number.isInteger(ms)?ms+' ms':'— ms';
+  tag.title='Measured WebSocket round-trip to the room server. Peer-host latency can differ.';
+  tag.setAttribute('aria-label','Server ping '+(Number.isInteger(ms)?ms+' milliseconds':'not available'));
+  tag.classList.toggle('rm-ping-poor',Number.isInteger(ms)&&ms>180);
+ }
+}
 const baseOnlineUpdateRoster=updateRoster;
 updateRoster=function(){
  const previous=rosterKey;
  baseOnlineUpdateRoster();
  if(menuOpen&&serverLink?.roomState&&rosterKey!==previous)renderSubPanel();
+ if(rosterKey!==previous)renderRoomPings();
 };
 $('subTeam').onchange=renderSubPanel;
 $('subAssignBench').onclick=()=>{
