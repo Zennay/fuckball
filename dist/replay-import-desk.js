@@ -40,8 +40,6 @@
  importButton.disabled=clearButton.disabled=true;
  actions.append(importButton,clearButton);
  section.append(header,zone,choose,previews,status,actions);
- const count=view.querySelector('#gamesCount');
- if(count)count.insertAdjacentElement('afterend',document.createComment('Replay import desk anchored before game list'));
  view.insertBefore(section,library);
  let selected=[],busy=false,usedCount=null,usedBytes=null;
  const fileInfo=file=>file&&typeof file.name==='string'&&
@@ -121,20 +119,20 @@
  });
  let dragDepth=0;
  zone.addEventListener('dragenter',event=>{
-  if(busy||!event.dataTransfer?.types?.includes('Files'))return;
+  if(busy||!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
   event.preventDefault();dragDepth++;zone.classList.add('dragging');
  });
  zone.addEventListener('dragover',event=>{
-  if(busy||!event.dataTransfer?.types?.includes('Files'))return;
+  if(busy||!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
   event.preventDefault();event.dataTransfer.dropEffect='copy';
  });
  zone.addEventListener('dragleave',event=>{
-  if(!event.dataTransfer?.types?.includes('Files'))return;
+  if(!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
   event.preventDefault();dragDepth=Math.max(0,dragDepth-1);
   if(!dragDepth)zone.classList.remove('dragging');
  });
  zone.addEventListener('drop',event=>{
-  if(busy||!event.dataTransfer?.types?.includes('Files'))return;
+  if(busy||!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
   event.preventDefault();dragDepth=0;zone.classList.remove('dragging');
   stage(event.dataTransfer.files);
  });
