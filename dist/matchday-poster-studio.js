@@ -137,11 +137,9 @@
       (s.tagline?'\n'+s.tagline:'')+
       '\nPrivate user-created poster; no official server verification or matchmaking invitation.';
   }
-  function draw(){
-    const s=state(),ok=valid(s);
-    saveButton.disabled=imageButton.disabled=textButton.disabled=!ok;
-    printButton.disabled=!ok;
-    const ctx=canvas.getContext('2d');if(!ctx)return;
+
+  function paint(target,s){
+    const ctx=target.getContext('2d');if(!ctx)return;
     const t=themes[s.theme]||themes.lime;
     ctx.fillStyle=t.back;ctx.fillRect(0,0,1200,675);
     ctx.fillStyle=t.panel;
@@ -171,7 +169,12 @@
     drawFit(ctx,dateText,68,577,635,27,true,t.text);
     drawFit(ctx,s.venue||'VENUE TBC',68,617,700,19,false,t.muted);
     drawFit(ctx,s.tagline||'PLAY FOR THE LOVE OF FOOTBALL.',745,610,385,18,false,t.accent);
-    // Accessible alternative is plain text: no machine-verified claims.
+  }
+  function draw(){
+    const s=state(),ok=valid(s);
+    saveButton.disabled=imageButton.disabled=textButton.disabled=!ok;
+    printButton.disabled=!ok;
+    paint(canvas,s);
     alternative.textContent=readable({...s,home:s.home||'HOME',away:s.away||'AWAY'});
     if(!ok)notify('Enter two different team names. Result mode needs whole scores from 0 to 99.');
     else if(status.textContent.startsWith('Enter two different'))notify('');
@@ -295,6 +298,7 @@
   const portableFields=['competition','home','away','venue','tagline','kickoff',
     'theme','format','redScore','blueScore'];
   const backupButton=button('↓ Backup drafts JSON',backupDrafts);
+  const mediaKitButton=button('↓ Media Kit ZIP',()=>exportMediaKit());
   const importButton=button('↑ Restore drafts JSON',()=>restoreFile.click());
   const restoreFile=make('input');
   restoreFile.type='file';restoreFile.accept='.json,application/json';restoreFile.hidden=true;
@@ -309,6 +313,47 @@
     download(new Blob([payload],{type:'application/json'}),
       'fuckball-private-poster-drafts.json');
     notify('Your private draft archive was saved. The file contains no logins or game recordings.');
+  }
+
+  async function exportMediaKit(){
+    if(draftsBlocked||!drafts.length)return notify('No verified posters are available to export.');
+    if(typeof JSZip!=='function')return notify('The local ZIP feature is unavailable in this browser.');
+    const current=drafts.slice();
+    if(current.length>MAX_DRAFTS||current.some(d=>!valid(d)))
+      return notify('A saved poster is invalid; no media package was created.');
+    mediaKitButton.disabled=true;
+    const frame=make('canvas');frame.width=1200;frame.height=675;
+    let total=0;
+    try{
+      const zip=new JSZip();
+      const records=[];
+      for(let i=0;i<current.length;i++){
+        const s=current[i],n=String(i+1).padStart(2,'0');
+        paint(frame,s);
+        const png=await new Promise((resolve,reject)=>{
+          frame.toBlob(blob=>blob?resolve(blob):reject(Error('PNG rendering unavailable')),'image/png');
+        });
+        if(png.size>8*1024*1024||total+png.size>64*1024*1024)
+          throw Error('Package would exceed the 64 MiB safety limit.');
+        total+=png.size;
+        zip.file('posters/poster-'+n+'.png',png,{compression:'STORE',createFolders:false});
+        zip.file('posters/poster-'+n+'.txt',readable(s)+'\n',
+          {compression:'STORE',createFolders:false});
+        records.push(n+'. '+s.home+' vs '+s.away+' — '+(s.competition||'Private friendly'));
+        notify('Creating private posters '+(i+1)+' / '+current.length+'…');
+      }
+      zip.file('README.txt','FUCKBALL — PRIVATE FRIENDLY MEDIA KIT\n'+
+        'All results and match details were entered by the player.\n'+
+        'This is NOT an official server-verified competition or invitation.\n'+
+        'No player accounts, chats, room URLs, recordings or authorization data included.\n\n'+
+        records.join('\n')+'\n',{compression:'STORE'});
+      const blob=await zip.generateAsync({type:'blob',compression:'STORE',streamFiles:true});
+      if(blob.size>64*1024*1024)throw Error('Finished package exceeds the export limit.');
+      download(blob,'fuckball-private-matchday-media-kit.zip');
+      notify(current.length+' private posters exported as PNG and TXT in a local ZIP.');
+    }catch{
+      notify('Could not prepare the private media kit. No stored posters were changed.');
+    }finally{mediaKitButton.disabled=draftsBlocked||drafts.length===0;}
   }
   async function restoreDrafts(file){
     if(!file)return;
@@ -345,7 +390,8 @@
     const tools=make('div',null,'poster-studio-portability');
     backupButton.disabled=draftsBlocked||drafts.length===0;
     importButton.disabled=draftsBlocked||drafts.length>=MAX_DRAFTS;
-    tools.append(backupButton,importButton,restoreFile);
+    mediaKitButton.disabled=draftsBlocked||drafts.length===0;
+    tools.append(backupButton,mediaKitButton,importButton,restoreFile);
     saved.append(tools);
     updateEditingState();
     if(!drafts.length)return saved.append(make('p','Save up to eight designs. They never appear on your server account.'));
