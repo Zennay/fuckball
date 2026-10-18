@@ -10,7 +10,7 @@
   ['keyboard','Keyboard bindings','Active movement, kick and chat buttons',null],
   ['keyboardSlots','Saved keyboard slots','Your three personal keyboard profiles','fuckball.keyboard-layouts.v1'],
   ['touch','Touch layout','Thumb controls, size, position and visibility','fuckball.touch-controls.v1'],
-  ['controller','Controller setup','Kick mapping and stick deadzone','fuckball.gamepad.v1'],
+  ['controller','Controller setup','Movement stick, invert axes, kick button and deadzone','fuckball.gamepad.v1'],
   ['accessibility','Accessibility','Contrast, text size, motion and team markers','fuckball.accessibility.v1']
  ];
  const actions=['up','down','left','right','kick','chat'];
@@ -58,10 +58,16 @@
   return normal;
  }
  function controller(raw){
-  keys(raw,['kick','deadzone']);
-  if(!['default','face','trigger','shoulder'].includes(raw.kick)||!isNumber(raw.deadzone,.15,.65))
-   throw Error('Invalid controller settings.');
-  return {kick:raw.kick,deadzone:raw.deadzone};
+  keys(raw,['kick','deadzone','stick','invertX','invertY'],['kick','deadzone']);
+  const goodKick=['default','face','trigger','shoulder'].includes(raw.kick)||
+   /^button:(?:[0-8]|10|11)$/.test(raw.kick);
+  const stick=raw.stick===undefined?'left':raw.stick;
+  const invertX=raw.invertX===undefined?false:raw.invertX;
+  const invertY=raw.invertY===undefined?false:raw.invertY;
+  if(!goodKick||!isNumber(raw.deadzone,.15,.65)||
+   !['left','right'].includes(stick)||typeof invertX!=='boolean'||
+   typeof invertY!=='boolean')throw Error('Invalid controller settings.');
+  return {kick:raw.kick,deadzone:raw.deadzone,stick,invertX,invertY};
  }
  function accessibility(raw){
   keys(raw,['version','contrast','large','motion','opaque','teamMarks']);
@@ -74,7 +80,7 @@
  const defaults={
   keyboardSlots:()=>({version:1,slots:[null,null,null]}),
   touch:()=>({hand:'right',scale:1,deadzone:10,edge:20,lift:0,opacity:85}),
-  controller:()=>({kick:'default',deadzone:.30}),
+  controller:()=>({kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false}),
   accessibility:()=>({version:1,contrast:!!window.matchMedia?.('(prefers-contrast: more)')?.matches,
    large:false,motion:!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
    opaque:false,teamMarks:false})
