@@ -71,7 +71,7 @@
  function openDb(){
   if(database)return Promise.resolve(database);
   return new Promise((resolve,reject)=>{
-   if(!indexedDB){reject(Error('This browser does not support private tactics storage.'));return;}
+   if(!window.indexedDB){reject(Error('This browser does not support private tactics storage.'));return;}
    const req=indexedDB.open(DB,1);
    req.onupgradeneeded=()=>{
     if(!req.result.objectStoreNames.contains(STORE))
@@ -124,6 +124,7 @@
     const preview=create('img','');
     preview.loading='lazy';preview.alt='Saved tactics frame: '+safeTitle(item.title);
     const url=URL.createObjectURL(item.snapshot);thumbs.push(url);preview.src=url;
+    preview.title='Open Edit to inspect annotations on the full captured frame';
     const meta=create('div','tactics-card-content');
     const when=new Date(item.createdAt).toLocaleString();
     meta.append(create('strong','',safeTitle(item.title)),
@@ -152,7 +153,7 @@
   });
  }
  function drawShape(ctx,shape){
-  const w=canvas.width,h=canvas.height;
+  const w=ctx.canvas.width,h=ctx.canvas.height;
   const x1=shape.x1*w,y1=shape.y1*h,x2=shape.x2*w,y2=shape.y2*h;
   ctx.save();ctx.strokeStyle=shape.color;ctx.fillStyle=shape.color;
   ctx.lineWidth=Math.max(3,Math.round(w/300));ctx.lineCap='round';ctx.lineJoin='round';
@@ -305,7 +306,11 @@
  editor.addEventListener('close',()=>{
   image=null;pending=null;stroke=null;session=null;
  });
- trigger.onclick=()=>capture().catch(error=>status.textContent=error.message||'Capture unavailable.');
+ trigger.onclick=()=>capture().catch(error=>{
+  const message=error.message||'Capture unavailable.';
+  status.textContent=message;
+  if(typeof notify==='function')notify(message);
+ });
  refresh.onclick=paintGallery;
  document.getElementById('tabReplay')?.addEventListener('click',paintGallery);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!games.hidden)paintGallery();});
