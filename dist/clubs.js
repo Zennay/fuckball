@@ -76,6 +76,21 @@
   }catch(e){status.textContent=e.message||'Could not create Club party.';}
   finally{busy=false;}
  }
+ function hostClubPractice(){
+  if(!settings.account?.token){status.textContent='Sign in to create a Club-only room.';return;}
+  if(serverLink?.ws&&serverLink.ws.readyState<=1){
+   status.textContent='Leave your current online game or cancel Quick Match before creating a Club room.';return;
+  }
+  const address=$('serverAddress')?.value?.trim();
+  if(!defaultServer||address!==defaultServer){
+   status.textContent='Club practice requires the same native server as your Club account. Select this website’s native server first.';
+   return;
+  }
+  // Club membership is freshly verified by the server before it allocates
+  // the private room. A browser Club badge does not grant access.
+  dialog.close();
+  connectServer(true,'','',null,null,false,true);
+ }
  async function inviteToSquad(name){
   if(busy)return;busy=true;status.textContent='Sending private Club party invitation…';
   try{
@@ -124,6 +139,9 @@
     if(confirm('Permanently disband '+club.name+' and remove every membership?'))act({action:'disband'});
    },true));
    buttons.append(button('⚽ Form Club squad',organizeSquad));
+   const practice=button('🏟 Host Club practice room',hostClubPractice);
+   practice.className='primary';practice.title='Create an unlisted room immediately limited to signed-in members of this Club.';
+   buttons.append(practice);
    summary.append(buttons);
    // Only authenticated current members receive their own server's Club
    // results. They are casual outcomes, not rank or verified league fixtures.
@@ -160,7 +178,7 @@
     form.append(history);
    }
    const rooms=panel('CLUB MATCH ROOMS',
-    'Club members can join these live, unlisted rooms. Hosts enable Club-only access from Room Control.');
+    'Start a private Club practice room above or join an existing member-only Custom Room. Only authenticated Clubmates can enter. Practice rooms are casual, never ranked.');
    const live=Array.isArray(data.rooms)?data.rooms:[];
    for(const game of live){
     if(typeof game.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(game.room))continue;
