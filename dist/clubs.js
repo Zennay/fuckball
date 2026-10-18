@@ -93,7 +93,7 @@
    const roster=panel('TEAM ROSTER','Roles are server-authorized. Captains can invite or remove regular members.');
    for(const member of club.members){
     const actions=[];
-    if(member.user!==settings.account.username?.toLowerCase()){
+    if(member.user!==settings.account?.username?.toLowerCase()){
      if(role==='owner'){
       if(member.role==='member')actions.push(button('Make captain',()=>act({action:'promote',user:member.user})));
       if(member.role==='captain')actions.push(button('Remove captain',()=>act({action:'demote',user:member.user})));
