@@ -196,3 +196,25 @@
 @media(max-width:500px){.matchday-clashes{padding:12px}
  .matchday-clash-actions button,.matchday-clashes-controls button{flex:1 1 100%}}
 @media print{.matchday-clashes-controls,.matchday-clash-actions{display:none}}
+
+
+/* Honest read-only standings derived from manually saved private league scores. */
+.matchday-league-standings{margin-top:13px;padding:9px 11px;border:1px solid #67897b;
+ border-radius:10px;background:#183933;max-width:100%}
+.matchday-league-standings>summary{cursor:pointer;font-size:.87rem;letter-spacing:.015em;
+ color:#d6efbf;font-weight:760;padding:5px 2px}
+.matchday-league-standings>summary:focus-visible{outline:3px solid #f5e5a4;outline-offset:2px}
+.matchday-standings-scroll{max-width:100%;overflow-x:auto;margin:12px 0}
+.matchday-league-standings table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.82rem}
+.matchday-league-standings caption{text-align:left;color:#bcd8c8;font-size:.76rem;line-height:1.4;padding:3px 0 11px}
+.matchday-league-standings th,.matchday-league-standings td{padding:8px 9px;text-align:right;
+ border-bottom:1px solid #587669;white-space:nowrap}
+.matchday-league-standings th:nth-child(2),.matchday-league-standings td:nth-child(2){text-align:left;white-space:normal;min-width:125px;overflow-wrap:anywhere}
+.matchday-league-standings tbody tr:first-child{font-weight:800;color:#e6fab8}
+.matchday-league-standings>p{margin:6px 0 11px;color:#c6e0d0;line-height:1.45;font-size:.78rem}
+.matchday-standings-export{padding:9px 12px;border-radius:8px;border:1px solid #90b4a0;
+ background:#315e51;color:#f2ffe8;min-height:44px;font-size:.85rem}
+.matchday-standings-export:focus-visible{outline:3px solid #fae5a0;outline-offset:3px}
+@media(max-width:570px){.matchday-league-standings{padding:7px}
+ .matchday-league-standings th,.matchday-league-standings td{padding:8px 6px}}
+@media print{.matchday-standings-scroll{overflow:visible}}
