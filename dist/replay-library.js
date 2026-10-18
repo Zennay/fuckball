@@ -98,7 +98,14 @@ const ReplayLibrary=(()=>{
   return updateMeta(id,item=>({...item,name}));
  }
  function setFavorite(id,value){return updateMeta(id,item=>({...item,favorite:value===true}));}
- return{list,save,get,remove,parseRecording,rename,setFavorite};
+ // Only portable user-owned archives may restore local display metadata.
+ // Never import account IDs, server results or any claim of verified rankings.
+ function restoreDetails(id,details){
+  if(!details||typeof details.favorite!=='boolean'||!Number.isSafeInteger(details.createdAt)||
+   details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
+  return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite}));
+ }
+ return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
