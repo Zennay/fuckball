@@ -26,7 +26,7 @@
  // Never interrupt a server room, direct-peer match or pending human ready check.
  const launchNotice=document.createElement('p');launchNotice.className='pwa-launch-notice';
  launchNotice.setAttribute('role','status');launchNotice.setAttribute('aria-live','polite');
- actions.insertAdjacentElement('afterend',launchNotice);
+ // Attached with the other panel content below.
  function onlineConflict(){
   if(typeof serverLink!=='undefined'&&serverLink?.room)
    return 'Leave your active native online room explicitly before starting offline practice.';
@@ -76,7 +76,7 @@
  const tip=document.createElement('p');
  tip.textContent='When an Install button appears here, use it. On iPhone/iPad, use Share → Add to Home Screen in Safari. On other browsers, look for Install or Add to Home Screen in the browser menu. Play online only when connected to a Fuckball game server.';
  help.append(summary,tip);
- panel.append(heading,description,actions,setup,offline,help);
+ panel.append(heading,description,actions,launchNotice,setup,offline,help);
  cards.insertAdjacentElement('afterend',panel);
  let pending=null,ready=false,registered=null,newVersion=false,installed=window.matchMedia?.('(display-mode: standalone)')?.matches||navigator.standalone===true;
  const update=()=>{
