@@ -227,16 +227,19 @@
     qualify.setAttribute('aria-label','Number of league teams to seed into playoffs');
     for(const n of possible)qualify.add(new Option('Top '+n+' teams',String(n)));
     const preview=make('p',null,'tournament-playoff-preview');
-    const build=button('Create seeded cup',()=>{
-      const n=Number(qualify.value),standings=tableFor(t);
-      if(!possible.includes(n)||standings.length<n||t.fixtures.every(f=>f.homeScore===null))
-        return inform('Record at least one private league result before generating playoff seeds.');
+    const bracketOrder=n=>{
       let seeds=[1,2];
       while(seeds.length<n){
         const length=seeds.length;
         seeds=seeds.flatMap(seed=>[seed,2*length+1-seed]);
       }
-      const teams=seeds.map(rank=>standings[rank-1].name);
+      return seeds;
+    };
+    const build=button('Create seeded cup',()=>{
+      const n=Number(qualify.value),standings=tableFor(t);
+      if(!possible.includes(n)||standings.length<n||t.fixtures.every(f=>f.homeScore===null))
+        return inform('Record at least one private league result before generating playoff seeds.');
+      const teams=bracketOrder(n).map(rank=>standings[rank-1].name);
       const known=t.fixtures.filter(f=>f.homeScore!==null).length;
       if(!window.confirm('Create a NEW private '+n+'-team knockout cup from '+t.name+
         '? Seeding is based on '+known+'/'+t.fixtures.length+
@@ -249,9 +252,13 @@
     const updatePreview=()=>{
       const n=Number(qualify.value),standings=tableFor(t);
       const leader=standings[0]?.name||'none';
+      const seeded=n&&possible.includes(n)?bracketOrder(n).map(rank=>standings[rank-1]?.name||'—'):[];
+      const games=[];
+      for(let i=0;i+1<seeded.length;i+=2)games.push(seeded[i]+' vs '+seeded[i+1]);
       preview.textContent=done===0?'Record one actual friendly result to unlock playoff seeding.':
-        'Current leader: '+leader+' · Top '+n+' advance to a new seeded bracket. '+
-        done+'/'+t.fixtures.length+' league results recorded (manual, unverified).';
+        'Current leader: '+leader+' · '+(done<t.fixtures.length?'Provisional':'Complete')+
+        ' league table ('+done+'/'+t.fixtures.length+' results, manual/unverified). '+
+        'Opening round: '+games.join(' · ')+'.';
     };
     qualify.addEventListener('change',updatePreview);
     playoffActions.append(qualify,build);
