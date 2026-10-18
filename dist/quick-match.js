@@ -23,6 +23,11 @@
  const actions=document.createElement('div');actions.className='quick-queue-actions';
  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='× Cancel search';cancel.hidden=true;
  actions.append(cancel);
+ const alertControls=document.createElement('div');alertControls.className='quick-queue-alerts';
+ const alertButton=document.createElement('button');alertButton.type='button';
+ const alertHelp=document.createElement('span');
+ alertHelp.textContent='Optional browser alerts while this tab is in the background. No auto-accept, no push service.';
+ alertControls.append(alertButton,alertHelp);
  const readyBox=document.createElement('section');readyBox.className='quick-ready';readyBox.hidden=true;
  readyBox.setAttribute('aria-label','Match ready check');
  const readyTitle=document.createElement('h3');readyTitle.textContent='MATCH FOUND.';
@@ -35,11 +40,61 @@
  const declineReady=document.createElement('button');declineReady.type='button';declineReady.textContent='Decline';
  readyActions.append(acceptReady,declineReady);
  readyBox.append(readyTitle,readyText,readyProgress,readyActions);
- panel.append(heading,description,modes,availability,notice,readyBox,actions);
+ panel.append(heading,description,modes,availability,alertControls,notice,readyBox,actions);
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
  let ready=null,readyAccepted=false;
+ let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
+ function clearReadyAlert(){
+  if(titleFlash){clearInterval(titleFlash);titleFlash=null;}
+  if(titleBeforeAlert!==null){document.title=titleBeforeAlert;titleBeforeAlert=null;}
+  if(readyNotification){try{readyNotification.close();}catch{}readyNotification=null;}
+  if(readyNotificationTimer){clearTimeout(readyNotificationTimer);readyNotificationTimer=null;}
+ }
+ function updateAlertButton(){
+  const supported=typeof Notification!=='undefined'&&window.isSecureContext===true;
+  const enabled=settings.quickMatchAlerts===true&&supported&&Notification.permission==='granted';
+  alertButton.textContent=enabled?'🔔 Match alerts on · turn off':'🔕 Enable background match alerts';
+  alertButton.setAttribute('aria-pressed',String(enabled));
+  alertButton.disabled=!supported;
+  if(!supported)alertHelp.textContent='Background notifications require an HTTPS or localhost browser with Notification support.';
+  else if(Notification.permission==='denied')alertHelp.textContent='Notifications are blocked by your browser. Change site permissions to enable them.';
+  else alertHelp.textContent='Optional browser alert during the 15-second ready check when this tab is hidden. You must return and confirm manually.';
+ }
+ alertButton.onclick=async()=>{
+  if(settings.quickMatchAlerts===true){
+   settings.quickMatchAlerts=false;savePrefs();clearReadyAlert();updateAlertButton();return;
+  }
+  if(typeof Notification==='undefined'||window.isSecureContext!==true)return;
+  try{
+   const permission=Notification.permission==='default'?
+    await Notification.requestPermission():Notification.permission;
+   settings.quickMatchAlerts=permission==='granted';savePrefs();updateAlertButton();
+  }catch{alertHelp.textContent='The browser could not enable notifications.';}
+ };
+ updateAlertButton();
+ function alertReady(mode,expiresAt){
+  clearReadyAlert();
+  if(settings.quickMatchAlerts!==true||typeof Notification==='undefined'||
+     Notification.permission!=='granted'||!document.hidden)return;
+  titleBeforeAlert=document.title;
+  let highlight=false;
+  titleFlash=setInterval(()=>{
+   highlight=!highlight;
+   document.title=highlight?'⚽ MATCH FOUND — CONFIRM':titleBeforeAlert;
+  },800);
+  try{
+   readyNotification=new Notification('Fuckball · '+mode+' match found',{
+    body:'Return to your game tab and confirm. Every human player must accept.',
+    tag:'fuckball-ready-check',silent:false
+   });
+   readyNotification.onclick=()=>{window.focus();clearReadyAlert();};
+  }catch{readyNotification=null;}
+  readyNotificationTimer=setTimeout(clearReadyAlert,
+   Math.max(500,Math.min(15000,expiresAt-Date.now())));
+ }
+ window.addEventListener('focus',clearReadyAlert);
  function refresh(){
   modeButtons.forEach(b=>b.disabled=searching);
   cancel.hidden=!searching;
@@ -60,7 +115,7 @@
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
  function done(message){
-  searching=false;matchMode=null;ready=null;readyAccepted=false;stopClock();refresh();notice.textContent=message;
+  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;stopClock();refresh();notice.textContent=message;
  }
  function start(mode,party=false){
   if(searching)return;
@@ -127,7 +182,7 @@
  }
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible')loadAvailability();
+  if(document.visibilityState==='visible'){clearReadyAlert();loadAvailability();}
  });
  window.addEventListener('online',loadAvailability);
  window.addEventListener('offline',loadAvailability);
@@ -136,7 +191,7 @@
   if(!ready||readyAccepted||Date.now()>=ready.expiresAt)return;
   try{
    serverLink?.send({type:'queueReadyResponse',id:ready.id,accept:true});
-   readyAccepted=true;ready.ready=Math.max(1,ready.ready);refresh();
+   readyAccepted=true;clearReadyAlert();ready.ready=Math.max(1,ready.ready);refresh();
   }catch{done('Could not confirm this match. Start another search.');}
  };
  declineReady.onclick=()=>{
@@ -159,7 +214,7 @@
    if(!searching||!Number.isSafeInteger(d.expiresAt)||typeof d.id!=='string'||
       d.mode!==matchMode||d.players!==needed||d.humanOnly!==true)return;
    ready={id:d.id,mode:d.mode,players:d.players,expiresAt:d.expiresAt,ready:0};
-   readyAccepted=false;refresh();
+   readyAccepted=false;refresh();alertReady(d.mode,d.expiresAt);
   }else if(d.type==='queueReadyProgress'){
    if(!ready||ready.id!==d.id)return;
    if(Number.isSafeInteger(d.ready)&&d.ready>=0&&d.ready<=ready.players)
@@ -169,7 +224,7 @@
    if(ready&&ready.id===d.id){readyAccepted=true;refresh();}
   }else if(d.type==='queueReadyAborted'){
    if(!ready||ready.id!==d.id)return;
-   ready=null;readyAccepted=false;
+   ready=null;readyAccepted=false;clearReadyAlert();
    if(d.requeued===true){
     refresh();notice.textContent=(d.reason||'Not everyone accepted.')+' Searching again…';
    }else{
