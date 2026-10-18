@@ -1,0 +1,27 @@
+/* Account-owned server receipts complement, never impersonate, local HBR2 replays. */
+.server-results{padding:22px 0 30px;margin-bottom:24px;border-bottom:1px solid #476067}
+.server-results-head{display:flex;justify-content:space-between;align-items:flex-start;gap:22px;flex-wrap:wrap}
+.server-results-head h2,.server-local-heading{font-size:clamp(22px,3.5vw,34px);font-weight:900;font-style:italic;letter-spacing:-.035em;margin:7px 0}
+.server-results-head p,.server-results-note{color:#a8bfc1;line-height:1.6;max-width:680px}
+.server-results-head button,.server-results-controls button{padding:10px 14px;border:1px solid #6e888c;border-radius:8px;color:#eff7f1}
+.server-results-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:18px 0 10px}
+.server-results-controls label{display:grid;gap:5px;font-size:11px;color:#b7c9cb}
+.server-results-controls select{background:#13252d;color:#f1f5ee;min-height:40px;padding:9px;border:1px solid #688187;border-radius:7px}
+.server-results-controls .server-results-erase{color:#ffc1b9;border-color:#a97171}
+.server-results-controls button:disabled,.server-results-head button:disabled{opacity:.45;cursor:default}
+.server-results-status{color:#c8dccc;min-height:22px}
+.server-results-count{font-size:12px;color:#a8bfc1;margin:8px 0 14px}
+.server-results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.server-result{display:grid;align-content:start;gap:8px;background:#23363d;border:1px solid #587078;border-radius:12px;padding:16px;min-width:0}
+.server-result-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.server-result-top strong{font-size:12px;letter-spacing:.08em}
+.server-result-score{font-size:22px;font-weight:900;font-variant-numeric:tabular-nums}
+.server-result p{margin:0;color:#e0e9e1;font-size:12px}
+.server-result small{color:#9ab5bb}
+.server-result-win{border-left:4px solid #bee883}
+.server-result-loss{border-left:4px solid #ce8791}
+.server-result-draw{border-left:4px solid #a4bdc0}
+.server-results-empty{background:#26383e;border:1px dashed #5e757d;padding:20px;border-radius:9px;color:#bbd0d1;grid-column:1/-1}
+.server-local-heading{margin:16px 0 22px}
+.server-results-controls button:focus-visible,.server-results-head button:focus-visible,.server-results-controls select:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:660px){.server-results-head button{width:100%}.server-results-controls>*{flex:1 1 130px}.server-results-controls select,.server-results-controls button{width:100%}}

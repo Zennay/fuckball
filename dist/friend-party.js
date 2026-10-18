@@ -45,7 +45,8 @@
   for(const action of actions)buttons.append(action);
   line.append(t,buttons);box.append(line);
  };
- let busy=false,generation=0,hasJoined=false,lastModeKey='';
+ let busy=false,generation=0,hasJoined=false,lastModeKey='',lastQuietPoll=0;
+ const knownInvitations=new Set();
  async function api(data){
   const token=settings.account?.token;
   if(!token)throw Error('Sign in to use friend parties.');
@@ -61,6 +62,7 @@
   busy=true;notice.textContent='Saving party action…';
   api(payload).then(state=>{
    render(state);
+   entry.textContent='Party'+(state.invitations?.length?' ('+state.invitations.length+')':'');
    notice.textContent='Party updated.';
    launchIfReady(state);
   }).catch(e=>{notice.textContent=e.message||'Party action unavailable.';})
@@ -146,7 +148,10 @@
   if(!state?.invitations?.length)invites.append(document.createTextNode('No pending invites.'));
  }
  async function refresh(){
-  if(busy||(!dialog.open&&!hasJoined))return;
+  if(busy)return;
+  const quiet=!dialog.open&&!hasJoined;
+  if(quiet&&Date.now()-lastQuietPoll<30000)return;
+  if(quiet)lastQuietPoll=Date.now();
   if(!settings.account?.token){
    body.replaceChildren();statusBar.hidden=true;hasJoined=false;
    notice.textContent='Sign in with a Fuckball account to use parties.';
@@ -160,7 +165,19 @@
    // Polling must not erase a teammate's half-typed invitation.
    const typing=dialog.open&&dialog.contains(document.activeElement)&&
     document.activeElement?.tagName==='INPUT';
-   if(!typing)render(state);
+   if(!typing&&(dialog.open||hasJoined||state.party))render(state);
+   const invitations=Array.isArray(state.invitations)?state.invitations:[];
+   entry.textContent='Party'+(invitations.length?' ('+invitations.length+')':'');
+   entry.setAttribute('aria-label',invitations.length?
+    invitations.length+' party invitation'+(invitations.length===1?'':'s')+' awaiting your response':
+    'Party invitations and matchmaking');
+   for(const invitation of invitations){
+    if(typeof invitation.id!=='string'||knownInvitations.has(invitation.id))continue;
+    knownInvitations.add(invitation.id);
+    // Only surface a toast for newly arrived invitations after the first
+    // quiet poll; opening the dialog already displays the invitation details.
+    if(lastQuietPoll&&quiet)notify('You have a new friend party invitation. Open Friends → Party.');
+   }
    launchIfReady(state);
    if(dialog.open&&!typing)notice.textContent=state.party?'Party connected on this server.':'Create a party or accept a friend invitation.';
   }catch(e){if(seq===generation&&dialog.open)notice.textContent=e.message||'Party temporarily unavailable.';}
@@ -173,4 +190,6 @@
  bannerOpen.onclick=open;entry.onclick=open;
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
  setInterval(()=>{if(document.visibilityState==='visible')refresh();},2500);
+ // Discover invitations without keeping the Friends dialog open.
+ if(settings.account?.token)refresh();
 })();
