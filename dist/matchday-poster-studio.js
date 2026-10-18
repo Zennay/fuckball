@@ -277,7 +277,7 @@
     const f=fixtures[Number(choose.value)];if(!f)return;
     competition.value=f.league;home.value=f.home;away.value=f.away;
     venue.value=f.venue;kickoff.value=localDate(f.time);
-    if(f.game)tagline.value='PRIVATE BEST-OF SERIES · GAME '+f.game;
+    tagline.value=f.game?'PRIVATE BEST-OF SERIES · GAME '+f.game:'PLAY FOR THE LOVE OF FOOTBALL.';
     format.value=f.red===null?'fixture':'result';
     scoreRed.value=String(f.red??0);scoreBlue.value=String(f.blue??0);
     scoreRow.hidden=format.value!=='result';draw();
