@@ -168,6 +168,12 @@ function createClubs(dir){
   }
   return view(who);
  }
- return{view,action};
+ return{view,action,
+  membership(username){
+   const who=normalize(username),club=belonging(who);
+   const member=club&&assigned(club,who);
+   return member?{id:club.id,tag:club.tag,role:member.role}:null;
+  }
+ };
 }
 module.exports={createClubs};
