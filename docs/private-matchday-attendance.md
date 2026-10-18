@@ -66,3 +66,19 @@ date is not evidence a finalist is known or that a game has been played.
 
 Use **Set kickoff / Edit kickoff** on a cup fixture to open its existing Cup
 Builder editor, which remains the sole writer for those local match fields.
+
+## Provisional Red / Blue 4v4 lineup
+
+For each unsplayed fixture, the organiser can assign a friend marked **Going** to
+Red (max. four players), Blue (max. four players) or Bench/unassigned. The
+attendance panel displays a three-column draft team preview and headcount.
+**Maybe** and **Cannot play** players remain unassigned, and changing a Going
+player to a different availability automatically moves them to Bench. Team
+slots cannot be overfilled. Changing this draft never moves a real online
+player, invites anybody or changes any server room or actual match result.
+
+The existing private attendance JSON and selected-match CSV now preserve each
+provisional side. Older backups without a `side` field remain valid and
+restore everyone unassigned on the Bench. Additive imports keep existing
+players and downgrade a new incoming Red/Blue assignment to Bench when that
+team already has four players; the status message states the number benched.
