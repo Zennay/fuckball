@@ -44,6 +44,49 @@
  panel.append(heading,description,modes,availability,alertControls,notice,readyBox,actions);
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
+ // The chosen format is a private device preference. Queueing always requires
+ // a deliberate user click and goes through the existing server authority.
+ const PREF_KEY='fuckball.quick-match-preferred-mode.v1';
+ const standardModes=['1v1','2v2','3v3','4v4'];
+ function loadPreferred(){
+  try{
+   const saved=JSON.parse(localStorage.getItem(PREF_KEY)||'null');
+   return saved?.version===1&&standardModes.includes(saved.mode)?saved.mode:'1v1';
+  }catch{return'1v1';}
+ }
+ let preferred=loadPreferred();
+ const shortcut=document.createElement('div');shortcut.className='quick-queue-shortcut';
+ const shortcutCopy=document.createElement('div');shortcutCopy.className='quick-queue-shortcut-copy';
+ const shortcutHead=document.createElement('strong');shortcutHead.textContent='YOUR QUICK START';
+ const shortcutDesc=document.createElement('p');
+ shortcutDesc.textContent='Choose your default format to join the real human queue with one deliberate click. No auto-join, ranked claims or filler bots.';
+ shortcutCopy.append(shortcutHead,shortcutDesc);
+ const shortcutActions=document.createElement('div');shortcutActions.className='quick-queue-shortcut-actions';
+ const preferredLabel=document.createElement('label');preferredLabel.textContent='Preferred format';
+ const preferredSelect=document.createElement('select');
+ preferredSelect.setAttribute('aria-label','Preferred human Quick Match format');
+ for(const mode of standardModes)preferredSelect.add(new Option(mode+' · '+(Number(mode[0])*2)+' humans',mode));
+ preferredLabel.append(preferredSelect);
+ const quickStart=document.createElement('button');quickStart.type='button';quickStart.className='primary';
+ shortcutActions.append(preferredLabel,quickStart);shortcut.append(shortcutCopy,shortcutActions);
+ panel.insertBefore(shortcut,modes);
+ function setPreferred(mode,store=true){
+  if(!standardModes.includes(mode))return;
+  preferred=mode;preferredSelect.value=mode;
+  quickStart.textContent='▶ Find '+mode+' match';
+  quickStart.setAttribute('aria-label','Search for a real-player '+mode+' Quick Match');
+  for(const b of modeButtons){
+   b.classList.toggle('is-preferred',b.dataset.playlist===mode);
+   b.title=b.dataset.playlist===mode?'Your preferred format':'Find real players for '+b.dataset.playlist;
+  }
+  if(store){
+   try{localStorage.setItem(PREF_KEY,JSON.stringify({version:1,mode}));}
+   catch{shortcutDesc.textContent='Preference is active for this visit; browser storage is unavailable.';}
+  }
+ }
+ preferredSelect.onchange=()=>setPreferred(preferredSelect.value);
+ quickStart.onclick=()=>start(preferred);
+ setPreferred(preferred,false);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
  let ready=null,readyAccepted=false;
  let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
@@ -98,6 +141,7 @@
  window.addEventListener('focus',clearReadyAlert);
  function refresh(){
   modeButtons.forEach(b=>b.disabled=searching);
+  preferredSelect.disabled=quickStart.disabled=searching;
   cancel.hidden=!searching;
   readyBox.hidden=!ready;
   if(ready){
@@ -128,18 +172,20 @@
   if(!$('serverAddress').value.trim()){
    notice.textContent='Connect to a Fuckball multiplayer server to find human opponents.';return;
   }
+  if(!party&&standardModes.includes(mode))setPreferred(mode);
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   connectServer(false,'','',null,mode,party);
  }
  for(const mode of ['1v1','2v2','3v3','4v4']){
-  const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';
+  const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';b.dataset.playlist=mode;
   const name=document.createElement('strong');name.textContent=mode;
   const sub=document.createElement('small');
   sub.textContent=(Number(mode[0])*2)+' real players · one server';
   b.append(name,sub);b.onclick=()=>start(mode);
   modes.append(b);modeButtons.push(b);modeDetails.set(mode,sub);
  }
+ setPreferred(preferred,false);
  // Discover honest, current occupancy only on this server, never estimated bots,
  // global concurrency, matchmaking guarantees or another player's identity.
  let listingRequest=0;
