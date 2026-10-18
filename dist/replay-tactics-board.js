@@ -19,7 +19,7 @@
  const caption=create('div');
  caption.append(create('span','eyebrow','REPLAY STUDY · THIS DEVICE'),
   create('h2','','TACTICS BOARDS.'),
-  create('p','','Freeze a frame from your own HBR2 recording, annotate movement and share a PNG. No cloud copy or official performance claim.'));
+  create('p','','Freeze HBR2 frames, annotate tactics and back up the private boards as a portable ZIP. No cloud copy or official performance claim.'));
  const refresh=create('button','','↻ Refresh boards');refresh.type='button';
  header.append(caption,refresh);
  const status=create('p','tactics-library-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -314,5 +314,161 @@
  refresh.onclick=paintGallery;
  document.getElementById('tabReplay')?.addEventListener('click',paintGallery);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!games.hidden)paintGallery();});
+
+ // Portable backups of already-owned pitch drawings. Never inspect/upload
+ // accounts, server match data, hidden invites or credentials.
+ const backupButton=create('button','','↓ Backup boards · ZIP');
+ const restoreButton=create('button','','↑ Restore boards · ZIP');
+ backupButton.type=restoreButton.type='button';
+ const chooser=document.createElement('input');chooser.type='file';chooser.accept='.zip,application/zip';chooser.hidden=true;
+ chooser.setAttribute('aria-label','Choose a tactics board ZIP backup');
+ panel.append(chooser);header.append(backupButton,restoreButton);
+ const ZIP_LIMIT=56*1048576,INDEX_LIMIT=128*1024;
+ function requireArchive(){
+  if(typeof JSZip!=='function')throw Error('ZIP tools are not available in this browser.');
+  if(!globalThis.crypto?.subtle)throw Error('HTTPS or localhost is required for secure ZIP integrity.');
+ }
+ function zipEntrySize(entry){
+  const size=entry?._data?.uncompressedSize;
+  if(!Number.isSafeInteger(size)||size<0)throw Error('Archive size cannot be verified.');
+  return size;
+ }
+ async function digest(bytes){
+  const sum=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+  return [...sum].map(x=>x.toString(16).padStart(2,'0')).join('');
+ }
+ function validateDrawing(raw){
+  if(!Array.isArray(raw)||raw.length>90)throw Error('Invalid drawing collection.');
+  const colors=new Set(['#eaf1a7','#f69a8c','#82c0fa','#ffffff']);
+  return raw.map(x=>{
+   if(!x||!['arrow','circle','line','text'].includes(x.type)||!colors.has(x.color)||
+    ![x.x1,x.x2,x.y1,x.y2].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1))
+    throw Error('An imported annotation is invalid.');
+   if(x.type==='text'&&
+    (typeof x.text!=='string'||!x.text.trim()||x.text.length>28||
+     /[\x00-\x1f\x7f]/.test(x.text)))
+    throw Error('A text annotation is invalid.');
+   return{x1:x.x1,y1:x.y1,x2:x.x2,y2:x.y2,type:x.type,color:x.color,
+    ...(x.type==='text'?{text:x.text}:{})};
+  });
+ }
+ function validateIndexItem(row){
+  if(!row||!validId(row.id)||!validId(row.replayId)||
+   typeof row.title!=='string'||!row.title.trim()||row.title.length>80||
+   !Number.isSafeInteger(row.frameNo)||row.frameNo<0||row.frameNo>86400000||
+   !Number.isSafeInteger(row.createdAt)||row.createdAt<=0||row.createdAt>Date.now()+86400000||
+   row.path!=='frames/'+row.id+'.png'||!/^[0-9a-f]{64}$/.test(row.sha256)||
+   !Number.isSafeInteger(row.size)||row.size<=0||row.size>MAX_ONE)
+   throw Error('A tactics board metadata record is invalid.');
+  return validateDrawing(row.shapes);
+ }
+ function isPng(bytes){
+  if(bytes.length<24)return false;
+  const signature=[137,80,78,71,13,10,26,10];
+  if(!signature.every((v,i)=>bytes[i]===v))return false;
+  const header=String.fromCharCode(...bytes.slice(12,16));
+  if(header!=='IHDR')return false;
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  const width=view.getUint32(16),height=view.getUint32(20);
+  return width>0&&height>0&&width<=4096&&height<=4096;
+ }
+ function setBackupBusy(value){backupButton.disabled=restoreButton.disabled=value;}
+ async function exportBoards(){
+  requireArchive();
+  const boards=await readAll();
+  if(!boards.length)throw Error('Save your first tactics board before making a backup.');
+  if(boards.length>MAX||boards.reduce((n,x)=>n+x.snapshot.size,0)>MAX_BYTES)
+   throw Error('Private boards exceed the portable backup limits.');
+  const archive=new JSZip(),rows=[];
+  for(let i=0;i<boards.length;i++){
+   const x=boards[i],bytes=new Uint8Array(await x.snapshot.arrayBuffer());
+   if(!isPng(bytes))throw Error('A saved tactics frame is not a valid PNG.');
+   const shapes=validateDrawing(x.shapes);
+   const meta={id:x.id,replayId:x.replayId,frameNo:x.frameNo,title:safeTitle(x.title),
+    createdAt:x.createdAt,shapes,path:'frames/'+x.id+'.png',size:bytes.length,sha256:await digest(bytes)};
+   validateIndexItem(meta);
+   rows.push(meta);archive.file(meta.path,bytes,{binary:true,compression:'STORE',createFolders:false});
+   status.textContent='Collecting private board '+(i+1)+' / '+boards.length+'…';
+  }
+  const json=JSON.stringify({format:'fuckball-local-tactics-boards',version:1,boards:rows});
+  if(json.length>INDEX_LIMIT)throw Error('Tactics backup metadata is too large.');
+  archive.file('manifest.json',json,{compression:'STORE'});
+  const zip=await archive.generateAsync({type:'blob',compression:'STORE',streamFiles:true});
+  if(zip.size>ZIP_LIMIT)throw Error('ZIP backup exceeds 56 MB.');
+  saveBlob(zip,'fuckball-tactics-backup-'+new Date().toISOString().slice(0,10)+'.zip');
+  status.textContent='Private backup downloaded · '+boards.length+' boards. No cloud upload.';
+ }
+ async function importBoards(file){
+  requireArchive();
+  if(!file||file.size<=0||file.size>ZIP_LIMIT)
+   throw Error('Choose a tactics backup ZIP under 56 MB.');
+  const archive=await JSZip.loadAsync(await file.arrayBuffer());
+  const index=archive.file('manifest.json');
+  if(!index||zipEntrySize(index)>INDEX_LIMIT)throw Error('Not a supported tactics ZIP.');
+  let data;
+  try{data=JSON.parse(await index.async('string'));}
+  catch{throw Error('Invalid backup manifest.');}
+  if(data?.format!=='fuckball-local-tactics-boards'||data.version!==1||
+   !Array.isArray(data.boards)||data.boards.length>MAX)
+   throw Error('Unsupported or oversized tactics backup.');
+  const allowed=new Set(['manifest.json']),ids=new Set();
+  let declaredSize=0;
+  for(const row of data.boards){
+   validateIndexItem(row);
+   if(ids.has(row.id))throw Error('Archive contains a duplicate board ID.');
+   ids.add(row.id);allowed.add(row.path);
+   const entry=archive.file(row.path);
+   if(!entry||zipEntrySize(entry)!==row.size)throw Error('Tactics backup has an invalid frame size.');
+   declaredSize+=row.size;
+  }
+  if(declaredSize>MAX_BYTES)throw Error('Tactics backup exceeds 48 MB.');
+  if(Object.keys(archive.files).some(key=>!allowed.has(key)&&key!=='frames/'))
+   throw Error('Unexpected files in tactics backup.');
+  const existing=await readAll(),byId=new Map(existing.map(item=>[item.id,item]));
+  const pending=[];let skipped=0;
+  for(const row of data.boards){
+   const bytes=await archive.file(row.path).async('uint8array');
+   if(bytes.length!==row.size||!isPng(bytes)||await digest(bytes)!==row.sha256)
+    throw Error('Backup integrity failed for '+safeTitle(row.title));
+   if(byId.has(row.id)){
+    const prior=new Uint8Array(await byId.get(row.id).snapshot.arrayBuffer());
+    if(await digest(prior)!==row.sha256)throw Error('Conflicting tactics board ID. Existing board kept.');
+    skipped++;continue;
+   }
+   const blob=new Blob([bytes],{type:'image/png'});
+   // Decode with the browser before writing anything to IndexedDB.
+   await imageFrom(blob);
+   pending.push({id:row.id,replayId:row.replayId,frameNo:row.frameNo,
+    title:row.title,createdAt:row.createdAt,shapes:validateDrawing(row.shapes),snapshot:blob});
+   status.textContent='Verifying tactics frame '+(pending.length+skipped)+' / '+data.boards.length+'…';
+  }
+  if(existing.length+pending.length>MAX||
+   existing.reduce((n,x)=>n+x.snapshot.size,0)+pending.reduce((n,x)=>n+x.snapshot.size,0)>MAX_BYTES)
+   throw Error('Not enough room for these boards (15 items / 48 MB).');
+  if(!pending.length){
+   status.textContent='All '+skipped+' boards already exist on this device.';return;
+  }
+  if(!confirm('Restore '+pending.length+' private tactics board(s) without replacing '+existing.length+
+   ' existing board(s)? PNG frames may display player-name labels.'))return;
+  // One transaction: capacity/decoder/hash checks happen before any writes.
+  await mutate(store=>{for(const item of pending)store.add(item);});
+  await paintGallery();
+  status.textContent='Restored '+pending.length+' private board(s)'+(skipped?' · '+skipped+' already here':'')+
+   '. No original replay files or online data were changed.';
+ }
+ backupButton.onclick=async()=>{
+  setBackupBusy(true);try{await exportBoards();}
+  catch(error){status.textContent='Backup unavailable: '+(error.message||'Unknown error');}
+  finally{setBackupBusy(false);}
+ };
+ restoreButton.onclick=()=>chooser.click();
+ chooser.onchange=async()=>{
+  const file=chooser.files?.[0];chooser.value='';if(!file)return;
+  setBackupBusy(true);
+  try{await importBoards(file);}
+  catch(error){status.textContent='Restore refused: '+(error.message||'Invalid backup');}
+  finally{setBackupBusy(false);}
+ };
+
  paintGallery();
 })();
