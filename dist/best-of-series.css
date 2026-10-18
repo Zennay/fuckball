@@ -65,6 +65,12 @@
  box-shadow:0 0 0 3px rgba(191,252,144,.16);scroll-margin-top:23vh}
 .series-game:focus-visible{outline:3px solid #d0f7a8;outline-offset:4px}
 
+/* Player-triggered offline share actions, never public account or verified scores. */
+.best-of-series .series-share-action{background:#285355;color:#ebffda;border-color:#a6d9bd}
+.best-of-series .series-share-action:hover:not(:disabled){background:#356963}
+@media(max-width:440px){.series-actions .series-share-action{flex:1 1 100%}}
+@media print{.series-share-action{display:none!important}}
+
 /* Intentional, device-local poster creation for real recorded series games. */
 .series-game .series-game-poster{display:block;width:100%;min-height:44px;
  background:#c8ecb1;border:1px solid #9cc28d;color:#19362c;
