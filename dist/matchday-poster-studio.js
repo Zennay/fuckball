@@ -91,7 +91,7 @@
   const canvas=make('canvas');canvas.width=1200;canvas.height=675;
   canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Visual preview of your private friendly poster');
   const alternative=make('p',null,'poster-studio-alternative');
-  const saveButton=button('Save new design',saveDraft,'primary');
+  const saveButton=button('Save new design',()=>saveDraft(),'primary');
   const copyButton=button('Save as new copy',()=>saveDraft(true));
   copyButton.hidden=true;
   const newButton=button('New design',()=>{
