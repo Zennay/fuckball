@@ -58,3 +58,37 @@
 .career-profile button:focus-visible,.career-profile-open:focus-visible{outline:3px solid #dcffb3;outline-offset:3px}
 @media(max-width:600px){.career-profile-actions button{flex:1 1 140px}.career-identity{align-items:flex-start}.career-avatar{width:54px;height:54px;font-size:24px}}
 @media(prefers-reduced-motion:reduce){.career-profile *{animation:none!important;transition:none!important}}
+
+/* Recent unranked native-server match form. All bars derive from the 50
+   authenticated receipts already available to the account profile. */
+.career-form{margin-top:26px;border:1px solid #58786a;border-radius:14px;
+ padding:clamp(17px,3vw,28px);background:#20362f}
+.career-form[hidden]{display:none}
+.career-form>h2{font-size:clamp(22px,3vw,31px);font-style:italic;letter-spacing:-.04em;margin:0 0 8px}
+.career-form>p{font-size:12px;line-height:1.6;color:#bbd1bd;margin:0 0 20px}
+.career-form-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:10px}
+.career-form-card{padding:16px;background:#17302d;border:1px solid #59736a;border-radius:10px;
+ display:grid;gap:7px;align-content:start}
+.career-form-card strong{font-size:clamp(18px,3vw,27px);color:#ddffa9;
+ font-variant-numeric:tabular-nums;letter-spacing:-.035em}
+.career-form-card span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:#bfd7c1}
+.career-form-card small{font-size:11px;line-height:1.55;color:#a4c0b0}
+.career-form h3{font-size:13px;letter-spacing:.07em;color:#dff8c4;margin:24px 0 13px}
+.career-form-modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));
+ gap:10px 18px}
+.career-form-modes h3{grid-column:1/-1;margin-bottom:2px}
+.career-form-mode{display:grid;gap:7px;min-width:0;color:#d4e7d8;font-size:12px}
+.career-form-track{display:flex;width:100%;height:12px;border-radius:10px;background:#42595a;overflow:hidden}
+.career-form-track span{display:block;min-width:0;height:100%}
+.career-form-win{background:#bded83}
+.career-form-draw{background:#c0cdcb}
+.career-form-loss{background:#d6959e}
+.career-form-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.career-form-day{display:grid;justify-items:center;gap:6px;font-size:12px;font-variant-numeric:tabular-nums}
+.career-form-day-column{height:78px;width:min(100%,44px);display:flex;align-items:flex-end;
+ border-radius:6px;background:#314947;overflow:hidden}
+.career-form-day-fill{width:100%;background:#b8e787;border-radius:6px 6px 0 0}
+.career-form-day small{font-size:10px;color:#acc7b2}
+.career-form-day b{font-size:12px;color:#def8c4}
+@media(max-width:500px){.career-form-week{gap:5px}.career-form-day-column{height:60px}}
+@media(prefers-reduced-motion:reduce){.career-form *{animation:none!important;transition:none!important}}
