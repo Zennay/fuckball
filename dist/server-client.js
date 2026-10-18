@@ -25,6 +25,8 @@ function connectServer(create,roomId='',joinName='',resumeContext=null){try{cons
  else if(d.type==='recording'){const decoded=atob(d.bytes);saveBlob(Uint8Array.from(decoded,c=>c.charCodeAt(0)),'fuckball-server-'+Date.now()+'.hbr2','application/octet-stream');notify('Replay saved.');}
  else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
  else if(d.type==='subApplied'){notify('Substitution: '+d.outId+' → '+d.inId+' ('+(d.team===1?'Red':'Blue')+').');renderSubPanel();}
+ else if(d.type==='matchResult'){notify((d.winner===1?'Red':d.winner===2?'Blue':'Neither side')+' wins · '+d.red+' : '+d.blue+'.');openMatchMenu();}
+ else if(d.type==='matchRestart'){notify(d.rematch?'Rematch started · teams swapped':'New game started');if(menuOpen)closeMatchMenu();}
  else if(d.type==='goal'){beep(650,.22);log((d.team===1?'Red':'Blue')+' scores');}
  else channel?.onmessage?.(event);
  };
@@ -89,9 +91,48 @@ function populateSubSelect(id,items,empty){
  for(const item of items){const option=document.createElement('option');option.value=String(item.id);option.textContent=item.name;control.append(option);}
  control.value=items.some(item=>String(item.id)===previous)?previous:String(items[0].id);
 }
+function renderNextMatchPanel(){
+ const panel=$('nextMatchPanel'),link=serverLink,state=link?.roomState;
+ panel.hidden=!(link?.room&&state&&!state.started);
+ if(panel.hidden)return;
+ const result=state.lastResult,request=state.rematch;
+ $('nextMatchTitle').textContent=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
+ const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
+ $('nextMatchInfo').textContent=request?
+   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' active players · expires shortly':
+   result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
+   'Everyone remains connected to this room.';
+ const list=$('nextMatchPlayers');list.replaceChildren();
+ for(const p of Array.isArray(result?.finalPlayers)?result.finalPlayers:[]){
+  if(!p||typeof p.name!=='string'||!Number.isFinite(p.playedFrames))continue;
+  const line=document.createElement('li'),name=document.createElement('span'),time=document.createElement('small');
+  name.textContent=(p.finalTeam===1?'🔴 ':p.finalTeam===2?'🔵 ':'⚪ ')+p.name;
+  time.textContent=(Math.max(0,p.playedFrames)/60).toFixed(1)+'s active · final side';
+  line.append(name,time);list.append(line);
+ }
+ const host=!!link.isOwner;
+ $('rematchRequest').hidden=!result||!!request||!host;
+ $('rematchRequest').disabled=!result||!!request||!host;
+ $('nextGame').hidden=!host;
+ $('nextGame').disabled=!host;
+ const canVote=!!request&&voters.has(networkPlayerId)&&!approved.has(networkPlayerId);
+ $('rematchAccept').hidden=!canVote;
+ $('rematchDecline').hidden=!canVote;
+}
+$('rematchRequest').onclick=()=>serverLink?.send({type:'rematchRequest'});
+$('nextGame').onclick=()=>serverLink?.send({type:'newGame'});
+$('rematchAccept').onclick=()=>{
+ const request=serverLink?.roomState?.rematch;
+ if(request)serverLink.send({type:'rematchVote',id:request.id,accept:true});
+};
+$('rematchDecline').onclick=()=>{
+ const request=serverLink?.roomState?.rematch;
+ if(request)serverLink.send({type:'rematchVote',id:request.id,accept:false});
+};
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
+ renderNextMatchPanel();
  if(panel.hidden)return;
  const players=(room?.state?.players||[]).filter(p=>Number.isSafeInteger(p.id)&&!botIds.has(p.id));
  const nameOf=id=>players.find(p=>p.id===id)?.name||'Player '+id;
