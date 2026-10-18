@@ -279,7 +279,99 @@
     if(filterSelect.value!==filter)filter='pending';
     filterSelect.value=filter;
     filterSelect.onchange=()=>{filter=filterSelect.value;render();};
-    gamesHeader.append(filterSelect);fixtures.append(gamesHeader);
+    gamesHeader.append(filterSelect);
+    const schedulePanel=make('form',null,'tournament-round-scheduler');
+    schedulePanel.hidden=true;
+    const scheduleTitle=make('h4','PLAN MATCHDAYS IN BULK');
+    const scheduleHelp=make('p','Set local kickoffs for each round. Existing dates are preserved unless you explicitly allow replacement. No rooms or players are invited.');
+    const start=make('input');start.type='datetime-local';start.required=true;
+    start.setAttribute('aria-label','Kickoff for first round in local time');
+    const days=make('input');days.type='number';days.min='1';days.max='30';days.step='1';days.value='7';days.required=true;
+    const gap=make('input');gap.type='number';gap.min='0';gap.max='180';gap.step='5';gap.value='60';gap.required=true;
+    const defaultVenue=make('input');defaultVenue.type='text';defaultVenue.maxLength=60;defaultVenue.placeholder='Optional venue for new dates';
+    const overwrite=make('input');overwrite.type='checkbox';
+    const overwriteLabel=label('Replace existing kickoff times',overwrite);
+    const schedulePreview=make('p',null,'tournament-schedule-preview');
+    schedulePreview.setAttribute('role','status');
+    const scheduleSave=make('button','Apply private calendar');
+    scheduleSave.type='submit';
+    const toggleScheduler=button('Plan multiple kickoffs',()=>{
+      schedulePanel.hidden=!schedulePanel.hidden;
+      if(!schedulePanel.hidden)start.focus();
+    });
+    gamesHeader.append(toggleScheduler);
+    schedulePanel.append(scheduleTitle,scheduleHelp,
+      label('First-round kickoff · local time',start),
+      label('Days between rounds · 1–30',days),
+      label('Minutes between matches in a round · 0–180',gap),
+      label('Venue · optional',defaultVenue),overwriteLabel,
+      schedulePreview,scheduleSave);
+    fixtures.append(gamesHeader,schedulePanel);
+    const buildCalendar=()=>{
+      const initial=start.value.trim();
+      if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(initial))
+        throw Error('Choose a first kickoff date and time.');
+      const base=new Date(initial);
+      if(!Number.isFinite(base.getTime())||localValue(base.getTime())!==initial)
+        throw Error('First kickoff is not valid in your local time zone.');
+      const spacing=Number(days.value),between=Number(gap.value);
+      if(!Number.isSafeInteger(spacing)||spacing<1||spacing>30||
+        !Number.isSafeInteger(between)||between<0||between>180||
+        between%5!==0)throw Error('Use 1–30 days and a five-minute spacing up to 180 minutes.');
+      const place=defaultVenue.value.trim();
+      if(!venueValid(place))throw Error('Venue must contain at most 60 safe characters.');
+      const roundOffsets=new Map(),records=[];
+      for(const f of t.fixtures){
+        const slot=roundOffsets.get(f.round)||0;roundOffsets.set(f.round,slot+1);
+        if(!overwrite.checked&&f.kickoff!==null)continue;
+        const local=new Date(base.getTime());
+        local.setDate(local.getDate()+(f.round-1)*spacing);
+        local.setMinutes(local.getMinutes()+slot*between);
+        const kickoff=local.getTime();
+        if(!scheduleValid(kickoff))throw Error('A generated kickoff is outside the allowed date range.');
+        records.push({id:f.id,kickoff,venue:place||f.venue});
+      }
+      return records;
+    };
+    const showSchedulePreview=()=>{
+      try{
+        const records=buildCalendar();
+        scheduleSave.disabled=!records.length||!storageHealthy;
+        schedulePreview.textContent=records.length+
+          ' fixture(s) would receive local kickoff dates. '+
+          (overwrite.checked?'Existing kickoff times WILL be replaced.':
+            'Existing kickoff times stay unchanged.')+
+          (records.length?' First: '+new Date(records[0].kickoff).toLocaleString(undefined,{
+            dateStyle:'medium',timeStyle:'short'}):'');
+      }catch(error){
+        scheduleSave.disabled=true;schedulePreview.textContent=error.message||'Invalid schedule.';
+      }
+    };
+    for(const control of [start,days,gap,defaultVenue,overwrite]){
+      control.addEventListener('input',showSchedulePreview);
+      control.addEventListener('change',showSchedulePreview);
+    }
+    schedulePanel.onsubmit=event=>{
+      event.preventDefault();
+      let records;
+      try{records=buildCalendar();}
+      catch(error){schedulePreview.textContent=error.message||'Invalid schedule.';return;}
+      if(!records.length)return inform('All fixtures already have kickoff times. Enable replacement to reschedule.');
+      if(!storageHealthy||localStorage.getItem(KEY)!==storageSnapshot)
+        return inform('League data changed in another tab. Reload before applying this calendar.');
+      if(!window.confirm('Schedule '+records.length+' private fixture(s) in "'+t.name+'"'+
+        (overwrite.checked?' and replace existing kickoff times':' without changing existing dates')+
+        '? This does not create rooms, send invitations or change game results.'))return;
+      const changed=new Map(records.map(x=>[x.id,x]));
+      const modified={...t,updatedAt:Math.max(Date.now(),t.createdAt),
+        fixtures:t.fixtures.map(f=>changed.has(f.id)?{...f,...changed.get(f.id)}:f)};
+      try{
+        persist(tournaments.map(x=>x.id===t.id?normalize(modified):x));
+        message=records.length+' private kickoff times saved. Other competition and match results unchanged.';
+        render();
+      }catch(error){inform('Could not update private kickoffs: '+(error.message||'Local storage error'));}
+    };
+    showSchedulePreview();fixtures.append(gamesHeader);
     const visible=t.fixtures.filter(f=>filter==='all'||
       (filter==='pending'&&f.homeScore===null)||
       (filter==='upcoming'&&f.kickoff!==null&&f.kickoff>=Date.now()&&f.homeScore===null)||
