@@ -125,6 +125,40 @@
    },true));
    buttons.append(button('⚽ Form Club squad',organizeSquad));
    summary.append(buttons);
+   // Only authenticated current members receive their own server's Club
+   // results. They are casual outcomes, not rank or verified league fixtures.
+   const results=data.results;
+   const record=results?.record;
+   const form=panel('CLUB MATCH HISTORY',
+    'Completed, server-authoritative Club vs Club 4v4 games on this server. Retained results are limited and do not affect Club Elo or seasonal standings.');
+   if(!results?.durable)form.append(cell('p','Club history needs this server’s persistent data directory.'));
+   else if(!record||!record.matches)form.append(cell('p','No eligible Club vs Club results recorded yet. Form a full squad to play your first match.'));
+   else{
+    const stats=document.createElement('div');stats.className='club-results-summary';
+    for(const [caption,value]of [
+     ['RECORDED',record.matches],
+     ['W / D / L',record.wins+' / '+record.draws+' / '+record.losses],
+     ['GOALS',record.scored+' : '+record.conceded]
+    ]){
+     const tile=document.createElement('div');
+     tile.append(cell('span',caption),cell('strong',String(value)));stats.append(tile);
+    }
+    form.append(stats);
+    const history=document.createElement('div');history.className='club-results-history';
+    for(const result of (Array.isArray(record.recent)?record.recent:[]).slice(0,30)){
+     if(!['W','D','L'].includes(result.outcome)||!Number.isSafeInteger(result.at)||
+        !Number.isSafeInteger(result.goals)||!Number.isSafeInteger(result.against))continue;
+     const date=new Date(result.at);
+     if(!Number.isFinite(date.valueOf()))continue;
+     const item=document.createElement('div');item.className='club-results-row';
+     const badge=cell('strong',result.outcome);
+     badge.setAttribute('aria-label',result.outcome==='W'?'Win':result.outcome==='L'?'Loss':'Draw');
+     item.append(badge,cell('span',result.goals+' – '+result.against),
+      cell('time',date.toLocaleDateString()));
+     history.append(item);
+    }
+    form.append(history);
+   }
    const rooms=panel('CLUB MATCH ROOMS',
     'Club members can join these live, unlisted rooms. Hosts enable Club-only access from Room Control.');
    const live=Array.isArray(data.rooms)?data.rooms:[];
