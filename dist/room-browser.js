@@ -1,0 +1,94 @@
+'use strict';
+// Only deliberately published rooms appear here. No member usernames, IPs,
+// signed-in identities, private invite links or undisclosed rooms are queried.
+(function(){
+ const home=$('homeView');
+ if(!home)return;
+ const anchor=home.querySelector('.quick-queue-panel')||home.querySelector('.mode-cards');
+ if(!anchor)return;
+ const section=document.createElement('section');section.className='room-browser';
+ section.setAttribute('aria-label','Public online rooms');
+ const heading=document.createElement('div');heading.className='room-browser-heading';
+ const h=document.createElement('h2');h.textContent='PUBLIC ROOMS.';
+ const badge=document.createElement('span');badge.textContent='HOST-APPROVED LISTINGS';
+ heading.append(h,badge);
+ const intro=document.createElement('p');
+ intro.textContent='Discover rooms whose hosts chose to be visible. Private links never appear here. Rooms may fill or close after this list loads.';
+ const toolbar=document.createElement('div');toolbar.className='room-browser-tools';
+ const toggle=document.createElement('button');toggle.type='button';toggle.textContent='Browse rooms';
+ toggle.className='primary';toggle.setAttribute('aria-expanded','false');
+ const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh';refresh.hidden=true;
+ toolbar.append(toggle,refresh);
+ const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
+ const status=document.createElement('p');status.className='room-browser-status';
+ status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const list=document.createElement('div');list.className='room-browser-list';
+ body.append(status,list);section.append(heading,intro,toolbar,body);
+ anchor.insertAdjacentElement('afterend',section);
+ let sequence=0,busy=false,interval=null,shown=false;
+ function button(label,click){
+  const item=document.createElement('button');item.type='button';
+  item.textContent=label;item.onclick=click;return item;
+ }
+ function putRoom(room){
+  if(!room||typeof room.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(room.room)||
+    !Number.isSafeInteger(room.players)||room.players<0||room.players>128)return;
+  const card=document.createElement('article');card.className='room-browser-entry';
+  const copy=document.createElement('div');copy.className='room-browser-info';
+  const title=document.createElement('strong');title.textContent='ROOM '+room.room;
+  const details=document.createElement('small');
+  details.textContent=room.players+' online · '+(room.started?'In progress':'Lobby')+
+   ' · '+(['1v1','2v2','3v3','4v4'].includes(room.mode)?room.mode.toUpperCase():'Custom')+
+   ' · '+String(room.map||'Stadium').slice(0,60);
+  copy.append(title,details);
+  const actions=document.createElement('div');actions.className='room-browser-actions';
+  const join=button('Join room',()=>{
+   if(serverLink?.room){
+    status.textContent='Leave your current room before joining another.';return;
+   }
+   showJoinScreen(room.room);
+  });
+  join.className='primary';
+  const share=button('Copy invite',async()=>{
+   const url=location.origin+location.pathname+'?room='+encodeURIComponent(room.room);
+   try{
+    if(!navigator.clipboard?.writeText)throw Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(url);status.textContent='Public room link copied.';
+   }catch{status.textContent='Copy this URL to invite a friend: '+url;}
+  });
+  actions.append(join,share);card.append(copy,actions);list.append(card);
+ }
+ async function load(){
+  if(!shown||busy)return;
+  busy=true;const current=++sequence;refresh.disabled=true;
+  status.textContent='Loading public rooms…';
+  try{
+   const response=await fetch('/api/public-rooms',{cache:'no-store'});
+   if(!response.ok)throw Error('Room directory unavailable.');
+   const result=await response.json();
+   if(!shown||current!==sequence)return;
+   if(!Array.isArray(result.rooms)||result.rooms.length>16)throw Error('Unexpected directory response.');
+   list.replaceChildren();
+   for(const room of result.rooms)putRoom(room);
+   status.textContent=list.children.length?
+    list.children.length+' discoverable rooms · only host-published listings.':
+    'No public rooms right now. You can create a private invite room instead.';
+  }catch(e){if(current===sequence&&shown)status.textContent=e.message||'Room directory unavailable.';}
+  finally{busy=false;refresh.disabled=false;}
+ }
+ function close(){
+  shown=false;sequence++;body.hidden=true;refresh.hidden=true;
+  toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
+  if(interval){clearInterval(interval);interval=null;}
+ }
+ toggle.onclick=()=>{
+  if(shown){close();return;}
+  shown=true;body.hidden=false;refresh.hidden=false;
+  toggle.textContent='Hide rooms';toggle.setAttribute('aria-expanded','true');
+  load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
+ };
+ refresh.onclick=load;
+ document.addEventListener('visibilitychange',()=>{
+  if(shown&&document.visibilityState==='visible')load();
+ });
+})();
