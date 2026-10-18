@@ -52,7 +52,9 @@
   if(document.getElementById('matchView')?.hidden===false&&
       ((typeof started!=='undefined'&&started)||(typeof replay!=='undefined'&&replay))&&
       !window.confirm('Leave the current local game or replay to start '+description+'? Unsaved local progress may be lost.'))return;
-  control.click();
+  if(!quickPlay(id==='quickSquad'?'4v4':'bot',true)){
+   launchNotice.textContent='The original local game did not start; your existing session was kept.';return;
+  }
   launchNotice.textContent='Opened '+description+' using the existing local game controls. No human matchmaking was started.';
  }
  local.onclick=()=>beginPractice('quickPractice','local 1v1 practice');
