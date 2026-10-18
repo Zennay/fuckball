@@ -78,6 +78,13 @@ function createMatchHistory(dir){
    if(typeof username!=='string'||!USER.test(username.toLowerCase()))return [];
    const user=username.toLowerCase();
    return items.filter(x=>x.user===user).slice(-50).reverse().map(({user,...rest})=>({...rest,source:'native-server',ranked:false}));
+  },
+  erase(username){
+   if(typeof username!=='string'||!USER.test(username.toLowerCase()))throw Error('Invalid account.');
+   const user=username.toLowerCase(),next=items.filter(x=>x.user!==user);
+   const removed=items.length-next.length;
+   if(removed){write(next);items=next;}
+   return removed;
   }
  };
 }
