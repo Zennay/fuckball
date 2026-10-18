@@ -28,11 +28,11 @@
   const lines=['# Personal replay coaching report','','Generated '+new Date().toLocaleString(),
    'Private notes from a locally saved HBR2 recording. Not verified match statistics.',''];
   for(const note of notes){
-   const safe=value=>String(value).replace(/[\\r\\n]+/g,' ').replace(/[<>]/g,'').trim();
+   const safe=value=>String(value).replace(/[\r\n]+/g,' ').replace(/[<>]/g,'').trim();
    lines.push('## '+format(note.frameNo)+' — '+safe(note.label),'',
     '**Focus:** '+safe(note.category),'',safe(note.text),'');
   }
-  const blob=new Blob([lines.join('\\n')],{type:'text/markdown;charset=utf-8'});
+  const blob=new Blob([lines.join('\n')],{type:'text/markdown;charset=utf-8'});
   const url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download='fuckball-replay-coaching-'+new Date().toISOString().slice(0,10)+'.md';
   document.body.append(link);link.click();link.remove();
