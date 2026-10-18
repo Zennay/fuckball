@@ -1,0 +1,217 @@
+'use strict';
+// Local practice setup recipes; the original quickPlay owns all game/session gates.
+(function(){
+ const home=document.getElementById('homeView');
+ const nativeStadium=document.getElementById('stadium');
+ if(!home||!nativeStadium)return;
+ const KEY='fuckball.local-match-loadouts.v1',LIMIT=8,MAX_BYTES=12000;
+ const modes=[['bot','1v1 · human vs AI'],['practice','Solo practice'],['2v2','2v2 practice'],['4v4','4v4 practice']];
+ const difficulties=['easy','normal','hard','elite'],scores=[0,3,5,10];
+ const nativeMaps=[...nativeStadium.options].filter(o=>/^\d+$/.test(o.value))
+  .map(o=>({id:Number(o.value),name:o.textContent})).filter(o=>Number.isSafeInteger(o.id)&&o.id>=0&&o.id<64);
+ if(!nativeMaps.length)return;
+ const newNode=(tag,text,klass)=>{
+  const n=document.createElement(tag);if(text!==undefined&&text!==null)n.textContent=String(text);
+  if(klass)n.className=klass;return n;
+ };
+ const btn=(label,cb)=>{
+  const n=newNode('button',label);n.type='button';n.onclick=cb;return n;
+ };
+ const validName=s=>typeof s==='string'&&s.trim()===s&&s.length>=1&&s.length<=38&&
+  !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+ const validate=raw=>{
+  if(!raw||raw.version!==1||!Array.isArray(raw.presets)||raw.presets.length>LIMIT)
+   throw Error('Invalid local match preset collection.');
+  const names=new Set();
+  return raw.presets.map(x=>{
+   if(!x||!validName(x.name)||!modes.some(m=>m[0]===x.mode)||
+    !difficulties.includes(x.difficulty)||!scores.includes(x.scoreLimit)||
+    !Number.isSafeInteger(x.timeLimit)||x.timeLimit<0||x.timeLimit>99||
+    !nativeMaps.some(s=>s.id===x.stadium))
+    throw Error('Preset has unsupported match controls or stadium.');
+   const name=x.name.toLocaleLowerCase();
+   if(names.has(name))throw Error('Preset names must be unique.');names.add(name);
+   return {name:x.name,mode:x.mode,difficulty:x.difficulty,
+    scoreLimit:x.scoreLimit,timeLimit:x.timeLimit,stadium:x.stadium};
+  });
+ };
+ let snapshot=null,rows=[],healthy=true;
+ function refreshStored(){
+  try{
+   const raw=localStorage.getItem(KEY);snapshot=raw;
+   rows=raw===null?[]:validate(JSON.parse(raw));
+   healthy=true;
+  }catch{healthy=false;rows=[];}
+ }
+ refreshStored();
+ function write(next){
+  if(!healthy)throw Error('Stored presets could not be read. They were not overwritten.');
+  const payload={version:1,presets:next};
+  const raw=JSON.stringify(payload);
+  if(raw.length>MAX_BYTES)throw Error('Preset collection is too large.');
+  if(localStorage.getItem(KEY)!==snapshot){
+   refreshStored();render();
+   throw Error('Another tab changed your saved presets. Latest list loaded. Repeat the action.');
+  }
+  localStorage.setItem(KEY,raw);
+  snapshot=raw;rows=next;render();
+ }
+ const root=newNode('section',null,'local-match-loadouts');
+ root.setAttribute('aria-label','Private local match loadouts');
+ const header=newNode('div',null,'local-match-loadouts-head');
+ const headline=newNode('div');
+ headline.append(newNode('h2','LOCAL MATCH LOADOUTS.'),newNode('p',
+  'Save complete solo-vs-AI practice setups: team size, opponent difficulty, match duration, score limit and native stadium. Start only when you choose. No online rooms, AI policy or physics changes.'));
+ const meta=newNode('span','0 / 8 SAVED','local-loadouts-count');
+ header.append(headline,meta);
+ const fields=newNode('div',null,'local-loadouts-fields');
+ const name=newNode('input');name.maxLength=38;name.required=true;name.placeholder='e.g. 4v4 hard scrimmage';
+ const mode=newNode('select'),difficulty=newNode('select'),score=newNode('select'),
+  time=newNode('input'),map=newNode('select');
+ const picker=newNode('select');picker.setAttribute('aria-label','Load saved local match setup');
+ const selected=newNode('label','Saved loadout');selected.append(picker);
+ for(const [value,label] of modes){const o=new Option(label,value);mode.add(o);}
+ for(const value of difficulties)difficulty.add(new Option(value[0].toUpperCase()+value.slice(1),value));
+ for(const value of scores)score.add(new Option(value===0?'No score limit':value+' goals',String(value)));
+ for(const m of nativeMaps)map.add(new Option(m.name,String(m.id)));
+ time.type='number';time.inputMode='numeric';time.min='0';time.max='99';time.step='1';time.value='7';
+ function field(text,control){
+  const label=newNode('label',text);label.append(control);fields.append(label);return label;
+ }
+ fields.append(selected);
+ field('Loadout name',name);field('Offline match type',mode);field('AI difficulty',difficulty);
+ field('Score limit',score);field('Time limit in minutes · 0 = none',time);
+ field('Native stadium',map);
+ const actions=newNode('div',null,'local-loadouts-actions');
+ const play=btn('▶ Play local match with these settings',launch);
+ const save=btn('＋ Save as new',saveNew);
+ const update=btn('Save changes to selected',saveExisting);
+ const remove=btn('Delete selected',removeSelected);
+ const exportBtn=btn('↓ Backup my loadouts',backup);
+ const importBtn=btn('↑ Restore loadouts',()=>upload.click());
+ const upload=newNode('input');upload.type='file';upload.accept='.json,application/json';
+ upload.hidden=true;upload.setAttribute('aria-label','Restore private local match loadout backup');
+ actions.append(play,save,update,remove,exportBtn,importBtn,upload);
+ const note=newNode('p','All saved loadouts are private device settings, not live room presets. Starting a loadout uses the original local game and asks before replacing a current local match or replay. Imported stadium files are not included.');
+ const status=newNode('p',null,'local-loadouts-status');status.setAttribute('role','status');
+ status.setAttribute('aria-live','polite');
+ root.append(header,fields,actions,note,status);
+ const after=home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
+ if(after)after.insertAdjacentElement('afterend',root);else home.append(root);
+ function selectedIndex(){
+  if(picker.value==='')return null;
+  const index=Number(picker.value);
+  return Number.isSafeInteger(index)&&index>=0&&index<rows.length?index:null;
+ }
+ function readForm(){
+  const draft={name:name.value.trim(),mode:mode.value,difficulty:difficulty.value,
+   scoreLimit:Number(score.value),timeLimit:Number(time.value),stadium:Number(map.value)};
+  validate({version:1,presets:[draft]});
+  return draft;
+ }
+ function fill(p){
+  name.value=p.name;mode.value=p.mode;difficulty.value=p.difficulty;
+  score.value=String(p.scoreLimit);time.value=String(p.timeLimit);map.value=String(p.stadium);
+ }
+ function render(){
+  const previous=picker.value;
+  picker.replaceChildren(new Option('Choose a saved loadout',''));
+  rows.forEach((row,i)=>picker.add(new Option(row.name,String(i))));
+  picker.value=previous&&Number(previous)<rows.length?previous:'';
+  meta.textContent=rows.length+' / '+LIMIT+' SAVED';
+  picker.disabled=remove.disabled=update.disabled=!healthy||!rows.length;
+  save.disabled=!healthy||rows.length>=LIMIT;
+  exportBtn.disabled=!healthy||!rows.length;
+  if(!healthy){
+   status.textContent='Existing local match presets are unreadable. Storage was not overwritten. Restore the damaged data manually before saving.';
+  }
+ }
+ picker.onchange=()=>{const index=selectedIndex();if(index!==null){fill(rows[index]);
+   status.textContent='Loaded '+rows[index].name+' for review. No game started.';}};
+ function saveNew(){
+  try{
+   const item=readForm();
+   if(rows.length>=LIMIT)throw Error('Eight local loadouts is the maximum.');
+   if(rows.some(x=>x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
+    throw Error('A loadout with this name already exists; select it to update.');
+   write([...rows,item]);picker.value=String(rows.length-1);
+   status.textContent='New local loadout saved. It will only start when you click Play.';
+  }catch(e){status.textContent=e.message||'Could not save loadout.';}
+ }
+ function saveExisting(){
+  try{
+   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout to update.');
+   const item=readForm();
+   if(rows.some((x,n)=>n!==i&&x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
+    throw Error('Another saved loadout already uses that name.');
+   write(rows.map((x,n)=>n===i?item:x));picker.value=String(i);
+   status.textContent='Saved changes to the selected local loadout.';
+  }catch(e){status.textContent=e.message||'Loadout not updated.';}
+ }
+ function removeSelected(){
+  try{
+   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout.');
+   if(!confirm('Remove saved local loadout "'+rows[i].name+'"? Your native practice results and matches will remain unchanged.'))return;
+   write(rows.filter((_,n)=>n!==i));status.textContent='Only the chosen loadout was deleted.';
+  }catch(e){status.textContent=e.message||'Loadout not deleted.';}
+ }
+ function launch(){
+  let draft;
+  try{draft=readForm();}catch(e){status.textContent=e.message||'Invalid loadout.';return;}
+  if(typeof quickPlay!=='function'||typeof pendingSessionBlock!=='function'){
+   status.textContent='The native practice launcher is unavailable.';return;
+  }
+  const block=pendingSessionBlock();
+  if(block){status.textContent=block;return;}
+  if((started||replay)&&!confirm('Replace your current solo match or replay with "'+draft.name+
+   '"? Unsaved local gameplay or recordings could be lost.'))return;
+  const target=defaults?.[draft.stadium];
+  if(!target||nativeStadium.querySelector('option[value="'+draft.stadium+'"]')===null){
+   status.textContent='This stadium is unavailable. Select another native stadium.';return;
+  }
+  // The original native launcher enforces session authority again. Do not fire
+  // any change handlers while online or create our own game/physics instance.
+  nativeStadium.value=String(draft.stadium);stadium=target;
+  document.getElementById('stadiumLabel').textContent=target.name.toUpperCase();
+  document.getElementById('scoreLimit').value=String(draft.scoreLimit);
+  document.getElementById('timeLimit').value=String(draft.timeLimit);
+  document.getElementById('botDifficulty').value=draft.difficulty;
+  settings.difficulty=draft.difficulty;settings.botLevels={};settings.timeLimit=draft.timeLimit;
+  savePrefs();
+  if(quickPlay(draft.mode,true)){
+   status.textContent='Native '+draft.mode+' practice started with "'+draft.name+'". No online server joined.';
+  }else status.textContent='Native game rejected the new session. No multiplayer authority was changed.';
+ }
+ function download(payload,filename){
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));
+  const link=newNode('a');link.href=url;link.download=filename;
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ function backup(){
+  if(!healthy||!rows.length)return;
+  download({format:'fuckball-local-match-loadouts',version:1,source:'private-device-only',
+   exportedAt:new Date().toISOString(),presets:rows},
+  'fuckball-local-match-loadouts-'+new Date().toISOString().slice(0,10)+'.json');
+  status.textContent='Loadout backup saved. It contains only local configuration, no user account or server data.';
+ }
+ upload.onchange=async()=>{
+  const file=upload.files?.[0];upload.value='';if(!file)return;
+  if(file.size<=0||file.size>MAX_BYTES){status.textContent='Choose a loadout JSON file no larger than 12 KB.';return;}
+  try{
+   const parsed=JSON.parse(await file.text());
+   if(parsed?.format!=='fuckball-local-match-loadouts'||parsed.version!==1||
+    parsed.source!=='private-device-only')throw Error('Unsupported local match loadout backup.');
+   const incoming=validate({version:1,presets:parsed.presets});
+   if(!confirm('Replace '+rows.length+' saved local match loadouts with '+
+    incoming.length+' from this device backup? No real matches or practice history will change.'))return;
+   write(incoming);status.textContent='Restored '+incoming.length+' private match loadout settings.';
+  }catch(e){status.textContent='Restore refused: '+(e.message||'Unsupported data');}
+ };
+ window.addEventListener('storage',e=>{
+  if(e.key!==KEY&&e.key!==null)return;
+  refreshStored();render();status.textContent='Saved loadouts changed in another tab. Re-select your current setup.';
+ });
+ fill({name:'My solo match',mode:'bot',difficulty:'hard',scoreLimit:3,timeLimit:7,stadium:nativeMaps[0].id});
+ render();
+})();
