@@ -34,7 +34,7 @@ const ReplayLibrary=(()=>{
   const items=await list(),total=items.reduce((sum,item)=>sum+item.size,0);
   if(items.length>=MAX_ITEMS||total+bytes.length>MAX_TOTAL)
    throw Error('My Games is full. Delete an older recording to free space (30 items / 160 MB).');
-  const id=crypto.randomUUID(),createdAt=Date.now();
+  const random=crypto.getRandomValues(new Uint8Array(16));const id=Array.from(random,b=>b.toString(16).padStart(2,'0')).join(''),createdAt=Date.now();
   const item={id,createdAt,size:bytes.length,name:String(name||'Replay.hbr2').slice(0,100)};
   const d=await db();
   await new Promise((resolve,reject)=>{
