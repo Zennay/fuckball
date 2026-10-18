@@ -32,6 +32,15 @@
  identity.append(avatar,who,login);
  const metrics=document.createElement('div');metrics.className='career-metrics';
  metrics.setAttribute('aria-label','Career match statistics');
+ const formSection=document.createElement('section');formSection.className='career-form';
+ formSection.setAttribute('aria-label','Recent match form and activity');formSection.hidden=true;
+ const formHeading=document.createElement('h2');formHeading.textContent='MATCH FORM.';
+ const formNote=document.createElement('p');formNote.textContent=
+  'Recent native-server rounds only, capped at your latest 50 receipts. This is not an Elo rating or a lifetime total.';
+ const formCards=document.createElement('div');formCards.className='career-form-cards';
+ const formModes=document.createElement('div');formModes.className='career-form-modes';
+ const formActivity=document.createElement('div');formActivity.className='career-form-activity';
+ formSection.append(formHeading,formNote,formCards,formModes,formActivity);
  const modes=document.createElement('section');modes.className='career-modes';
  const mh=document.createElement('h2');mh.textContent='PLAYLIST HISTORY.';
  const modeNote=document.createElement('p');modeNote.textContent='Matches counted on this server only; these are not ranked ratings.';
@@ -44,7 +53,7 @@
  recent.append(rh,recentNote,recentRows);
  const footer=document.createElement('p');footer.className='career-profile-footnote';
  footer.textContent='Career totals may outlive the limited list of recent match receipts. Statistics depend on this server retaining its data directory; they are not global, ranked or cross-server.';
- view.append(top,status,identity,metrics,modes,recent,footer);
+ view.append(top,status,identity,metrics,formSection,modes,recent,footer);
  const main=document.querySelector('#matchView');
  (main?.parentElement||document.body).insertBefore(view,main||null);
  const open=document.createElement('button');open.type='button';open.className='career-profile-open';
@@ -70,7 +79,8 @@
  const outcomes={1:'RED',2:'BLUE'};
  function clear(){
   metrics.replaceChildren();modeRows.replaceChildren();recentRows.replaceChildren();
-  download.disabled=true;current=null;
+  formCards.replaceChildren();formModes.replaceChildren();formActivity.replaceChildren();
+  formSection.hidden=true;download.disabled=true;current=null;
  }
  function metric(label,value,detail=''){
   const card=document.createElement('article');card.className='career-metric';
@@ -107,6 +117,102 @@
    const fill=document.createElement('div');fill.style.width=width+'%';track.append(fill);
    row.append(top,track);modeRows.append(row);
   }
+ }
+ const formOutcomes=Object.freeze({win:'WIN',draw:'DRAW',loss:'LOSS'});
+ function matchResult(entry){
+  return entry.winner===0?'draw':entry.winner===entry.team?'win':'loss';
+ }
+ function safeReceipt(entry){
+  return entry&&typeof entry==='object'&&entry.source==='native-server'&&
+   entry.ranked===false&&['bot','1v1','2v2','3v3','4v4'].includes(entry.mode)&&
+   [1,2].includes(entry.team)&&[0,1,2].includes(entry.winner)&&
+   [entry.red,entry.blue,entry.at,entry.playedFrames].every(n=>Number.isSafeInteger(n)&&n>=0)&&
+   entry.at>0&&entry.playedFrames>0&&entry.red<=999&&entry.blue<=999;
+ }
+ function formCard(label,value,detail){
+  const card=document.createElement('div');card.className='career-form-card';
+  const number=document.createElement('strong');number.textContent=value;
+  const caption=document.createElement('span');caption.textContent=label;
+  const description=document.createElement('small');description.textContent=detail;
+  card.append(number,caption,description);formCards.append(card);
+ }
+ function renderForm(items){
+  formCards.replaceChildren();formModes.replaceChildren();formActivity.replaceChildren();
+  formSection.hidden=false;
+  const ordered=items.filter(safeReceipt).sort((a,b)=>b.at-a.at).slice(0,50);
+  if(!ordered.length){
+   const empty=document.createElement('p');empty.className='career-no-matches';
+   empty.textContent='Complete a signed-in native-server match to see your recent form.';
+   formCards.append(empty);return;
+  }
+  const recentTen=ordered.slice(0,10);
+  const countResult=(group,result)=>group.filter(m=>matchResult(m)===result).length;
+  const wins=countResult(recentTen,'win'),draws=countResult(recentTen,'draw'),
+   losses=countResult(recentTen,'loss');
+  let streak=0,streakKind=null;
+  for(const match of ordered){
+   const outcome=matchResult(match);
+   if(streakKind===null)streakKind=outcome;
+   if(outcome!==streakKind)break;
+   streak++;
+  }
+  const goalDifference=recentTen.reduce((sum,m)=>sum+(m.team===1?m.red-m.blue:m.blue-m.red),0);
+  formCard('Last '+recentTen.length+' rounds',wins+'W · '+draws+'D · '+losses+'L',
+   'Native-server results, including AI modes when played.');
+  formCard('Current form streak',streak+' '+formOutcomes[streakKind]+(streak===1?'':'S'),
+   'Consecutive results within the available recent receipts.');
+  formCard('Goal difference',(goalDifference>0?'+':'')+goalDifference,
+   'Goals scored minus conceded in those rounds.');
+  const previous=ordered.slice(10,20);
+  if(recentTen.length===10&&previous.length===10){
+   const delta=Math.round(100*countResult(recentTen,'win')/10)-
+    Math.round(100*countResult(previous,'win')/10);
+   formCard('Win-rate shift',(delta>0?'+':'')+delta+' pp',
+    'Latest 10 versus preceding 10 server rounds; not a skill rating.');
+  }
+  const formats=document.createElement('h3');formats.textContent='RECENT RESULTS BY FORMAT';
+  formModes.append(formats);
+  for(const mode of ['1v1','2v2','3v3','4v4','bot']){
+   const games=ordered.filter(m=>m.mode===mode);
+   if(!games.length)continue;
+   const line=document.createElement('div');line.className='career-form-mode';
+   const label=document.createElement('span');label.textContent=
+    (mode==='bot'?'Vs AI':mode)+' · '+games.length+' rounds';
+   const track=document.createElement('div');track.className='career-form-track';
+   track.setAttribute('aria-label',games.length+' recent '+mode+' results: '+
+    countResult(games,'win')+' wins, '+countResult(games,'draw')+' draws, '+
+    countResult(games,'loss')+' losses');
+   for(const result of ['win','draw','loss']){
+    const width=100*countResult(games,result)/games.length;
+    if(!width)continue;
+    const bar=document.createElement('span');bar.className='career-form-'+result;
+    bar.style.width=width+'%';bar.title=countResult(games,result)+' '+result;
+    track.append(bar);
+   }
+   line.append(label,track);formModes.append(line);
+  }
+  const activityTitle=document.createElement('h3');activityTitle.textContent='LAST 7 DAYS';
+  formActivity.append(activityTitle);
+  const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const grid=document.createElement('div');grid.className='career-form-week';
+  const days=Array.from({length:7},(_,i)=>{
+   const from=new Date(today);from.setDate(today.getDate()-(6-i));
+   const until=new Date(from);until.setDate(from.getDate()+1);
+   return{from,until,rounds:ordered.filter(m=>m.at>=from.getTime()&&m.at<until.getTime()).length};
+  });
+  const max=Math.max(1,...days.map(day=>day.rounds));
+  for(const day of days){
+   const bar=document.createElement('div');bar.className='career-form-day';
+   const column=document.createElement('span');column.className='career-form-day-column';
+   const fill=document.createElement('span');fill.className='career-form-day-fill';
+   fill.style.height=(day.rounds?Math.max(8,100*day.rounds/max):0)+'%';
+   column.append(fill);column.title=day.rounds+' completed rounds';
+   const label=document.createElement('small');label.textContent=
+    day.from.toLocaleDateString(undefined,{weekday:'short'});
+   const amount=document.createElement('b');amount.textContent=day.rounds;
+   bar.append(column,label,amount);grid.append(bar);
+  }
+  formActivity.append(grid);
  }
  function renderRecent(items){
   recentRows.replaceChildren();
@@ -160,7 +266,7 @@
    if(!Number.isSafeInteger(stats.matches)||stats.matches<0||!Array.isArray(matchesResponse.items))
     throw Error('Unexpected statistics response.');
    current={stats,items:matchesResponse.items.slice(0,50),account:account.username};
-   renderStats(stats);renderRecent(current.items);
+   renderStats(stats);renderForm(current.items);renderRecent(current.items);
    download.disabled=false;
    status.textContent='Account data loaded for '+account.username+' · '+fmt(stats.matches)+
     ' server-recorded matches. Not ranked; no fabricated ratings.';
