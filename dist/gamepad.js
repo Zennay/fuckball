@@ -11,7 +11,7 @@
  label.textContent='Connect a controller · left stick / D-pad to move · A/X/RT to kick · Start for menu.';
  info.append(title,label);settingsPanel.append(info);
  const neutral=()=>({x:0,y:0,kick:false});
- let active=null,lastSignature='',wasStart=false,connected='',polling=true;
+ let active=null,lastSignature='',wasStart=false,connected='';
  const isHeld=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const magnitude=axis=>Number.isFinite(axis)&&Math.abs(axis)>=.32?Math.sign(axis):0;
@@ -47,7 +47,6 @@
   if(next!==connected){connected=next;label.textContent=next;}
  }
  function frame(){
-  if(!polling)return;
   const pad=controller();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
@@ -67,5 +66,4 @@
  }
  window.fuckballGamepad={read};
  requestAnimationFrame(frame);
- window.addEventListener('pagehide',()=>{polling=false;});
 })();
