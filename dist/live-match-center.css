@@ -1,0 +1,48 @@
+/* Accurate, local-view-only match scoreboard. Never asserts invented stats. */
+.match-center-trigger{min-height:42px;letter-spacing:.04em;font-weight:850}
+.match-center{position:absolute;top:clamp(64px,11vh,105px);left:50%;
+ transform:translateX(-50%);z-index:12;width:min(760px,calc(100vw - 24px));
+ max-height:min(75vh,780px);overflow:auto;box-sizing:border-box;
+ padding:clamp(14px,2vw,25px);border:1px solid #a5bfad;border-radius:16px;
+ background:#12232bf5;color:#e9f5e7;box-shadow:0 22px 65px #02090cbe;
+ backdrop-filter:blur(11px)}
+.match-center[hidden]{display:none!important}
+.match-center-head{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.match-center-kicker{font-size:10px;letter-spacing:.17em;color:#dbf5b0;font-weight:900}
+.match-center-head h2{font-size:clamp(21px,3vw,29px);font-weight:950;
+ letter-spacing:-.04em;margin:3px 0 5px}
+.match-center-head button{min-width:44px;min-height:44px;border-radius:9px;
+ border:1px solid #91a9a1;background:#27414b;color:#f2f8ee;font-size:19px}
+.match-center-badge{font-size:10px;letter-spacing:.07em;color:#b8d0c5;line-height:1.5}
+.match-center-score{display:flex;align-items:center;justify-content:center;gap:18px;
+ border-block:1px solid #476467;padding:16px;margin:14px 0 17px;
+ font-variant-numeric:tabular-nums}
+.match-center-score strong{font-size:clamp(38px,5vw,56px);font-weight:950}
+.match-center-score strong.red{color:#ff9e9e}
+.match-center-score strong.blue{color:#a5c3ff}
+.match-center-score>span{font-size:25px;color:#d9e2dc}
+.match-center-score time{font-size:15px;color:#e2edc7;font-weight:800;margin-left:14px}
+.match-center-teams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.match-center-team,.match-center-spectators{min-width:0;border:1px solid #52727a;
+ border-radius:11px;padding:12px;background:#1a313a}
+.match-center-team.red{border-top:3px solid #f78f98}
+.match-center-team.blue{border-top:3px solid #90aeff}
+.match-center :is(h3){font-size:11px;letter-spacing:.12em;color:#dff1d4;margin:0 0 11px}
+.match-center-roster{display:grid;gap:7px}
+.match-center-player{display:flex;justify-content:space-between;align-items:baseline;
+ gap:9px;border-radius:7px;padding:9px;background:#27434a;min-width:0}
+.match-center-player span{font-size:12px;overflow-wrap:anywhere;min-width:0}
+.match-center-player small{font-size:10px;color:#d2e5d3;white-space:nowrap;font-variant-numeric:tabular-nums}
+.match-center-empty{color:#bad0c3;font-size:11px;line-height:1.5}
+.match-center-spectators{margin-top:14px}
+.match-center-footer{font-size:11px;line-height:1.5;color:#bacdc2;margin:17px 0 0}
+.match-center :is(button):focus-visible,.match-center-trigger:focus-visible{
+ outline:3px solid #e1ffba;outline-offset:3px}
+@media(max-width:600px){
+ .match-center{top:70px;max-height:72vh}
+ .match-center-teams{grid-template-columns:1fr}
+ .match-center-score{gap:10px}
+ .match-center-score time{margin-left:4px}
+ .match-center-trigger{padding:8px 11px;font-size:10px}
+}
+@media(prefers-reduced-transparency:reduce){.match-center{backdrop-filter:none;background:#12232b}}
