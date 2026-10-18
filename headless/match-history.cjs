@@ -15,7 +15,7 @@ function valid(x){
   Number.isSafeInteger(x.blue)&&x.blue>=0&&x.blue<=999&&
   [0,1,2].includes(x.winner)&&[1,2].includes(x.team)&&
   Number.isSafeInteger(x.playedFrames)&&x.playedFrames>0&&
-  typeof x.mode==='string'&&['bot','2v2','4v4'].includes(x.mode);
+  typeof x.mode==='string'&&['bot','1v1','2v2','3v3','4v4'].includes(x.mode);
 }
 function sameFile(a,b){
  return a.dev===b.dev&&a.ino===b.ino&&a.size===b.size&&
