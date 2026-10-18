@@ -44,8 +44,107 @@
  spectators.append(spectatorsTitle,spectatorsList);
  const footer=document.createElement('p');footer.className='match-center-footer';
  footer.textContent='Current local snapshot only · latency is shown only when individually measured by the server. No ratings or match statistics are inferred.';
- panel.append(header,badge,score,teams,spectators,footer);match.append(panel);
+
+ const feed=document.createElement('section');feed.className='match-center-feed';
+ const feedHeading=document.createElement('div');feedHeading.className='match-center-feed-heading';
+ const feedTitle=document.createElement('h3');feedTitle.textContent='LIVE MATCH OBSERVATIONS';
+ const feedActions=document.createElement('div');feedActions.className='match-center-feed-actions';
+ const downloadFeed=document.createElement('button');downloadFeed.type='button';
+ downloadFeed.textContent='↓ Save my notes';downloadFeed.title='Download only observed changes on this device';
+ const clearFeed=document.createElement('button');clearFeed.type='button';clearFeed.textContent='Clear';
+ feedActions.append(downloadFeed,clearFeed);feedHeading.append(feedTitle,feedActions);
+ const feedIntro=document.createElement('p');feedIntro.textContent='Observed scoreboard changes while this tab is open. This is NOT an official game event feed: scorer identity, fouls, assists and match results are not inferred.';
+ const feedList=document.createElement('ol');feedList.className='match-center-feed-list';
+ const feedStatus=document.createElement('p');feedStatus.className='match-center-feed-status';
+ feedStatus.setAttribute('role','status');feedStatus.setAttribute('aria-live','polite');
+ feed.append(feedHeading,feedIntro,feedList,feedStatus);
+ panel.append(header,badge,score,teams,spectators,feed,footer);match.append(panel);
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
+ let timeline=[],snapshot=null,sessionId='',sessionRoom=null,historyInterrupted=false;
+ const MAX_HISTORY=40;
+ function liveSnapshot(){
+  if(typeof replay!=='undefined'&&replay)return null;
+  const g=room?.gameState;
+  if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
+    !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
+    g.redScore<0||g.blueScore<0||g.redScore>500||g.blueScore>500||
+    g.timeElapsed<0||g.timeElapsed>86400)return null;
+  const kind=serverLink?.room?'native online room':peerConnected?'direct peer room':'local practice';
+  const key=serverLink?.room?'native:'+serverLink.room:peerConnected?'peer':'local';
+  return {key,kind,red:g.redScore,blue:g.blueScore,elapsed:Math.floor(g.timeElapsed)};
+ }
+ function formatClock(seconds){
+  return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+ }
+ function addObservation(label,reading){
+  timeline.push({clock:formatClock(reading.elapsed),red:reading.red,blue:reading.blue,
+   detail:label,observedAt:new Date().toISOString()});
+  if(timeline.length>MAX_HISTORY)timeline.shift();
+  lastSignature='';
+ }
+ function renderObservations(){
+  feedList.replaceChildren();
+  for(const entry of [...timeline].reverse()){
+   const item=document.createElement('li');
+   const clock=document.createElement('time');clock.textContent=entry.clock;
+   const detail=document.createElement('span');detail.textContent=entry.detail;
+   const score=document.createElement('small');score.textContent=entry.red+'–'+entry.blue;
+   item.append(clock,detail,score);feedList.append(item);
+  }
+  if(!timeline.length){
+   const item=document.createElement('li');item.className='match-center-feed-empty';
+   item.textContent='No live changes observed. Open a local or online match to begin.';
+   feedList.append(item);
+  }
+  feedStatus.textContent=timeline.length+' read-only observations in this tab. No server upload, official scoring or persistent tracking.';
+  downloadFeed.disabled=!timeline.length;
+ }
+ function observe(){
+  if(match.hidden){if(sessionId||timeline.length){timeline=[];sessionId='';sessionRoom=null;snapshot=null;lastSignature='';}return;}
+  if(document.hidden){historyInterrupted=true;return;}
+  const reading=liveSnapshot();
+  if(!reading){
+   if(sessionId||timeline.length){timeline=[];sessionId='';sessionRoom=null;snapshot=null;lastSignature='';}
+   return;
+  }
+  if(sessionRoom!==room||sessionId!==reading.key){
+   sessionRoom=room;sessionId=reading.key;timeline=[];snapshot=null;historyInterrupted=false;
+  }
+  const prior=snapshot;
+  if(!prior){
+   addObservation('Scoreboard snapshot first observed ('+reading.kind+').',reading);
+  }else if(reading.elapsed+3<prior.elapsed||reading.red<prior.red||reading.blue<prior.blue){
+   timeline=[];addObservation('Match clock or score reset; observation history restarted.',reading);
+  }else if(reading.red!==prior.red||reading.blue!==prior.blue){
+   const redDelta=reading.red-prior.red,blueDelta=reading.blue-prior.blue;
+   const single=redDelta+blueDelta===1&&(redDelta===1||blueDelta===1);
+   const description=historyInterrupted?'Scoreboard changed while this tab was hidden.':
+    single?(redDelta?'Red':'Blue')+' score increased by one (scorer unknown).':
+    'Scoreboard changed by multiple points (cause unknown).';
+   addObservation(description,reading);
+  }
+  snapshot=reading;historyInterrupted=false;
+ }
+ downloadFeed.addEventListener('click',()=>{
+  if(!timeline.length)return;
+  const lines=['# Fuckball local match observations','',
+   'Player-owned, unverified scoreboard notes. Not an official match result.',
+   'No room identifiers, player names, accounts, chat or authentication data included.','',
+   'Context: '+(snapshot?.kind||'local view'),'',
+   ...timeline.map(x=>'- ['+x.clock+'] '+x.detail+' Score observed: '+x.red+'-'+x.blue)];
+  const blob=new Blob([lines.join('\n')+'\n'],{type:'text/markdown'});
+  if(blob.size>16384){feedStatus.textContent='Too many observations to export safely.';return;}
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='fuckball-private-scoreboard-notes.md';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  feedStatus.textContent='Private observations exported to Markdown. No upload.';
+ });
+ clearFeed.addEventListener('click',()=>{
+  timeline=[];renderObservations();
+  feedStatus.textContent='Local observation history cleared. Current score remains unchanged.';
+ });
+ renderObservations();
  function eligible(){
   return !match.hidden&&!document.hidden&&
    (typeof room!=='undefined'&&!!room||typeof replay!=='undefined'&&!!replay);
@@ -95,7 +194,7 @@
   const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':serverLink?.room?
    'NATIVE ONLINE ROOM · LIVE SNAPSHOT':peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
   const state=inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
-  const signature=JSON.stringify([scores,time,mode,state,users.map(p=>
+  const signature=JSON.stringify([scores,time,mode,state,timeline.length,users.map(p=>
    [p.id,p.name,p.team.id,p.aiControlled,pingFor(p)]),serverLink?.roomControl?.owner]);
   if(!force&&signature===lastSignature)return;
   lastSignature=signature;
@@ -107,6 +206,7 @@
   const inactive=users.filter(p=>p.team.id===0);
   spectators.hidden=!inactive.length;
   fill(spectatorsList,inactive);
+  renderObservations();
  }
  function setVisible(){
   const visible=(sticky||holding)&&eligible()&&document.getElementById('pauseMenu')?.hidden!==false;
@@ -143,6 +243,7 @@
  window.addEventListener('blur',()=>{holding=false;setVisible();});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)closePanel();});
  window.setInterval(()=>{
+  observe();
   if(!eligible()||document.getElementById('pauseMenu')?.hidden===false){
    if(sticky||holding)closePanel();
    button.hidden=true;return;
