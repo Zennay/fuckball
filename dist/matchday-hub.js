@@ -144,6 +144,7 @@
    window.dispatchEvent(new Event('fuckball:open-private-league-planner'));
   }),button('🏆 Leagues',()=>go('.tournament-desk')),
   button('🏅 Cups',()=>go('.knockout-desk')),
+  button('⚔ Best-of series',()=>go('.best-of-series')),
   button('⚽ Tactics',()=>go('.formation-studio')),
   button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV),
   button('↓ All fixtures ICS',exportCalendar));
