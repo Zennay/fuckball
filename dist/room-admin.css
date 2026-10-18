@@ -1,0 +1,17 @@
+/* Room host actions are native-server authoritative, never peer trust. */
+.room-admin-panel{margin:20px 0 0;padding:18px;border:1px solid #657e75;background:#1b3030;border-radius:12px;display:grid;gap:12px}
+.room-admin-panel[hidden],.room-admin-actions[hidden]{display:none!important}
+.room-admin-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.room-admin-heading strong{color:#e4ffb8;font-size:13px;letter-spacing:.08em}
+.room-admin-state{padding:6px 10px;border:1px solid #6d9975;background:#223c2d;border-radius:20px;font-size:11px;color:#d5eccb}
+.room-admin-state.locked{border-color:#b18b66;background:#41352a;color:#ffdab8}
+.room-admin-panel>p{font-size:12px;color:#b4c9bc;max-width:780px;line-height:1.55;margin:0}
+.room-admin-actions{display:flex;align-items:end;flex-wrap:wrap;gap:10px}
+.room-admin-actions label{display:grid;gap:5px;font-size:11px;color:#c7dacd;flex:1 1 170px}
+.room-admin-actions select{padding:10px 12px;min-height:42px;border-radius:8px;border:1px solid #788f82;background:#122426;color:#edf7e8;max-width:100%}
+.room-admin-actions button{padding:11px 14px;border-radius:7px;border:1px solid #84a48f;background:#294538;color:#eef6e7;min-height:42px}
+.room-admin-actions button.danger{border-color:#b37774;background:#4c2b2a;color:#ffdad8}
+.room-admin-actions button:disabled{opacity:.45;cursor:not-allowed}
+.room-admin-actions button:focus-visible,.room-admin-actions select:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+.room-admin-notice{font-size:11px;min-height:16px;color:#e2dba9}
+@media(max-width:660px){.room-admin-actions button{flex:1 1 130px}.room-admin-panel{padding:14px}}

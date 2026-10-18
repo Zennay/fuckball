@@ -21,7 +21,7 @@ function createServer(options={}){
  function purgeInvites(){
   const now=Date.now();
   for(const [user,list]of friendInvites){
-   const keep=list.filter(i=>i.expiresAt>now&&rooms.has(i.room)&&
+   const keep=list.filter(i=>i.expiresAt>now&&rooms.has(i.room)&&!rooms.get(i.room).locked&&
     social?.areFriends(i.from,user)&&[...rooms.get(i.room).sockets.values()].some(ws=>ws.account?.toLowerCase()===i.from&&accounts.user(ws.accountToken)?.toLowerCase()===i.from));
    if(keep.length)friendInvites.set(user,keep);else friendInvites.delete(user);
   }
@@ -57,6 +57,7 @@ function createServer(options={}){
       throw Error('Invalid player or room.');
      const to=data.to.toLowerCase(),room=rooms.get(data.room);
      if(!social.areFriends(user,to))throw Error('You can only invite mutual friends.');
+     if(room?.locked)throw Error('This room is locked. Unlock it before inviting friends.');
      if(!room||![...room.sockets.values()].some(ws=>ws.readyState===1&&ws.account?.toLowerCase()===user&&accounts.user(ws.accountToken)?.toLowerCase()===user))
       throw Error('Join a live room before sending invitations.');
      purgeInvites();
@@ -139,7 +140,7 @@ function createServer(options={}){
     try{history.append(records);}catch{console.warn('Match history write unavailable; completed round remains unrecorded.');}
    },
    send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -168,6 +169,46 @@ function createServer(options={}){
   const d=r.election.decide({rtt,players,candidates,current:r.authority,now});if(d.switch)migrate(r,d.host,d.reason);}
  // A per-connection bearer ticket is never placed in the room URL, status, or host snapshots.
  function issueTicket(ws,r,id){const ticket=crypto.randomBytes(32).toString('hex');r.sessionTokens.set(id,ticket);send(ws,{type:'resumeTicket',ticket,windowMs:reconnectMs});}
+ function roomControl(r){
+  const msg={type:'roomControl',locked:r.locked,owner:r.owner,banMinutes:10};
+  for(const client of r.sockets.values())send(client,msg);
+ }
+ // Temporary account-scoped ban; never block a shared public IP, and never
+ // trust a self-reported account label. Only account identities authenticated
+ // by the server may be temporarily barred from this one room.
+ function admitted(r,account){
+  const now=Date.now();
+  for(const [name,expires]of r.roomBans)if(expires<=now)r.roomBans.delete(name);
+  return !account||!(r.roomBans.get(account.toLowerCase())>now);
+ }
+ function removePlayer(ws,r,reason){
+  if(!ws||ws.room!==r)return;
+  ws.intentionalLeave=true;
+  send(ws,{type:'roomRemoved',reason});
+  leave(ws);
+  ws.close(4003,'Removed from room');
+ }
+ function roomAdmin(ws,r,d){
+  if(ws.playerId!==r.owner||!r.sockets.has(ws.playerId))
+   throw Error('Only the current room host can moderate this room.');
+  if(d.action==='lock'||d.action==='unlock'){
+   r.locked=d.action==='lock';roomControl(r);return;
+  }
+  if(!['kick','ban'].includes(d.action)||!Number.isSafeInteger(d.id)||d.id<1)
+   throw Error('Invalid room moderation action.');
+  const target=r.sockets.get(d.id);
+  if(!target||d.id===r.owner)throw Error('Choose a connected player other than yourself.');
+  if(d.action==='ban'){
+   if(!target.account||accounts.user(target.accountToken)?.toLowerCase()!==target.account.toLowerCase())
+    throw Error('Temporary room bans require a signed-in player.');
+   const name=target.account.toLowerCase();
+   if(r.roomBans.size>=128&&!r.roomBans.has(name))throw Error('Temporary room ban list is full.');
+   r.roomBans.set(name,Date.now()+10*60000);
+   const peers=[...r.sockets.values()].filter(p=>p.account?.toLowerCase()===name);
+   for(const p of peers)removePlayer(p,r,'Temporarily removed from this room by the host (10 minutes).');
+  }else removePlayer(target,r,'Removed from this room by the host.');
+  roomControl(r);
+ }
  function rejoin(ws,r,ticket){
   if(typeof ticket!=='string'||!/^[0-9a-f]{64}$/.test(ticket))throw Error('Session expired. Join the room again.');
   let id=null,claim=null;
@@ -178,6 +219,7 @@ function createServer(options={}){
   const c=r.clients.get(id);c.timeline=r.v3&&ws.netcode===3?Netcode.createInputTimeline():null;c.lastInputSeq=0;
   send(ws,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:claim.account,netcode:c.timeline?3:2,resumed:true});
   issueTicket(ws,r,id);r.setConnected(id,true);
+  send(ws,{type:'roomControl',locked:r.locked,owner:r.owner,banMinutes:10});
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
@@ -195,12 +237,12 @@ function createServer(options={}){
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
   if(ws.pendingResumeToken){const ticket=ws.pendingResumeToken;ws.pendingResumeToken=null;rejoin(ws,r,ticket);return;}
   while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
-  if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);}
+  if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);roomControl(r);}
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;r.sockets.delete(id);r.reports.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
   if(r.authority===id){if(!r.sockets.size){r.destroy();rooms.delete(r.id);return;}failover(r,'host left');}
   else if(r.authority!=='server'){send(hostSocket(r),{type:'hostLeave',id});if(!r.sockets.size){r.destroy();rooms.delete(r.id);}meshUpdate(r);return;}
-  if(r.leave(id)){r.destroy();rooms.delete(r.id);return;}meshUpdate(r);}
+  if(r.leave(id)){r.destroy();rooms.delete(r.id);return;}meshUpdate(r);roomControl(r);}
  function fromHost(r,ws,d){if(r.authority!==ws.playerId)return;
   if(d.type==='hostOut'){const to=r.sockets.get(Number(d.to));if(to&&d.d&&HOST_OUT.has(d.d.type))send(to,d.d);return;}
   if(d.type==='standby'){try{r.standby=RoomCore.decodeState(d.state);r.standbyAt=Date.now();for(const [id,c]of r.standby.clients)if(c.timeline)r.clients.get(id)?.timeline?.prune(c.timeline.appliedSeq,c.timeline.current);}catch{}return;}
@@ -216,8 +258,9 @@ function createServer(options={}){
    const d=JSON.parse(raw.toString());
    if(d.type==='ping'){send(ws,ws.room?{type:'pong',t:d.t,frame:roomTime(ws.room)}:{type:'pong',t:d.t,frame:frame+fraction()});return;}
    if(d.type==='sping'){send(ws,{type:'spong',t:d.t,frame:ws.room?roomTime(ws.room):null});return;}
-   if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
+   if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
+   if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
    if(d.type==='leave'){ws.intentionalLeave=true;ws.close(1000,'Left room');return;}
    if(d.type==='latencyReply'){
     // A reply counts only for a server-issued single-use nonce on this socket.
