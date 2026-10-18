@@ -64,3 +64,10 @@
 .series-game.series-game-target{border:2px solid #d0f7a8;background:#234b3e;
  box-shadow:0 0 0 3px rgba(191,252,144,.16);scroll-margin-top:23vh}
 .series-game:focus-visible{outline:3px solid #d0f7a8;outline-offset:4px}
+
+/* Intentional, device-local poster creation for real recorded series games. */
+.series-game .series-game-poster{display:block;width:100%;min-height:44px;
+ background:#c8ecb1;border:1px solid #9cc28d;color:#19362c;
+ font-weight:850;letter-spacing:.01em}
+.series-game .series-game-poster:focus-visible{outline:3px solid #e6ffab;outline-offset:3px}
+@media print{.series-game .series-game-poster{display:none!important}}
