@@ -97,6 +97,7 @@
  const csv=button('↓ Games CSV',downloadCSV),calendar=button('↓ Calendar ICS',downloadCalendar);
  const scorecard=button('↓ Share scorecard SVG',downloadScorecard);
  const shareText=button('Copy series summary',copySummary);
+ scorecard.className='series-share-action';shareText.className='series-share-action';
  const remove=button('Delete series',deleteSeries);
  const file=text('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
  tools.append(choose,createToggle,backup,restore,csv,calendar,scorecard,shareText,remove,file);
@@ -162,8 +163,11 @@
  }
  function downloadCalendar(){
   const v=current();if(!v)return;
-  const rows=v.games.filter(x=>x.kickoff!==null);
-  if(!rows.length)return inform('Set at least one kickoff before exporting a calendar.');
+  // Once a series is decided, future unplayed games do not exist as fixtures.
+  // Only previously recorded games may remain on the exported calendar.
+  const state=statusFor(v);
+  const rows=v.games.filter((x,i)=>x.kickoff!==null&&(!state.winner||i<state.recorded));
+  if(!rows.length)return inform('No required games have a saved kickoff. A decided series never exports unnecessary future fixtures.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const stamp=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
@@ -211,7 +215,7 @@
   const v=current();if(!v||!healthy)return;
   try{
    if(!navigator.clipboard?.writeText)throw Error('Clipboard access is unavailable in this browser.');
-   await navigator.clipboard.writeText(shareLines(v,statusFor(v)).join('\\n'));
+   await navigator.clipboard.writeText(shareLines(v,statusFor(v)).join('\n'));
    inform('Series summary copied. Paste it wherever you choose; nothing was uploaded.');
   }catch(e){inform('Copy unavailable: '+e.message+' Use the SVG or CSV export instead.');}
  }
@@ -226,7 +230,7 @@
    const label=(x,y,value,size=25,fill='#e7f9ef',weight=600)=>
     '<text x="'+x+'" y="'+y+'" font-family="system-ui, sans-serif" font-size="'+size+
     '" font-weight="'+weight+'" fill="'+fill+'">'+esc(value)+'</text>';
-   const height=364+v.games.length*74;
+   const height=414+v.games.length*74;
    let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="'+height+
     '" viewBox="0 0 1000 '+height+'" role="img" aria-labelledby="series-title series-desc">'+
     '<title id="series-title">'+esc(v.name)+' — local private best-of scorecard</title>'+
