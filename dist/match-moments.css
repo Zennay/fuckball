@@ -36,3 +36,26 @@
  outline:3px solid #dcffad;outline-offset:3px}
 @media(max-width:640px){.moment-dialog{width:98vw;max-width:98vw}.moment-tools button{flex:1 1 140px}}
 @media(prefers-reduced-motion:reduce){.moment-dialog *{animation:none!important;transition:none!important}}
+
+/* Private Moments Library: pinned photos, quick search, full-size inspection. */
+.moment-tools .moment-filter-label{display:grid;gap:5px;font-size:11px;color:#d4e7da;min-width:140px}
+.moment-tools :is(input,select){min-height:42px;max-width:100%;border:1px solid #7c9a8e;background:#122c33;color:#edf6e8;border-radius:8px;padding:8px 12px}
+.moment-card-favorite{border-color:#c5e69c;box-shadow:inset 0 0 0 1px #9fc684}
+.moment-preview{border:0;background:transparent;cursor:zoom-in;width:100%;padding:0;border-radius:7px}
+.moment-preview img{display:block}
+.moment-card-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.moment-card-actions button{min-width:0;overflow-wrap:anywhere;font-size:11px}
+.moment-view-dialog{border:1px solid #7c988d;border-radius:16px;background:#142931;color:#edf8e6;padding:18px;width:min(1200px,95vw);max-height:95dvh}
+.moment-view-dialog::backdrop,.moment-edit-dialog::backdrop{background:#060e11e8}
+.moment-view-dialog img{max-width:100%;max-height:75dvh;display:block;margin:14px auto;object-fit:contain}
+.moment-view-dialog button,.moment-edit-actions button{border:1px solid #77988c;background:#345447;color:#f5f9ed;padding:11px 17px;border-radius:8px}
+.moment-view-dialog p{font-size:13px;overflow-wrap:anywhere;color:#c5d9cb}
+.moment-edit-dialog{width:min(440px,94vw);border-radius:14px;border:1px solid #7c988d;background:#142931;color:#f2f8e9;padding:20px}
+.moment-edit-form{display:grid;gap:16px}
+.moment-edit-form h2{font-size:23px;margin:0}
+.moment-edit-form p{font-size:12px;color:#c1d5c9;line-height:1.6}
+.moment-edit-form label{font-size:12px;display:grid;gap:8px}
+.moment-edit-form input{border:1px solid #8ca99a;border-radius:8px;padding:11px;background:#0c2029;color:#f7fbf3;max-width:100%}
+.moment-edit-actions{display:flex;justify-content:flex-end;gap:8px}
+:is(.moment-view-dialog,.moment-edit-dialog) :is(button,input):focus-visible,.moment-tools :is(input,select):focus-visible{outline:3px solid #dfffaf;outline-offset:3px}
+@media(max-width:640px){.moment-tools .moment-filter-label{flex:1 1 120px;min-width:0}.moment-card-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
