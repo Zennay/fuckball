@@ -539,6 +539,21 @@ function createServer(options={}){
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
    if(r.quickMatch&&!['in','input','chat'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
+   if(d.type==='chat'){
+    // Room-authoritative chat works with server and peer-hosted simulations;
+    // a client cannot impersonate the sender, name, room or player ID.
+    if(r.sockets.get(ws.playerId)!==ws||typeof d.text!=='string'||
+       d.text.length<1||d.text.length>140||!d.text.trim()||
+       /[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/.test(d.text))
+     throw Error('Chat message must be 1–140 printable characters.');
+    const recent=(ws.chatTimes||[]).filter(t=>now-t<10000);
+    if(recent.length>=4)throw Error('Chat is too fast. Try again shortly.');
+    recent.push(now);ws.chatTimes=recent;
+    const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Player').slice(0,25);
+    const message={type:'chat',room:r.id,from:ws.playerId,name,text:d.text.trim(),at:now};
+    for(const peer of r.sockets.values())send(peer,message);
+    return;
+   }
    if(d.type==='leave'){ws.intentionalLeave=true;ws.close(1000,'Left room');return;}
    if(d.type==='latencyReply'){
     // A reply counts only for a server-issued single-use nonce on this socket.
