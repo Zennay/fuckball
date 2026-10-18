@@ -113,13 +113,14 @@ renderer.render=function(...args){
  if(performance.now()>=spectatorUiDue){spectatorUiDue=performance.now()+250;refreshSpectatorControls();}
  return originalRender.apply(this,args);
 };
-document.addEventListener('keydown',event=>{
+// The window capture listener complements (never replaces) the game's document input listener.
+window.addEventListener('keydown',event=>{
  if(event.repeat||menuOpen||!isSpectatorCamera()||!$('joinScreen').hidden||
     $('matchView').hidden||['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName))return;
  if(event.code==='BracketLeft'||event.code==='BracketRight'){
   event.preventDefault();cycleSpectatorTarget(event.code==='BracketRight'?1:-1);
  }
-});
+},true);
 
 $('matchMenuButton').onclick=toggleMatchMenu;for(const b of Object.keys(menuPanes))$(b).onclick=()=>menuPane(menuPanes[b],b);
 $('menuHome').onclick=()=>{if(serverLink||peerConnected)disconnect();showView('home');};$('compatButton').onclick=()=>openDialog('compatDialog');
