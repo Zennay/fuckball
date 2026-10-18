@@ -329,7 +329,7 @@
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
    row.append(dom('time',date),dom('strong',f.name),
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
-   row.append(button('Design poster',()=>window.dispatchEvent(
+   row.append(f.type==='Series'?button('Open series',()=>window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}))):button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
