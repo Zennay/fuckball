@@ -72,3 +72,11 @@
 @media(max-width:580px){.room-browser-transfer{padding:12px}
  .room-browser-transfer-actions button{flex:1 1 100%}
  .room-browser-transfer-replace{flex:1 1 100%}}
+
+/* Discoverability: keep reset control visible and keyboard-accessible on mobile. */
+.room-browser-filters .room-browser-reset{min-height:43px;min-width:115px;
+ border:1px solid #8cafaa;background:#29474b;color:#e6f6db;border-radius:8px;
+ padding:9px 13px;font-weight:750;cursor:pointer}
+.room-browser-filters .room-browser-reset:hover{background:#33575a}
+.room-browser-filters .room-browser-reset:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-filters .room-browser-reset{flex:1 1 100%}}

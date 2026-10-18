@@ -95,9 +95,12 @@
  const backup=button('↓ Backup all JSON',downloadAll);
  const restore=button('↑ Restore JSON',()=>{file.value='';file.click();});
  const csv=button('↓ Games CSV',downloadCSV),calendar=button('↓ Calendar ICS',downloadCalendar);
+ const scorecard=button('↓ Share scorecard SVG',downloadScorecard);
+ const shareText=button('Copy series summary',copySummary);
+ scorecard.className='series-share-action';shareText.className='series-share-action';
  const remove=button('Delete series',deleteSeries);
  const file=text('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
- tools.append(choose,createToggle,backup,restore,csv,calendar,remove,file);
+ tools.append(choose,createToggle,backup,restore,csv,calendar,scorecard,shareText,remove,file);
  const creation=text('form',null,'series-new');creation.hidden=true;
  const name=text('input');name.required=true;name.maxLength=60;name.placeholder='Friday night finals';
  const redName=text('input');redName.required=true;redName.maxLength=35;redName.placeholder='Red Lions';
@@ -160,8 +163,10 @@
  }
  function downloadCalendar(){
   const v=current();if(!v)return;
-  const rows=v.games.filter(x=>x.kickoff!==null);
-  if(!rows.length)return inform('Set at least one kickoff before exporting a calendar.');
+  // A decided series must not export unnecessary future fixtures.
+  const state=statusFor(v);
+  const rows=v.games.filter((x,i)=>x.kickoff!==null&&(!state.winner||i<state.recorded));
+  if(!rows.length)return inform('No required games have a saved kickoff. A decided series never exports unnecessary future fixtures.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const stamp=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
@@ -184,6 +189,80 @@
   try{download(filename(v)+'-schedule.ics',lines.map(fold).join('\r\n')+'\r\n','text/calendar;charset=utf-8');
    inform(rows.length+' private kickoffs exported. Dates are provisional; no invitations were sent.');}
   catch(e){inform('Calendar export failed: '+e.message);}
+ }
+ // Explicit, portable exports: only deliberately entered series names, scores and provisional plans.
+ // No accounts, private storage IDs, online results or auto-posting are included.
+ function shareLines(v,info){
+  const lines=[v.name+' · Best of '+v.bestOf+' (private / unofficial)',
+   v.red+' '+info.red+' – '+info.blue+' '+v.blue,
+   info.winner?'Winner: '+info.winner:'First to '+info.needed+' wins · '+info.recorded+' games recorded'];
+  for(let i=0;i<v.games.length;i++){
+   const g=v.games[i],required=!info.winner||i<info.recorded;
+   let row='Game '+(i+1)+': ';
+   if(g.redScore!==null)row+=v.red+' '+g.redScore+' – '+g.blueScore+' '+v.blue;
+   else if(!required)row+='not required (series decided)';
+   else row+='not played';
+   if(g.kickoff!==null&&required)
+    row+=' · provisional '+new Date(g.kickoff).toLocaleString();
+   if(g.venue&&required)row+=' · '+g.venue;
+   lines.push(row);
+  }
+  lines.push('Local, manually entered results. Not ranked or verified. No invitation sent.');
+  return lines;
+ }
+ async function copySummary(){
+  const v=current();if(!v||!healthy)return;
+  try{
+   if(!navigator.clipboard?.writeText)throw Error('Clipboard access is unavailable in this browser.');
+   await navigator.clipboard.writeText(shareLines(v,statusFor(v)).join('\n'));
+   inform('Series summary copied. Paste it wherever you choose; nothing was uploaded.');
+  }catch(e){inform('Copy unavailable: '+e.message+' Use the SVG or CSV export instead.');}
+ }
+ function downloadScorecard(){
+  const v=current();if(!v||!healthy)return;
+  try{
+   const info=statusFor(v);
+   const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+   // Each label is shortened for the graphic, but never changes the stored result.
+   const short=(x,n)=>Array.from(x).length>n?Array.from(x).slice(0,n-1).join('')+'…':x;
+   const label=(x,y,value,size=25,fill='#e7f9ef',weight=600)=>
+    '<text x="'+x+'" y="'+y+'" font-family="system-ui, sans-serif" font-size="'+size+
+    '" font-weight="'+weight+'" fill="'+fill+'">'+esc(value)+'</text>';
+   const height=414+v.games.length*74;
+   let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="'+height+
+    '" viewBox="0 0 1000 '+height+'" role="img" aria-labelledby="series-title series-desc">'+
+    '<title id="series-title">'+esc(v.name)+' — local private best-of scorecard</title>'+
+    '<desc id="series-desc">Unverified, manually entered results and provisional game plans. Never ranked or official.</desc>'+
+    '<rect width="1000" height="'+height+'" fill="#102830"/>'+
+    '<rect width="1000" height="14" fill="#c8f49e"/>'+
+    label(52,76,'FUCKBALL  /  PRIVATE SERIES',24,'#c8f49e',800)+
+    label(52,119,short(v.name,46),33,'#f2ffeb',800)+
+    label(52,162,'BEST OF '+v.bestOf+'  ·  FIRST TO '+info.needed,21,'#afcec5',750)+
+    '<rect x="48" y="187" width="904" height="116" rx="20" fill="#214649"/>'+
+    label(76,239,short(v.red,22),30,'#ffaba5',800)+
+    label(76,280,short(v.blue,22),30,'#a7cbff',800)+
+    label(807,239,String(info.red),38,'#ffaba5',850)+
+    label(807,280,String(info.blue),38,'#a7cbff',850)+
+    label(52,344,info.winner?'WINNER · '+short(info.winner,42):
+     info.recorded+' OF '+v.bestOf+' GAMES RECORDED',23,'#d8ffb2',800);
+   for(let i=0;i<v.games.length;i++){
+    const g=v.games[i],y=364+i*74,required=!info.winner||i<info.recorded;
+    const state=g.redScore!==null?'RECORDED':required?'NOT PLAYED':'NOT REQUIRED';
+    const points=g.redScore===null?'—  :  —':g.redScore+'  :  '+g.blueScore;
+    const detail=(!required?'Series already decided':g.kickoff===null?'No kickoff set':
+     'Provisional · '+new Date(g.kickoff).toLocaleString()+
+      (g.venue?' · '+g.venue:''));
+    svg+='<rect x="48" y="'+y+'" width="904" height="65" rx="13" fill="#193942"/>'+
+     label(68,y+28,'GAME '+(i+1),21,'#d2f2d9',800)+
+     label(243,y+28,points,27,'#fcfff7',800)+
+     label(445,y+28,state,19,g.redScore!==null?'#c8f49e':'#f2ddab',750)+
+     label(68,y+53,short(detail,95),15,'#bfd1cf',450);
+   }
+   svg+=label(52,height-16,'UNOFFICIAL · DEVICE-LOCAL · NO SERVER-VERIFIED SCORES',16,'#a7c6c1',700)+'</svg>';
+   download(filename(v)+'-scorecard.svg',svg,'image/svg+xml;charset=utf-8');
+   inform('Shareable private scorecard exported as SVG; no result was uploaded or verified.');
+  }catch(e){inform('Scorecard export failed: '+e.message);}
  }
  function statusFor(v){
   const result=inspect(v),needed=Math.floor(v.bestOf/2)+1;
@@ -231,7 +310,7 @@
   choose.value=current()?.id||'';
   const v=current(),enabled=!!v&&healthy;
   backup.disabled=!healthy||!items.length;createToggle.disabled=remove.disabled=!healthy;
-  csv.disabled=calendar.disabled=!enabled;
+  csv.disabled=calendar.disabled=scorecard.disabled=shareText.disabled=!enabled;
   restore.disabled=!healthy;create.disabled=!healthy;
   note.textContent=message||(healthy?'Everything here is device-private and unverified.':
    'Unreadable original data: '+errorText);
