@@ -77,3 +77,50 @@
 .my-games-tools .games-backup-button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 @media(max-width:660px){.my-games-tools .games-backup-button{flex:1 1 145px;min-height:44px}}
 @media(prefers-reduced-motion:reduce){.my-games-tools .games-backup-button{transition:none}}
+
+/* Replay annotations are private to the local HBR2 library. */
+.replay-controls .replay-add-bookmark{
+ min-height:35px;padding:7px 12px;background:#283d35;
+ border:1px solid #a4c778;border-radius:7px;color:#e4ffbe;
+ font-size:11px;font-weight:750;white-space:nowrap;
+}
+.replay-add-bookmark[hidden],.replay-bookmarks[hidden]{display:none!important}
+.replay-add-bookmark:disabled{opacity:.5;cursor:not-allowed}
+.replay-bookmarks:not([hidden]){
+ display:flex;align-items:center;flex-basis:100%;gap:8px;max-width:100%;
+ overflow-x:auto;scrollbar-width:thin;padding:6px 2px;
+}
+.replay-bookmarks>strong{
+ font-size:10px;color:#e1f0d2;text-transform:uppercase;white-space:nowrap;
+}
+.replay-bookmark{display:inline-flex;align-items:stretch;flex:0 0 auto;gap:1px}
+.replay-bookmark .replay-moment{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.replay-remove-bookmark{
+ min-width:32px;border:1px solid #81575b;border-radius:5px;
+ background:#3a292d;color:#ffd1d1;font-size:20px;cursor:pointer;
+}
+.replay-controls button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+.replay-bookmark-dialog{
+ width:min(470px,94vw);max-width:94vw;border-radius:12px;
+ background:#152730;border:1px solid #75968a;color:#f2f6e9;
+ box-shadow:0 22px 80px #0009;
+}
+.replay-bookmark-dialog::backdrop{background:#06151cbd}
+.replay-bookmark-form{display:grid;gap:17px;padding:24px}
+.replay-bookmark-form h2{margin:0;font-size:24px}
+.replay-bookmark-form p{margin:0;color:#b9cac0}
+.replay-bookmark-form label{display:grid;gap:8px;font-size:13px;color:#d3ebd4}
+.replay-bookmark-form input{
+ font:inherit;width:100%;max-width:100%;min-height:43px;
+ padding:9px 12px;border:1px solid #82958a;background:#101e24;color:#fff;border-radius:7px;
+}
+.replay-bookmark-actions{display:flex;justify-content:flex-end;gap:10px}
+.replay-bookmark-actions button{padding:10px 16px;border-radius:7px}
+.replay-bookmark-dialog button:focus-visible,.replay-bookmark-dialog input:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:3px;
+}
+@media(max-width:660px){
+ .replay-controls .replay-add-bookmark{order:2}
+ .replay-bookmarks:not([hidden]){order:3}
+ .replay-bookmark .replay-moment{max-width:160px}
+}

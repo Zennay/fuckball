@@ -98,19 +98,43 @@ const ReplayLibrary=(()=>{
   return updateMeta(id,item=>({...item,name}));
  }
  function setFavorite(id,value){return updateMeta(id,item=>({...item,favorite:value===true}));}
+ function normalizeBookmarks(raw,frames){
+  if(raw===undefined)return[];
+  if(!Array.isArray(raw)||raw.length>30)throw Error('A replay can have at most 30 bookmarks.');
+  const limit=Number.isSafeInteger(frames)&&frames>0?frames:60*60*8*60;
+  const seen=new Set();
+  return raw.map(entry=>{
+   if(!entry||typeof entry!=='object'||!Number.isSafeInteger(entry.frameNo)||
+    entry.frameNo<0||entry.frameNo>limit||typeof entry.label!=='string'||
+    !entry.label.trim()||entry.label.trim().length>48||/[\x00-\x1f]/.test(entry.label)||
+    seen.has(entry.frameNo))throw Error('Replay bookmark is invalid.');
+   seen.add(entry.frameNo);
+   return{frameNo:entry.frameNo,label:entry.label.trim()};
+  }).sort((a,b)=>a.frameNo-b.frameNo);
+ }
+ function addBookmark(id,frameNo,label){
+  return updateMeta(id,item=>({...item,bookmarks:normalizeBookmarks([
+   ...(item.bookmarks||[]),{frameNo,label}],item.frames)}));
+ }
+ function removeBookmark(id,frameNo){
+  return updateMeta(id,item=>({...item,bookmarks:normalizeBookmarks(
+   (item.bookmarks||[]).filter(b=>b.frameNo!==frameNo),item.frames)}));
+ }
  // Only portable user-owned archives may restore local display metadata.
  // Never import account IDs, server results or any claim of verified rankings.
  function restoreDetails(id,details){
   if(!details||typeof details.favorite!=='boolean'||!Number.isSafeInteger(details.createdAt)||
    details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
-  return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite}));
+  return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite,
+   bookmarks:normalizeBookmarks(details.bookmarks,item.frames)}));
  }
- return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails};
+ return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails,
+  normalizeBookmarks,addBookmark,removeBookmark};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
 gamesSort.add(new Option('Favorites first','favorites'));
-let favoritesOnly=false;
+let favoritesOnly=false,activeLocalReplayId=null;
 const favoritesToggle=document.createElement('button');
 favoritesToggle.type='button';favoritesToggle.className='games-favorites-toggle';
 favoritesToggle.setAttribute('aria-pressed','false');
@@ -175,7 +199,7 @@ async function renderMyGames(){
    const detail=document.createElement('div');detail.className='game-entry-info';
    const title=document.createElement('strong');title.textContent=item.name;
    const metadata=document.createElement('span');
-   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · LOCAL';
+   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · LOCAL';
    detail.append(title,metadata);
    const controls=document.createElement('div');controls.className='game-entry-actions';
    const star=makeGameButton(item.favorite===true?'★ Saved':'☆ Favorite',
@@ -186,7 +210,8 @@ async function renderMyGames(){
    controls.append(
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
-     loadReplay(bytes,item.name);gamesMessage('');
+     loadReplay(bytes,item.name);activeLocalReplayId=item.id;
+     if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();gamesMessage('');
     }),
     star,
     makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
