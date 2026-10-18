@@ -1,0 +1,37 @@
+/* Stadium Locker: device-owned HaxBall stadiums, never automatic room writes. */
+.stadium-locker{grid-column:1/-1;display:grid;gap:12px;margin:12px 0 20px;
+ padding:clamp(13px,2vw,19px);border:1px solid #659082;
+ border-radius:13px;background:linear-gradient(135deg,#1a3739,#192d35);min-width:0}
+.stadium-locker h3{font-size:17px;letter-spacing:.09em;margin:0;color:#e5f9ba}
+.stadium-locker>p{font-size:12px;color:#d1e3d7;line-height:1.6;margin:0}
+.stadium-locker-top{display:flex;flex-wrap:wrap;gap:9px;align-items:end}
+.stadium-locker-top label{display:grid;flex:2 1 180px;gap:6px;
+ font-size:12px;color:#e2eddc}
+.stadium-locker-top input{min-height:44px;min-width:0;width:100%;box-sizing:border-box;
+ border:1px solid #789c8f;border-radius:8px;background:#122c33;
+ color:#f6ffef;padding:9px 12px;font-size:13px}
+.stadium-locker :is(button){background:#284a42;border:1px solid #85a898;
+ border-radius:9px;padding:9px 12px;color:#f5ffe8;font-size:12px;
+ font-weight:800;min-height:44px;cursor:pointer}
+.stadium-locker :is(button):hover:not(:disabled){background:#376456}
+.stadium-locker :is(button):disabled{opacity:.55;cursor:not-allowed}
+.stadium-locker-top>button{flex:1 1 155px}
+.stadium-locker-actions{display:flex;flex-wrap:wrap;gap:9px}
+.stadium-locker-actions button{flex:1 1 160px}
+.stadium-locker .stadium-locker-status{min-height:22px;color:#e1f5bb;
+ font-size:12px;line-height:1.5;margin:0}
+.stadium-locker .stadium-locker-summary{font-size:11px;color:#b9d3bf;
+ letter-spacing:.02em}
+.stadium-locker-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:11px}
+.stadium-locker-card{padding:14px;min-width:0;display:grid;align-content:start;gap:10px;
+ border:1px solid #678f84;border-radius:10px;background:#254447}
+.stadium-locker-card strong{font-size:15px;color:#d9f6ad;overflow-wrap:anywhere}
+.stadium-locker-card small{font-size:11px;line-height:1.5;color:#d4e3df;
+ overflow-wrap:anywhere}
+.stadium-locker-card-actions{display:flex;flex-wrap:wrap;gap:7px}
+.stadium-locker-card-actions button{flex:1 1 100px;padding:8px 9px}
+.stadium-locker-card-actions .stadium-locker-delete{background:#523334;
+ border-color:#a97e7e;color:#ffe5db}
+.stadium-locker :is(button,input):focus-visible{outline:3px solid #e1ffb1;outline-offset:3px}
+@media(max-width:570px){.stadium-locker{padding:12px}
+ .stadium-locker-top>button,.stadium-locker-actions button{flex:1 1 100%}}
