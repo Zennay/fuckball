@@ -22,6 +22,7 @@ function createServer(options={}){
   const now=Date.now();
   for(const [user,list]of friendInvites){
    const keep=list.filter(i=>i.expiresAt>now&&rooms.has(i.room)&&!rooms.get(i.room).locked&&
+    (!rooms.get(i.room).clubId||clubs?.membership(user)?.id===rooms.get(i.room).clubId)&&
     social?.areFriends(i.from,user)&&[...rooms.get(i.room).sockets.values()].some(ws=>ws.account?.toLowerCase()===i.from&&accounts.user(ws.accountToken)?.toLowerCase()===i.from));
    if(keep.length)friendInvites.set(user,keep);else friendInvites.delete(user);
   }
@@ -106,6 +107,15 @@ function createServer(options={}){
     if(!data||typeof data!=='object'||Array.isArray(data)||
       typeof data.action!=='string')throw Error('Invalid Club request.');
     clubs.action(user,data.action,data,target=>accounts.reserved(target));
+    // Club removal, leaving or disbanding immediately revokes active access
+    // to Club-only rooms as well as future join / reconnect attempts.
+    for(const room of [...rooms.values()])if(room.clubId)
+     for(const peer of [...room.sockets.values()]){
+      const member=peer.account&&accounts.user(peer.accountToken)?.toLowerCase()===peer.account.toLowerCase()?
+       clubs.membership(peer.account):null;
+      if(member?.id!==room.clubId)
+       removePlayer(peer,room,'Club membership changed. Club-only access has ended.');
+     }
     return json(200,clubPayload());
    }catch(e){return json(400,{error:e?.message||'Club change unavailable.'});}
   });
