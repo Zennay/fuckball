@@ -18,7 +18,7 @@
  const install=document.createElement('button');install.type='button';
  install.className='primary';install.textContent='↓ Install Fuckball';install.hidden=true;
  const local=document.createElement('button');local.type='button';
- local.textContent='▶ Practice 1v1';local.onclick=()=>document.getElementById('quickMatch')?.click();
+ local.textContent='▶ Practice 1v1';// The human Quick Match card opens the online queue. Offline practice must\n // always use the dedicated local AI path; never silently enqueue humans.\n local.onclick=()=>document.getElementById('quickPractice')?.click();
  const squad=document.createElement('button');squad.type='button';
  squad.textContent='Play local 4v4';squad.onclick=()=>document.getElementById('quickSquad')?.click();
  actions.append(install,local,squad);
