@@ -4,7 +4,7 @@
   const host=document.getElementById('homeView');
   if (!host) return;
   const FIXTURES_KEY='fuckball.local-tournaments.v1';
-  const DRAFTS_KEY='fuckball.matchday-posters.v1';
+  const DRAFTS_KEY='fuckball.custom-poster-drafts.v1';
   const MAX_DRAFTS=8, MAX_STORE=96*1024;
   const make=(tag,text,cls)=>{
     const el=document.createElement(tag);
@@ -53,7 +53,7 @@
   const panel=make('section',null,'matchday-poster-studio');
   panel.setAttribute('aria-label','Private Matchday Poster Studio');
   const details=make('details');
-  const summary=make('summary','▣ MATCHDAY POSTER STUDIO · OPEN');
+  const summary=make('summary','▣ CUSTOM POSTER DESIGNER · OPEN');
   const body=make('div',null,'poster-studio-body');
   const intro=make('p','Design a match poster from your own local fixtures, or create one from scratch. Posters and manually entered results are unofficial. Nothing is sent to a server.');
   const columns=make('div',null,'poster-studio-grid');
@@ -102,7 +102,10 @@
   body.append(intro,columns,saved);
   details.append(summary,body);panel.append(details);
   const cards=host.querySelector('.mode-cards');
-  if(cards)cards.insertAdjacentElement('afterend',panel);else host.append(panel);
+  const parent=host.querySelector('.matchday-posters .matchday-posters-body');
+  if(parent)parent.append(panel);
+  else if(cards)cards.insertAdjacentElement('afterend',panel);
+  else host.append(panel);
   function notify(message){status.textContent=message;}
   function drawFit(ctx,value,x,y,maxWidth,size,bold,color){
     ctx.fillStyle=color;ctx.font=(bold?'900 ':'600 ')+size+'px system-ui, sans-serif';
@@ -155,7 +158,7 @@
       date.toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}):'KICKOFF TBC';
     drawFit(ctx,dateText,68,577,635,27,true,t.text);
     drawFit(ctx,s.venue||'VENUE TBC',68,617,700,19,false,t.muted);
-    drawFit(ctx,s.tagline||'PLAY FOR THE LOVE OF FOOTBALL.',1160,610,390,18,false,t.accent);
+    drawFit(ctx,s.tagline||'PLAY FOR THE LOVE OF FOOTBALL.',745,610,385,18,false,t.accent);
     // Accessible alternative is plain text: no machine-verified claims.
     alternative.textContent=readable({...s,home:s.home||'HOME',away:s.away||'AWAY'});
     if(!ok)notify('Enter two different team names. Result mode needs whole scores from 0 to 99.');
