@@ -9,14 +9,21 @@ const norm=name=>{
  if(typeof name!=='string'||!NAME.test(name.toLowerCase()))throw Error('Invalid player account.');
  return name.toLowerCase();
 };
-function createParties({social,exists,clock=()=>Date.now()}){
+function createParties({social,exists,clubForUser=()=>null,clock=()=>Date.now()}){
+ // Invites may travel through an accepted friendship OR a shared current Club.
+ // A social block always denies both routes, even for existing Club members.
+ const eligibleTeammates=(a,b)=>{
+  if(!social.canShareMatch(a,b))return false;
+  const clubA=clubForUser(a);
+  return social.areFriends(a,b)||!!clubA&&clubA===clubForUser(b);
+ };
  const parties=new Map(),members=new Map(),invites=new Map();
  const partyOf=user=>parties.get(members.get(norm(user)))||null;
  function purge(){
   const now=clock();
   for(const [name,list]of invites){
    const valid=list.filter(i=>i.expiresAt>now&&parties.has(i.id)&&
-    parties.get(i.id).leader===i.leader&&social.areFriends(i.leader,name));
+    parties.get(i.id).leader===i.leader&&eligibleTeammates(i.leader,name));
    if(valid.length)invites.set(name,valid);else invites.delete(name);
   }
   for(const p of parties.values())if(p.launchMode&&p.launchExpires<=now){
@@ -46,8 +53,8 @@ function createParties({social,exists,clock=()=>Date.now()}){
    if(!p||p.leader!==user)throw Error('Only the party leader can invite friends.');
    if(p.launchMode)throw Error('Cancel the party search before inviting.');
    if(p.users.length>=MAX)throw Error('Party is full.');
-   if(target===user||!exists(target)||!social.areFriends(user,target))
-    throw Error('Only an accepted friend with an account can be invited.');
+   if(target===user||!exists(target)||!eligibleTeammates(user,target))
+    throw Error('Invite a mutual friend or another member of your Club. Blocked accounts cannot be invited.');
    if(partyOf(target))throw Error('Friend already belongs to a party.');
    const current=(invites.get(target)||[]).filter(i=>i.id!==p.id);
    if(current.length>=12)throw Error('Friend has too many invitations.');
@@ -62,7 +69,7 @@ function createParties({social,exists,clock=()=>Date.now()}){
     if(partyOf(user))throw Error('Leave your current party first.');
     const p=parties.get(data.id);
     if(!p||p.leader!==available.leader||p.users.length>=MAX||p.launchMode||
-      !social.areFriends(p.leader,user))throw Error('This party is no longer accepting players.');
+      !eligibleTeammates(p.leader,user))throw Error('This party is no longer accepting players.');
     p.users.push(user);p.ready.clear();members.set(user,p.id);
    }
   }else{
