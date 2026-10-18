@@ -70,7 +70,9 @@
   const kickoff=input('datetime-local');
   const theme=make('select');for(const [id,name]of [['lime','Lime / dark'],['ice','Ice blue'],['ember','Ember'],['mono','Monochrome']])
     theme.add(new Option(name,id));
-  const format=make('select');format.add(new Option('Upcoming fixture','fixture'),new Option('Self-reported result','result'));
+  const format=make('select');
+  format.add(new Option('Upcoming fixture','fixture'));
+  format.add(new Option('Self-reported result','result'));
   const scoreRed=input('number'),scoreBlue=input('number');
   for(const score of [scoreRed,scoreBlue]){score.min='0';score.max='99';score.step='1';score.value='0';}
   const scoreRow=make('div',null,'poster-studio-scores');scoreRow.hidden=true;
