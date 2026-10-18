@@ -187,6 +187,9 @@
      document.getElementById('joinScreen')?.hidden===false){
    history.textContent='Finish or cancel the active human matchmaking or room invitation first.';return;
   }
+  if((started||replay)&&!window.confirm('Start Goal Rush in a fresh local 1v1 match? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   history.textContent='Current local game or replay kept. Goal Rush did not start.';return;
+  }
   if(session)quit();
   try{
    document.getElementById('quickPractice').click();
