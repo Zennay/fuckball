@@ -4,6 +4,7 @@
  const home=document.getElementById('homeView');if(!home)return;
  const LEAGUES='fuckball.local-tournaments.v1';
  const CUPS='fuckball.private-knockout-cups.v1';
+ const SERIES='fuckball.private-series.v1';
  const dom=(tag,value,cls)=>{
   const e=document.createElement(tag);if(value!==undefined&&value!==null)e.textContent=String(value);
   if(cls)e.className=cls;return e;
@@ -124,6 +125,40 @@
    fixtures:cupFixtures,
    leader:winner===null?null:raw.teams[winner],upcoming:[]};
  }
+ function series(raw){
+  if(!raw||raw.version!==1||typeof raw.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(raw.id)||
+   !cleanName(raw.name)||!cleanName(raw.red)||!cleanName(raw.blue)||
+   raw.red.length>35||raw.blue.length>35||raw.red.toLowerCase()===raw.blue.toLowerCase()||
+   ![3,5,7].includes(raw.bestOf)||!Array.isArray(raw.games)||raw.games.length!==raw.bestOf)
+   throw Error('Invalid private best-of series.');
+  const needed=Math.floor(raw.bestOf/2)+1;
+  let red=0,blue=0,recorded=0,seenEmpty=false,decided=false;
+  const fixtures=[];
+  for(let i=0;i<raw.bestOf;i++){
+   const g=raw.games[i],time=g?.kickoff===undefined?null:g.kickoff,venue=g?.venue??'';
+   if(!g||g.id!=='g'+(i+1)||!safeScore(g.redScore)||!safeScore(g.blueScore)||
+     (g.redScore===null)!==(g.blueScore===null)||
+     (g.redScore!==null&&g.redScore===g.blueScore)||!safeTime(time)||
+     typeof venue!=='string'||venue.length>60||/[\u0000-\u001f\u007f-\u009f]/.test(venue))
+    throw Error('Invalid private best-of game.');
+   if(g.redScore===null)seenEmpty=true;
+   else{
+    if(seenEmpty||decided)throw Error('Private best-of result order is invalid.');
+    recorded++;if(g.redScore>g.blueScore)red++;else blue++;
+    if(red>=needed||blue>=needed)decided=true;
+   }
+   fixtures.push({type:'Series',seriesId:raw.id,gameId:g.id,round:i+1,
+    competition:raw.name,home:raw.red,away:raw.blue,
+    homeScore:g.redScore,awayScore:g.blueScore,time,venue,unlocked:!decided&&i===recorded,
+    active:!decided,uid:raw.id+'-'+g.id});
+  }
+  const winner=red>=needed?raw.red:blue>=needed?raw.blue:null;
+  const upcoming=winner?[]:fixtures.filter(f=>f.homeScore===null&&f.time!==null&&f.time>Date.now())
+   .map(f=>({name:f.home+' vs '+f.away+' · Game '+f.round,time:f.time,
+    venue:f.venue,competition:raw.name,uid:f.uid,type:'Series',seriesId:raw.id}));
+  return {type:'Series',id:raw.id,name:raw.name,total:raw.bestOf,played:recorded,
+   leader:winner||(red>blue?raw.red:blue>red?raw.blue:null),winner,fixtures,upcoming};
+ }
  const section=dom('section',null,'matchday-hub');
  section.setAttribute('aria-label','Private Matchday Hub');
  const details=dom('details',null,'matchday-disclosure');
@@ -131,7 +166,7 @@
  const content=dom('div',null,'matchday-body');
  const header=dom('div',null,'matchday-header');
  const lead=dom('div');
- lead.append(dom('h2','YOUR MATCHDAY.'),dom('p','One private overview of your local leagues, knockouts and planned friendlies. All results are self-entered and not verified by game servers.'));
+ lead.append(dom('h2','YOUR MATCHDAY.'),dom('p','One private overview of your local leagues, knockouts, best-of series and planned friendlies. All results are self-entered and not verified by game servers.'));
  const buttons=dom('div',null,'matchday-actions');
  const go=(selector)=>{
   const target=home.querySelector(selector);if(!target)return;
@@ -152,15 +187,15 @@
  const totals=dom('div',null,'matchday-totals');
  const competitionList=dom('div',null,'matchday-competitions');
  const control=dom('section',null,'matchday-control');
- control.setAttribute('aria-label','Private league and knockout fixture control center');
+ control.setAttribute('aria-label','Private league, knockout and best-of-series control center');
  const controlHeader=dom('div',null,'matchday-control-header');
  const controlIntro=dom('div');
  controlIntro.append(dom('h3','MATCHDAY CONTROL CENTER'),
-  dom('p','Find private league and knockout fixtures, enter self-reported results in the existing competition editors, or schedule league kickoffs. Nothing here records official server outcomes.'));
+  dom('p','Find league, cup and best-of-series games and open their existing private editors. Only the original editors save scores and kickoffs. Nothing here records official server outcomes.'));
  const controlTools=dom('div',null,'matchday-control-tools');
  const search=dom('input');search.type='search';search.maxLength=90;
  search.placeholder='Search league or team…';
- search.setAttribute('aria-label','Search private league fixtures');
+ search.setAttribute('aria-label','Search all private fixtures and series games');
  const display=dom('select');display.setAttribute('aria-label','Filter private league fixtures');
  for(const [value,label]of [
    ['pending','Still to play'],['ready','Ready for result'],
@@ -181,6 +216,12 @@
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
  let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
  const openFixture=(f,field)=>{
+   if(f.type==='Series'){
+     window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}));
+     controlStatus.textContent='Opened '+f.competition+' · Game '+f.round+
+      ' in its original series editor. Scores are stored only through that editor.';
+     return;
+   }
    if(f.type==='Knockout')
      window.dispatchEvent(new CustomEvent('fuckball:open-private-cup-fixture',{
        detail:{cupId:f.cupId,matchId:f.matchId}
@@ -196,10 +237,10 @@
    const matching=fixtureCards.filter(f=>
      (!term||[f.home,f.away,f.competition].some(x=>x.toLocaleLowerCase().includes(term)))&&
      (mode==='all'||
-      (mode==='pending'&&f.homeScore===null)||
-      (mode==='ready'&&f.homeScore===null&&f.unlocked!==false)||
-      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null)||
-      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now)||
+      (mode==='pending'&&f.homeScore===null&&f.active!==false)||
+      (mode==='ready'&&f.homeScore===null&&f.unlocked!==false&&f.active!==false)||
+      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null&&f.active!==false)||
+      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
       (mode==='completed'&&f.homeScore!==null))
    );
    const ordered=matching.sort((a,b)=>{
@@ -220,7 +261,7 @@
        f.homeScore+' – '+f.awayScore+
        (f.tiebreak?' · '+(f.tiebreak==='home'?f.home:f.away)+' won tiebreak':'')+
        ' · self-reported';
-     info.append(dom('small',f.competition+' · '+f.type+' · Round '+f.round),
+     info.append(dom('small',f.competition+' · '+f.type+' · '+(f.type==='Series'?'Game':'Round')+' '+f.round),
        dom('strong',f.home+' vs '+f.away),
        dom('span',when+' · '+result+(f.venue?' · '+f.venue:'')));
      const actions=dom('div',null,'matchday-control-row-actions');
@@ -228,14 +269,14 @@
        f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')));
      if(f.type!=='Knockout'){
        actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
-       actions.append(button('Poster',()=>window.dispatchEvent(
+       if(f.type!=='Series')actions.append(button('Poster',()=>window.dispatchEvent(
          new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
      }
      card.append(info,actions);controlRows.append(card);
    }
    if(!visible.length)controlRows.append(dom('p',
      fixtureCards.length?'No private fixtures match your search and filter.':
-     'No local league or cup fixtures yet. Create a tournament or knockout cup first.'));
+     'No local league, cup or series fixtures yet. Create a private competition first.'));
    controlStatus.textContent=matching.length+' of '+fixtureCards.length+
      ' private competition fixtures shown'+(matching.length>limit?' · first '+limit+' displayed; refine your search':'')+
      '. Scores here are never server-verified.';
@@ -243,13 +284,14 @@
  search.addEventListener('input',renderControl);
  display.addEventListener('change',renderControl);
  function render(){
-  let leagueData=[],cupData=[];failures=0;
+  let leagueData=[],cupData=[],seriesData=[];failures=0;
   try{leagueData=read(LEAGUES,128*1024,8).map(league);}catch{failures++;}
   try{cupData=read(CUPS,96*1024,8).map(cup);}catch{failures++;}
-  competitions=[...leagueData,...cupData].sort((a,b)=>a.name.localeCompare(b.name));
-  fixtureCards=[...leagueData,...cupData].flatMap(c=>c.fixtures);
+   try{seriesData=read(SERIES,128*1024,12).map(series);}catch{failures++;}
+  competitions=[...leagueData,...cupData,...seriesData].sort((a,b)=>a.name.localeCompare(b.name));
+  fixtureCards=[...leagueData,...cupData,...seriesData].flatMap(c=>c.fixtures);
   renderControl();
-  allUpcoming=leagueData.flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
+  allUpcoming=[...leagueData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
   const finished=competitions.reduce((n,c)=>n+c.played,0);
@@ -257,6 +299,7 @@
    ['Competitions',competitions.length],
    ['Leagues',leagueData.length],
    ['Knockouts',cupData.length],
+    ['Best-of series',seriesData.length],
    ['Manual results',finished],
    ['Future kickoffs',allUpcoming.length]
   ];
@@ -266,26 +309,27 @@
   }
   competitionList.replaceChildren(dom('h3','SAVED COMPETITIONS'));
   if(!competitions.length)
-   competitionList.append(dom('p','No readable private competitions yet. Create a league or knockout cup below.'));
+   competitionList.append(dom('p','No readable private competitions yet. Create a league, cup or best-of series below.'));
   for(const c of competitions){
    const card=dom('article',null,'matchday-competition');
    const body=dom('div');
    body.append(dom('small',c.type.toUpperCase()),dom('strong',c.name),
     dom('p',c.played+' of '+c.total+' friendly results recorded'+
-      (c.leader?' · '+(c.type==='Knockout'?'Winner':'Current leader')+': '+c.leader:'')));
+      (c.leader?' · '+(c.type==='Knockout'||c.winner?'Winner':'Current leader')+': '+c.leader:'')));
    const open=button('Open '+c.type,()=>window.dispatchEvent(
+     c.type==='Series'?new CustomEvent('fuckball:open-private-series',{detail:{id:c.id}}):
      new CustomEvent('fuckball:open-private-competition',{detail:{type:c.type,id:c.id}})));
    card.append(body,open);competitionList.append(card);
   }
   upcoming.replaceChildren(dom('h3','UPCOMING PRIVATE FIXTURES'));
   if(!upcomingMatches.length)
-   upcoming.append(dom('p','No future kickoff times set in your local leagues. Add a time in the fixture calendar below.'));
+   upcoming.append(dom('p','No future kickoff times in readable leagues or active series. Schedule a private game first.'));
   for(const f of upcomingMatches){
    const row=dom('article',null,'matchday-upcoming-item');
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
    row.append(dom('time',date),dom('strong',f.name),
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
-   row.append(button('Design poster',()=>window.dispatchEvent(
+   row.append(f.type==='Series'?button('Open series',()=>window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}))):button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
@@ -310,7 +354,7 @@
   note.textContent='Local, unofficial competition overview saved to CSV.';
  }
  function exportCalendar(){
-  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a private league first.');
+  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league or active series first.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const date=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
@@ -343,7 +387,7 @@
  details.addEventListener('toggle',()=>{if(details.open)render();});
  document.getElementById('tabHome')?.addEventListener('click',render);
  window.addEventListener('fuckball:private-competition-change',render);
- window.addEventListener('storage',event=>{if(event.key===LEAGUES||event.key===CUPS)render();});
+ window.addEventListener('storage',event=>{if([LEAGUES,CUPS,SERIES].includes(event.key))render();});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&details.open)render();});
  render();
 })();
