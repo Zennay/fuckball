@@ -23,6 +23,7 @@
   {id:'league',label:'Round-robin Tournament Desk',group:'Competitions',desc:'Private team schedules, standings and results',view:'home',selector:'.tournament-desk',terms:'league table fixtures football'},
   {id:'knockout',label:'Knockout Cup Builder',group:'Competitions',desc:'Private elimination bracket and advancement',view:'home',selector:'.knockout-desk',terms:'cup elimination playoffs'},
   {id:'matchday',label:'Matchday Hub',group:'Competitions',desc:'Your local competitions and upcoming kickoffs',view:'home',selector:'.matchday-hub',terms:'calendar scoreboard planning'},
+  {id:'posters',label:'Matchday Poster Studio',group:'Competitions',desc:'Create a local friendly fixture or result PNG',view:'home',selector:'.matchday-posters',terms:'image share graphic match card fixture'},
   {id:'game-night',label:'Game Night Pack',group:'Competitions',desc:'Export and restore local competition and tactics plans',view:'home',selector:'.game-night-pack',terms:'backup restore portable'},
   {id:'formation',label:'4v4 Formation Studio',group:'Competitions',desc:'Private tactics, HBS stadium drawings and passing routes',view:'home',selector:'.formation-studio',terms:'lineup tactics coach'},
   {id:'games',label:'My Games / Replay Library',group:'Replays',desc:'Manage real locally saved HBR2 recordings',view:'games',selector:'.my-games-tools',terms:'replay record archive'},
