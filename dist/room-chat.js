@@ -28,8 +28,10 @@
   const candidates=Array.isArray(all)?all.filter(p=>
    Number.isSafeInteger(p?.id)&&p.id>0&&p.id!==networkPlayerId&&
    p.aiControlled!==true&&!botIds.has(p.id)).slice(0,64):[];
-  status.textContent=candidates.length?
-   muted.size+' muted in room '+current+' · changes are temporary.':
+  const until=serverLink?.roomControl?.chatMuteUntil||serverLink?.chatMutedUntil||0;
+  status.textContent=until>Date.now()?
+   'Your chat is muted by this room’s host until '+new Date(until).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+'. You can still play and read chat.':
+   candidates.length?muted.size+' players hidden on this device · changes are temporary.':
    'Other players will appear here after you join their room.';
   for(const player of candidates){
    const row=document.createElement('div');row.className='native-chat-player';
