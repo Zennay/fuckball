@@ -18,6 +18,15 @@
   const validId=s=>typeof s==='string'&&/^[a-f0-9-]{16,50}$/i.test(s);
   const validTimestamp=s=>Number.isSafeInteger(s)&&s>=1600000000000&&s<=Date.now()+86400000;
   const validScore=s=>s===null||(Number.isSafeInteger(s)&&s>=0&&s<=99);
+  const validKickoff=n=>n===null||(Number.isSafeInteger(n)&&n>=1577836800000&&n<=4102444800000);
+  const validVenue=s=>typeof s==='string'&&s.length<=60&&s===s.trim()&&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+  const localDate=n=>{
+    if(n===null)return '';
+    const d=new Date(n),pad=x=>String(x).padStart(2,'0');
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+
+      pad(d.getHours())+':'+pad(d.getMinutes());
+  };
   const uid=()=>crypto.randomUUID?crypto.randomUUID():
     Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
   const roundsFor=n=>Math.log2(n);
@@ -61,6 +70,10 @@
     if(source.matches.length!==expected.length)throw Error('Incomplete knockout bracket.');
     const matches=expected.map((m,i)=>{
       const x=source.matches[i];
+      const kickoff=x?.kickoff===undefined?null:x.kickoff;
+      const venue=x?.venue===undefined?'':x.venue;
+      if(!validKickoff(kickoff)||!validVenue(venue))
+        throw Error('Invalid private cup kickoff or venue.');
       if(!x||x.id!==m.id||x.round!==m.round||x.game!==m.game||
         !validScore(x.homeScore)||!validScore(x.awayScore)||
         ![null,'home','away'].includes(x.tiebreak))throw Error('Invalid fixture or score.');
@@ -68,7 +81,8 @@
       const tied=x.homeScore!==null&&x.homeScore===x.awayScore;
       if(partial||(tied&&x.tiebreak===null)||(!tied&&x.tiebreak!==null))
         throw Error('A knockout fixture needs two scores and a winner after a draw.');
-      return {...m,homeScore:x.homeScore,awayScore:x.awayScore,tiebreak:x.tiebreak};
+      return {...m,homeScore:x.homeScore,awayScore:x.awayScore,tiebreak:x.tiebreak,
+        kickoff,venue};
     });
     const safe={version:1,id:source.id,name:source.name,teams,matches,
       createdAt:source.createdAt,updatedAt:source.updatedAt};
@@ -133,11 +147,12 @@
   const add=btn('＋ New cup',()=>{setup.hidden=!setup.hidden;if(!setup.hidden)cupName.focus();});
   const exportButton=btn('↓ Save JSON',exportCup);
   const csvButton=btn('↓ Match CSV',exportMatches);
+  const calendarButton=btn('↓ Calendar ICS',exportCupCalendar);
   const printButton=btn('Print bracket',()=>{section.open=true;window.print();});
   const importFile=el('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;
   const importButton=btn('↑ Restore JSON',()=>importFile.click());
   const deleteButton=btn('Delete cup',deleteCup,'knockout-delete');
-  toolbar.append(picker,add,exportButton,csvButton,printButton,importButton,deleteButton,importFile);
+  toolbar.append(picker,add,exportButton,csvButton,calendarButton,printButton,importButton,deleteButton,importFile);
   const summary=el('div',null,'knockout-progress');
   const bracket=el('div',null,'knockout-bracket');bracket.setAttribute('aria-label','Knockout bracket');
   const notification=el('p',null,'knockout-message');notification.setAttribute('role','status');notification.setAttribute('aria-live','polite');
@@ -161,7 +176,7 @@
     picker.replaceChildren(new Option('Choose a cup…',''));
     for(const t of cups)picker.add(new Option(t.name,t.id));
     picker.value=c?.id||'';
-    for(const button of [exportButton,csvButton,printButton,deleteButton])button.disabled=!c;
+    for(const button of [exportButton,csvButton,calendarButton,printButton,deleteButton])button.disabled=!c;
     summary.replaceChildren();bracket.replaceChildren();
     notification.textContent=message||'Everything stays private to this browser. Results are manual and unverified.';
     if(!c)return;
@@ -208,6 +223,32 @@
         clear.disabled=match.homeScore===null;
         buttons.append(saveButton,clear);
         fixture.append(title,homeRow,awayRow,ties,buttons);
+        const schedule=el('details',null,'knockout-match-schedule');
+        const scheduleSummary=el('summary',match.kickoff===null?'Set private kickoff':
+          'Kickoff · '+new Date(match.kickoff).toLocaleString(undefined,{dateStyle:'short',timeStyle:'short'}));
+        const scheduleFields=el('div',null,'knockout-schedule-fields');
+        const kickoffField=el('input');kickoffField.type='datetime-local';
+        kickoffField.value=localDate(match.kickoff);
+        kickoffField.setAttribute('aria-label','Local kickoff for '+homeName+' versus '+awayName);
+        const venueField=el('input');venueField.type='text';venueField.maxLength=60;
+        venueField.value=match.venue;venueField.placeholder='Optional venue';
+        const applySchedule=btn('Save kickoff',()=>{
+          const value=kickoffField.value.trim(),place=venueField.value.trim();
+          if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
+            return info('Choose a valid private local kickoff first.');
+          const when=new Date(value).getTime();
+          if(!validKickoff(when)||localDate(when)!==value)
+            return info('Kickoff is invalid or outside the supported calendar range.');
+          try{scheduleMatch(match.id,when,place);}
+          catch(error){info(error.message||'Could not save cup kickoff.');}
+        });
+        const clearSchedule=btn('Remove kickoff',()=>{
+          try{scheduleMatch(match.id,null,'');}
+          catch(error){info(error.message||'Could not remove kickoff.');}
+        });clearSchedule.disabled=match.kickoff===null;
+        scheduleFields.append(label('Local date and time',kickoffField),
+          label('Venue',venueField),applySchedule,clearSchedule);
+        schedule.append(scheduleSummary,scheduleFields);fixture.append(schedule);
         if(people.home===null||people.away===null){
           fixture.classList.add('pending');
           fixture.append(el('small','Finish the preceding fixtures to unlock this match.'));
@@ -229,6 +270,19 @@
       cols.append(column);
     }
     bracket.append(cols);
+  }
+  function scheduleMatch(matchId,kickoff,venue){
+    if(!validKickoff(kickoff)||!validVenue(venue))
+      throw Error('Cup kickoff time or venue is invalid.');
+    const c=current();
+    if(!c||!c.matches.some(m=>m.id===matchId))
+      throw Error('This private cup fixture is no longer available.');
+    const candidate=normalize({...c,updatedAt:Math.max(Date.now(),c.createdAt),
+      matches:c.matches.map(m=>m.id===matchId?{...m,kickoff,venue}:m)});
+    save(cups.map(item=>item.id===c.id?candidate:item));
+    message=kickoff===null?'Private cup kickoff removed.':
+      'Private cup kickoff saved. No rooms were created and no invitations were sent.';
+    render();
   }
   function apply(match,homeScore,awayScore,tiebreak){
     const c=current();
@@ -303,11 +357,12 @@
   };
   function exportMatches(){
     const c=current();if(!c)return;
-    const rows=[['Round','Match','Home','Away','Home goals','Away goals','Tiebreak','Winner','Status']];
+    const rows=[['Round','Match','Home','Away','Kickoff UTC','Venue','Home goals','Away goals','Tiebreak','Winner','Status']];
     for(const m of c.matches){
       const r=resolve(c,m.round,m.game);
       rows.push([roundName(m.round,c.teams.length),m.id,
         r.home===null?'TBD':c.teams[r.home],r.away===null?'TBD':c.teams[r.away],
+        m.kickoff===null?'':new Date(m.kickoff).toISOString(),m.venue,
         m.homeScore===null?'':m.homeScore,m.awayScore===null?'':m.awayScore,
         m.tiebreak||'',r.winner===null?'':c.teams[r.winner],
         m.homeScore===null?'Pending':'Manual · unverified']);
@@ -315,6 +370,40 @@
     download(slug(c)+'-matches.csv','\uFEFF'+rows.map(r=>r.map(csvField).join(',')).join('\r\n')+'\r\n',
       'text/csv;charset=utf-8');
     info('Unofficial private cup schedule and results downloaded.');
+  }
+  function exportCupCalendar(){
+    const c=current();if(!c)return;
+    const scheduled=c.matches.filter(m=>m.kickoff!==null);
+    if(!scheduled.length)return info('Set a private kickoff on a cup match before exporting its calendar.');
+    const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;')
+      .replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+    const stamp=n=>new Date(n).toISOString().replace(/[-:]/g,'')
+      .replace(/\.\d{3}Z$/,'Z');
+    const fold=s=>{
+      let line='',column=0;
+      for(const ch of s){
+        const size=new TextEncoder().encode(ch).length;
+        if(column+size>72){line+='\r\n ';column=1;}
+        line+=ch;column+=size;
+      }
+      return line;
+    };
+    const lines=['BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
+      'PRODID:-//Fuckball//Private Knockout Cup//EN'];
+    for(const m of scheduled){
+      const r=resolve(c,m.round,m.game);
+      const home=r.home===null?'Qualifier to be decided':c.teams[r.home];
+      const away=r.away===null?'Qualifier to be decided':c.teams[r.away];
+      lines.push('BEGIN:VEVENT','UID:'+m.id+'.'+c.id+'@local.fuckball',
+        'DTSTAMP:'+stamp(Date.now()),'DTSTART:'+stamp(m.kickoff),'DURATION:PT1H',
+        'SUMMARY:'+escape(home+' vs '+away+' · '+c.name),
+        'DESCRIPTION:'+escape('Private knockout friendly. Qualifiers and results are manually recorded, not server-verified.'),
+        ...(m.venue?['LOCATION:'+escape(m.venue)]:[]),'END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    download(slug(c)+'-private-calendar.ics',lines.map(fold).join('\r\n')+'\r\n',
+      'text/calendar;charset=utf-8');
+    info(scheduled.length+' tentative private cup kickoffs saved in an ICS calendar. No invitations sent.');
   }
   importFile.onchange=async()=>{
     const file=importFile.files?.[0];importFile.value='';
