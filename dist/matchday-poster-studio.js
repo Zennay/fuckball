@@ -224,7 +224,7 @@
   }
   function readFixtures(){
     const raw=localStorage.getItem(FIXTURES_KEY);
-    if(!raw)return [];
+    if(!raw)return readSeriesFixtures();
     if(raw.length>128*1024)throw Error('League collection exceeds the safe reading limit.');
     const data=JSON.parse(raw);
     if(!Array.isArray(data)||data.length>8)throw Error('League collection is invalid.');
