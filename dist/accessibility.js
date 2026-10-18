@@ -98,3 +98,12 @@
   media?.addEventListener?.('change',()=>{if(!explicit){preferences[key]=key==='contrast'?systemContrast():systemMotion();apply();fill();}});
  }
 })();
+
+/* Bootstrap the standalone, privacy-bounded player setup passport without
+ * claiming the active Clubs owner's dist/index.html integration path. */
+(function(){
+ const script=document.createElement('script');
+ script.src=new URL('./personal-setup-passport.js',document.currentScript?.src||document.baseURI).href;
+ script.async=false;
+ document.head.append(script);
+})();
