@@ -272,8 +272,8 @@
       if(!venueValid(place))throw Error('Venue must contain at most 60 safe characters.');
       const roundOffsets=new Map(),records=[];
       for(const f of t.fixtures){
-        if(!overwrite.checked&&f.kickoff!==null)continue;
         const slot=roundOffsets.get(f.round)||0;roundOffsets.set(f.round,slot+1);
+        if(!overwrite.checked&&f.kickoff!==null)continue;
         const local=new Date(base.getTime());
         local.setDate(local.getDate()+(f.round-1)*spacing);
         local.setMinutes(local.getMinutes()+slot*between);
