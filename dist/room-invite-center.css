@@ -40,3 +40,8 @@
 .room-invite-qr-code{font:800 20px ui-monospace,monospace;letter-spacing:.12em;color:#d9f9b0;margin:0}
 .room-invite-qr>p:last-child{font-size:.78rem;line-height:1.5;color:#d0e7dc;margin:0;max-width:55ch}
 @media(max-width:570px){.room-invite-qr{padding:10px}}
+
+/* Scannable room card is generated and saved on the user's own device. */
+.room-invite-qr .room-invite-qr-download{justify-self:center;width:min(100%,360px);
+ background:#d7f5aa;color:#16332a;border-color:#e5ffc0;font-weight:850}
+.room-invite-qr .room-invite-qr-download:disabled{opacity:.55;cursor:wait}
