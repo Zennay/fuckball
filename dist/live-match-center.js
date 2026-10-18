@@ -100,6 +100,7 @@
   downloadFeed.disabled=!timeline.length;
  }
  function observe(){
+  if(match.hidden){if(sessionId||timeline.length){timeline=[];sessionId='';sessionRoom=null;snapshot=null;lastSignature='';}return;}
   if(document.hidden){historyInterrupted=true;return;}
   const reading=liveSnapshot();
   if(!reading){
