@@ -1,0 +1,33 @@
+/* Opt-in, device-local interface accessibility; pitch rendering and physics untouched. */
+.fb-access-dialog{position:fixed;max-width:min(520px,calc(100vw - 32px));width:100%;max-height:min(85dvh,730px);overflow:auto;background:#1b3038;color:#f5f7f3;border:2px solid #b3cda5;border-radius:14px;padding:25px;box-shadow:0 24px 75px #091a1ecc;z-index:10000}
+.fb-access-dialog::backdrop{background:#04141bdd}
+.fb-access-dialog h2{font-size:25px;line-height:1.2;margin:0 0 10px}
+.fb-access-dialog p{font-size:14px;line-height:1.5;color:#d9e5df;margin:0 0 16px}
+.fb-access-options{display:grid;gap:9px;margin:16px 0}
+.fb-access-option{display:flex;align-items:flex-start;gap:15px;padding:12px;border:1px solid #647c7c;border-radius:9px;color:#fff;background:#263c43;font-size:15px;cursor:pointer}
+.fb-access-option:focus-within{outline:2px solid #d3ef9f;outline-offset:2px}
+.fb-access-option input{flex:0 0 auto;width:21px;height:21px;accent-color:#d3ef9f;margin:0}
+.fb-access-option span{display:grid;gap:5px}
+.fb-access-option strong{font-size:15px}
+.fb-access-option small{font-size:13px;line-height:1.35;color:#c8dbdd}
+.fb-access-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:14px}
+.fb-access-actions button{min-height:44px}
+.fb-access-dialog .fb-access-message{color:#d3ef9f;font-size:12px;margin-top:8px}
+#accessibilityButton{font-weight:900;letter-spacing:.04em;min-width:35px;padding:7px}
+#matchAccessibilityButton{font-weight:900}
+html.fb-access-contrast{--panel:#101b23;--border:#d6e3e7;--muted:#f0f4f5;--green:#e6ffac;--red:#ffada8;--blue:#abc9ff}
+html.fb-access-contrast body{background:#0c1820;color:#fff}
+html.fb-access-contrast :is(button,input,select,textarea,dialog){border-color:#c9d8dc}
+html.fb-access-contrast :is(.room-menu,.rm-card,.club-header,.room-panel,.scoreboard){background-color:#11232c}
+html.fb-access-contrast :is(p,.muted,small,.rm-hint){color:#e1eaed}
+html.fb-access-contrast button:focus-visible,html.fb-access-large button:focus-visible{outline:3px solid #e6ffac;outline-offset:3px}
+html.fb-access-large :is(button,select,input,textarea,nav,summary){font-size:max(15px,1em);min-height:44px}
+html.fb-access-large :is(p,label,.rm-small,.hud-net,.rm-hint){font-size:max(14px,1em);line-height:1.5}
+html.fb-access-large :is(.team-name,.rm-team-head,.hud-chat){font-size:14px}
+html.fb-access-large .fb-access-option small{font-size:14px}
+html.fb-access-opaque :is(.room-menu,.rm-card,.overlay-card,dialog,.fb-access-dialog){backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background-color:#162932!important}
+html.fb-access-team-marks .scoreboard .team-name.red::before{content:'◆ ';color:#ffe4aa}
+html.fb-access-team-marks .scoreboard .team-name.blue::before{content:'● ';color:#effaff}
+html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}
+@media(prefers-reduced-motion:reduce){html:not(.fb-access-motion-allow) :is(*,*::before,*::after){animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}}
+@media(max-width:550px){.fb-access-dialog{padding:17px}.fb-access-option{padding:10px}.fb-access-actions button{flex:1}#accessibilityButton{min-width:34px}}
