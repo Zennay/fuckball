@@ -22,7 +22,7 @@ function createServer(options={}){
   const now=Date.now();
   for(const [user,list]of friendInvites){
    const keep=list.filter(i=>i.expiresAt>now&&rooms.has(i.room)&&
-    social?.areFriends(i.from,user)&&[...rooms.get(i.room).sockets.values()].some(ws=>ws.account?.toLowerCase()===i.from));
+    social?.areFriends(i.from,user)&&[...rooms.get(i.room).sockets.values()].some(ws=>ws.account?.toLowerCase()===i.from&&accounts.user(ws.accountToken)?.toLowerCase()===i.from));
    if(keep.length)friendInvites.set(user,keep);else friendInvites.delete(user);
   }
  }
@@ -34,7 +34,7 @@ function createServer(options={}){
   if(!user)return json(401,{error:'Sign in to use friends and room invitations.'});
   const status=()=>{
    purgeInvites();
-   const playing=new Set([...clients].filter(ws=>ws.readyState===1&&ws.room&&ws.account).map(ws=>ws.account.toLowerCase()));
+   const playing=new Set([...clients].filter(ws=>ws.readyState===1&&ws.room&&ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase()).map(ws=>ws.account.toLowerCase()));
    return{...social.view(user,playing),invites:(friendInvites.get(user)||[]).map(i=>({from:i.from,room:i.room,expiresAt:i.expiresAt}))};
   };
   if(req.method==='GET'&&route==='/api/social')return json(200,status());
@@ -57,7 +57,7 @@ function createServer(options={}){
       throw Error('Invalid player or room.');
      const to=data.to.toLowerCase(),room=rooms.get(data.room);
      if(!social.areFriends(user,to))throw Error('You can only invite mutual friends.');
-     if(!room||![...room.sockets.values()].some(ws=>ws.readyState===1&&ws.account?.toLowerCase()===user))
+     if(!room||![...room.sockets.values()].some(ws=>ws.readyState===1&&ws.account?.toLowerCase()===user&&accounts.user(ws.accountToken)?.toLowerCase()===user))
       throw Error('Join a live room before sending invitations.');
      purgeInvites();
      if(friendInvites.size>1024&&!friendInvites.has(to))throw Error('Room invitation capacity reached.');
@@ -216,7 +216,7 @@ function createServer(options={}){
    const d=JSON.parse(raw.toString());
    if(d.type==='ping'){send(ws,ws.room?{type:'pong',t:d.t,frame:roomTime(ws.room)}:{type:'pong',t:d.t,frame:frame+fraction()});return;}
    if(d.type==='sping'){send(ws,{type:'spong',t:d.t,frame:ws.room?roomTime(ws.room):null});return;}
-   if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');ws.name=name;ws.account=account||null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
+   if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='leave'){ws.intentionalLeave=true;ws.close(1000,'Left room');return;}
    if(d.type==='latencyReply'){
