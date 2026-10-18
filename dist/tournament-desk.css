@@ -63,3 +63,10 @@
  border:2px solid #d8ff9c;background:#2c4b3c;scroll-margin-top:25vh;
  box-shadow:0 0 0 3px rgba(205,251,153,.22)
 }
+
+/* Explicit, backup-first recovery only for unreadable local league data. */
+.tournament-recovery:not([hidden]){display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+ border:1px solid #d5a56f;background:#42352b;border-radius:10px;padding:15px;margin:16px 0}
+.tournament-recovery p{flex:1 1 100%;margin:0;color:#ffe5c7;line-height:1.5}
+.tournament-recovery button{min-height:43px}
+.tournament-recovery[hidden]{display:none!important}
