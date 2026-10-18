@@ -139,7 +139,14 @@ function createSocial(dir){
   }
   return{ok:true};
  }
- return{view,action,areFriends:(a,b)=>{
+ return{view,action,
+  // Direction-independent privacy guard for future human Quick Matches.
+  // Internal matching does not reveal who blocked whom to the other player.
+  canShareMatch:(a,b)=>{
+   const user=normalize(a),target=normalize(b);
+   return user!==target&&!blocked(user,target);
+  },
+  areFriends:(a,b)=>{
   const user=normalize(a),target=normalize(b);
   return user!==target&&friends(user,target)&&!blocked(user,target);
  }};
