@@ -42,11 +42,23 @@
  const summary=document.createElement('p');summary.className='server-results-count';
  const form=document.createElement('div');form.className='server-results-form';
  form.setAttribute('aria-label','Verified unranked online match form for selected mode and period');
+ const insights=document.createElement('section');insights.className='server-form-explorer';
+ insights.setAttribute('aria-label','Recent server match form and playlists');insights.hidden=true;
+ const insightsHeading=document.createElement('h3');insightsHeading.textContent='YOUR RECENT FORM.';
+ const insightsText=document.createElement('p');insightsText.className='server-form-explorer-explain';
+ insightsText.textContent='Only actual unranked results in your selected time window and playlist. This is not a lifetime record, Elo, or official ranked placement.';
+ const insightsStats=document.createElement('div');insightsStats.className='server-form-explorer-stats';
+ const trend=document.createElement('div');trend.className='server-form-explorer-trend';
+ const trendLabel=document.createElement('strong');trendLabel.textContent='RECENT MATCHES · NEWEST FIRST';
+ const trendPills=document.createElement('div');trendPills.className='server-form-explorer-pills';
+ trend.append(trendLabel,trendPills);
+ const playlists=document.createElement('div');playlists.className='server-form-explorer-playlists';
+ insights.append(insightsHeading,insightsText,insightsStats,trend,playlists);
  const list=document.createElement('div');list.className='server-results-grid';list.setAttribute('aria-label','My online match results');
  const divider=document.createElement('h2');divider.className='server-local-heading';divider.textContent='SAVED REPLAYS ON THIS DEVICE';
  const detail=document.createElement('p');detail.className='server-results-note';
  detail.textContent='Online result receipts do not include HBR2 playback. Your local recordings below stay on this device. Account totals may outlive the 50 most recent server receipts.';
- panel.append(heading,controls,status,summary,form,list,detail);
+ panel.append(heading,controls,status,summary,form,insights,list,detail);
  games.insertBefore(panel,document.getElementById('gamesStatus'));
  games.insertBefore(divider,document.getElementById('gamesStatus'));
  let generation=0,currentToken=null,currentUser=null,items=null,busy=false;
@@ -69,8 +81,72 @@
  }
  function reset(message){
   items=null;currentToken=null;currentUser=null;list.replaceChildren();
-  summary.textContent='';form.replaceChildren();status.textContent=message;
+  summary.textContent='';form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();status.textContent=message;
   exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
+ }
+ function renderInsights(scope){
+  insights.hidden=!scope.length;
+  insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();
+  if(!scope.length)return;
+  // Receipts are explicitly limited to the server's recent 50; never claim
+  // lifetime streaks or official matchmaking ratings.
+  const ordered=scope.slice().sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
+  const wins=ordered.filter(x=>outcome(x)==='win').length;
+  const percent=Math.round(100*wins/ordered.length);
+  const first=outcome(ordered[0]);
+  let run=0;
+  for(const item of ordered){if(outcome(item)!==first)break;run++;}
+  const goals=ordered.reduce((sum,item)=>sum+(item.team===1?item.red-item.blue:item.blue-item.red),0);
+  for(const [label,value] of [
+   ['RECENT WIN PERCENTAGE',percent+'% of '+ordered.length+' receipts'],
+   ['CURRENT RECENT RUN',run+' '+(first==='win'?'win':first==='loss'?'loss':'draw')+(run===1?'':'s')],
+   ['GOAL DIFFERENCE',(goals>=0?'+':'')+goals]
+  ]){
+   const tile=document.createElement('div');tile.className='server-form-explorer-stat';
+   const key=document.createElement('span');key.textContent=label;
+   const number=document.createElement('strong');number.textContent=value;
+   tile.append(key,number);insightsStats.append(tile);
+  }
+  for(const item of ordered.slice(0,10)){
+   const result=outcome(item);
+   const chip=document.createElement('button');chip.type='button';
+   chip.className='server-form-explorer-chip result-'+result;
+   chip.textContent=result==='win'?'W':result==='loss'?'L':'D';
+   chip.title=new Date(item.at).toLocaleString()+' · '+item.mode+
+    ' · '+(item.team===1?item.red:item.blue)+'-'+(item.team===1?item.blue:item.red);
+   chip.setAttribute('aria-label',result+' on '+new Date(item.at).toLocaleDateString()+
+    '. Show only '+result+' results.');
+   chip.onclick=()=>{
+    if(!items?.includes(item)||authenticated()?.token!==currentToken)return;
+    filter.value=result;render();
+    status.textContent='Showing '+result+' receipts in the selected period and playlist.';
+   };
+   trendPills.append(chip);
+  }
+  // Unlike global/ranked leaderboards, this view only compares the user's
+  // own recent receipts; each row is a clickable filter.
+  if(mode.value==='all'){
+   const title=document.createElement('strong');title.textContent='YOUR RECENT RESULTS BY MODE';
+   playlists.append(title);
+   for(const playlist of ['1v1','2v2','3v3','4v4','bot']){
+    const subset=scope.filter(x=>x.mode===playlist);
+    if(!subset.length)continue;
+    const button=document.createElement('button');button.type='button';
+    button.className='server-form-explorer-playlist';
+    const label=document.createElement('strong');label.textContent=playlist==='bot'?'Vs AI':playlist;
+    const details=document.createElement('span');
+    const count=type=>subset.filter(x=>outcome(x)===type).length;
+    details.textContent=subset.length+' played · '+count('win')+' W / '+count('draw')+
+     ' D / '+count('loss')+' L';
+    button.append(label,details);
+    button.onclick=()=>{
+     if(!items||!currentToken||authenticated()?.token!==currentToken)return;
+     mode.value=playlist;filter.value='all';render();
+     status.textContent='Showing your own '+(playlist==='bot'?'Vs AI':playlist)+' unranked receipts.';
+    };
+    playlists.append(button);
+   }
+  }
  }
  function render(){
   list.replaceChildren();
@@ -82,6 +158,7 @@
   summary.textContent=filtered.length+' shown · '+scope.length+' in this period and mode · '+
    items.length+' recent server receipts · unranked';
   form.replaceChildren();
+  renderInsights(scope);
   if(scope.length){
    const count=type=>scope.reduce((n,x)=>n+Number(outcome(x)===type),0);
    const gf=scope.reduce((n,x)=>n+(x.team===1?x.red:x.blue),0);
@@ -136,7 +213,7 @@
  async function load(){
   const seq=++generation,account=authenticated();
   if(!account){reset('Sign in through the online account menu to see your private server results.');return;}
-  currentToken=null;items=null;list.replaceChildren();summary.textContent='';form.replaceChildren();
+  currentToken=null;items=null;list.replaceChildren();summary.textContent='';form.replaceChildren();insights.hidden=true;
   status.textContent='Loading online results for '+account.username+'…';
   refresh.disabled=true;exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
   try{
@@ -216,7 +293,7 @@
  showView=function(next){
   previousShowView(next);
   if(next==='games')load();
-  else{generation++;currentToken=null;items=null;form.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
+  else{generation++;currentToken=null;items=null;form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&!games.hidden&&authenticated()?.token!==currentToken)load();
