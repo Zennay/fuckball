@@ -1,0 +1,32 @@
+/* Host-agnostic, player-triggered Custom Room lineup exports. */
+.native-match-sheet{display:grid;gap:13px;margin:16px 0;padding:16px;
+ border:1px solid #718a83;border-radius:14px;background:#192f38;color:#f2f8ed}
+.native-match-sheet[hidden]{display:none!important}
+.native-match-sheet-head{display:flex;justify-content:space-between;align-items:center;gap:9px;flex-wrap:wrap}
+.native-match-sheet-head strong{font-size:15px;letter-spacing:.06em;color:#e0f5b0}
+.native-match-sheet-head span{font-size:11px;color:#c4ddd3;font-weight:800}
+.native-match-sheet p{margin:0;font-size:12px;line-height:1.6;color:#cddbd4}
+.native-match-sheet .native-match-sheet-score{font-size:19px;color:#f1fada;font-weight:800}
+.native-match-sheet .native-match-sheet-counts{font-weight:750;color:#dcf5b9}
+.native-match-sheet-roster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.native-match-sheet-team{border:1px solid #5d7774;border-radius:10px;
+ background:#203b40;padding:12px;min-width:0}
+.native-match-sheet-team-1{border-left:4px solid #f58b8b}
+.native-match-sheet-team-2{border-left:4px solid #8bb2ef}
+.native-match-sheet-team-0{grid-column:1/-1;border-left:4px solid #b0c5b7}
+.native-match-sheet-team strong{font-size:12px;letter-spacing:.07em;color:#d3ffab}
+.native-match-sheet-team ul{list-style:none;margin:11px 0 0;padding:0;display:grid;gap:7px}
+.native-match-sheet-team li{overflow-wrap:anywhere;font-size:12px;color:#f3f7ee}
+.native-match-sheet-actions{display:flex;gap:8px;flex-wrap:wrap}
+.native-match-sheet-actions button{border-radius:8px;border:1px solid #8aa69a;
+ background:#2b4e4b;color:#f8fff5;font-weight:750;font-size:12px;min-height:43px;padding:9px 12px;
+ flex:1 1 140px;cursor:pointer}
+.native-match-sheet-actions button:first-child{background:#d2efb0;color:#163125;border-color:#d2efb0}
+.native-match-sheet-actions button:disabled{opacity:.5;cursor:default}
+.native-match-sheet-actions button:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+.native-match-sheet .native-match-sheet-status{color:#e3fdb4;min-height:16px}
+@media(max-width:650px){.native-match-sheet{padding:12px}
+ .native-match-sheet-roster{grid-template-columns:1fr}
+ .native-match-sheet-team-0{grid-column:auto}
+ .native-match-sheet-actions button{flex-basis:100%}}
+@media print{.native-match-sheet{display:none!important}}
