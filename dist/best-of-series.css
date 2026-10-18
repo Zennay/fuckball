@@ -39,3 +39,23 @@
 @media(max-width:740px){.best-of-series{width:calc(100% - 16px);margin:15px auto}.series-inner{padding:7px 13px 18px}.series-fixtures{grid-template-columns:1fr}}
 @media(max-width:440px){.series-new{grid-template-columns:1fr}.series-actions button{flex:1 1 45%}.series-actions select{flex:1 1 100%}.series-game{padding:10px}.series-schedule-form label{grid-column:1/-1}}
 @media print{.best-of-series{color:#000}.series-actions,.series-new,.series-recovery,.series-status,.series-score-form button,.series-schedule-form{display:none!important}.series-game,.series-scoreboard{background:#fff;border-color:#777;color:#000}.series-tally strong,.series-game-heading strong{color:#000}}
+
+/* Transactional whole-series kickoff planning, separate from manually recorded results. */
+.series-batch-schedule{margin:16px 0;border:1px solid #84ab91;border-radius:12px;background:#193b38;overflow:hidden}
+.series-batch-schedule>summary{cursor:pointer;padding:15px 17px;color:#e3f6b9;font-weight:850;list-style-position:inside}
+.series-batch-body{padding:2px 17px 16px}
+.series-batch-body>p{font-size:.88rem;color:#cfe5d8;line-height:1.5}
+.series-batch-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.series-batch-form label{display:grid;gap:6px;color:#d0e9d9;font-size:.85rem}
+.series-batch-form label input{width:100%}
+.series-batch-preserve{display:flex!important;flex-direction:row;align-items:center;gap:9px;min-height:44px}
+.series-batch-preserve input{width:20px!important;height:20px;accent-color:#c7f3a5}
+.series-batch-form button{min-height:44px}
+.series-batch-preview:not(:empty){margin-top:15px;background:#132e35;border:1px dashed #88a995;
+ border-radius:11px;padding:13px;color:#e5f3e9}
+.series-batch-preview strong{color:#d9f5b5}
+.series-batch-preview ol{padding-left:22px;display:grid;gap:7px;max-height:280px;overflow:auto}
+.series-batch-preview p{font-size:.83rem;color:#cee0d7;line-height:1.5}
+@media(max-width:550px){.series-batch-form{grid-template-columns:1fr}
+ .series-batch-body{padding:2px 12px 12px}}
+@media print{.series-batch-schedule{display:none!important}}
