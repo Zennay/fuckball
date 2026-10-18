@@ -4,7 +4,7 @@
 const crypto=require('node:crypto');
 const MAX=4,MAX_PARTIES=256,INVITE_MS=5*60000,LAUNCH_MS=30000;
 const NAME=/^[a-z0-9_-]{3,20}$/;
-const MODES={'1v1':1,'2v2':2,'3v3':3,'4v4':4};
+const MODES={'1v1':1,'2v2':2,'3v3':3,'4v4':4,'club4v4':4};
 const norm=name=>{
  if(typeof name!=='string'||!NAME.test(name.toLowerCase()))throw Error('Invalid player account.');
  return name.toLowerCase();
