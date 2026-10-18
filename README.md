@@ -16,6 +16,12 @@ When a compatible full roster is found, **each player gets a 15-second ready pro
 
 This does not implement friends parties, regional matchmaking, rated rankings, or a persistent match server. The separate persistent match receipts remain server-local and are not anti-cheat-ranked history.
 
+## Your account Profile (server-recorded career)
+
+The **Profile** button in the main header opens an account-only career dashboard with completed match count, win/draw/loss breakdown, goals scored/conceded, real active playing time, best streak, played modes (AI, 1v1–4v4) and recent native-server results. Players can refresh, export their own account data as JSON or jump directly to My Games. Guests are invited to sign in before any account information is queried.
+
+Both the career totals and recent results come from the existing authenticated `/api/player-stats` and `/api/match-history` endpoints. No private account history is placed in a public directory. If a server has no persistent data directory, the Profile explains that and does not show fabricated values. Stats are **server-local, unranked and not anti-cheat-verified**; local HBR2 recordings remain separate from server results. The aggregate total can outlive the server's recent-receipt retention window.
+
 ## Browse opt-in public Custom Rooms
 
 On Home, open **Browse rooms** to find Custom Rooms whose current host explicitly selected **List room publicly** under Esc → Room Control. Room IDs, live participant count, stadium, mode and started/lobby state are shown, with Join room and Copy invite actions. Join still uses the existing guest/account join screen and server admission rules. The directory is a snapshot; entries may expire or become full before you join.
