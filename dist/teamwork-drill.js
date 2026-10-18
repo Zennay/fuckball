@@ -159,7 +159,7 @@
   paint();
  };
  stop.onclick=()=>finish('TEAMWORK · STOPPED',false);
- restart.onclick=()=>{quit();launch.click();};
+ restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=session,d=event.detail;
