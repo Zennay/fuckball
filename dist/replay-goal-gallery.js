@@ -12,7 +12,10 @@
  hint.textContent='Jump to goals in replays saved on this device. Recording markers are not verified online match results.';
  title.append(heading,hint);
  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh goals';
- head.append(title,refresh);
+ const reelButton=document.createElement('button');reelButton.type='button';
+ reelButton.className='goal-gallery-reel';reelButton.textContent='▶ Play filtered highlights';
+ reelButton.title='Automatically play up to 60 locally saved goals, around 3 seconds before and 4 seconds after each marker';
+ head.append(title,refresh,reelButton);
  const controls=document.createElement('div');controls.className='goal-gallery-filters';
  const side=document.createElement('select');side.setAttribute('aria-label','Filter goals by scoring side');
  for(const [value,label] of [['all','Both sides'],['1','Red goals'],['2','Blue goals']])side.add(new Option(label,value));
@@ -29,9 +32,39 @@
  const navigation=document.createElement('div');navigation.className='goal-gallery-navigation';navigation.hidden=true;
  const prev=document.createElement('button'),next=document.createElement('button'),position=document.createElement('span');
  prev.type=next.type='button';prev.textContent='‹ Previous goal';next.textContent='Next goal ›';
- navigation.append(prev,position,next);
+ const stopReelButton=document.createElement('button');stopReelButton.type='button';
+ stopReelButton.hidden=true;stopReelButton.textContent='■ Stop reel';
+ stopReelButton.className='goal-gallery-stop';
+ navigation.append(prev,position,next,stopReelButton);
  document.getElementById('replayControls').append(navigation);
  let generation=0,moments=[],selection=-1,opening=false;
+ let reelActive=false,reelTimer=null,reelToken=0;
+ function stopReel(){
+  reelActive=false;reelToken++;
+  if(reelTimer){clearTimeout(reelTimer);reelTimer=null;}
+  stopReelButton.hidden=true;reelButton.textContent='▶ Play filtered highlights';
+  if(navigation.hidden===false&&selection>=0)
+   position.textContent='Goal '+(selection+1)+' / '+moments.length;
+ }
+ async function playReelMoment(index){
+  if(!reelActive)return;
+  const token=reelToken;
+  await openMoment(index);
+  if(!reelActive||token!==reelToken)return;
+  if(selection!==index||!replay){stopReel();return;}
+  const marker=moments[index].frameNo*1000/60;
+  const end=Math.min(replay.length(),marker+4000);
+  const duration=Math.max(500,Math.min(11000,end-replay.getTime()));
+  position.textContent='Reel '+(index+1)+' / '+moments.length+' · local replay';
+  reelTimer=setTimeout(()=>{
+   reelTimer=null;
+   if(!reelActive||token!==reelToken)return;
+   // A user-paused replay must not silently jump to a different recording.
+   if(replay?.getSpeed()===0&&replay.getTime()<replay.length()-250){stopReel();return;}
+   if(index===moments.length-1){stopReel();return;}
+   playReelMoment(index+1);
+  },duration);
+ }
  const clock=frame=>Math.floor(frame/3600)+':'+String(Math.floor(frame%3600/60)).padStart(2,'0');
  function availableTags(items){
   const choices=new Map();
@@ -54,7 +87,7 @@
   details.textContent=clock(g.frameNo)+' · '+new Date(item.createdAt).toLocaleDateString();
   const button=document.createElement('button');button.type='button';button.textContent='▶ Watch goal';
   button.setAttribute('aria-label','Watch '+(g.teamId===1?'red':'blue')+' goal at '+clock(g.frameNo)+' in '+item.name);
-  button.onclick=()=>openMoment(moments.indexOf(g));
+  button.onclick=()=>{stopReel();openMoment(moments.indexOf(g));};
   card.append(score,name,details,button);return card;
  }
  function render(items){
@@ -73,6 +106,8 @@
    'Showing '+moments.length+' recent recorded goals (maximum 60) · device-local and unverified':
    'No goal markers match these filters. Import or record a local HBR2 match.';
   for(const goal of moments)grid.append(present(goal.item,goal));
+  reelButton.disabled=!moments.length;
+  reelButton.textContent=moments.length?'▶ Play '+moments.length+' highlights':'No goals to play';
   // Previous/next controls remain tied to the filtered list only.
   if(selection>=moments.length){selection=-1;navigation.hidden=true;}
  }
@@ -96,8 +131,19 @@
    summary.textContent='Could not open recorded goal: '+(error?.message||'local file unavailable');
   }finally{opening=false;}
  }
- prev.onclick=()=>openMoment(selection-1);next.onclick=()=>openMoment(selection+1);
+ prev.onclick=()=>{stopReel();openMoment(selection-1);};
+ next.onclick=()=>{stopReel();openMoment(selection+1);};
+ stopReelButton.onclick=stopReel;
+ reelButton.onclick=()=>{
+  if(reelActive){stopReel();return;}
+  if(opening||!moments.length)return;
+  reelActive=true;reelToken++;
+  reelButton.textContent='■ Stop highlight reel';
+  stopReelButton.hidden=false;
+  playReelMoment(0);
+ };
  async function refreshGallery(){
+  if(reelActive)stopReel();
   const stamp=++generation;refresh.disabled=true;
   summary.textContent='Loading saved goal markers…';
   try{
@@ -118,5 +164,11 @@
  const previousShowView=showView;
  showView=function(next){previousShowView(next);if(next==='games')refreshGallery();};
  const previousCloseReplay=closeReplay;
- closeReplay=function(){previousCloseReplay();navigation.hidden=true;selection=-1;};
+ closeReplay=function(){stopReel();previousCloseReplay();navigation.hidden=true;selection=-1;};
+ const previousLoadReplay=loadReplay;
+ loadReplay=function(...args){
+  if(reelActive&&!opening)stopReel();
+  return previousLoadReplay(...args);
+ };
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)stopReel();});
 })();
