@@ -91,7 +91,13 @@
   const canvas=make('canvas');canvas.width=1200;canvas.height=675;
   canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Visual preview of your private friendly poster');
   const alternative=make('p',null,'poster-studio-alternative');
-  const saveButton=button('Save draft',saveDraft,'primary');
+  const saveButton=button('Save new design',()=>saveDraft(),'primary');
+  const copyButton=button('Save as new copy',()=>saveDraft(true));
+  copyButton.hidden=true;
+  const newButton=button('New design',()=>{
+    activeDraftId=null;updateEditingState();choose.value='';
+    notify('New design mode. Saved posters remain unchanged.');
+  });
   const imageButton=button('↓ Export PNG',exportPNG,'primary');
   const textButton=button('↓ Accessible TXT',exportText);
   const printButton=button('Print',()=>{
@@ -100,7 +106,7 @@
   });
   window.addEventListener('afterprint',()=>document.body.classList.remove('poster-custom-print'));
   const controls=make('div',null,'poster-studio-actions');
-  controls.append(saveButton,imageButton,textButton,printButton);
+  controls.append(saveButton,copyButton,newButton,imageButton,textButton,printButton);
   const status=make('p',null,'poster-studio-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   preview.append(canvas,alternative,controls,status);
   columns.append(editor,preview);
@@ -218,6 +224,7 @@
   }
   choose.addEventListener('change',()=>{
     if(choose.value==='')return;
+    activeDraftId=null;updateEditingState();
     const f=fixtures[Number(choose.value)];if(!f)return;
     competition.value=f.league;home.value=f.home;away.value=f.away;
     venue.value=f.venue;kickoff.value=localDate(f.time);
@@ -258,7 +265,7 @@
     if(new Set(list.map(d=>d.id)).size!==list.length)throw Error('Duplicate draft ID.');
     return list;
   }
-  let drafts=[],draftsBlocked=false,draftsSnapshot='';
+  let drafts=[],draftsBlocked=false,draftsSnapshot='',activeDraftId=null;
   try{drafts=readDrafts();draftsSnapshot=localStorage.getItem(DRAFTS_KEY)||'';}
   catch{draftsBlocked=true;notify('Saved posters could not be verified. Existing browser data was not overwritten.');}
   const saveState=()=>{
@@ -270,6 +277,13 @@
     localStorage.setItem(DRAFTS_KEY,serialized);
     draftsSnapshot=serialized;
   };
+  function updateEditingState(){
+    const selected=drafts.find(d=>d.id===activeDraftId);
+    if(activeDraftId&&!selected)activeDraftId=null;
+    saveButton.textContent=selected?'Update this design':'Save new design';
+    copyButton.hidden=!selected;
+    newButton.hidden=!selected;
+  }
   function apply(s){
     for(const k of ['competition','home','away','venue','tagline','kickoff','redScore','blueScore']){
       ({competition,home,away,venue,tagline,kickoff,redScore:scoreRed,blueScore:scoreBlue}[k]).value=s[k]||'';
@@ -333,29 +347,40 @@
     importButton.disabled=draftsBlocked||drafts.length>=MAX_DRAFTS;
     tools.append(backupButton,importButton,restoreFile);
     saved.append(tools);
+    updateEditingState();
     if(!drafts.length)return saved.append(make('p','Save up to eight designs. They never appear on your server account.'));
     for(const d of drafts){
       const row=make('div',null,'poster-studio-draft');
+      row.classList.toggle('active',activeDraftId===d.id);
       row.append(make('strong',d.home+' vs '+d.away),
         make('span',d.competition||'Private friendly'));
-      row.append(button('Open',()=>{apply(d);details.open=true;notify('Draft opened locally.');}));
+      row.append(button('Edit',()=>{
+        activeDraftId=d.id;apply(d);details.open=true;renderDrafts();
+        notify('Editing the selected saved design. Changes are not stored until you click Update this design.');
+      }));
       row.append(button('Delete',()=>{
         if(!confirm('Delete only this local poster draft?'))return;
         const prior=drafts;drafts=drafts.filter(x=>x.id!==d.id);
-        try{saveState();renderDrafts();notify('Saved poster deleted.');}
+        try{saveState();if(activeDraftId===d.id)activeDraftId=null;
+          renderDrafts();notify('Saved poster deleted.');}
         catch{drafts=prior;notify('Could not delete draft; stored posters are unchanged.');}
       }));
       saved.append(row);
     }
   }
-  function saveDraft(){
+  function saveDraft(asCopy=false){
     const s=state();if(!valid(s))return notify('Enter valid details before saving.');
-    if(drafts.length>=MAX_DRAFTS)return notify('Eight saved posters reached. Delete a draft to save another.');
-    const id=crypto.randomUUID?crypto.randomUUID():
-      Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
-    const prior=drafts;drafts=[{id,...s},...drafts];
-    try{saveState();renderDrafts();notify('Poster saved privately on this device.');}
-    catch{drafts=prior;notify('Browser storage unavailable; poster was not saved.');}
+    const selected=!asCopy&&drafts.find(d=>d.id===activeDraftId);
+    if(!selected&&drafts.length>=MAX_DRAFTS)
+      return notify('Eight saved posters reached. Update an existing design or delete one first.');
+    const prior=drafts;
+    const id=selected?.id||(crypto.randomUUID?crypto.randomUUID():
+      Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join(''));
+    drafts=selected?drafts.map(d=>d.id===id?{id,...s}:d):[{id,...s},...drafts];
+    try{saveState();activeDraftId=id;renderDrafts();
+      notify(selected?'Saved changes to this private design.':
+        asCopy?'A separate editable copy was saved.':'Poster saved privately on this device.');}
+    catch{drafts=prior;notify('Save failed; previously saved posters were not changed.');}
   }
   for(const el of [competition,home,away,venue,tagline,kickoff,theme,format,scoreRed,scoreBlue]){
     el.addEventListener('input',()=>{
@@ -371,7 +396,7 @@
     if(e.key===FIXTURES_KEY)refreshFixtures();
     if(e.key===DRAFTS_KEY){
       try{drafts=readDrafts();draftsSnapshot=localStorage.getItem(DRAFTS_KEY)||'';
-        draftsBlocked=false;renderDrafts();}
+        draftsBlocked=false;activeDraftId=null;renderDrafts();}
       catch{draftsBlocked=true;notify('Posters changed in another tab but could not be loaded.');}
     }
   });
