@@ -15,3 +15,29 @@
 .room-admin-actions button:focus-visible,.room-admin-actions select:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 .room-admin-notice{font-size:11px;min-height:16px;color:#e2dba9}
 @media(max-width:660px){.room-admin-actions button{flex:1 1 130px}.room-admin-panel{padding:14px}}
+
+/* Host-only matchday planning, server-authorized and never mid-game. */
+.lineup-planner{display:grid;gap:12px;margin:18px 0;padding:18px;border:1px solid #88aa91;
+ border-radius:12px;background:#1a3436}
+.lineup-planner[hidden]{display:none!important}
+.lineup-planner-header{display:flex;justify-content:space-between;align-items:baseline;
+ flex-wrap:wrap;gap:10px}
+.lineup-planner-header h3{margin:0;color:#d8f5ad;font-size:17px;letter-spacing:.06em}
+.lineup-planner-header span{font-size:10px;color:#b9d7c5;letter-spacing:.09em}
+.lineup-planner>p{font-size:12px;line-height:1.6;color:#c9d8cd;margin:0}
+.lineup-planner-actions{display:flex;gap:9px;flex-wrap:wrap}
+.lineup-planner-actions button{border:1px solid #9cb4a5;padding:10px 14px;min-height:44px;
+ border-radius:8px;background:#294846;color:#eaf9df;font-weight:800}
+.lineup-planner-actions button.primary{background:#d0efaa;color:#183125}
+.lineup-planner-actions button:disabled{opacity:.5;cursor:not-allowed}
+.lineup-planner-roster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.lineup-planner-player{display:grid;gap:6px;padding:11px;background:#244247;
+ border:1px solid #6f9688;border-radius:9px;min-width:0}
+.lineup-planner-player span{font-size:12px;color:#e5f2e7;overflow-wrap:anywhere}
+.lineup-planner-player select{background:#142c32;color:#f2f9ef;border:1px solid #779b8b;
+ border-radius:7px;padding:10px;min-width:0;min-height:42px}
+.lineup-planner-summary{font-weight:800;color:#e2f6b1!important}
+.lineup-planner-status{font-size:11px;color:#c6e3d2!important}
+.lineup-planner :is(button,select):focus-visible{outline:3px solid #dcffac;outline-offset:3px}
+@media(max-width:640px){.lineup-planner{padding:12px}.lineup-planner-roster{grid-template-columns:1fr}
+ .lineup-planner-actions button{flex:1 1 150px}}
