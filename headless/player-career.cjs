@@ -32,6 +32,9 @@ function cloneProfiles(old){
  for(const [user,profile] of Object.entries(old)){
   // Up-convert existing persisted v2 careers without fabricating games:
   // before human Quick Match, only bot/2v2/4v4 modes existed.
+  if(!profile?.modes||typeof profile.modes!=='object'||Array.isArray(profile.modes)||
+   Object.keys(profile.modes).some(mode=>!MODES.includes(mode)))
+   throw Error('Invalid stored career statistics.');
   const modes={bot:profile?.modes?.bot,'1v1':profile?.modes?.['1v1']??0,
    '2v2':profile?.modes?.['2v2'],'3v3':profile?.modes?.['3v3']??0,
    '4v4':profile?.modes?.['4v4']};
