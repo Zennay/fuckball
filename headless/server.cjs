@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createClubResults}=require('./club-results.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -15,6 +15,7 @@ function createServer(options={}){
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
+  clubResults=dataDir?createClubResults(dataDir):null,
   parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
    clubForUser:user=>clubs?.membership(user)?.id||null}):null,
   authHits=new Map(),securityHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
@@ -90,7 +91,7 @@ function createServer(options={}){
   if(!user)return json(401,{error:'Sign in to manage a Club.'});
   const clubPayload=()=>{
    const view=clubs.view(user),member=clubs.membership(user);
-   return{...view,rooms:member?[...rooms.values()]
+   return{...view,results:member?clubResults?.view(member.id)||null:null,rooms:member?[...rooms.values()]
     .filter(r=>r.clubId===member.id&&!r.locked&&!r.quickMatch)
     .slice(0,8).map(r=>({room:r.id,players:r.sockets.size,started:r.started===true})):[]};
   };
@@ -344,6 +345,28 @@ function createServer(options={}){
       winner:result.winner,team:side,playedFrames:p.playedFrames,mode:room.mode});
     }
     try{history.append(records);}catch{console.warn('Match history write unavailable; completed round remains unrecorded.');}
+    // Only eight fully participating, signed-in humans in the dedicated
+    // trusted Club vs Club queue can produce a persisted Club result.
+    // This is a *casual local-server record*, not a verified ranked fixture.
+    if(room.quickMatch?.clubMatch&&clubResults){
+     const participants=(result.finalPlayers||[]).flatMap(p=>{
+      const ws=sockets.get(p.id),team=p.sideFrames;
+      if(!ws?.account||accounts.user(ws.accountToken)?.toLowerCase()!==ws.account.toLowerCase()||
+         !Array.isArray(team)||team.length!==2)return[];
+      const side=team[0]>=120*60?1:team[1]>=120*60?2:0;
+      return side?[{account:ws.account.toLowerCase(),side}]:[];
+     });
+     const left=participants.filter(p=>p.side===1),right=participants.filter(p=>p.side===2);
+     if(participants.length===8&&left.length===4&&right.length===4&&
+        new Set(participants.map(p=>p.account)).size===8){
+      const valid=left.every(p=>clubs?.membership(p.account)?.id===room.quickMatch.clubMatch.red)&&
+       right.every(p=>clubs?.membership(p.account)?.id===room.quickMatch.clubMatch.blue);
+      if(valid)try{
+       clubResults.append({red:room.quickMatch.clubMatch.red,blue:room.quickMatch.clubMatch.blue,
+        redGoals:result.red,blueGoals:result.blue});
+      }catch{console.warn('Club match result storage unavailable; no Club result recorded.');}
+     }
+    }
    },
    send:(cid,data)=>{if(r.authority!=='server'||data?.type==='chat'&&
     !Number.isSafeInteger(data.from))return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
@@ -499,8 +522,20 @@ function createServer(options={}){
   }
  }
  function createMatchedRoom({mode,red,blue}){
+  let clubMatch=null;
+  if(mode==='club4v4'){
+   if(!clubs||red.length!==4||blue.length!==4)
+    throw Error('Club match requires two complete authenticated squads.');
+   const clubRed=clubs.membership(red[0].user)?.id,
+    clubBlue=clubs.membership(blue[0].user)?.id;
+   if(!clubRed||!clubBlue||clubRed===clubBlue||
+      red.some(p=>clubs.membership(p.user)?.id!==clubRed)||
+      blue.some(p=>clubs.membership(p.user)?.id!==clubBlue))
+    throw Error('Club membership changed before the game began.');
+   clubMatch={red:clubRed,blue:clubBlue};
+  }
   const r=createRoom();
-  r.quickMatch={mode,startedAt:Date.now()};
+  r.quickMatch={mode,clubMatch,startedAt:Date.now()};
   r.mode=mode==='2v2'?'2v2':mode==='1v1'?'bot':'4v4';
   try{
    for(let i=0;i<red.length;i++)for(const entry of [red[i],blue[i]]){
