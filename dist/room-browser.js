@@ -141,7 +141,8 @@
   const details=document.createElement('small');
   details.textContent=room.players+' online · '+(Number.isSafeInteger(room.occupied)?room.occupied:room.players)+'/'+([8,12,16,24,64].includes(room.capacity)?room.capacity:'?')+' seats occupied · '+(room.requiresAccount?'Account required':'Guests allowed')+' · '+(room.started?'In progress':'Lobby')+
    ' · '+(['1v1','2v2','3v3','4v4'].includes(room.mode)?room.mode.toUpperCase():'Custom')+
-   ' · '+String(room.map||'Stadium').slice(0,60);
+   ' · '+String(room.map||'Stadium').slice(0,60)+
+   ' · '+(freeSeats(room)===null?'Capacity not reported':freeSeats(room)+' open seats');
   copy.append(title,details);
   const actions=document.createElement('div');actions.className='room-browser-actions';
   const join=button('Join room',()=>requestJoin(room));
@@ -190,8 +191,10 @@
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
   list.replaceChildren();
   for(const room of visible)putRoom(room,pins);
+  const age=lastLoadedAt>0?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
+  const freshness=age===null?'No current server snapshot':age<45?'Updated '+age+'s ago':'Old snapshot ('+age+'s); refresh before joining';
   status.textContent=roomsCache.length?
-   visible.length+' of '+roomsCache.length+' public rooms shown · listings refresh every 20s.':
+   visible.length+' of '+roomsCache.length+' public rooms shown · '+freshness+' · refresh every 20s.':
    'No public rooms right now. You can create a private invite room instead.';
   if(roomsCache.length&&!visible.length)
    status.textContent='No public rooms match these filters. Change the search or refresh.';
