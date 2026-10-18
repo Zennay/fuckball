@@ -19,3 +19,15 @@
 .pwa-panel :is(button,summary):focus-visible{outline:3px solid #e2ffab;outline-offset:3px}
 @media(max-width:640px){.pwa-actions button{flex:1 1 100%}.pwa-panel{margin-bottom:25px}}
 @media(prefers-reduced-motion:reduce){.pwa-panel *{animation:none!important;transition:none!important}}
+
+.pwa-offline-readiness{padding:15px;border:1px solid #719879;border-radius:10px;
+ background:#17302e;display:grid;gap:9px}
+.pwa-offline-readiness>strong{font-size:12px;letter-spacing:.07em;color:#e1fbb2}
+.pwa-offline-readiness>p{margin:0;line-height:1.55;color:#e4eee2;font-size:12px}
+.pwa-offline-actions{display:flex;flex-wrap:wrap;gap:9px}
+.pwa-offline-actions button{padding:10px 13px;border:1px solid #7c9d8b;
+ background:#315348;color:#f0ffe9;border-radius:8px;font-size:12px;font-weight:750;
+ min-height:44px;flex:1 1 160px}
+.pwa-offline-actions button:disabled{opacity:.55;cursor:not-allowed}
+.pwa-offline-actions button[hidden]{display:none!important}
+.pwa-offline-actions button:focus-visible{outline:3px solid #d6ffa4;outline-offset:3px}
