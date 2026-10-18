@@ -56,6 +56,16 @@
   </div>
   <p class="rm-small">The incoming player must consent. Accepted live swaps wait for a match pause.</p>
 </section>
+<section id="nextMatchPanel" class="rm-next-match" hidden aria-label="Continue playing this online room">
+ <div class="rm-next-heading"><strong id="nextMatchTitle">Match finished</strong><span id="nextMatchInfo" role="status" aria-live="polite">Start another match without leaving your room.</span></div>
+ <div class="rm-next-actions">
+  <button id="rematchRequest" class="primary" type="button">↻ Rematch · swap sides</button>
+  <button id="nextGame" type="button">▶ New game</button>
+  <button id="rematchAccept" class="primary" type="button" hidden>Accept rematch</button>
+  <button id="rematchDecline" type="button" hidden>Decline</button>
+ </div>
+ <p class="rm-small">Rematch keeps everyone in the same room and needs every active human player’s consent. New game keeps the current sides.</p>
+</section>
 <div class="rm-actions"><button id="startButton" class="primary">▶ Start game</button><button id="pauseButton" disabled>Ⅱ Pause</button><button id="swapTeams" title="Red becomes Blue and Blue becomes Red">⇄ Swap teams</button><button id="allSpec" title="Move everyone to Spectators">↓ All to spectators</button><span class="grow"></span><button id="recordButton">● Record</button></div>
 <div class="rm-settings"><label>Time limit <small>(minutes, 0 = none)</small><input id="timeLimit" type="number" min="0" max="99" step="1" value="7" inputmode="numeric"></label><label>Score limit<select id="scoreLimit"><option value="0">None</option><option selected>3</option><option>5</option><option>10</option></select></label><label class="rm-stadium">Stadium<select id="stadium" aria-label="Stadium"></select></label></div>
 <!-- Legacy controls kept for scripted modes (home quick-play, replays, direct WebRTC); not shown in the menu. -->
