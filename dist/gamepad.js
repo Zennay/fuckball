@@ -26,7 +26,7 @@
  options.append(kickLabel,deadzoneLabel);
  info.append(title,label,options);settingsPanel.append(info);
  const KEY='fuckball.gamepad.v1';
- let preferences={kick:'default',deadzone:.32};
+ let preferences={kick:'default',deadzone:.30};
  try{
   const saved=JSON.parse(localStorage.getItem(KEY)||'{}');
   if(['default','face','trigger','shoulder'].includes(saved.kick))preferences.kick=saved.kick;
