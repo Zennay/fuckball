@@ -92,3 +92,32 @@ friends stay on the bench. This is not skill-based balancing; it requires your
 confirmation before replacing a draft. **Clear draft teams** moves everybody
 to the provisional bench while preserving their availability and notes. Neither
 action changes a real game room or validated competition score.
+
+
+## Reuse familiar players for a new fixture
+
+Open **Matchday Hub → Attendance**, select the **new, unsplayed** target match,
+then choose another locally saved private match under **Reuse friends for another
+match**. The source can be an earlier or completed competition fixture (its
+organiser-entered names remain in local storage). An optional filter copies
+only names previously marked Going, or the entire prior list.
+
+A count preview distinguishes new names, already-listed names and those beyond
+the 24-person target limit. After explicit confirmation, only new names are added:
+**each starts Maybe / unassigned, with a blank note**. The organiser must
+collect availability again and explicitly form the Red/Blue draft teams for this
+new date. Existing target players, notes, responses and team sides are untouched.
+
+The copy uses the original private attendance storage's optimistic tab conflict
+checks and capacity bounds. No network request, server roster change, automatic
+invitation, or claim of consent is made.
+
+## Private match sheet
+
+Select an unsplayed fixture and choose **Private team sheet TXT** to download
+an intentionally unofficial, human-readable local text file. It includes the
+original stored private competition name, actual saved kickoff and venue,
+up to four players per provisional Red and Blue lineup, Going teammates on
+the bench, Maybe and Out lists and the organiser's own notes. No data is sent
+to online servers. Share the resulting file only with the participants you
+choose, as it can include their names and private notes.
