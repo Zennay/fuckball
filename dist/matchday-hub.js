@@ -389,7 +389,9 @@
     const note=dom('p','3 points per manually entered win, 1 for a draw. Ties sorted by points, goal difference, goals for, then team name. No online match verification.');
     const csv=button('↓ Export this table CSV',()=>exportPrivateStandings(c));
     csv.className='matchday-standings-export';
+    const season=window.FuckballLeagueSeasonReport?.build(c);
     disclosure.append(headline,scroll,note,csv);
+    if(season)disclosure.append(season);
     body.append(disclosure);
    }
    const open=button('Open '+c.type,()=>window.dispatchEvent(

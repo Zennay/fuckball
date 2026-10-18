@@ -1,0 +1,55 @@
+/* Device-local private league season centre, subordinate to existing standings. */
+.league-season-centre{margin:14px 0 7px;padding:14px;border:1px solid #689180;
+ border-radius:12px;background:#112f2f;color:#f0ffef}
+.league-season-centre h4{margin:0;color:#ebf8b8;font-size:.93rem;letter-spacing:.055em}
+.league-season-centre>p{font-size:.8rem;line-height:1.55;color:#cce0d4}
+.league-season-centre h5{margin:19px 0 10px;color:#e6efc0;font-size:.89rem}
+.league-season-centre :is(button,select):focus-visible{outline:3px solid #ffe39b;outline-offset:3px}
+.league-season-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.league-season-controls label,.league-season-fixtures label{font-size:.82rem;font-weight:650;
+ display:grid;gap:7px;color:#e3f5df}
+.league-season-controls select,.league-season-fixtures select{font:inherit;border-radius:8px;
+ border:1px solid #8baea0;color:#fff;background:#21483f;padding:9px 11px;min-height:44px;
+ max-width:100%;min-width:180px}
+.league-season-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:13px 0}
+.league-season-metric{padding:11px;border-radius:9px;border:1px solid #59796b;
+ background:#224b43;display:grid;gap:3px}
+.league-season-metric strong{font-size:1.24rem;font-variant-numeric:tabular-nums;color:#effac6}
+.league-season-metric span{font-size:.72rem;color:#d0e6db;line-height:1.4}
+.league-season-form{display:flex;gap:8px;flex-wrap:wrap}
+.league-season-form span{border-radius:8px;min-width:38px;min-height:38px;
+ display:inline-flex;align-items:center;justify-content:center;font-weight:850}
+.league-form-W{color:#062e20;background:#aff2bb}
+.league-form-D{color:#282f35;background:#dbe2e4}
+.league-form-L{color:#3e1010;background:#ffb0a0}
+.league-season-headtohead{overflow-x:auto;max-width:100%}
+.league-season-headtohead table{font-variant-numeric:tabular-nums;width:100%;
+ font-size:.81rem;border-collapse:collapse}
+.league-season-headtohead td,.league-season-headtohead th{text-align:right;
+ padding:8px 9px;white-space:nowrap;border-bottom:1px solid #4f7569}
+.league-season-headtohead td:first-child,.league-season-headtohead th:first-child{text-align:left}
+.league-season-fixture-list{display:grid;gap:8px;margin-top:10px}
+.league-season-fixture{display:grid;grid-template-columns:1.5fr 2fr auto;
+ align-items:center;gap:9px;padding:11px;border:1px solid #527b70;
+ background:#21433f;border-radius:8px;font-size:.8rem}
+.league-season-fixture strong{overflow-wrap:anywhere}
+.league-season-fixture span{color:#cfdfd5;line-height:1.4}
+.league-season-fixture .league-fixture-played{color:#eafab2;font-weight:750}
+.league-season-fixture .league-fixture-pending{color:#d4dfd8}
+.league-season-count,.league-season-message{font-size:.76rem;line-height:1.5;color:#d2e5d7}
+.league-season-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.league-season-actions button{font:inherit;font-size:.81rem;min-height:44px;
+ padding:9px 12px;border:1px solid #8eb9a0;border-radius:8px;
+ background:#315c4a;color:#effee8;cursor:pointer}
+@media(max-width:720px){
+ .league-season-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .league-season-fixture{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+ .league-season-centre{padding:10px}
+ .league-season-actions button,.league-season-controls label,
+ .league-season-controls select,.league-season-fixtures select{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.league-season-centre *{scroll-behavior:auto!important}}
+@media print{.league-season-actions,.league-season-controls{display:none!important}
+ .league-season-fixture{break-inside:avoid}}
