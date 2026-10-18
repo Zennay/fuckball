@@ -74,10 +74,46 @@ const ReplayLibrary=(()=>{
    tx.objectStore('meta').delete(id);tx.objectStore('data').delete(id);
   });
  }
- return{list,save,get,remove,parseRecording};
+ async function updateMeta(id,change){
+  const d=await db();
+  return new Promise((resolve,reject)=>{
+   const tx=d.transaction('meta','readwrite'),store=tx.objectStore('meta');
+   let saved;
+   const lookup=store.get(id);
+   lookup.onsuccess=()=>{
+    if(!lookup.result){tx.abort();return;}
+    saved=change(lookup.result);
+    store.put(saved);
+   };
+   tx.oncomplete=()=>resolve(saved);
+   tx.onerror=()=>reject(tx.error||Error('Could not update replay.'));
+   tx.onabort=()=>reject(Error('Replay missing or could not be updated.'));
+  });
+ }
+ function rename(id,value){
+  let name=String(value||'').trim().replace(/[\\/<>:"|?*\x00-\x1f]/g,'_');
+  if(!name)throw Error('Replay name cannot be empty.');
+  if(!/\.hbr2$/i.test(name))name=name.slice(0,95)+'.hbr2';
+  name=name.slice(0,100);
+  return updateMeta(id,item=>({...item,name}));
+ }
+ function setFavorite(id,value){return updateMeta(id,item=>({...item,favorite:value===true}));}
+ return{list,save,get,remove,parseRecording,rename,setFavorite};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
+gamesSort.add(new Option('Favorites first','favorites'));
+let favoritesOnly=false;
+const favoritesToggle=document.createElement('button');
+favoritesToggle.type='button';favoritesToggle.className='games-favorites-toggle';
+favoritesToggle.setAttribute('aria-pressed','false');
+favoritesToggle.textContent='☆ Favorites';
+favoritesToggle.onclick=()=>{
+ favoritesOnly=!favoritesOnly;favoritesToggle.setAttribute('aria-pressed',String(favoritesOnly));
+ renderMyGames();
+};
+document.querySelector('.my-games-tools').insertBefore(favoritesToggle,$('gamesImport'));
+
 function recordingLength(frames){
  if(!Number.isSafeInteger(frames)||frames<=0)return 'Duration unknown';
  return 'Recording '+fmt(frames/60);
@@ -90,6 +126,25 @@ function goalsLabel(item){
 }
 
 function gamesMessage(message){gamesStatus.textContent=message;}
+function editGameName(item){
+ const dialog=document.createElement('dialog');dialog.className='game-rename-dialog';
+ const form=document.createElement('form');form.className='game-rename-form';
+ const heading=document.createElement('h2');heading.textContent='Rename recording';
+ const label=document.createElement('label');label.textContent='New replay name';
+ const input=document.createElement('input');input.type='text';input.maxLength=100;
+ input.value=item.name;input.required=true;label.append(input);
+ const actions=document.createElement('div');actions.className='game-rename-actions';
+ const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();
+ const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Save name';
+ actions.append(cancel,save);form.append(heading,label,actions);dialog.append(form);
+ form.onsubmit=async event=>{
+  event.preventDefault();save.disabled=true;
+  try{await ReplayLibrary.rename(item.id,input.value);dialog.close();await renderMyGames();}
+  catch(e){gamesMessage('Rename failed: '+(e.message||String(e)));save.disabled=false;}
+ };
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);dialog.showModal();input.focus();input.select();
+}
 function makeGameButton(text,description,handler){
  const button=document.createElement('button');button.type='button';button.textContent=text;
  button.setAttribute('aria-label',description);
@@ -100,20 +155,30 @@ async function renderMyGames(){
  gamesMessage('Loading local replays…');
  try{
   const all=await ReplayLibrary.list(),term=gamesSearch.value.trim().toLocaleLowerCase();
-  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term));
+  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term)&&(!favoritesOnly||item.favorite===true));
+  const favoriteCount=all.filter(item=>item.favorite===true).length;
+  favoritesToggle.textContent=(favoritesOnly?'★ Show all':'☆ Favorites')+' ('+favoriteCount+')';
   if(gamesSort.value==='oldest')items.sort((a,b)=>a.createdAt-b.createdAt);
   if(gamesSort.value==='longest')items.sort((a,b)=>(b.frames||0)-(a.frames||0)||b.createdAt-a.createdAt);
+  if(gamesSort.value==='favorites')items.sort((a,b)=>Number(b.favorite===true)-Number(a.favorite===true)||b.createdAt-a.createdAt);
   gamesList.replaceChildren();gamesEmpty.hidden=all.length!==0;
   $('gamesCount').textContent=all.length+' / 30 saved';
   for(const item of items){
-   const row=document.createElement('article');row.className='game-entry';
+   const row=document.createElement('article');row.className='game-entry'+(item.favorite===true?' game-entry-favorite':'');
    const detail=document.createElement('div');detail.className='game-entry-info';
    const title=document.createElement('strong');title.textContent=item.name;
    const metadata=document.createElement('span');
    metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · LOCAL';
    detail.append(title,metadata);
    const controls=document.createElement('div');controls.className='game-entry-actions';
+   const star=makeGameButton(item.favorite===true?'★ Saved':'☆ Favorite',
+    'Toggle favorite for '+item.name,async()=>{
+     await ReplayLibrary.setFavorite(item.id,item.favorite!==true);await renderMyGames();
+    });
+   star.className='game-star';star.setAttribute('aria-pressed',String(item.favorite===true));
    controls.append(
+    star,
+    makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      loadReplay(bytes,item.name);gamesMessage('');
@@ -130,7 +195,7 @@ async function renderMyGames(){
    row.append(detail,controls);gamesList.append(row);
   }
   gamesMessage(all.length?'Stored only in this browser. Goal markers are from unverified recordings.':(term?'':'Import a recording to get started.'));
-  if(all.length&&!items.length)gamesMessage('No matching replays. Clear the search to see all recordings.');
+  if(all.length&&!items.length)gamesMessage(favoritesOnly?'No favorite replays match this filter.':'No matching replays. Clear the search to see all recordings.');
  }catch(e){
   gamesEmpty.hidden=true;gamesList.replaceChildren();
   gamesMessage('Local replay storage is unavailable: '+(e.message||'Unknown error')+'. Downloads still work.');
