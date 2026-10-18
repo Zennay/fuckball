@@ -104,6 +104,7 @@
    loadReplay(saved.bytes,item.name);
    activeLocalReplayId=item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    if(Number.isSafeInteger(frameNo)&&frameNo>=0&&typeof replay!=='undefined'&&replay){
     replay.setTime(Math.max(0,frameNo-180)*1000/60);
     replay.setSpeed(1);
