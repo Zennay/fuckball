@@ -211,10 +211,20 @@ renderSubPanel();
 // My Games: server-backed results are a separate, authenticated feed.
 // Local HBR2 files remain unverified browser recordings, never rankings.
 const accountMatchSection=document.createElement('section');
-accountMatchSection.id='serverMatchHistory';
 accountMatchSection.className='server-match-history';
-accountMatchSection.innerHTML='<div class="server-history-head"><div><span class="eyebrow">SIGNED-IN MATCH HISTORY</span><h2>SERVER RESULTS.</h2><p>Completed matches on the native room server only. These are not ranked or anti-cheat verified.</p></div><button id="refreshServerHistory" type="button">↻ Refresh</button></div><p id="serverHistoryStatus" role="status" aria-live="polite"></p><div id="serverHistoryList" class="server-history-list"></div>';
-$('gamesView').insertBefore(accountMatchSection,$('gamesList'));
+const accountMatchHeader=document.createElement('div'),accountMatchIntro=document.createElement('div');
+accountMatchHeader.className='server-history-head';
+const accountMatchEyebrow=document.createElement('span'),accountMatchTitle=document.createElement('h2'),accountMatchDescription=document.createElement('p');
+accountMatchEyebrow.className='eyebrow';accountMatchEyebrow.textContent='SIGNED-IN MATCH HISTORY';
+accountMatchTitle.textContent='SERVER RESULTS.';
+accountMatchDescription.textContent='Completed matches on the native room server only. These are not ranked or anti-cheat verified.';
+accountMatchIntro.append(accountMatchEyebrow,accountMatchTitle,accountMatchDescription);
+const refreshServerHistory=document.createElement('button');refreshServerHistory.type='button';refreshServerHistory.textContent='↻ Refresh';
+accountMatchHeader.append(accountMatchIntro,refreshServerHistory);
+const accountMatchStatus=document.createElement('p');accountMatchStatus.setAttribute('role','status');accountMatchStatus.setAttribute('aria-live','polite');
+const accountMatchList=document.createElement('div');accountMatchList.className='server-history-list';
+accountMatchSection.append(accountMatchHeader,accountMatchStatus,accountMatchList);
+$('gamesView').append(accountMatchSection);
 const accountMatchStyle=document.createElement('style');
 accountMatchStyle.textContent=`
 .server-match-history{max-width:1180px;margin:24px auto;padding:20px;border:1px solid #455249;border-radius:12px;background:#15201bee;color:#edf4ed}
@@ -227,12 +237,12 @@ accountMatchStyle.textContent=`
 .server-history-item strong{font-size:18px;color:#f0f9e9}
 .server-history-item span,.server-history-item small{font-size:12px;color:#afc4b5}
 .server-history-result{color:#c6ff42!important;font-weight:800}
-#serverHistoryStatus{font-size:12px;color:#c6ddc3}
+.server-match-history [role=status]{font-size:12px;color:#c6ddc3}
 `;
-document.head.append(accountMatchStyle);
+(document.head||document.body).append(accountMatchStyle);
 let accountMatchLoad=0;
 async function renderAccountMatchHistory(){
- const load=++accountMatchLoad,status=$('serverHistoryStatus'),list=$('serverHistoryList');
+ const load=++accountMatchLoad,status=accountMatchStatus,list=accountMatchList;
  list.replaceChildren();
  const token=settings.account?.token;
  if(!token){status.textContent='Log in from the online room to see your completed server matches.';return;}
@@ -263,6 +273,6 @@ async function renderAccountMatchHistory(){
   if(load===accountMatchLoad)status.textContent='Could not load server results. Local replays are still available.';
  }
 }
-$('refreshServerHistory').onclick=renderAccountMatchHistory;
+refreshServerHistory.onclick=renderAccountMatchHistory;
 const showViewWithServerHistory=showView;
 showView=function(view){showViewWithServerHistory(view);if(view==='games')renderAccountMatchHistory();};
