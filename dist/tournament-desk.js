@@ -440,7 +440,8 @@
       tournaments=incoming;storageSnapshot=event.newValue;storageHealthy=true;
       recoveryBackupPrepared=false;
       message='Tournament data refreshed from another tab.';render();
-    }catch{storageHealthy=false;recoveryBackupPrepared=false;recovery.hidden=false;
+    }catch{storageSnapshot=event.newValue;storageHealthy=false;
+      recoveryBackupPrepared=false;recovery.hidden=false;
       inform('Another tab changed tournament data. Reload or recover it before saving.');}
   });
   render();
