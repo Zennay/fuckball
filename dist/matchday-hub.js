@@ -55,7 +55,8 @@
    leader:count?table[0]?.name:null,
    upcoming:rounds.filter(f=>f.homeScore===null&&f.kickoff!==null&&f.kickoff>Date.now())
     .map(f=>({name:teams[f.home]+' vs '+teams[f.away],time:f.kickoff,
-      venue:f.venue,competition:raw.name}))};
+      venue:f.venue,competition:raw.name,
+      uid:String(raw.id||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,50)+'-'+String(f.id||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30)}))};
  }
  function cup(raw){
   if(!raw||!cleanName(raw.name)||![2,4,8,16].includes(raw.teams?.length)||
@@ -109,7 +110,8 @@
  buttons.append(button('🏆 Leagues',()=>go('.tournament-desk')),
   button('🏅 Cups',()=>go('.knockout-desk')),
   button('⚽ Tactics',()=>go('.formation-studio')),
-  button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV));
+  button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV),
+  button('↓ All fixtures ICS',exportCalendar));
  header.append(lead,buttons);
  const totals=dom('div',null,'matchday-totals');
  const competitionList=dom('div',null,'matchday-competitions');
@@ -118,13 +120,14 @@
  content.append(header,totals,competitionList,upcoming,note);details.append(content);section.append(details);
  const cards=home.querySelector('.mode-cards');
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
- let competitions=[],upcomingMatches=[],failures=0;
+ let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0;
  function render(){
   let leagueData=[],cupData=[];failures=0;
   try{leagueData=read(LEAGUES,128*1024,8).map(league);}catch{failures++;}
   try{cupData=read(CUPS,96*1024,8).map(cup);}catch{failures++;}
   competitions=[...leagueData,...cupData].sort((a,b)=>a.name.localeCompare(b.name));
-  upcomingMatches=leagueData.flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time).slice(0,12);
+  allUpcoming=leagueData.flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
+  upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
   const finished=competitions.reduce((n,c)=>n+c.played,0);
   const summary=[
@@ -132,7 +135,7 @@
    ['Leagues',leagueData.length],
    ['Knockouts',cupData.length],
    ['Manual results',finished],
-   ['Future kickoffs',upcomingMatches.length]
+   ['Future kickoffs',allUpcoming.length]
   ];
   for(const [name,count]of summary){
    const box=dom('article',null,'matchday-stat');
@@ -179,6 +182,37 @@
   const a=dom('a');a.href=url;a.download='fuckball-private-matchday-overview.csv';a.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
   note.textContent='Local, unofficial competition overview saved to CSV.';
+ }
+ function exportCalendar(){
+  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a private league first.');
+  const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+  const date=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
+  const fold=s=>{
+   let line='',column=0;
+   for(const ch of s){
+    const length=new TextEncoder().encode(ch).length;
+    if(column+length>72){line+='\r\n ';column=1;}
+    line+=ch;column+=length;
+   }
+   return line;
+  };
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
+   'PRODID:-//Fuckball//Private Matchday Hub//EN'];
+  const items=allUpcoming.slice(0,200);
+  for(const [index,f]of items.entries()){
+   const uid=(f.uid||'fixture-'+index).replace(/[^a-zA-Z0-9-]/g,'').slice(0,90);
+   lines.push('BEGIN:VEVENT','UID:'+uid+'@local.fuckball',
+    'DTSTAMP:'+date(Date.now()),'DTSTART:'+date(f.time),'DURATION:PT1H',
+    'SUMMARY:'+escape(f.name),
+    'DESCRIPTION:'+escape('Private friendly in '+f.competition+'. Not verified by game servers.'),
+    ...(f.venue?['LOCATION:'+escape(f.venue)]:[]),'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  const output=lines.map(fold).join('\r\n')+'\r\n';
+  const url=URL.createObjectURL(new Blob([output],{type:'text/calendar;charset=utf-8'}));
+  const a=dom('a');a.href=url;a.download='fuckball-private-matchday.ics';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  note.textContent=items.length+' private upcoming friendlies exported with 60-minute placeholder durations. No invitations sent.';
  }
  details.addEventListener('toggle',()=>{if(details.open)render();});
  document.getElementById('tabHome')?.addEventListener('click',render);
