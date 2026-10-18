@@ -33,12 +33,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,clubOnly:d.clubOnly===true,canClubLock:d.canClubLock===true,owner:d.owner,
     chatMuteUntil:Number.isSafeInteger(d.chatMuteUntil)&&d.chatMuteUntil>Date.now()?d.chatMuteUntil:null,
     chatMutes:Array.isArray(d.chatMutes)&&d.chatMutes.length<=128?d.chatMutes.filter(m=>Array.isArray(m)&&m.length===2&&Number.isSafeInteger(m[0])&&m[0]>0&&Number.isSafeInteger(m[1])&&m[1]>Date.now()):[]};
-  window.renderCustomRoomAdmin?.();return;
+  window.renderCustomRoomAdmin?.();window.renderNativeChatMute?.();return;
  }
  if(d.type==='chatModeration'){
    const until=Number.isSafeInteger(d.until)&&d.until>Date.now()?d.until:null;
    link.chatMutedUntil=d.muted===true?until:null;
    notify(until?'The room host muted your chat for up to 10 minutes.':'Your room chat is available again.');
+   window.renderNativeChatMute?.();
    return;
   }
   if(d.type==='resumeTicket'){if(typeof d.ticket==='string'&&/^[0-9a-f]{64}$/.test(d.ticket))link.resumeTicket=d.ticket;return;}
