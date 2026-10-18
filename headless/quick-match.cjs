@@ -49,13 +49,15 @@ function distributeUnits(units,size){
  units.forEach((u,i)=>(best&(1<<i)?red:blue).push(...u.players));
  return{red,blue};
 }
-function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true}){
+function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true,canShareMatch=()=>true}){
  const pools=Object.fromEntries(Object.keys(SIZES).map(mode=>[mode,[]]));
  const active=new Map(),readyBySocket=new Map(),readyChecks=new Map();
  let nextId=0;
  const available=ws=>ws?.readyState===1&&!ws.room&&validAccount(ws);
  const live=u=>u.players.every(p=>available(p.ws));
  const all=units=>units.flatMap(u=>u.players);
+ const compatible=players=>players.every((p,i)=>players.slice(i+1).every(q=>
+  canShareMatch(p.user,q.user)));
  function broadcast(mode){
   const count=pools[mode].reduce((n,u)=>n+u.players.length,0);
   for(const unit of pools[mode])for(const p of unit.players)if(available(p.ws))
@@ -106,6 +108,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
     throw Error('All party members must be online, signed in and not already searching.');
    users.add(p.user);sockets.add(p.ws);
   }
+  if(!compatible(players))throw Error('This party cannot enter a match after a social change.');
   for(const unit of new Set(active.values()))
    if(unit.players.some(p=>users.has(p.user)))
     throw Error('A party member is already searching.');
@@ -131,6 +134,12 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   if(!check||id!==check.id||typeof accepted!=='boolean')
    throw Error('This ready check is no longer active.');
   if(!available(ws)){abortReady(check,ws,'A player disconnected.');return;}
+  // Social blocks may change while the 15-second ready check is on screen.
+  // Never start a newly blocked human matchup from an old ready proposal.
+  if(!compatible(all(check.units))){
+   abortReady(check,null,'A matchmaking preference changed. Searching for a different lineup.');
+   return;
+  }
   if(!accepted){abortReady(check,ws,'A player declined.');return;}
   check.accepted.add(ws);
   const players=all(check.units);
@@ -167,7 +176,9 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   function visit(index,slots,selected){
    if(--budget<=0||solutions>=96)return;
    if(slots===0){
-    const units=[anchor,...selected],teams=distributeUnits(units,size);
+    const units=[anchor,...selected];
+    if(!compatible(all(units)))return;
+    const teams=distributeUnits(units,size);
     if(!teams)return;
     solutions++;
     const redSkill=teams.red.reduce((sum,p)=>sum+p.skill,0);
