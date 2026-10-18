@@ -18,10 +18,44 @@
  const install=document.createElement('button');install.type='button';
  install.className='primary';install.textContent='↓ Install Fuckball';install.hidden=true;
  const local=document.createElement('button');local.type='button';
- local.textContent='▶ Practice 1v1';// The human Quick Match card opens the online queue. Offline practice must\n // always use the dedicated local AI path; never silently enqueue humans.\n local.onclick=()=>document.getElementById('quickPractice')?.click();
+ local.textContent='▶ Practice 1v1';
  const squad=document.createElement('button');squad.type='button';
- squad.textContent='Play local 4v4';squad.onclick=()=>document.getElementById('quickSquad')?.click();
+ squad.textContent='Play local 4v4';
  actions.append(install,local,squad);
+ // These game launchers are separate from the human Quick Match queue.
+ // Never interrupt a server room, direct-peer match or pending human ready check.
+ const launchNotice=document.createElement('p');launchNotice.className='pwa-launch-notice';
+ launchNotice.setAttribute('role','status');launchNotice.setAttribute('aria-live','polite');
+ actions.insertAdjacentElement('afterend',launchNotice);
+ function onlineConflict(){
+  if(typeof serverLink!=='undefined'&&serverLink?.room)
+   return 'Leave your active native online room explicitly before starting offline practice.';
+  if(typeof peerConnected!=='undefined'&&peerConnected)
+   return 'Disconnect from your current peer room before starting offline practice.';
+  if(typeof serverLink!=='undefined'&&serverLink?.quickMatchMode)
+   return 'Cancel your existing human Quick Match search or ready check first.';
+  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
+     document.querySelector('.quick-ready:not([hidden])'))
+   return 'Cancel the active human queue or ready check before practising.';
+  if(document.getElementById('joinScreen')?.hidden===false)
+   return 'Close your open room invitation before starting a local match.';
+  return null;
+ }
+ function beginPractice(id,description){
+  const conflict=onlineConflict();
+  if(conflict){launchNotice.textContent=conflict;return;}
+  const control=document.getElementById(id);
+  if(!control||control.disabled){launchNotice.textContent=description+' cannot start right now. Use the original game controls.';return;}
+  // Opening another local mode may end an in-progress solo game or replay.
+  // The player decides whether to discard that local session.
+  if(document.getElementById('matchView')?.hidden===false&&
+      ((typeof started!=='undefined'&&started)||(typeof replay!=='undefined'&&replay))&&
+      !window.confirm('Leave the current local game or replay to start '+description+'? Unsaved local progress may be lost.'))return;
+  control.click();
+  launchNotice.textContent='Opened '+description+' using the existing local game controls. No human matchmaking was started.';
+ }
+ local.onclick=()=>beginPractice('quickPractice','local 1v1 practice');
+ squad.onclick=()=>beginPractice('quickSquad','local 4v4 practice');
  const setup=document.createElement('p');setup.className='pwa-setup';
  setup.setAttribute('role','status');setup.setAttribute('aria-live','polite');
  setup.textContent='Offline availability is being prepared on this device…';
