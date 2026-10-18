@@ -66,6 +66,8 @@
  const deadValue=make('output','','30%');
  const sliderRow=make('div','controller-setup-slider');sliderRow.append(slider,deadValue);deadLabel.append(sliderRow);
  fields.append(deviceLabel,mappingLabel,stickLabel,deadLabel,invertLabel);
+ const bindButton=make('button','controller-setup-bind','◎ Press a button to bind kick');
+ bindButton.type='button';
  const calibrate=make('button','','◎ Measure resting stick (2s)');calibrate.type='button';
  const hint=make('p','controller-setup-hint','Rest the stick and release every button before calibrating. This only recommends a deadzone; you choose whether to apply it.');
  const actions=make('div','controller-setup-actions');
@@ -73,12 +75,55 @@
  const reset=make('button','','Restore defaults');reset.type='button';
  const done=make('button','','Done');done.type='button';
  actions.append(apply,reset,done);
- dialog.append(heading,privacy,state,board,fields,calibrate,hint,actions);
+ dialog.append(heading,privacy,state,board,fields,bindButton,calibrate,hint,actions);
  document.body.append(dialog);
  const kickValid=k=>MODES.some(([key])=>key===k);
  let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false},
   suggestion=null,sampling=null,lastMessage='',active=false;
- let selectedSource=null,deviceSignature='';
+ let selectedSource=null,deviceSignature='',binding=null;
+ const allowedButtons=[0,1,2,3,4,5,6,7,8,10,11];
+ function cancelBinding(message){
+  binding=null;bindButton.textContent='◎ Press a button to bind kick';
+  if(message)hint.textContent=message;
+ }
+ function scanBinding(){
+  if(!binding)return;
+  const task=binding;
+  if(!active||!dialog.open||document.hidden)return cancelBinding('Binding stopped when the dialog or tab closed.');
+  const pad=controller();
+  if(!pad||pad.index!==task.index)return cancelBinding('Selected controller disconnected or changed. No binding was saved.');
+  if(performance.now()-task.startedAt>8000)
+   return cancelBinding('No button detected within eight seconds. Choose Press a button to retry.');
+  const down=allowedButtons.filter(i=>held(pad,i));
+  if(!task.armed){
+   if(down.length===0){task.armed=true;hint.textContent='Now press exactly one kick button. Menu/Start and D-pad buttons are reserved.';}
+   else hint.textContent='Release all buttons first, then press the desired kick button.';
+  }else if(down.length===1){
+   const n=down[0];
+   cancelBinding();
+   config.kick='button:'+n;
+   fill();persist();
+   hint.textContent='Kick is now bound to button '+n+' on this device. The in-match menu uses the same setting.';
+   return;
+  }else if(down.length>1){
+   task.armed=false;
+   hint.textContent='More than one button pressed. Release all buttons and press only one.';
+  }
+  if(binding===task)requestAnimationFrame(scanBinding);
+ }
+ bindButton.onclick=()=>{
+  if(binding)return cancelBinding('Kick binding cancelled; your previous mapping is unchanged.');
+  const pad=controller();
+  if(!pad)return void(hint.textContent='Connect and select a controller before binding its kick button.');
+  cancelCalibration();
+  binding={index:pad.index,armed:false,startedAt:performance.now()};
+  bindButton.textContent='Cancel button binding';
+  hint.textContent='Release all buttons; then press the desired kick button within eight seconds.';
+  requestAnimationFrame(scanBinding);
+ };
+ function cancelCalibration(){
+  sampling=null;calibrate.disabled=false;suggestion=null;apply.disabled=true;
+ }
  function read(){
   try{
    const saved=JSON.parse(localStorage.getItem(KEY)||'null');
@@ -124,6 +169,7 @@
   config.deadzone=value;fill();persist();
  };
  reset.onclick=()=>{
+  cancelBinding();
   config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false};suggestion=null;
   apply.disabled=true;fill();persist();
   hint.textContent='Standard kick mapping and 30% deadzone restored.';
@@ -166,7 +212,8 @@
   const next=choice==='auto'?null:Number(choice);
   if(next!==null&&(!Number.isSafeInteger(next)||next<0||next>15))return;
   selectedSource=next;deviceSignature='';
-  sampling=null;suggestion=null;apply.disabled=true;calibrate.disabled=false;
+  cancelBinding('Controller changed; previous pending binding cancelled.');
+  cancelCalibration();
   lastMessage='';
   window.dispatchEvent(new CustomEvent('fuckball:controller-source',{detail:{index:next}}));
   refreshSources();present(controller());
@@ -225,6 +272,7 @@
    Math.round(suggestion*100)+'%. Apply it or adjust the slider manually.';
  }
  calibrate.onclick=()=>{
+  cancelBinding();
   if(!controller()){
    hint.textContent='Connect a controller and press a button before measuring drift.';return;
   }
@@ -238,20 +286,21 @@
   fill();persist();
  };
  function close(){
+  cancelBinding();
   if(dialog.open)dialog.close();
   else dialog.removeAttribute('open');
   launch.focus();
  }
  done.onclick=close;
  dialog.addEventListener('close',()=>{
-  active=false;sampling=null;calibrate.disabled=false;launch.focus();
+  cancelBinding();active=false;sampling=null;calibrate.disabled=false;launch.focus();
  });
  dialog.addEventListener('click',event=>{if(event.target===dialog)close();});
  launch.onclick=()=>{
   if(typeof dialog.showModal!=='function'){
    state.textContent='Your browser does not support the controller setup dialog.';return;
   }
-  fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
+  cancelBinding();fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
   hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
   dialog.showModal();mapping.focus();
  };
@@ -267,4 +316,5 @@
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
  window.addEventListener('gamepadconnected',()=>{if(active){refreshSources();present(controller());}});
  window.addEventListener('gamepaddisconnected',()=>{if(active){refreshSources();present(controller());}});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelBinding();});
 })();
