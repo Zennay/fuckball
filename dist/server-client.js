@@ -102,6 +102,14 @@ function renderNextMatchPanel(){
    'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' active players · expires shortly':
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
    'Everyone remains connected to this room.';
+ const list=$('nextMatchPlayers');list.replaceChildren();
+ for(const p of Array.isArray(result?.finalPlayers)?result.finalPlayers:[]){
+  if(!p||typeof p.name!=='string'||!Number.isFinite(p.playedFrames))continue;
+  const line=document.createElement('li'),name=document.createElement('span'),time=document.createElement('small');
+  name.textContent=(p.finalTeam===1?'🔴 ':p.finalTeam===2?'🔵 ':'⚪ ')+p.name;
+  time.textContent=(Math.max(0,p.playedFrames)/60).toFixed(1)+'s active · final side';
+  line.append(name,time);list.append(line);
+ }
  const host=!!link.isOwner;
  $('rematchRequest').hidden=!result||!!request||!host;
  $('rematchRequest').disabled=!result||!!request||!host;
