@@ -56,7 +56,7 @@
   table.sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
   const count=rounds.filter(f=>f.homeScore!==null).length;
   const allFixtures=rounds.map(f=>({
-   tournamentId:raw.id,fixtureId:f.id,
+   type:'League',tournamentId:raw.id,fixtureId:f.id,
    uid:raw.id+'-'+f.id,round:f.round,
    home:teams[f.home],away:teams[f.away],
    time:f.kickoff,venue:f.venue,competition:raw.name,
@@ -218,11 +218,28 @@
  const controlStatus=dom('p',null,'matchday-control-status');
  controlStatus.setAttribute('role','status');controlStatus.setAttribute('aria-live','polite');
  control.append(controlHeader,controlRows,controlStatus);
+ const clashes=dom('section',null,'matchday-clashes');
+ clashes.setAttribute('aria-label','Potential private kickoff overlaps');
+ const clashesHeader=dom('div',null,'matchday-clashes-header');
+ const clashesTitle=dom('div');
+ clashesTitle.append(dom('h3','SCHEDULE OVERLAPS'),
+  dom('p','Spot scheduled private friendlies less than 60 minutes apart. This is a planning reminder, not proof of a real conflict or confirmed attendance.'));
+ const clashesControls=dom('div',null,'matchday-clashes-controls');
+ const sharedFilter=dom('input');sharedFilter.type='checkbox';sharedFilter.checked=false;
+ const filterLabel=dom('label',null,'matchday-clashes-filter');
+ filterLabel.append(sharedFilter,dom('span','Only matches sharing a named team'));
+ const exportClashes=button('↓ Export overlaps CSV',downloadClashes);
+ clashesControls.append(filterLabel,exportClashes);
+ clashesHeader.append(clashesTitle,clashesControls);
+ const clashesRows=dom('div',null,'matchday-clashes-list');
+ const clashesStatus=dom('p',null,'matchday-clashes-status');
+ clashesStatus.setAttribute('role','status');clashesStatus.setAttribute('aria-live','polite');
+ clashes.append(clashesHeader,clashesRows,clashesStatus);
  const upcoming=dom('div',null,'matchday-upcoming');
  const note=dom('p',null,'matchday-status');note.setAttribute('role','status');note.setAttribute('aria-live','polite');
  const attendancePanel=dom('details',null,'matchday-attendance');
  attendancePanel.append(dom('summary','✓ PRIVATE MATCH ATTENDANCE · OPEN'));
- content.append(header,totals,competitionList,control,upcoming,attendancePanel,note);details.append(content);section.append(details);
+ content.append(header,totals,competitionList,control,clashes,upcoming,attendancePanel,note);details.append(content);section.append(details);
  const cards=home.querySelector('.mode-cards');
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
  let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
@@ -302,6 +319,7 @@
   competitions=[...leagueData,...cupData,...seriesData].sort((a,b)=>a.name.localeCompare(b.name));
   fixtureCards=[...leagueData,...cupData,...seriesData].flatMap(c=>c.fixtures);
   renderControl();
+  renderClashes();
   allUpcoming=[...leagueData,...cupData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
@@ -352,6 +370,83 @@
   note.textContent=(failures?'Some local competition data was invalid or unavailable and has been excluded. ':'')+
     'All outcomes are manually entered, unverified and remain on this device. No online rooms or accounts were queried.';
  }
+
+ // Read-only collision hints: a 60-minute *placeholder*, not a match duration.
+ // Never mutate the private fixture writer's kickoff or assume shared names
+ // prove the same actual players across unrelated competitions.
+ const CLASH_WINDOW=60*60*1000,MAX_LISTED_CLASHES=24;
+ const clashId=f=>(f.type||'')+':'+(f.tournamentId||f.cupId||f.seriesId||'')+':'+
+  (f.fixtureId||f.matchId||f.gameId||'');
+ const teamNames=f=>[f.home,f.away].filter(x=>
+  typeof x==='string'&&x!=='Qualifying winner pending').map(x=>x.toLocaleLowerCase());
+ function collisionPairs(){
+  const ordered=fixtureCards.filter(f=>
+   f.active!==false&&f.homeScore===null&&Number.isFinite(f.time)&&f.time>Date.now())
+   .sort((a,b)=>a.time-b.time||clashId(a).localeCompare(clashId(b)));
+  const pairs=[];
+  for(let i=0;i<ordered.length;i++){
+   const left=ordered[i],names=new Set(teamNames(left));
+   for(let j=i+1;j<ordered.length;j++){
+    const right=ordered[j],gap=right.time-left.time;
+    if(gap>=CLASH_WINDOW)break;
+    if(clashId(left)===clashId(right))continue;
+    const overlap=teamNames(right).some(name=>names.has(name));
+    pairs.push({left,right,gap,overlap});
+   }
+  }
+  return pairs;
+ }
+ function selectedClashes(){
+  return collisionPairs().filter(item=>!sharedFilter.checked||item.overlap);
+ }
+ function renderClashes(){
+  const all=collisionPairs(),selected=sharedFilter.checked?all.filter(x=>x.overlap):all;
+  exportClashes.disabled=!selected.length;
+  clashesRows.replaceChildren();
+  for(const {left,right,gap,overlap} of selected.slice(0,MAX_LISTED_CLASHES)){
+   const row=dom('article',null,'matchday-clash-row');
+   const text=dom('div',null,'matchday-clash-detail');
+   const d=new Date(left.time).toLocaleString(undefined,{dateStyle:'short',timeStyle:'short'});
+   const d2=new Date(right.time).toLocaleString(undefined,{timeStyle:'short'});
+   text.append(dom('small',d+' ↔ '+d2+' · '+Math.round(gap/60000)+' minutes apart'+
+    (overlap?' · MATCHING TEAM NAME':'')),
+    dom('strong',left.competition+' · '+left.home+' vs '+left.away),
+    dom('span',right.competition+' · '+right.home+' vs '+right.away));
+   const actions=dom('div',null,'matchday-clash-actions');
+   actions.append(button('Review first kickoff',()=>openFixture(left,'schedule')),
+    button('Review second kickoff',()=>openFixture(right,'schedule')));
+   row.append(text,actions);clashesRows.append(row);
+  }
+  if(!selected.length)clashesRows.append(dom('p',
+   all.length?'No overlapping fixtures match this team-name filter.':
+   'No future private kickoffs fall inside the same provisional 60-minute window.'));
+  clashesStatus.textContent=all.length+' potential time overlaps in saved private fixtures · '+
+   all.filter(x=>x.overlap).length+' share a written team name · '+
+   selected.length+' match current filter'+
+   (selected.length>MAX_LISTED_CLASHES?' · first '+MAX_LISTED_CLASHES+' shown; export CSV for the full set':'')+
+   '. Dates remain editable only in their original competition.';
+ }
+ function downloadClashes(){
+  const rows=selectedClashes();if(!rows.length)return;
+  const csvCell=x=>{
+   let value=String(x??'');
+   if(/^\s*[=+\-@]/.test(value))value="'"+value;
+   return '"'+value.replace(/"/g,'""')+'"';
+  };
+  const table=[['First competition','First fixture','First kickoff UTC','Second competition',
+   'Second fixture','Second kickoff UTC','Minutes apart','Same written team name'],
+   ...rows.map(({left,right,gap,overlap})=>[
+    left.competition,left.home+' vs '+left.away,new Date(left.time).toISOString(),
+    right.competition,right.home+' vs '+right.away,new Date(right.time).toISOString(),
+    Math.round(gap/60000),overlap?'Yes':'No'])];
+  const output='\uFEFF'+table.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
+  const url=URL.createObjectURL(new Blob([output],{type:'text/csv;charset=utf-8'}));
+  const link=dom('a');link.href=url;link.download='fuckball-private-schedule-overlaps.csv';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  clashesStatus.textContent=rows.length+' provisional time overlaps downloaded from your local private fixtures. No data was sent.';
+ }
+ sharedFilter.addEventListener('change',renderClashes);
+
  function exportCSV(){
   if(!competitions.length&&!upcomingMatches.length)return;
   const sanitize=x=>{
