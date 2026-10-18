@@ -25,14 +25,23 @@ function distributeUnits(units,size){
  const total=units.reduce((sum,u)=>sum+u.players.reduce((n,p)=>n+p.skill,0),0);
  let best=null,bestScore=Infinity;
  for(let mask=1;mask<(1<<units.length)-1;mask++){
-  let redSize=0,redSkill=0,redParties=0,blueParties=0;
+  let redSize=0,redSkill=0,redPremade=0,bluePremade=0,redPartyPlayers=0,bluePartyPlayers=0;
   for(let i=0;i<units.length;i++){
-   const u=units[i],party=u.players.length>1;
-   if(mask&(1<<i)){redSize+=u.players.length;redSkill+=u.players.reduce((n,p)=>n+p.skill,0);if(party)redParties++;}
-   else if(party)blueParties++;
+   const u=units[i],partySize=u.players.length,party=partySize>1;
+   if(mask&(1<<i)){
+    redSize+=partySize;redSkill+=u.players.reduce((n,p)=>n+p.skill,0);
+    if(party){redPremade=Math.max(redPremade,partySize);redPartyPlayers+=partySize;}
+   }else if(party){
+    bluePremade=Math.max(bluePremade,partySize);bluePartyPlayers+=partySize;
+   }
   }
   if(redSize!==size)continue;
-  const score=Math.abs(total-2*redSkill)+Math.abs(redParties-blueParties)*45;
+  // Teams remain skill-balanced, but a premade should face a comparably
+  // coordinated opponent when one is already queued. This is a preference,
+  // never a party-only gate or a reason to fabricate human opponents.
+  const score=Math.abs(total-2*redSkill)+
+   Math.abs(redPremade-bluePremade)*90+
+   Math.abs(redPartyPlayers-bluePartyPlayers)*18;
   if(score<bestScore){bestScore=score;best=mask;}
  }
  if(best===null)return null;
@@ -154,23 +163,38 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
    .sort((a,b)=>Math.abs(a.skill-anchor.skill)-Math.abs(b.skill-anchor.skill)||a.at-b.at)
    .slice(0,21);
   const remaining=needed-anchor.players.length;
-  let budget=3500;
+  let budget=3500,solutions=0,best=null,bestScore=Infinity,bestAge=Infinity;
   function visit(index,slots,selected){
-   if(--budget<=0)return null;
+   if(--budget<=0||solutions>=96)return;
    if(slots===0){
-    const units=[anchor,...selected];
-    return distributeUnits(units,size)?units:null;
+    const units=[anchor,...selected],teams=distributeUnits(units,size);
+    if(!teams)return;
+    solutions++;
+    const redSkill=teams.red.reduce((sum,p)=>sum+p.skill,0);
+    const blueSkill=teams.blue.reduce((sum,p)=>sum+p.skill,0);
+    const largestParty=side=>Math.max(0,...units
+     .filter(u=>u.players.length>1&&side.includes(u.players[0]))
+     .map(u=>u.players.length));
+    const partyPlayers=side=>units.filter(u=>u.players.length>1&&side.includes(u.players[0]))
+     .reduce((sum,u)=>sum+u.players.length,0);
+    const score=Math.abs(redSkill-blueSkill)+
+     90*Math.abs(largestParty(teams.red)-largestParty(teams.blue))+
+     18*Math.abs(partyPlayers(teams.red)-partyPlayers(teams.blue));
+    const age=units.reduce((sum,u)=>sum+u.at,0);
+    if(score<bestScore||(score===bestScore&&age<bestAge)){
+     best=units;bestScore=score;bestAge=age;
+    }
+    return;
    }
-   if(slots<0||index>=alternatives.length)return null;
-   for(let i=index;i<alternatives.length;i++){
+   if(slots<0||index>=alternatives.length)return;
+   for(let i=index;i<alternatives.length&&budget>0&&solutions<96;i++){
     const u=alternatives[i];
     if(u.players.length>slots)continue;
-    const answer=visit(i+1,slots-u.players.length,[...selected,u]);
-    if(answer)return answer;
+    visit(i+1,slots-u.players.length,[...selected,u]);
    }
-   return null;
   }
-  return visit(0,remaining,[]);
+  visit(0,remaining,[]);
+  return best;
  }
  function drain(mode){
   const list=pools[mode],needed=SIZES[mode]*2;
