@@ -10,10 +10,20 @@
  const newid=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
  const cleanName=s=>typeof s==='string'&&s===s.trim()&&s.length>=1&&s.length<=45&&!/[\u0000-\u001f\u007f-\u009f]/.test(s);
  const checkedPoint=p=>Array.isArray(p)&&p.length===2&&p.every(v=>Number.isSafeInteger(v)&&v>=30&&v<=970);
+ function validStadium(s){
+  return s===null||(s&&typeof s==='object'&&typeof s.name==='string'&&
+   s.name.length<=45&&s.name.length>0&&!/[\u0000-\u001f\u007f-\u009f]/.test(s.name)&&
+   Number.isSafeInteger(s.width)&&s.width>0&&s.width<=10000&&
+   Number.isSafeInteger(s.height)&&s.height>0&&s.height<=10000&&
+   Array.isArray(s.lines)&&s.lines.length<=160&&
+   s.lines.every(line=>Array.isArray(line)&&line.length===2&&line.every(p=>
+    Array.isArray(p)&&p.length===2&&p.every(n=>Number.isSafeInteger(n)&&n>=0&&n<=1000))));
+ }
  function verify(a){
   if(!a||a.version!==1||typeof a.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(a.id)||
    !cleanName(a.name)||!Array.isArray(a.spots)||a.spots.length!==9||
    !a.spots.every(checkedPoint)||!Array.isArray(a.arrows)||a.arrows.length>16||
+    !validStadium(a.stadium===undefined?null:a.stadium)||
    !Number.isSafeInteger(a.updatedAt)||a.updatedAt<1600000000000||a.updatedAt>Date.now()+86400000)
    throw Error('Invalid formation data.');
   const links=new Set();
@@ -23,9 +33,10 @@
    links.add(link.join(':'));
   }
   return {version:1,id:a.id,name:a.name,spots:a.spots.map(p=>p.slice()),
-   arrows:a.arrows.map(p=>p.slice()),updatedAt:a.updatedAt};
+   arrows:a.arrows.map(p=>p.slice()),stadium:a.stadium===undefined?null:a.stadium,
+    updatedAt:a.updatedAt};
  }
- function fresh(name){return {version:1,id:newid(),name,spots:START.map(p=>p.slice()),arrows:[],updatedAt:Date.now()};}
+ function fresh(name){return {version:1,id:newid(),name,spots:START.map(p=>p.slice()),arrows:[],stadium:null,updatedAt:Date.now()};}
  let plans=[],active='',selected=0,mode='move',arrowFrom=-1,dragging=false,msg='';
  try{
   const stored=localStorage.getItem(KEY);
@@ -70,6 +81,31 @@
   const t=current();if(!t||!window.confirm('Reset all disc positions in this plan? Arrows will be kept.'))return;
   change(t,{spots:START.map(p=>p.slice())},'Disc positions reset.');
  });
+ const layout=el('select');
+ layout.setAttribute('aria-label','4v4 tactical formation preset');
+ for(const [value,label] of [['balanced','Balanced 1–2–1'],['press','High press'],['compact','Compact block']])
+  layout.add(new Option(label,value));
+ const layouts={
+  balanced:[[130,500],[350,300],[350,700],[650,500]],
+  press:[[170,500],[455,280],[455,720],[760,500]],
+  compact:[[135,500],[275,300],[275,700],[495,500]]
+ };
+ const applyLayout=btn('Apply 4v4 shape',()=>{
+  const t=current();if(!t)return;
+  const red=layouts[layout.value];if(!red)return;
+  if(!window.confirm('Apply this 4v4 shape to both teams? Passing arrows will be cleared.'))return;
+  const blue=red.map(([x,y])=>[1000-x,y]);
+  change(t,{spots:[...red.map(p=>p.slice()),...blue,[500,500]],arrows:[]},
+   'Mirrored 4v4 shape applied. Previous passing arrows cleared.');
+ });
+ const stadiumUpload=el('input');stadiumUpload.type='file';
+ stadiumUpload.accept='.hbs,.json,application/json';stadiumUpload.hidden=true;
+ const stadiumImport=btn('Import .hbs background',()=>stadiumUpload.click());
+ const stadiumClear=btn('Default pitch',()=>{
+  const t=current();if(!t||!t.stadium)return;
+  if(!window.confirm('Replace the current stadium drawing with the default pitch?'))return;
+  change(t,{stadium:null},'Default tactical pitch restored.');
+ });
  const json=btn('↓ Save JSON',exportJSON);
  const png=btn('↓ Save PNG',exportPNG);
  const upload=el('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
@@ -78,7 +114,7 @@
   const t=current();if(!t||!window.confirm('Delete private plan "'+t.name+'"? Save JSON first if needed.'))return;
   try{commit(plans.filter(p=>p.id!==t.id));active='';msg='Local plan deleted.';render();}catch(err){info(err.message);}
  });
- actionbar.append(planSelect,add,duplicate,reset,json,png,importBtn,remove,upload);
+ actionbar.append(planSelect,add,duplicate,reset,layout,applyLayout,stadiumImport,stadiumClear,stadiumUpload,json,png,importBtn,remove,upload);
  const workspace=el('div',undefined,'formation-workspace');
  const canvas=el('canvas');canvas.width=960;canvas.height=540;
  canvas.setAttribute('aria-label','Tactical pitch; select discs with buttons or click/drag. Keyboard arrow keys move the selected disc.');
@@ -135,7 +171,8 @@
   planSelect.replaceChildren(new Option('Choose a plan…',''));
   for(const p of plans)planSelect.add(new Option(p.name,p.id));
   planSelect.value=t?.id||'';
-  for(const b of [duplicate,reset,json,png,remove,move,link,clear])b.disabled=!t;
+  for(const b of [duplicate,reset,applyLayout,stadiumImport,json,png,remove,move,link,clear])b.disabled=!t;
+  stadiumClear.disabled=!t?.stadium;
   move.classList.toggle('active',mode==='move');
   link.classList.toggle('active',mode==='arrow');
   chooser.replaceChildren();
@@ -147,7 +184,7 @@
   }
   if(t){
    const point=t.spots[selected];
-   readout.textContent='Selected '+NAMES[selected]+' · X '+(point[0]/10).toFixed(1)+'% · Y '+(point[1]/10).toFixed(1)+'%. '+t.arrows.length+' passing arrows.';
+   readout.textContent='Selected '+NAMES[selected]+' · X '+(point[0]/10).toFixed(1)+'% · Y '+(point[1]/10).toFixed(1)+'%. '+t.arrows.length+' passing arrows. '+(t.stadium?'HBS stadium: '+t.stadium.name:'Default pitch.');
   }else readout.textContent='Create a private tactics plan to begin.';
   status.textContent=msg||(t?'Private, saved locally · not connected to real games.':'Create a plan to draw your first 4v4 formation.');
   draw();
@@ -158,18 +195,28 @@
  function draw(){
   const ctx=canvas.getContext('2d');
   if(!ctx)return;
-  const w=canvas.width,h=canvas.height;
+  const w=canvas.width,h=canvas.height,t=current();
   ctx.fillStyle='#0e382f';ctx.fillRect(0,0,w,h);
   ctx.fillStyle='#0f4638';ctx.fillRect(25,25,w-50,h-50);
   ctx.fillStyle='#164f40';
   for(let i=0;i<10;i++)if(i%2===0)ctx.fillRect(25+i*91,25,91,h-50);
   ctx.strokeStyle='#c5e7da';ctx.lineWidth=2;
   ctx.strokeRect(25,25,w-50,h-50);
-  ctx.beginPath();ctx.moveTo(w/2,25);ctx.lineTo(w/2,h-25);ctx.stroke();
-  ctx.beginPath();ctx.arc(w/2,h/2,68,0,Math.PI*2);ctx.stroke();
-  ctx.strokeRect(25,h/2-108,150,216);ctx.strokeRect(w-175,h/2-108,150,216);
-  ctx.strokeRect(25,h/2-55,55,110);ctx.strokeRect(w-80,h/2-55,55,110);
-  const t=current();if(!t)return;
+  if(t?.stadium){
+   ctx.strokeStyle='#b6e4d3';ctx.lineWidth=2;
+   for(const [[x1,y1],[x2,y2]] of t.stadium.lines){
+    ctx.beginPath();ctx.moveTo(x1*w/1000,y1*h/1000);
+    ctx.lineTo(x2*w/1000,y2*h/1000);ctx.stroke();
+   }
+   ctx.fillStyle='#d5ebdf';ctx.font='12px system-ui';ctx.textAlign='left';
+   ctx.fillText('HBS: '+t.stadium.name,35,20);
+  }else{
+   ctx.beginPath();ctx.moveTo(w/2,25);ctx.lineTo(w/2,h-25);ctx.stroke();
+   ctx.beginPath();ctx.arc(w/2,h/2,68,0,Math.PI*2);ctx.stroke();
+   ctx.strokeRect(25,h/2-108,150,216);ctx.strokeRect(w-175,h/2-108,150,216);
+   ctx.strokeRect(25,h/2-55,55,110);ctx.strokeRect(w-80,h/2-55,55,110);
+  }
+  if(!t)return;
   const xy=i=>[t.spots[i][0]*w/1000,t.spots[i][1]*h/1000];
   for(const [from,to]of t.arrows){
    const [x1,y1]=xy(from),[x2,y2]=xy(to),a=Math.atan2(y2-y1,x2-x1);
@@ -257,6 +304,41 @@
    info('Private formation diagram saved as PNG.');
   },'image/png');
  }
+ stadiumUpload.onchange=async()=>{
+  const file=stadiumUpload.files?.[0];stadiumUpload.value='';
+  if(!file)return;
+  const t=current();if(!t)return;
+  if(file.size<=0||file.size>2*1048576)
+   return info('HBS import requires a stadium smaller than 2 MiB.');
+  if(typeof Utils==='undefined'||typeof Utils.parseStadium!=='function'||
+   typeof Utils.exportStadium!=='function'||typeof JSON5==='undefined')
+   return info('Native stadium parser is unavailable.');
+  try{
+   const parsed=Utils.parseStadium(await file.text());
+   if(!parsed||!Number.isFinite(parsed.width)||!Number.isFinite(parsed.height)||
+    parsed.width<=0||parsed.height<=0||parsed.width>10000||parsed.height>10000)
+    throw Error('Invalid native stadium dimensions.');
+   const raw=JSON5.parse(Utils.exportStadium(parsed));
+   if(!raw||!Array.isArray(raw.vertexes)||!Array.isArray(raw.segments))
+    throw Error('Stadium geometry could not be read.');
+   const px=(value,bound)=>Math.round(Math.max(0,Math.min(1000,(value+bound)/(2*bound)*900+50)));
+   const lines=[];
+   for(const seg of raw.segments){
+    if(lines.length>=160)break;
+    if(seg?.vis===false||!Number.isSafeInteger(seg?.v0)||!Number.isSafeInteger(seg?.v1))continue;
+    const v0=raw.vertexes[seg.v0],v1=raw.vertexes[seg.v1];
+    if(!v0||!v1||![v0.x,v0.y,v1.x,v1.y].every(Number.isFinite))continue;
+    lines.push([[px(v0.x,parsed.width),px(v0.y,parsed.height)],
+     [px(v1.x,parsed.width),px(v1.y,parsed.height)]]);
+   }
+   if(!lines.length)throw Error('No drawable visible stadium segments.');
+   const stadium={name:String(parsed.name||'Imported stadium').trim().slice(0,45),
+    width:Math.round(parsed.width),height:Math.round(parsed.height),lines};
+   if(!validStadium(stadium))throw Error('Stadium drawing exceeds private board limits.');
+   if(!window.confirm('Use '+stadium.name+' as this plan’s background? Existing positions and arrows stay.'))return;
+   change(t,{stadium},'Real HBS background imported for this private diagram only.');
+  }catch(error){info('Stadium not imported: '+(error.message||'Invalid HBS file.'));}
+ };
  upload.onchange=async()=>{
   const file=upload.files?.[0];upload.value='';
   if(!file)return;
