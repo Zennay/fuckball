@@ -82,6 +82,38 @@
  let detector=null;
  try{if(typeof BarcodeDetector==='function')detector=new BarcodeDetector({formats:['qr_code']});}
  catch{detector=null;}
+ // Firefox and browsers without BarcodeDetector can decode on-device using a
+ // bundled, lazy-loaded jsQR fallback. Only the explicit scan action loads it.
+ let fallbackLoad=null;
+ async function readyDecoder(){
+  if(detector||typeof window.jsQR==='function')return;
+  if(!fallbackLoad){
+   fallbackLoad=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='vendor/jsQR.js';script.async=true;
+    script.onload=()=>typeof window.jsQR==='function'?resolve():reject(Error('Local QR decoder unavailable.'));
+    script.onerror=()=>reject(Error('Could not load local QR decoder. Paste the room link instead.'));
+    document.head.append(script);
+   }).catch(error=>{fallbackLoad=null;throw error;});
+  }
+  await fallbackLoad;
+ }
+ const localFrame=document.createElement('canvas');
+ const localContext=localFrame.getContext('2d',{willReadFrequently:true});
+ async function decodeQR(source){
+  if(detector)return detector.detect(source);
+  await readyDecoder();
+  if(!localContext)throw Error('Cannot decode QR on this device. Paste the invite instead.');
+  const width=source.videoWidth||source.width, height=source.videoHeight||source.height;
+  if(!(width>0&&height>0))return [];
+  const scale=Math.min(1,1280/Math.max(width,height));
+  localFrame.width=Math.max(1,Math.round(width*scale));
+  localFrame.height=Math.max(1,Math.round(height*scale));
+  localContext.drawImage(source,0,0,localFrame.width,localFrame.height);
+  const pixels=localContext.getImageData(0,0,localFrame.width,localFrame.height);
+  const qr=window.jsQR(pixels.data,pixels.width,pixels.height,{inversionAttempts:'attemptBoth'});
+  return qr&&typeof qr.data==='string'?[{rawValue:qr.data}]:[];
+ }
  const qrActions=document.createElement('div');qrActions.className='direct-invite-qr-actions';
  const scan=document.createElement('button');scan.type='button';scan.textContent='▣ Scan QR with camera';
  const imageLabel=document.createElement('label');imageLabel.textContent='Read QR from image';
@@ -115,15 +147,16 @@
    return false;
   }
  }
- scan.disabled=!detector||typeof navigator.mediaDevices?.getUserMedia!=='function';
- imageFile.disabled=!detector||typeof createImageBitmap!=='function';
+ scan.disabled=typeof navigator.mediaDevices?.getUserMedia!=='function';
+ imageFile.disabled=typeof createImageBitmap!=='function';
  if(scan.disabled){
   status.textContent='QR camera scanning is unavailable in this browser. Pasting the same-site invitation URL or room code still works.';
  }
  scan.onclick=async()=>{
-  if(!detector||stream)return;
+  if(stream)return;
   scan.disabled=true;lastInvalid='';
   try{
+   await readyDecoder();
    const acquired=await navigator.mediaDevices.getUserMedia({
     audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480}}
    });
@@ -135,7 +168,7 @@
     if(detecting||!stream||document.hidden||scanner.hidden||video.readyState<2)return;
     const currentStream=stream;detecting=true;
     try{
-     const found=await detector.detect(video);
+     const found=await decodeQR(video);
      if(stream!==currentStream||document.hidden)return;
      for(const item of found||[]){if(typeof item.rawValue==='string'&&acceptScanned(item.rawValue))break;}
     }catch{status.textContent='QR detection unavailable. Stop camera and paste the invitation instead.';stopScan();}
@@ -149,16 +182,17 @@
  close.onclick=()=>{stopScan();scan.focus();status.textContent='Camera stopped. Paste a link or try another image.';};
  imageFile.onchange=async()=>{
   const file=imageFile.files?.[0];imageFile.value='';
-  if(!file||!detector||typeof createImageBitmap!=='function')return;
+  if(!file||typeof createImageBitmap!=='function')return;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
   imageFile.disabled=true;
   try{
+   await readyDecoder();
    const bitmap=await createImageBitmap(file);
    try{
     if(bitmap.width>4096||bitmap.height>4096)throw Error('Image dimensions exceed 4096 pixels.');
-    const found=await detector.detect(bitmap);
+    const found=await decodeQR(bitmap);
     if(!found?.some(item=>typeof item.rawValue==='string'&&acceptScanned(item.rawValue)))
      status.textContent='No valid same-site room QR found. Paste a link or use another image.';
    }finally{bitmap.close();}
