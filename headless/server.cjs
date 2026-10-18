@@ -549,7 +549,8 @@ function createServer(options={}){
     const recent=(ws.chatTimes||[]).filter(t=>now-t<10000);
     if(recent.length>=4)throw Error('Chat is too fast. Try again shortly.');
     recent.push(now);ws.chatTimes=recent;
-    const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Player').slice(0,25);
+    const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Player')
+     .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25)||'Player';
     const message={type:'chat',room:r.id,from:ws.playerId,name,text:d.text.trim(),at:now};
     for(const peer of r.sockets.values())send(peer,message);
     return;
