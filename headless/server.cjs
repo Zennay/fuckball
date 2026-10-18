@@ -601,7 +601,7 @@ function createServer(options={}){
     return null;
    members.add(player.user);
   }
-  if(roster.some((p,i)=>roster.slice(i+1).some(q=>!social?.canShareMatch(p.user,q.user))))
+  if(social&&roster.some((p,i)=>roster.slice(i+1).some(q=>!social.canShareMatch(p.user,q.user))))
    return null;
   if(match.clubMatch){
    const sides={1:match.clubMatch.red,2:match.clubMatch.blue};
