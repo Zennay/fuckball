@@ -257,7 +257,9 @@ accountMatchHeader.append(accountMatchIntro,accountMatchActions);
 const accountMatchStatus=document.createElement('p');accountMatchStatus.setAttribute('role','status');accountMatchStatus.setAttribute('aria-live','polite');
 const accountMatchSummary=document.createElement('p');accountMatchSummary.className='server-history-summary';
 const accountMatchList=document.createElement('div');accountMatchList.className='server-history-list';
-accountMatchSection.append(accountMatchHeader,accountMatchStatus,accountMatchSummary,accountMatchList);
+const accountCareerPanel=document.createElement('section');accountCareerPanel.className='server-career-panel';
+accountCareerPanel.setAttribute('aria-label','My server-recorded career statistics');
+accountMatchSection.append(accountMatchHeader,accountMatchStatus,accountCareerPanel,accountMatchSummary,accountMatchList);
 $('gamesView').append(accountMatchSection);
 const accountMatchStyle=document.createElement('style');
 accountMatchStyle.textContent=`
@@ -275,13 +277,61 @@ accountMatchStyle.textContent=`
 .server-history-item strong{font-size:18px;color:#f0f9e9}
 .server-history-item span,.server-history-item small{font-size:12px;color:#afc4b5}
 .server-history-result{color:#c6ff42!important;font-weight:800}
+.server-career-panel{margin:17px 0;display:grid;gap:10px}
+.server-career-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr));gap:9px}
+.server-career-metric{border:1px solid #687d6588;border-radius:10px;padding:16px;background:#24372a;display:grid;gap:7px}
+.server-career-metric strong{font-size:22px;color:#d6ff9b;font-variant-numeric:tabular-nums}
+.server-career-metric span{text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:#a7bfad}
+.server-career-note{font-size:12px;line-height:1.5;color:#bbcdbc}
 .server-match-history [role=status]{font-size:12px;color:#c6ddc3}
 `;
 (document.head||document.body).append(accountMatchStyle);
-let accountMatchLoad=0,accountHistoryItems=[];
+let accountMatchLoad=0,accountHistoryItems=[],accountCareerData=null,accountCareerMatches=0;
+async function renderAccountCareer(token,load){
+ try{
+  const response=await fetch('/api/player-stats',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(load!==accountMatchLoad||settings.account?.token!==token)return;
+  if(response.status===401){accountCareerPanel.textContent='Log in again to see your career totals.';return;}
+  if(!response.ok)throw Error('Statistics unavailable.');
+  const data=await response.json(),stats=data?.stats;
+  if(!data.durable||!stats){accountCareerPanel.textContent='Career totals require persistent server storage.';return;}
+  if(stats.source!=='native-server'||stats.ranked!==false||
+     !Number.isSafeInteger(stats.matches)||stats.matches<0||
+     ['wins','draws','losses','goalsFor','goalsAgainst','playedFrames','bestWinStreak'].some(k=>!Number.isSafeInteger(stats[k])||stats[k]<0)||
+     stats.matches!==stats.wins+stats.draws+stats.losses)
+   throw Error('Invalid statistics.');
+  accountCareerData=stats;accountCareerMatches=stats.matches;
+  eraseServerHistory.disabled=accountHistoryItems.length===0&&stats.matches===0;
+  const grid=document.createElement('div');grid.className='server-career-grid';
+  const winRate=stats.matches?(stats.wins*100/stats.matches).toFixed(1)+'%':'—';
+  const fields=[
+   ['SERVER MATCHES',String(stats.matches)],
+   ['WIN RATE',winRate],
+   ['W · D · L',stats.wins+' · '+stats.draws+' · '+stats.losses],
+   ['GOALS',stats.goalsFor+' : '+stats.goalsAgainst],
+   ['ACTIVE TIME',(stats.playedFrames/3600).toFixed(1)+' min'],
+   ['BEST WIN STREAK',String(stats.bestWinStreak)]
+  ];
+  for(const [label,value]of fields){
+   const card=document.createElement('div');card.className='server-career-metric';
+   const caption=document.createElement('span'),number=document.createElement('strong');
+   caption.textContent=label;number.textContent=value;card.append(caption,number);grid.append(card);
+  }
+  const note=document.createElement('p');note.className='server-career-note';
+  const start=Number.isSafeInteger(stats.firstAt)?new Date(stats.firstAt).toLocaleDateString():'your first recorded match';
+  const modes=stats.modes||{};
+  note.textContent='Native-server results recorded since '+start+
+   ' · '+(modes['4v4']||0)+' 4v4 · '+(modes['2v2']||0)+' 2v2 · '+(modes.bot||0)+
+   ' bot-mode matches. Survives trimming of recent history while this server keeps its data. Not ranked; guest and peer-hosted results are excluded.';
+  accountCareerPanel.replaceChildren(grid,note);
+ }catch{
+  if(load===accountMatchLoad&&settings.account?.token===token)
+   accountCareerPanel.textContent='Career totals are currently unavailable. Recent matches remain visible.';
+ }
+}
 async function renderAccountMatchHistory(){
  const load=++accountMatchLoad,status=accountMatchStatus,list=accountMatchList;
- list.replaceChildren();accountMatchSummary.textContent='';accountHistoryItems=[];exportServerHistory.disabled=true;eraseServerHistory.disabled=true;
+ list.replaceChildren();accountMatchSummary.textContent='';accountCareerPanel.replaceChildren();accountHistoryItems=[];accountCareerData=null;accountCareerMatches=0;exportServerHistory.disabled=true;eraseServerHistory.disabled=true;
  const token=settings.account?.token;
  if(!token){status.textContent='Log in from the online room to see your completed server matches.';return;}
  status.textContent='Loading server results…';
@@ -313,6 +363,7 @@ async function renderAccountMatchHistory(){
   status.textContent=items.length?items.length+' recent server-recorded match results · no competitive rating assigned.':
    'No server-recorded results yet. Play a completed online match while signed in.';
   if(data.durable===false)status.textContent+=' This server has no persistent history store.';
+  if(data.durable)await renderAccountCareer(token,load);
  }catch{
   if(load===accountMatchLoad)status.textContent='Could not load server results. Local replays are still available.';
  }
@@ -320,14 +371,14 @@ async function renderAccountMatchHistory(){
 refreshServerHistory.onclick=renderAccountMatchHistory;
 exportServerHistory.onclick=()=>{
  if(!accountHistoryItems.length||!settings.account?.token)return;
- const payload={source:'native-server',ranked:false,exportedAt:new Date().toISOString(),items:accountHistoryItems};
+ const payload={source:'native-server',ranked:false,exportedAt:new Date().toISOString(),career:accountCareerData,items:accountHistoryItems};
  const bytes=new TextEncoder().encode(JSON.stringify(payload,null,2));
  saveBlob(bytes,'fuckball-my-server-results-'+new Date().toISOString().slice(0,10)+'.json','application/json');
 };
 eraseServerHistory.onclick=async()=>{
  const token=settings.account?.token;
- if(!token||!accountHistoryItems.length)return;
- if(typeof window.confirm!=='function'||!window.confirm('Permanently delete all your server-recorded match results? This cannot be undone. Local replay files will remain.'))return;
+ if(!token||(!accountHistoryItems.length&&!accountCareerMatches))return;
+ if(typeof window.confirm!=='function'||!window.confirm('Permanently delete all server-recorded match results AND career statistics? This cannot be undone. Local replay files will remain.'))return;
  eraseServerHistory.disabled=true;accountMatchStatus.textContent='Removing your stored server results…';
  try{
   const response=await fetch('/api/match-history',{method:'DELETE',headers:{Authorization:'Bearer '+token},cache:'no-store'});
