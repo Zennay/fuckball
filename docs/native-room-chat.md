@@ -1,0 +1,9 @@
+# Room-authoritative multiplayer chat
+
+Native Fuckball multiplayer rooms and human-only Quick Match now support room chat, rather than relying on a local-only echo or peer messaging. Type a message using the existing chat key and input. The browser sends a plain message over its **existing room WebSocket**. The coordinator verifies the admitted socket, builds the sender name/player ID from server room state, rate-limits it and returns a room-scoped chat event to connected participants, including the sender. Only an acknowledged server event is shown.
+
+Messages are bounded to 1–140 printable characters and contain no control/bidirectional formatting bytes. A socket may submit at most four messages per rolling 10 seconds. The user cannot choose the sender's player ID, room ID, identity or the displayed author. No message can route to another room, and no account token, IP address or direct peer address is shared in chat payloads. Messages are **ephemeral** and not added to replay files, account exports or rank history. The server handles the same chat delivery whether it or an eligible browser is currently simulating the match; chat authorization remains server-owned.
+
+Match Settings includes a **Room Chat** panel with Mute / Unmute for individual players. Mute is strictly device-local and room-session-limited, filters already authenticated incoming events by server-provided player ID and never reports, bans, alters match state or blocks that player's account. The existing social block/friend controls remain separate. Players can still disable/hide messages locally without asking the server to enforce an account-wide block.
+
+This feature does not change accepted physics, native input frames, bot policy, peer-host election or ranked integrity. It uses the application's original chat log and keyboard controls. Existing mandatory repository CI/release gates remain required; no manual QA suites were authored or run.
