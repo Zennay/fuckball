@@ -124,3 +124,10 @@
  .replay-bookmarks:not([hidden]){order:3}
  .replay-bookmark .replay-moment{max-width:160px}
 }
+
+/* Personal replay collections are local labels, never server-sourced categories. */
+.games-tag-hint{font-size:13px;line-height:1.5;color:#c2d2cb;margin:0}
+.games-tag-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:3px}
+.games-tag-chip{font-size:11px;padding:5px 9px;border:1px solid #84a49a;background:#2d4c4b;color:#e2f2d9;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
+.my-games-tools .games-tags-filter{min-width:135px}
+@media(max-width:660px){.my-games-tools .games-tags-filter{width:100%;min-width:0}}
