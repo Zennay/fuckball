@@ -62,7 +62,7 @@ function createServer(options={}){
   for(const id of r.parked.keys())if(r.clients.has(id))r.disconnected.add(id);
   for(const [id,ws]of r.sockets)if(!r.clients.has(id))try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch{}
   r.migration=null;r.standby=null;r.lastMigration=Date.now();r.status();
-  for(const ws of r.pendingJoins.splice(0))if(ws.readyState===1)join(ws,r);}
+  for(const ws of r.pendingJoins.splice(0))if(ws.readyState===1)try{join(ws,r);}catch(e){ws.room=null;ws.pendingResumeToken=null;send(ws,{type:'error',message:e?.message||'Unable to rejoin.'});}}
  function failover(r,reason){if(r.authority==='server'||!r.standby)return;const old=hostSocket(r);r.penalty.set(r.authority,Date.now()+60000);r.epoch++;resume(r,r.standby,{failover:true});r.migration={frame:r.frame};announce(r,'server');r.migration=null;if(old)send(old,{type:'stopHost'});}
  function election(r){if(!peerHosting||r.migration||r.hb._room.isRecording()||r.authority!=='server'&&r.standby?.recording||Date.now()-r.lastMigration<cooldown||!r.sockets.size)return;
   const now=Date.now(),players=[...r.sockets.keys()],rtt={server:{}};
