@@ -20,7 +20,7 @@ function createRoomCore(opts){
  hb.onTeamVictory=()=>{if(!r.started)return;r.started=false;
   const g=hb._room.gameState;
   const red=Number.isFinite(g?.redScore)?g.redScore:0,blue=Number.isFinite(g?.blueScore)?g.blueScore:0;
-  r.lastResult={round:r.round,red,blue,winner:red>blue?1:blue>red?2:0,activeFrames:[...r.activeFrames],frame:r.frame};
+  r.lastResult={round:r.round,red,blue,winner:red>blue?1:blue>red?2:0,activeFrames:[...r.activeFrames],finalPlayers:[...r.clients].map(([id,c])=>({id,name:c.name,finalTeam:hb.getPlayer(id)?.team||0,playedFrames:r.activeFrames.get(id)||0})).filter(p=>p.playedFrames>0),frame:r.frame};
   broadcast({type:'matchResult',...r.lastResult});status();snapshot();
  };
  function status(){expireSubs();if(r.rematch&&Date.now()>r.rematch.expiresAt)r.rematch=null;broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size-r.disconnected.size,reserved:r.disconnected.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),round:r.round,lastResult:r.lastResult,rematch:r.rematch?{id:r.rematch.id,required:[...r.rematch.required],accepted:[...r.rematch.accepted],expiresAt:r.rematch.expiresAt}:null,disconnectedIds:[...r.disconnected],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
