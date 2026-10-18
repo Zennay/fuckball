@@ -90,6 +90,27 @@
     if(confirm('Permanently disband '+club.name+' and remove every membership?'))act({action:'disband'});
    },true));
    summary.append(buttons);
+   const rooms=panel('CLUB MATCH ROOMS',
+    'Club members can join these live, unlisted rooms. Hosts enable Club-only access from Room Control.');
+   const live=Array.isArray(data.rooms)?data.rooms:[];
+   for(const game of live){
+    if(typeof game.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(game.room))continue;
+    const join=button('Join Club room',()=>{
+     if(serverLink?.room){status.textContent='Leave your current room before joining another.';return;}
+     dialog.close();showJoinScreen(game.room);
+    });
+    join.className='primary';
+    const invite=button('Copy link',async()=>{
+     const url=location.origin+location.pathname+'?room='+encodeURIComponent(game.room);
+     try{
+      if(!navigator.clipboard?.writeText)throw Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(url);status.textContent='Club room link copied.';
+     }catch{status.textContent='Copy this Club room link: '+url;}
+    });
+    row(rooms,'Room '+game.room+' · '+game.players+' online · '+(game.started?'Playing':'Lobby'),
+     [join,invite]);
+   }
+   if(!live.length)rooms.append(cell('p','No Club-only rooms are accepting new members. Create an online Custom Room, then choose Restrict to my Club in Room Control.'));
    const roster=panel('TEAM ROSTER','Roles are server-authorized. Captains can invite or remove regular members.');
    for(const member of club.members){
     const actions=[];
