@@ -77,6 +77,7 @@
    loadReplay(saved.bytes,item.name||'Local replay');
    activeLocalReplayId=item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
   }catch(error){summary.textContent='Cannot open recording: '+(error?.message||'local storage unavailable');}
   finally{busy=false;}
  }
