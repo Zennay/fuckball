@@ -153,6 +153,42 @@ function createServer(options={}){
    }catch(e){return json(400,{error:e?.message||'Party action failed.'});}
   });
  }
+ // Authenticated, self-scoped download. Never send password hashes, salts,
+ // sessions, socket IDs or another account's private data. No global directory.
+ function accountExportApi(req,res){
+  const json=(code,payload)=>{res.writeHead(code,{
+   'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',
+   'Pragma':'no-cache','X-Content-Type-Options':'nosniff'
+  });res.end(JSON.stringify(payload));};
+  if(req.method!=='GET')return json(405,{error:'GET required.'});
+  const token=(req.headers.authorization||'').replace(/^Bearer /,'');
+  const username=accounts.user(token);
+  if(!username)return json(401,{error:'Sign in to download your account data.'});
+  if(!history||!social||!clubs||!parties)
+   return json(503,{error:'Persistent account data is unavailable on this server.'});
+  try{
+   const user=username.toLowerCase(),friends=social.view(user,new Set());
+   const payload={format:'fuckball-account-export',version:1,
+    scope:'this-native-server',ranked:false,exportedAt:new Date().toISOString(),
+    account:{username},
+    career:history.stats(user),
+    recentMatches:history.list(user),
+    social:{
+     friends:friends.friends.map(friend=>friend.name),
+     incomingRequests:friends.incoming,outgoingRequests:friends.outgoing,
+     blocked:friends.blocked
+    },
+    club:clubs.view(user),
+    party:parties.snapshot(user)};
+   // The export is deliberately a bounded snapshot, not a streaming backup
+   // of other players, server databases, authentication material or all rooms.
+   if(Buffer.byteLength(JSON.stringify(payload))>512*1024)
+    throw Error('Snapshot exceeds limit.');
+   return json(200,payload);
+  }catch{
+   return json(503,{error:'Account data export could not be prepared safely.'});
+  }
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -178,7 +214,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/quick-match/availability'){
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/account/export'){accountExportApi(req,res);return;}if(route==='/api/quick-match/availability'){
    if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(quickMatch.availability()));return;
