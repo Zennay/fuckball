@@ -79,8 +79,9 @@ function refreshSpectatorControls(force=false){
  spectatorToolbar.hidden=!show||$('matchView').hidden||menuOpen;
  spectatorSetting.hidden=!show;
  if(!show){spectatorSelect.replaceChildren();return;}
- if(force||spectatorSelect.options.length!==players.length||
-    [...spectatorSelect.options].some((o,i)=>Number(o.value)!==players[i].id)){
+ const currentOptions=spectatorSelect.options||spectatorSelect.children||[];
+ if(force||currentOptions.length!==players.length||
+    [...currentOptions].some((o,i)=>Number(o.value)!==players[i].id)){
   spectatorSelect.replaceChildren();
   for(const p of players){const option=document.createElement('option');option.value=String(p.id);option.textContent=(p.side===1?'RED':'BLUE')+' · '+p.name;spectatorSelect.add(option);}
  }
