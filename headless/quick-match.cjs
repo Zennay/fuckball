@@ -55,13 +55,19 @@ function createQuickMatch({send,start,clock=()=>Date.now()}){
   }
   let matched=false;
   while(list.length>=needed){
-   const oldest=list[0],wait=Math.max(0,clock()-oldest.at);
-   // Provisional players get a larger initial window. Search widens every
-   // ten seconds; no hidden bot fills or misleading fake match confirmations.
-   const span=Math.min(500,160+Math.floor(wait/10000)*25);
-   const candidates=[oldest,...list.slice(1).filter(e=>Math.abs(e.skill-oldest.skill)<=span)
-    .sort((a,b)=>Math.abs(a.skill-oldest.skill)-Math.abs(b.skill-oldest.skill)||a.at-b.at).slice(0,needed-1)];
-   if(candidates.length<needed)break;
+   // Scan anchors in arrival order instead of letting one unmatched veteran
+   // block a complete, fairly close group elsewhere in the same playlist.
+   let candidates=null;
+   for(const anchor of list){
+    const wait=Math.max(0,clock()-anchor.at);
+    // Search widens every ten seconds, capped at a bounded experience gap.
+    const span=Math.min(500,160+Math.floor(wait/10000)*25);
+    const chosen=[anchor,...list.filter(e=>e!==anchor&&Math.abs(e.skill-anchor.skill)<=span)
+     .sort((a,b)=>Math.abs(a.skill-anchor.skill)-Math.abs(b.skill-anchor.skill)||a.at-b.at)
+     .slice(0,needed-1)];
+    if(chosen.length===needed){candidates=chosen;break;}
+   }
+   if(!candidates)break;
    for(const e of candidates){active.delete(e.ws);list.splice(list.indexOf(e),1);}
    const {red,blue}=distribute(candidates,SIZES[mode]);
    try{start({mode,red,blue});}catch{
