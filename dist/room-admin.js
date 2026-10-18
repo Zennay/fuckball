@@ -15,6 +15,8 @@
  description.textContent='The host can stop new joins without ending the game, remove disruptive players, and suspend signed-in players from this room for 10 minutes. Current players and valid reconnects keep their slots.';
  const controls=document.createElement('div');controls.className='room-admin-actions';
  const lock=document.createElement('button');lock.type='button';lock.className='primary';
+ const clubLock=document.createElement('button');clubLock.type='button';
+ clubLock.className='room-club-lock';clubLock.textContent='Club-only room';
  const listing=document.createElement('button');listing.type='button';
  listing.className='room-listing-toggle';listing.textContent='List publicly';
  const targetWrap=document.createElement('label');targetWrap.textContent='Connected player';
@@ -22,7 +24,7 @@
  targetWrap.append(target);
  const kick=document.createElement('button');kick.type='button';kick.textContent='Remove';
  const ban=document.createElement('button');ban.type='button';ban.className='danger';ban.textContent='Suspend 10 min';
- controls.append(lock,listing,targetWrap,kick,ban);
+ controls.append(lock,clubLock,listing,targetWrap,kick,ban);
  const notice=document.createElement('p');notice.className='room-admin-notice';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(heading,description,controls,notice);
@@ -32,15 +34,22 @@
   const link=serverLink;
   if(!link?.room){panel.hidden=true;return;}
   panel.hidden=false;
-  const isOwner=!!link.isOwner,locked=link.roomControl?.locked===true,listed=link.roomControl?.listed===true;
-  state.textContent=locked?'🔒 Closed to new players':listed?'🌍 Public room · anyone can discover':'🔗 Unlisted · invite link only';
+  const isOwner=!!link.isOwner,locked=link.roomControl?.locked===true,listed=link.roomControl?.listed===true,clubOnly=link.roomControl?.clubOnly===true;
+  state.textContent=locked?'🔒 Closed to new players':clubOnly?'🛡 Club members only':listed?'🌍 Public room · anyone can discover':'🔗 Unlisted · invite link only';
   state.classList.toggle('locked',locked);
   controls.hidden=!isOwner;
   if(!isOwner){notice.textContent=locked?'The host has locked the room. Your game continues.':'The room host controls entry and moderation.';return;}
   lock.textContent=locked?'Unlock joins':'Lock joins';lock.disabled=false;
+  clubLock.hidden=!clubOnly&&!link.roomControl?.canClubLock;
+  clubLock.textContent=clubOnly?'Allow other invited players':'Restrict to my Club';
+  clubLock.setAttribute('aria-pressed',String(clubOnly));
+  clubLock.disabled=false;
+  clubLock.title=clubOnly?
+   'Disable Club-only admission. The room stays unlisted.':
+   'All current players must be signed-in members of your Club.';
   listing.textContent=listed?'Remove from public rooms':'List room publicly';
-  listing.disabled=locked;listing.setAttribute('aria-pressed',String(listed));
-  listing.title=locked?'Unlock joins to publish this room.':'Anyone can see and join a public room.';
+  listing.disabled=locked||clubOnly;listing.setAttribute('aria-pressed',String(listed));
+  listing.title=clubOnly?'Club-only rooms cannot appear in public listings.':locked?'Unlock joins to publish this room.':'Anyone can see and join a public room.';
   const current=target.value,players=room?.state?.players||[];
   const eligible=players.filter(p=>Number.isSafeInteger(p.id)&&p.id!==networkPlayerId&&!botIds.has(p.id));
   const signature=JSON.stringify(eligible.map(p=>[p.id,p.name,p.team?.id]));
@@ -61,6 +70,14 @@
   if(!serverLink?.isOwner||!serverLink.room)return;
   serverLink.send({type:'roomAdmin',action,...(id!==undefined?{id}:{})});
  }
+ clubLock.onclick=()=>{
+  if(!serverLink?.isOwner)return;
+  const restricted=serverLink.roomControl?.clubOnly===true;
+  if(!restricted&&!confirm('Restrict this room to signed-in members of your Club? Every connected person must already be a member.'))return;
+  clubLock.disabled=true;
+  send(restricted?'clubOpen':'clubOnly');
+  notice.textContent=restricted?'Reopening to invited players…':'Checking Club membership and restricting room…';
+ };
  listing.onclick=()=>{
   if(!serverLink?.isOwner||serverLink.roomControl?.locked)return;
   listing.disabled=true;
