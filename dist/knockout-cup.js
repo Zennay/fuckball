@@ -178,6 +178,7 @@
       for(const match of c.matches.filter(m=>m.round===round)){
         const people=resolve(c,round,match.game);
         const fixture=el('form',null,'knockout-match');
+        fixture.dataset.matchId=match.id;
         const title=el('small','MATCH '+String(match.game+1));
         const homeName=people.home===null?'Winner pending':c.teams[people.home];
         const awayName=people.away===null?'Winner pending':c.teams[people.away];
@@ -327,6 +328,29 @@
       save([...cups,copy]);active=copy.id;message='Backup restored as a separate local cup.';render();
     }catch(error){info('Import refused: '+(error.message||'Invalid cup backup.'));}
   };
+  // External Matchday Hub actions only locate the existing private cup form.
+  // They cannot write results or bypass qualifying teams/tiebreak validation.
+  window.addEventListener('fuckball:open-private-cup-fixture',event=>{
+    const request=event.detail;
+    if(!request||typeof request.cupId!=='string'||
+      typeof request.matchId!=='string')return;
+    const selectedCup=cups.find(c=>c.id===request.cupId);
+    const match=selectedCup?.matches.find(m=>m.id===request.matchId);
+    if(!match)return info('This private cup match is no longer available.');
+    active=selectedCup.id;section.open=true;
+    message='Editing an unofficial private knockout result. Winners advance only via the saved bracket.';
+    render();
+    const target=Array.from(bracket.querySelectorAll('.knockout-match')).find(el=>
+      el.dataset.matchId===match.id);
+    if(!target)return info('The selected match could not be displayed.');
+    target.classList.add('knockout-match-target');
+    target.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'center'});
+    const input=target.querySelector('input[type="number"]:not(:disabled)');
+    if(input?.closest('form')?.querySelector('button[type="submit"]:not(:disabled)'))
+      input.focus({preventScroll:true});
+    else info('Complete the preceding cup matches before this knockout fixture can be scored.');
+  });
   window.addEventListener('storage',event=>{
     if(event.key!==KEY)return;
     try{
