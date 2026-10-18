@@ -191,7 +191,9 @@
         if(!((f.homeScore===null&&f.awayScore===null)||
           ([f.homeScore,f.awayScore].every(v=>Number.isSafeInteger(v)&&v>=0&&v<=99))))continue;
         all.push({league:league.name,home:league.teams[f.home],away:league.teams[f.away],
-          time:date||null,venue:f.venue||'',red:f.homeScore,blue:f.awayScore});
+          time:date||null,venue:f.venue||'',red:f.homeScore,blue:f.awayScore,
+          uid:String(league.id||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,50)+'-'+
+            String(f.id||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30)});
       }
     }
     return all.sort((a,b)=>(a.time||Number.MAX_SAFE_INTEGER)-(b.time||Number.MAX_SAFE_INTEGER)).slice(0,256);
@@ -318,6 +320,18 @@
     }
   });
   window.addEventListener('fuckball:private-competition-change',refreshFixtures);
+  window.addEventListener('fuckball:open-private-poster-fixture',event=>{
+    const uid=event.detail?.uid;
+    if(typeof uid!=='string'||uid.length>90)return;
+    refreshFixtures();
+    const index=fixtures.findIndex(f=>f.uid===uid);
+    if(index<0)return notify('This fixture is no longer available locally.');
+    choose.value=String(index);choose.dispatchEvent(new Event('change'));
+    const outer=panel.closest('.matchday-posters details');
+    if(outer)outer.open=true;
+    details.open=true;
+    panel.scrollIntoView({behavior:'auto',block:'start'});
+  });
   details.addEventListener('toggle',()=>{if(details.open)refreshFixtures();});
   home.value='Red';away.value='Blue';competition.value='Friendly Match';
   tagline.value='PLAY FOR THE LOVE OF FOOTBALL.';
