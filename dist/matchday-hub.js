@@ -155,7 +155,7 @@
   const winner=red>=needed?raw.red:blue>=needed?raw.blue:null;
   const upcoming=winner?[]:fixtures.filter(f=>f.homeScore===null&&f.time!==null&&f.time>Date.now())
    .map(f=>({name:f.home+' vs '+f.away+' · Game '+f.round,time:f.time,
-    venue:f.venue,competition:raw.name,uid:f.uid,type:'Series',seriesId:raw.id}));
+    venue:f.venue,competition:raw.name,uid:f.uid,type:'Series',seriesId:raw.id,gameId:f.gameId}));
   return {type:'Series',id:raw.id,name:raw.name,total:raw.bestOf,played:recorded,
    leader:winner||(red>blue?raw.red:blue>red?raw.blue:null),winner,fixtures,upcoming};
  }
@@ -217,7 +217,8 @@
  let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
  const openFixture=(f,field)=>{
    if(f.type==='Series'){
-     window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}));
+     window.dispatchEvent(new CustomEvent('fuckball:open-private-series',
+      {detail:{id:f.seriesId,gameId:f.gameId,field}}));
      controlStatus.textContent='Opened '+f.competition+' · Game '+f.round+
       ' in its original series editor. Scores are stored only through that editor.';
      return;
@@ -329,7 +330,7 @@
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
    row.append(dom('time',date),dom('strong',f.name),
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
-   row.append(f.type==='Series'?button('Open series',()=>window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}))):button('Design poster',()=>window.dispatchEvent(
+   row.append(f.type==='Series'?button('Open series',()=>window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId,gameId:f.gameId,field:'schedule'}}))):button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
