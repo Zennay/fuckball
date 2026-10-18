@@ -61,7 +61,8 @@
    const path='replays/'+item.id+'.hbr2';
    zip.file(path,bytes,{binary:true,compression:'STORE',createFolders:false});
    entries.push({id:item.id,path,name:normalizedName(item.name),createdAt:item.createdAt,
-    size:bytes.length,favorite:item.favorite===true,sha256:await sha256(bytes)});
+    size:bytes.length,favorite:item.favorite===true,
+    bookmarks:ReplayLibrary.normalizeBookmarks(item.bookmarks,item.frames),sha256:await sha256(bytes)});
    gamesMessage('Preparing backup '+(i+1)+' / '+items.length+'…');
   }
   const manifest=JSON.stringify({format:'fuckball-local-replays',version:1,entries});
@@ -90,6 +91,9 @@
      !validDate(entry.createdAt)||typeof entry.favorite!=='boolean')
      throw Error('Backup contains an invalid replay record.');
     normalizedName(entry.name);
+    // Bookmarks are optional for legacy v1 archives, mandatory to validate when present.
+    // The frame count is checked against the actual HBR2 after decompression.
+    ReplayLibrary.normalizeBookmarks(entry.bookmarks);
     const zipped=zip.file(entry.path);
     if(!zipped||zipSize(zipped)!==entry.size)throw Error('Backup replay is missing or has an invalid size.');
     paths.add(entry.path);
@@ -115,7 +119,10 @@
    const entry=entries[i],bytes=await zip.file(entry.path).async('uint8array');
    if(bytes.length!==entry.size||await sha256(bytes)!==entry.sha256)
     throw Error('Replay checksum mismatch: '+normalizedName(entry.name));
-   try{ReplayLibrary.parseRecording(bytes);}catch{throw Error('Invalid HBR2 replay: '+normalizedName(entry.name));}
+   let recording;
+   try{recording=ReplayLibrary.parseRecording(bytes);}catch{throw Error('Invalid HBR2 replay: '+normalizedName(entry.name));}
+   try{ReplayLibrary.normalizeBookmarks(entry.bookmarks,recording.frames);}
+   catch{throw Error('Invalid bookmarks in replay: '+normalizedName(entry.name));}
    const normalized=normalizedName(entry.name);
    let duplicate=false;
    for(const other of existing){
@@ -139,7 +146,8 @@
    for(let i=0;i<prepared.length;i++){
     const item=prepared[i],saved=await ReplayLibrary.save(item.bytes,item.name);
     inserted.push(saved.id);
-    await ReplayLibrary.restoreDetails(saved.id,{createdAt:item.entry.createdAt,favorite:item.entry.favorite});
+    await ReplayLibrary.restoreDetails(saved.id,{createdAt:item.entry.createdAt,favorite:item.entry.favorite,
+     bookmarks:item.entry.bookmarks});
     gamesMessage('Restoring '+(i+1)+' / '+prepared.length+'…');
    }
   }catch(error){
