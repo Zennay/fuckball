@@ -54,6 +54,8 @@ const CORE=[
  "./room-chat.css",
  "./mobile-controls.js",
  "./mobile-controls.css",
+ "./match-moments.js",
+ "./match-moments.css",
  "./pwa.js",
  "./pwa.css",
  "./manifest.json",
