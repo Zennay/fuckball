@@ -146,3 +146,11 @@
  };
  window.renderCustomRoomAdmin=render;
 })();
+
+/* Load the separate client-only lineup UI through the existing room-admin
+ * entry point, without modifying the active Clubs owner's HTML file. */
+(function(){
+ const script=document.createElement('script');
+ script.src=new URL('./lineup-planner.js',document.currentScript?.src||document.baseURI).href;
+ script.async=false;document.head.append(script);
+})();
