@@ -17,3 +17,10 @@
 .goal-gallery-navigation button{padding:8px 12px}
 .goal-gallery-navigation button:disabled{opacity:.4;cursor:default}
 .goal-gallery button:focus-visible,.goal-gallery select:focus-visible,.goal-gallery input:focus-visible,.goal-gallery-navigation button:focus-visible{outline:3px solid #d8f0aa;outline-offset:2px}
+/* Explicit opt-in highlight reel: the real local HBR2 player changes recordings. */
+.goal-gallery-head .goal-gallery-reel{border-color:#bde58d;background:#37522e;color:#e9f9db;font-weight:800}
+.goal-gallery-head .goal-gallery-reel:hover:not(:disabled){background:#466d32}
+.goal-gallery-head .goal-gallery-reel:disabled{opacity:.45;cursor:default}
+.goal-gallery-navigation .goal-gallery-stop:not([hidden]){display:inline-flex;border:1px solid #ca9a91;color:#ffddd5;background:#442e34}
+.goal-gallery-reel:focus-visible,.goal-gallery-stop:focus-visible{outline:3px solid #d6f3a1;outline-offset:3px}
+@media(max-width:680px){.goal-gallery-head .goal-gallery-reel{width:100%}.goal-gallery-navigation{flex-wrap:wrap}}
