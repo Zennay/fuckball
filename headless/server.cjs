@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -14,7 +14,7 @@ function createServer(options={}){
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
-  social=dataDir?createSocial(dataDir):null,authHits=new Map();
+  social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,authHits=new Map(),clubHits=new Map();
  // Room invitations are ephemeral: only a live room participant may share
  // an existing room with a mutually accepted friend. Never persist room links.
  const friendInvites=new Map(),socialHits=new Map(),INVITE_TTL=5*60000;
@@ -73,6 +73,35 @@ function createServer(options={}){
    }catch(e){return json(400,{error:typeof e?.message==='string'?e.message:'Invalid social request.'});}
   });
  }
+ // Authenticated social Clubs. Never reveal membership to non-members.
+ function clubApi(req,res){
+  const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json',
+   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
+  if(!clubs)return json(503,{error:'Clubs require persistent server storage.'});
+  const token=(req.headers.authorization||'').replace(/^Bearer /,'');
+  const account=accounts.user(token),user=account?.toLowerCase();
+  if(!user)return json(401,{error:'Sign in to manage a Club.'});
+  if(req.method==='GET')return json(200,clubs.view(user));
+  if(req.method!=='POST')return json(405,{error:'GET or POST required.'});
+  const now=Date.now(),key=user+':'+(req.socket.remoteAddress||'');
+  const hits=(clubHits.get(key)||[]).filter(t=>now-t<300000);
+  if(hits.length>=20)return json(429,{error:'Too many Club changes. Try again shortly.'});
+  hits.push(now);clubHits.set(key,hits);
+  if(clubHits.size>2000)for(const [k,times]of clubHits)
+   if(times.every(t=>now-t>300000))clubHits.delete(k);
+  let body='',exceeded=false;req.setEncoding('utf8');
+  req.on('data',part=>{body+=part;if(body.length>2048){exceeded=true;req.destroy();}});
+  req.on('end',()=>{
+   if(exceeded)return;
+   try{
+    const data=JSON.parse(body||'{}');
+    if(!data||typeof data!=='object'||Array.isArray(data)||
+      typeof data.action!=='string')throw Error('Invalid Club request.');
+    const result=clubs.action(user,data.action,data,target=>accounts.reserved(target));
+    return json(200,result);
+   }catch(e){return json(400,{error:e?.message||'Club change unavailable.'});}
+  });
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -98,7 +127,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
   if(route==='/api/public-rooms'){
     if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
     const listings=[...rooms.values()].filter(r=>r.listed===true&&!r.locked&&!r.quickMatch)

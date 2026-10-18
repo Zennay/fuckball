@@ -16,6 +16,12 @@ When a compatible full roster is found, **each player gets a 15-second ready pro
 
 This does not implement friends parties, regional matchmaking, rated rankings, or a persistent match server. The separate persistent match receipts remain server-local and are not anti-cheat-ranked history.
 
+## Clubs — persistent social teams
+
+Open **Friends → Clubs** to create a named Club with a unique 2–6 character tag, invite registered accounts, accept or decline invitations and view the private team roster. Each player belongs to at most one Club on this server. Clubs support up to 24 members, one owner and optional captains. Owners can appoint or remove captains, transfer ownership, remove members and disband the Club; captains can invite teammates and remove ordinary members. Members can leave at any time; owners must transfer ownership or disband first.
+
+Only authenticated members see their Club's roster or pending outbound invitations; prospective members see only Club invitations addressed to their account. The server checks every mutation and persists the state under its configured data directory. There is no public Club search, shared password, or automatic exposure of private room links. **Clubs are social only**: no Club-vs-Club matchmaking, fixture verification, Elo, club statistics or global leaderboard is claimed. The data is local to one host server.
+
 ## Your account Profile (server-recorded career)
 
 The **Profile** button in the main header opens an account-only career dashboard with completed match count, win/draw/loss breakdown, goals scored/conceded, real active playing time, best streak, played modes (AI, 1v1–4v4) and recent native-server results. Players can refresh, export their own account data as JSON or jump directly to My Games. Guests are invited to sign in before any account information is queried.
