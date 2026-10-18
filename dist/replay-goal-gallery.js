@@ -121,6 +121,7 @@
    loadReplay(saved.bytes,moment.item.name);
    activeLocalReplayId=moment.item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    if(stamp!==generation||!replay)return;
    replay.setTime(Math.max(0,moment.frameNo-180)*1000/60);
    replay.setSpeed(1);document.getElementById('replayToggle').textContent='Ⅱ';
