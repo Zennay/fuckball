@@ -27,7 +27,7 @@
  const dialog=make('dialog','controller-setup-dialog');
  dialog.setAttribute('aria-labelledby','controllerSetupTitle');
  const heading=make('h2','', 'CONTROLLER SETUP.');heading.id='controllerSetupTitle';
- const privacy=make('p','controller-setup-privacy','Local controller diagnostics only. Button presses, hardware IDs and settings are never uploaded.');
+ const privacy=make('p','controller-setup-privacy','Local controller diagnostics only. Controller selection is limited to this tab; no button presses, hardware IDs or settings are uploaded.');
  const state=make('p','controller-setup-state','Connect a controller and press a button.');
  state.setAttribute('role','status');state.setAttribute('aria-live','polite');
  const board=make('section','controller-setup-preview');
@@ -41,6 +41,9 @@
  const kick=make('strong','','Kick released');
  readout.append(direction,kick);board.append(boardHead,visual,readout);
  const fields=make('div','controller-setup-fields');
+ const deviceLabel=make('label','','Controller in this tab');
+ const deviceSelect=make('select');deviceSelect.setAttribute('aria-label','Choose which gamepad controls your player');
+ deviceLabel.append(deviceSelect);
  const mappingLabel=make('label','','Kick buttons');
  const mapping=make('select');mapping.setAttribute('aria-label','Gamepad kick mapping');
  for(const [v,label] of MODES)mapping.add(new Option(label,v));
@@ -50,7 +53,7 @@
  slider.setAttribute('aria-label','Gamepad stick deadzone');
  const deadValue=make('output','','30%');
  const sliderRow=make('div','controller-setup-slider');sliderRow.append(slider,deadValue);deadLabel.append(sliderRow);
- fields.append(mappingLabel,deadLabel);
+ fields.append(deviceLabel,mappingLabel,deadLabel);
  const calibrate=make('button','','◎ Measure resting stick (2s)');calibrate.type='button';
  const hint=make('p','controller-setup-hint','Rest the stick and release every button before calibrating. This only recommends a deadzone; you choose whether to apply it.');
  const actions=make('div','controller-setup-actions');
@@ -61,6 +64,7 @@
  dialog.append(heading,privacy,state,board,fields,calibrate,hint,actions);
  document.body.append(dialog);
  let config={kick:'default',deadzone:.30},suggestion=null,sampling=null,lastMessage='',active=false;
+ let selectedSource=null,deviceSignature='';
  function read(){
   try{
    const saved=JSON.parse(localStorage.getItem(KEY)||'null');
@@ -107,18 +111,51 @@
   if(config.kick==='shoulder')return held(pad,5)||held(pad,7);
   return held(pad,0)||held(pad,2)||held(pad,7);
  }
- function controller(){
-  if(typeof navigator.getGamepads!=='function')return null;
-  try{return Array.from(navigator.getGamepads()).find(p=>p?.connected)||null;}
-  catch{return null;}
+ function availableControllers(){
+  if(typeof navigator.getGamepads!=='function')return [];
+  try{return Array.from(navigator.getGamepads()).filter(p=>
+   p?.connected&&Number.isSafeInteger(p.index)&&p.index>=0&&p.index<=15);}
+  catch{return [];}
  }
+ function controller(){
+  const pads=availableControllers();
+  return selectedSource===null?pads[0]||null:
+   pads.find(p=>p.index===selectedSource)||null;
+ }
+ function refreshSources(){
+  const pads=availableControllers();
+  const signature=pads.map(p=>p.index+':'+String(p.id).slice(0,70)).join('|')+';'+selectedSource;
+  if(signature===deviceSignature)return;
+  deviceSignature=signature;
+  deviceSelect.replaceChildren(new Option('Automatic · first connected controller','auto'));
+  for(const pad of pads)deviceSelect.add(new Option('Port '+(pad.index+1)+' · '+
+    String(pad.id||'Controller').slice(0,58),String(pad.index)));
+  if(selectedSource!==null&&!pads.some(p=>p.index===selectedSource)){
+   deviceSelect.add(new Option('Port '+(selectedSource+1)+' · disconnected',String(selectedSource)));
+  }
+  deviceSelect.value=selectedSource===null?'auto':String(selectedSource);
+ }
+ deviceSelect.onchange=()=>{
+  const choice=deviceSelect.value;
+  const next=choice==='auto'?null:Number(choice);
+  if(next!==null&&(!Number.isSafeInteger(next)||next<0||next>15))return;
+  selectedSource=next;deviceSignature='';
+  sampling=null;suggestion=null;apply.disabled=true;calibrate.disabled=false;
+  lastMessage='';
+  window.dispatchEvent(new CustomEvent('fuckball:controller-source',{detail:{index:next}}));
+  refreshSources();present(controller());
+  hint.textContent=next===null?
+   'Automatic selection enabled. The first connected controller controls your player.':
+   'Using only port '+(next+1)+'. If it disconnects, gameplay goes neutral instead of switching players.';
+ };
  function present(pad){
   if(!pad){
    if(sampling){
     sampling=null;calibrate.disabled=false;suggestion=null;apply.disabled=true;
     hint.textContent='Controller disconnected during calibration. Reconnect it and restart the measurement.';
    }
-   const msg='No connected controller detected. Connect one and press a gamepad button.';
+   const msg=selectedSource===null?'No connected controller detected. Connect one and press a gamepad button.':
+    'Selected controller on port '+(selectedSource+1)+' is disconnected. Select another controller or Automatic.';
    if(lastMessage!==msg){state.textContent=msg;lastMessage=msg;}
    visual.setAttribute('aria-label','No gamepad connected');
    dot.style.left='50%';dot.style.top='50%';
@@ -184,11 +221,11 @@
   if(typeof dialog.showModal!=='function'){
    state.textContent='Your browser does not support the controller setup dialog.';return;
   }
-  fill();sampling=null;suggestion=null;apply.disabled=true;active=true;
+  fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
   hint.textContent='This input preview does not move players or join a room. Leave the stick centered to measure resting drift.';
   dialog.showModal();mapping.focus();
  };
- window.setInterval(()=>{if(active&&dialog.open&&!document.hidden)present(controller());},120);
- window.addEventListener('gamepadconnected',()=>{if(active)present(controller());});
- window.addEventListener('gamepaddisconnected',()=>{if(active)present(controller());});
+ window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
+ window.addEventListener('gamepadconnected',()=>{if(active){refreshSources();present(controller());}});
+ window.addEventListener('gamepaddisconnected',()=>{if(active){refreshSources();present(controller());}});
 })();
