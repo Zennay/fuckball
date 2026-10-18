@@ -4,3 +4,14 @@
 .controller-setup-fields label:first-child{min-width:0}
 .controller-setup-fields select{width:100%;text-overflow:ellipsis}
 @media(max-width:780px){.controller-setup-fields{grid-template-columns:1fr}}
+
+/* Advanced input layout: visible and operable on narrow controllers and laptops. */
+.controller-setup-invert{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:12px;
+ margin:0;padding:12px;border:1px solid #689296;border-radius:10px;min-width:0}
+.controller-setup-invert legend{font-weight:750;color:#d3f5d0;padding:0 6px;font-size:13px}
+.controller-setup-invert label{display:flex;flex:1 1 190px;flex-direction:row;
+ align-items:center;gap:9px;min-height:34px;font-size:13px}
+.controller-setup-invert input[type=checkbox]{accent-color:#c8f28c;width:19px;height:19px}
+.gamepad-axis-options{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px}
+.gamepad-axis-options label{flex:1 1 180px;display:flex;align-items:center;gap:8px}
+.gamepad-axis-options input[type=checkbox]{accent-color:#c8f28c;width:18px;height:18px}
