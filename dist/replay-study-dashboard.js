@@ -80,7 +80,7 @@
  }
  async function jump(note){
   if(opening||loading||!validId(note.id))return;
-  opening=true;const buttonText=status.textContent;status.textContent='Opening stored replay at '+frameStamp(note.frameNo)+'…';
+  opening=true;status.textContent='Opening stored replay at '+frameStamp(note.frameNo)+'…';
   try{
    const saved=await ReplayLibrary.get(note.id);
    if(saved.item.id!==note.id||saved.bytes.length>32*1048576)
@@ -103,7 +103,7 @@
  }
  async function load(){
   if(loading||opening)return;
-  const token=++generation;loading=true;refresh.disabled=true;
+  const token=++generation;loading=true;refresh.disabled=true;let succeeded=false;
   status.textContent='Reading your saved offline replay notes…';
   try{
    const raw=await ReplayLibrary.list(),updated=[];let skipped=0;
@@ -118,9 +118,9 @@
    }
    if(token!==generation)return;
    observations=updated.sort((a,b)=>b.recordedAt-a.recordedAt||a.frameNo-b.frameNo);
-   invalid=skipped;visible=20;view();
+   invalid=skipped;visible=20;succeeded=true;
   }catch(error){status.textContent='Cannot load private study notes: '+(error.message||'Browser storage unavailable');}
-  finally{loading=false;refresh.disabled=false;}
+  finally{loading=false;refresh.disabled=false;if(succeeded)view();}
  }
  search.oninput=()=>{visible=20;view();};
  focus.onchange=period.onchange=()=>{visible=20;view();};
