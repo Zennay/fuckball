@@ -173,20 +173,18 @@
   // Reopening a previously armed drill keeps its original baseline.
   if(session.armedStep!==session.done){
    session.armedStep=session.done;session.armedAt=Date.now();session.baseline=latestSuccess(step);
-   if(!saveState(session)){status.textContent='Cannot track the drill: browser storage is unavailable.';return;}
+   if(!saveState(session)){
+    session.armedStep=null;session.armedAt=0;session.baseline=0;
+    status.textContent='Cannot track the drill: browser storage is unavailable.';return;
+   }
   }
-  if(step==='touch'){
-   document.querySelector('.first-play-card')?.scrollIntoView({block:'center',behavior:'smooth'});
-   document.querySelector('.first-play-card button.primary')?.focus();
-  }else{
-   const lab=home.querySelector('.practice-lab-disclosure');
-   if(lab)lab.open=true;
-   const tab=document.getElementById('practice-lab-tab-'+step);
-   tab?.click();
-   tab?.scrollIntoView({block:'center',behavior:'smooth'});
-   const drill=step==='goals'?'.goal-rush-setup':'.teamwork-panel';
-   home.querySelector(drill+' button.primary')?.focus();
-  }
+  const lab=home.querySelector('.practice-lab-disclosure');
+  if(lab)lab.open=true;
+  const tab=document.getElementById('practice-lab-tab-'+(step==='touch'?'first':step));
+  tab?.click();
+  tab?.scrollIntoView({block:'center',behavior:'smooth'});
+  const drill=step==='touch'?'.first-play-card':step==='goals'?'.goal-rush-setup':'.teamwork-panel';
+  home.querySelector(drill+' button.primary')?.focus();
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }
  open.onclick=openDrill;
