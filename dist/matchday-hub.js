@@ -426,6 +426,8 @@
  const picker=dom('label',null,'matchday-attendance-picker');
  picker.append(dom('span','SELECT MATCH'),fixtureChoice);
  const counts=dom('div',null,'matchday-attendance-counts');
+ const lineupPreview=dom('div',null,'matchday-lineup-preview');
+ lineupPreview.setAttribute('aria-label','Provisional private 4v4 team preview');
  const peopleView=dom('div',null,'matchday-attendance-rows');
  const form=dom('form',null,'matchday-attendance-form');
  const friend=dom('input');friend.required=true;friend.maxLength=35;friend.placeholder='Player or friend';
@@ -445,7 +447,7 @@
  tools.append(csv,backup,restore,clear,upload);
  const info=dom('p',null,'matchday-attendance-message');
  info.setAttribute('role','status');info.setAttribute('aria-live','polite');
- attendanceBody.append(picker,counts,peopleView,form,tools,info);
+ attendanceBody.append(picker,counts,lineupPreview,peopleView,form,tools,info);
  attendancePanel.append(attendanceBody);
  const attendeeKey=f=>f.type+':'+(f.tournamentId||f.cupId||f.seriesId)+':'+(f.fixtureId||f.matchId||f.gameId);
  const attendeePattern=/^(?:League|Knockout|Series):[a-f0-9-]{16,50}:(?:r[1-9]\d*g[1-9]\d*|r[1-9]\d*m[1-9]\d*|g[1-7])$/i;
@@ -547,13 +549,22 @@
   // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
   backup.disabled=!rsvpAvailable;
   restore.disabled=!rsvpAvailable;
-  peopleView.replaceChildren();counts.replaceChildren();
+  peopleView.replaceChildren();counts.replaceChildren();lineupPreview.replaceChildren();
   const selected=roster();
   for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
    counts.append(dom('span',label+': '+selected.filter(p=>p.status===status).length));
   for(const [side,label] of [['red','Red'],['blue','Blue']])
    counts.append(dom('span',label+': '+selected.filter(p=>p.side===side).length+'/4'));
   counts.append(dom('span','Going on bench: '+selected.filter(p=>p.status==='going'&&p.side==='bench').length));
+  for(const [side,title] of [['red','RED · DRAFT'],['blue','BLUE · DRAFT'],['bench','READY BENCH']]){
+   const list=dom('ul');
+   const members=selected.filter(p=>p.status==='going'&&p.side===side);
+   for(const p of members)list.append(dom('li',p.name));
+   if(!members.length)list.append(dom('li','No players assigned'));
+   const card=dom('section',null,'matchday-lineup-card matchday-lineup-'+side);
+   card.append(dom('h4',title+' · '+members.length+(side==='bench'?'':'/4')),list);
+   lineupPreview.append(card);
+  }
   if(!rsvpAvailable){
    peopleView.append(dom('p','No editing is allowed until unreadable local attendance data is recovered.'));return;
   }
@@ -576,13 +587,15 @@
    side.value=p.side||'bench';side.disabled=p.status!=='going';
    side.addEventListener('change',()=>{
     const newSide=side.value;
-    editRoster(people=>{
+    if(newSide===(p.side||'bench'))return;
+    const saved=editRoster(people=>{
      const current=people.find(x=>x.name===p.name);
      if(!current||current.status!=='going')throw Error('Only Going players can join a team');
      if(newSide!=='bench'&&people.filter(x=>x.side===newSide).length>=4)
       throw Error('Provisional '+newSide+' is already at four players');
      current.side=newSide;
     });
+    if(!saved)side.value=p.side||'bench';
    });
    const note=dom('input');note.value=p.note;note.maxLength=120;
    note.placeholder='Optional note';note.setAttribute('aria-label','Note for '+p.name);
