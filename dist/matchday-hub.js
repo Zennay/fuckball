@@ -420,7 +420,7 @@
  const ATTENDANCE_KEY='fuckball.private-match-attendance.v1';
  const attendanceBody=dom('div',null,'matchday-attendance-body');
  attendanceBody.append(dom('h3','WHO CAN PLAY?'),
-  dom('p','Organise friends for one unsplayed private fixture. This list stays on this device, is not a room reservation and does not contact or invite other players.'));
+  dom('p','Organise available friends into provisional 4v4 Red and Blue lineups or a bench. The roster stays on this device; it never assigns real online room teams.'));
  const fixtureChoice=dom('select');
  fixtureChoice.setAttribute('aria-label','Choose a private fixture for availability');
  const picker=dom('label',null,'matchday-attendance-picker');
@@ -454,6 +454,7 @@
  const safeNote=s=>typeof s==='string'&&s.length<=120&&
   !/[\u0000-\u001f\u007f-\u009f]/.test(s);
  const choices=['going','maybe','out'];
+ const lineupSides=['bench','red','blue'];
  let chosen='',rsvpRows=[],rsvpSnapshot='',rsvpAvailable=false;
  function eligible(){
   const seen=new Set();
@@ -475,15 +476,19 @@
      keys.has(entry.key)||!Array.isArray(entry.people)||entry.people.length>24)
     throw Error('Invalid match attendance collection');
    keys.add(entry.key);
-   const names=new Set();
+   const names=new Set();let red=0,blue=0;
    for(const p of entry.people){
+    const side=p?.side===undefined?'bench':p.side;
     if(!p||!safeGuest(p.name)||!choices.includes(p.status)||!safeNote(p.note)||
-      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid player entry');
+      !lineupSides.includes(side)||(side!=='bench'&&p.status!=='going')||
+      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid private player or side');
     names.add(p.name.toLocaleLowerCase());
+    if(side==='red')red++;if(side==='blue')blue++;
    }
+   if(red>4||blue>4)throw Error('Private lineups are limited to four players per team');
   }
   return parsed.entries.map(e=>({key:e.key,people:e.people.map(p=>({
-   name:p.name,status:p.status,note:p.note
+   name:p.name,status:p.status,note:p.note,side:p.side===undefined?'bench':p.side
   }))}));
  }
  function loadRSVP(){
@@ -546,6 +551,9 @@
   const selected=roster();
   for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
    counts.append(dom('span',label+': '+selected.filter(p=>p.status===status).length));
+  for(const [side,label] of [['red','Red'],['blue','Blue']])
+   counts.append(dom('span',label+': '+selected.filter(p=>p.side===side).length+'/4'));
+  counts.append(dom('span','Going on bench: '+selected.filter(p=>p.status==='going'&&p.side==='bench').length));
   if(!rsvpAvailable){
    peopleView.append(dom('p','No editing is allowed until unreadable local attendance data is recovered.'));return;
   }
@@ -559,7 +567,22 @@
    state.value=p.status;
    state.addEventListener('change',()=>{
     editRoster(people=>{const target=people.find(x=>x.name===p.name);
-     if(!target)throw Error('Player no longer exists');target.status=state.value;});
+     if(!target)throw Error('Player no longer exists');
+     target.status=state.value;if(target.status!=='going')target.side='bench';});
+   });
+   const side=dom('select');side.setAttribute('aria-label','Provisional team for '+p.name);
+   for(const [value,label] of [['bench','Bench / unassigned'],['red','Red team'],['blue','Blue team']])
+    side.add(new Option(label,value));
+   side.value=p.side||'bench';side.disabled=p.status!=='going';
+   side.addEventListener('change',()=>{
+    const newSide=side.value;
+    editRoster(people=>{
+     const current=people.find(x=>x.name===p.name);
+     if(!current||current.status!=='going')throw Error('Only Going players can join a team');
+     if(newSide!=='bench'&&people.filter(x=>x.side===newSide).length>=4)
+      throw Error('Provisional '+newSide+' is already at four players');
+     current.side=newSide;
+    });
    });
    const note=dom('input');note.value=p.note;note.maxLength=120;
    note.placeholder='Optional note';note.setAttribute('aria-label','Note for '+p.name);
@@ -574,10 +597,10 @@
     editRoster(people=>{const idx=people.findIndex(x=>x.name===p.name);
      if(idx<0)throw Error('Player no longer exists');people.splice(idx,1);});
    });
-   row.append(label,state,note,save,remove);peopleView.append(row);
+   row.append(label,state,side,note,save,remove);peopleView.append(row);
   }
   info.textContent=fixtures.length+' private unsplayed fixtures · '+selected.length+
-   ' listed friends. Nothing here is server-verified or sent as an invitation.';
+   ' listed friends. Draft sides are not actual online room assignments.';
  }
  fixtureChoice.addEventListener('change',()=>{chosen=fixtureChoice.value;renderAttendance();});
  form.addEventListener('submit',event=>{
@@ -589,7 +612,7 @@
    if(people.length>=24)throw Error('24-person per-match limit');
    if(people.some(p=>p.name.toLocaleLowerCase()===name.toLocaleLowerCase()))
     throw Error('Player already listed');
-   people.push({name,status,note});
+   people.push({name,status,note,side:'bench'});
   })){friend.value='';noteField.value='';friend.focus();}
  });
  function saveLocal(content,filename,type){
@@ -604,8 +627,8 @@
    let s=String(x);if(/^\s*[=+\-@]/.test(s))s="'"+s;
    return '"'+s.replace(/"/g,'""')+'"';
   };
-  const rows=[['Competition','Match','Person','Availability','Note'],
-   ...roster().map(p=>[fixture.competition,fixture.home+' vs '+fixture.away,p.name,p.status,p.note])];
+  const rows=[['Competition','Match','Person','Availability','Provisional side','Note'],
+   ...roster().map(p=>[fixture.competition,fixture.home+' vs '+fixture.away,p.name,p.status,p.side==='red'?'Red':p.side==='blue'?'Blue':'Bench / unassigned',p.note])];
   saveLocal('\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n',
    'fuckball-private-attendance.csv','text/csv;charset=utf-8');
  }
@@ -626,7 +649,7 @@
   if(file.size>1024*1024)return void(info.textContent='JSON backup exceeds 1 MiB.');
   try{
    const imported=parseRSVP(await file.text()),valid=new Set(eligible().map(f=>f.attendanceId));
-   let added=0,skipped=0;
+   let added=0,skipped=0,benched=0;
    const applied=changeRows(rows=>{
     for(const e of imported){
      if(!valid.has(e.key)){skipped+=e.people.length;continue;}
@@ -635,12 +658,16 @@
      for(const p of e.people){
       if(target.people.some(x=>x.name.toLocaleLowerCase()===p.name.toLocaleLowerCase())||
         target.people.length>=24){skipped++;continue;}
-      target.people.push({...p});added++;
+      let side=p.side||'bench';
+       if(side!=='bench'&&target.people.filter(x=>x.side===side).length>=4){
+        side='bench';benched++;
+       }
+       target.people.push({...p,side});added++;
      }
     }
    });
    if(applied)info.textContent='Restored '+added+' new friends; '+skipped+
-    ' skipped (duplicate, full or unavailable match). Saved friends were not overwritten.';
+    ' skipped, '+benched+' placed on the provisional bench because their team was full. Existing names were not overwritten.';
   }catch(e){info.textContent='No data imported: '+String(e.message||'invalid JSON')+'.';}
  });
  window.addEventListener('storage',event=>{
