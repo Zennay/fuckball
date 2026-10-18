@@ -32,6 +32,15 @@ kickoffs and venues to individual games and download a local CSV or ICS file
 not proof those games took place. The organiser also supports a dedicated JSON
 backup of your series collection and add-only restoration as fresh local copies.
 
+Each saved, still-relevant series game also has **Design match poster**. It opens
+the existing **Home → Custom Poster Designer** with that game's real team names,
+locally saved kickoff, venue and — only when actually recorded — its manual
+result. The Matchday Hub offers the same poster handoff. Posters remain fully
+editable before saving or exporting a PNG or accessible text; they are
+**unofficial, player-made artwork**, not authenticated match announcements or
+results. Full 35-character best-of team names remain intact in v3 Game Night
+Pack poster drafts.
+
 Open **Home → Game Night Pack** to download a single **v3** local JSON archive
 covering round-robin leagues, knockout cups, up to twelve best-of series,
 formation plans and up to eight Matchday Poster Designer drafts. Restoring a
