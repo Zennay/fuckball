@@ -266,8 +266,17 @@
    fixtureChoice.focus({preventScroll:true});
   }
  });
+ const runSheet=window.FuckballGameNightRunSheet?.create({
+  onOpenFixture:(fixture,field)=>openFixture(fixture,field),
+  onAttendance:key=>{
+   chosen=key;attendancePanel.open=true;renderAttendance();
+   attendancePanel.scrollIntoView({block:'start',behavior:'auto'});
+   fixtureChoice.focus({preventScroll:true});
+  }
+ });
  content.append(header,totals);
  if(ops)content.append(ops.element);
+ if(runSheet)content.append(runSheet.element);
  content.append(competitionList,control,clashes,upcoming,attendancePanel,note);details.append(content);section.append(details);
  const cards=home.querySelector('.mode-cards');
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
@@ -412,6 +421,7 @@
   renderUpcoming();
   renderAttendance();
   ops?.render(fixtureCards,rsvpRows,rsvpAvailable);
+  runSheet?.render(fixtureCards,rsvpRows,rsvpAvailable);
   note.textContent=(failures?'Some local competition data was invalid or unavailable and has been excluded. ':'')+
     'All outcomes are manually entered, unverified and remain on this device. No online rooms or accounts were queried.';
  }
@@ -744,7 +754,8 @@
    if(serialized.length>1024*1024)throw Error('1 MiB storage limit reached');
    localStorage.setItem(ATTENDANCE_KEY,serialized);
    rsvpRows=filtered;rsvpSnapshot=serialized;
-   renderAttendance();ops?.render(fixtureCards,rsvpRows,rsvpAvailable);return true;
+   renderAttendance();ops?.render(fixtureCards,rsvpRows,rsvpAvailable);
+   runSheet?.render(fixtureCards,rsvpRows,rsvpAvailable);return true;
   }catch(e){
    info.textContent='Not saved: '+String(e.message||'storage unavailable')+'. Your online matches are unchanged.';
    return false;
@@ -1096,7 +1107,7 @@
  });
  window.addEventListener('storage',event=>{
   if(event.key!==ATTENDANCE_KEY)return;
-  loadRSVP();renderAttendance();ops?.render(fixtureCards,rsvpRows,rsvpAvailable);
+  loadRSVP();renderAttendance();ops?.render(fixtureCards,rsvpRows,rsvpAvailable);runSheet?.render(fixtureCards,rsvpRows,rsvpAvailable);
   if(rsvpAvailable)info.textContent='Attendance updated in another tab; latest saved roster loaded.';
  });
  loadRSVP();
