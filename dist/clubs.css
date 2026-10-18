@@ -26,3 +26,9 @@
 .club-social-meta{font-size:11px;color:#a9c5b2;line-height:1.5}
 .club-social-dialog button:focus-visible,.club-social-dialog input:focus-visible,.club-social-dialog textarea:focus-visible,.main-nav button[aria-label^="My club"]:focus-visible{outline:3px solid #dcff9c;outline-offset:3px}
 @media(max-width:720px){.club-social-area{grid-template-columns:1fr}.club-social-dialog{max-height:95dvh}.club-social-card{padding:17px}}
+
+.profile-club-tag{display:inline-flex;align-items:center;justify-content:center;
+ min-height:27px;margin:0 8px;border:1px solid #b9e88a;border-radius:6px;
+ background:#304733;color:#dcffa9;font-size:11px;font-weight:900;letter-spacing:.04em;
+ padding:4px 8px}
+.profile-club-tag[hidden]{display:none!important}
