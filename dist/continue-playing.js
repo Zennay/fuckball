@@ -80,6 +80,7 @@
    loadReplay(saved.bytes,item.name);
    activeLocalReplayId=item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    note.textContent='Replay opened from this browser.';
   }catch(error){note.textContent='Could not open replay: '+(error.message||'Storage error');}
   finally{busy=false;}
