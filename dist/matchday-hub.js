@@ -438,6 +438,10 @@
  const noteField=dom('input');noteField.maxLength=120;noteField.placeholder='Optional note';
  noteField.setAttribute('aria-label','Availability note');
  const add=dom('button','+ Add');add.type='submit';form.append(friend,response,noteField,add);
+ const lineupActions=dom('div',null,'matchday-lineup-actions');
+ const arrange=button('↔ Arrange available players',arrangeLineups);
+ const resetDraft=button('↺ Clear draft teams',clearLineups);
+ lineupActions.append(arrange,resetDraft);
  const tools=dom('div',null,'matchday-attendance-actions');
  const csv=button('↓ Attendance CSV',exportAttendanceCSV);
  const backup=button('↓ Backup JSON',exportAttendanceJSON);
@@ -447,7 +451,7 @@
  tools.append(csv,backup,restore,clear,upload);
  const info=dom('p',null,'matchday-attendance-message');
  info.setAttribute('role','status');info.setAttribute('aria-live','polite');
- attendanceBody.append(picker,counts,lineupPreview,peopleView,form,tools,info);
+ attendanceBody.append(picker,counts,lineupPreview,lineupActions,peopleView,form,tools,info);
  attendancePanel.append(attendanceBody);
  const attendeeKey=f=>f.type+':'+(f.tournamentId||f.cupId||f.seriesId)+':'+(f.fixtureId||f.matchId||f.gameId);
  const attendeePattern=/^(?:League|Knockout|Series):[a-f0-9-]{16,50}:(?:r[1-9]\d*g[1-9]\d*|r[1-9]\d*m[1-9]\d*|g[1-7])$/i;
@@ -545,12 +549,14 @@
   }
   fixtureChoice.value=chosen;fixtureChoice.disabled=!fixtures.length;
   const active=!!chosen&&rsvpAvailable;
-  for(const el of [friend,response,noteField,add,csv,clear])el.disabled=!active;
+  for(const el of [friend,response,noteField,add,csv,clear,arrange,resetDraft])el.disabled=!active;
   // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
   backup.disabled=!rsvpAvailable;
   restore.disabled=!rsvpAvailable;
   peopleView.replaceChildren();counts.replaceChildren();lineupPreview.replaceChildren();
   const selected=roster();
+  arrange.disabled=!active||selected.filter(p=>p.status==='going').length<2;
+  resetDraft.disabled=!active||!selected.some(p=>p.side==='red'||p.side==='blue');
   for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
    counts.append(dom('span',label+': '+selected.filter(p=>p.status===status).length));
   for(const [side,label] of [['red','Red'],['blue','Blue']])
@@ -614,6 +620,24 @@
   }
   info.textContent=fixtures.length+' private unsplayed fixtures · '+selected.length+
    ' listed friends. Draft sides are not actual online room assignments.';
+ }
+ function arrangeLineups(){
+  const eligiblePeople=roster().filter(p=>p.status==='going');
+  if(eligiblePeople.length<2)return void(info.textContent='At least two Going players are needed to arrange private teams.');
+  if(!confirm('Arrange up to eight Going players in saved order, alternating Red and Blue? Existing draft sides will be replaced. This does not affect a live room.'))return;
+  const ok=editRoster(people=>{
+   let count=0;
+   for(const p of people){
+    p.side=p.status==='going'&&count<8?(count++%2===0?'red':'blue'):'bench';
+   }
+  });
+  if(ok)info.textContent='Provisional Red/Blue lineups refreshed from the Going list, not skill ratings. Remaining players stay on the bench.';
+ }
+ function clearLineups(){
+  if(!roster().some(p=>p.side==='red'||p.side==='blue'))return;
+  if(!confirm('Move everyone back to the private bench while preserving their availability and notes?'))return;
+  const ok=editRoster(people=>{for(const p of people)p.side='bench';});
+  if(ok)info.textContent='Private draft cleared. Availability and notes are unchanged.';
  }
  fixtureChoice.addEventListener('change',()=>{chosen=fixtureChoice.value;renderAttendance();});
  form.addEventListener('submit',event=>{
