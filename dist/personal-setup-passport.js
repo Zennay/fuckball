@@ -97,7 +97,7 @@
   keys(data,['format','version','exportedAt','parts'],['format','version','parts']);
   if(data.format!==FORMAT||data.version!==VERSION)throw Error('This is not a supported Fuckball setup file.');
   if(!object(data.parts)||Object.keys(data.parts).length<1||
-     Object.keys(data.parts).some(key=>!validators[key]))throw Error('Unknown setup category.');
+     Object.keys(data.parts).some(key=>!Object.hasOwn(validators,key)))throw Error('Unknown setup category.');
   const result={};
   for(const [key,value] of Object.entries(data.parts))result[key]=validators[key](value);
   return result;
