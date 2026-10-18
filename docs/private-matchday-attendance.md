@@ -82,3 +82,13 @@ provisional side. Older backups without a `side` field remain valid and
 restore everyone unassigned on the Bench. Additive imports keep existing
 players and downgrade a new incoming Red/Blue assignment to Bench when that
 team already has four players; the status message states the number benched.
+
+
+### Arrange or reset a friendly draft
+
+**Arrange available players** alternates the first eight friends currently
+marked Going between Red and Blue, preserving their saved list order. Remaining
+friends stay on the bench. This is not skill-based balancing; it requires your
+confirmation before replacing a draft. **Clear draft teams** moves everybody
+to the provisional bench while preserving their availability and notes. Neither
+action changes a real game room or validated competition score.
