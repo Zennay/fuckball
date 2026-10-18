@@ -40,3 +40,9 @@
 .quick-ready-actions button:focus-visible{outline:3px solid #efffb0;outline-offset:3px}
 @media(max-width:540px){.quick-ready-actions button{flex:1 1 140px}.quick-ready{padding:16px}}
 @media(prefers-reduced-motion:reduce){.quick-ready *{animation:none!important;transition:none!important}}
+
+/* Real queue population from the native server, distinct from local bot games. */
+.quick-queue-panel>.quick-queue-availability{display:flex;align-items:center;gap:8px;
+ color:#d3eac5;font-weight:750;font-size:12px;line-height:1.5;margin:4px 0 13px}
+.quick-queue-mode small{line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:550px){.quick-queue-panel>.quick-queue-availability{font-size:11px}}
