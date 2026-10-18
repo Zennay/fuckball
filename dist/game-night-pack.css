@@ -1,0 +1,29 @@
+/* Device-only Game Night Pack; all imports are additional private planning copies. */
+.game-night-pack{width:min(1120px,calc(100% - 32px));margin:28px auto 40px;color:#eef9f0}
+.game-night-pack details{border:1px solid #5c8071;border-radius:18px;background:#1a3435;box-shadow:0 12px 35px #0002}
+.game-night-pack summary{padding:19px 22px;font-weight:850;letter-spacing:.07em;cursor:pointer;list-style-position:inside}
+.game-night-body{padding:0 22px 22px}
+.game-night-body h2{font-size:clamp(1.1rem,2vw,1.5rem);margin:0 0 8px}
+.game-night-body>p{line-height:1.55;color:#cae1d5;max-width:75ch}
+.game-night-controls{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.game-night-controls button{font:inherit;font-weight:750;background:#d2f2aa;color:#18332d;border:1px solid #b8d99f;border-radius:8px;padding:10px 13px;cursor:pointer}
+.game-night-controls button:disabled{opacity:.45;cursor:not-allowed}
+.game-night-controls button:hover:not(:disabled){filter:brightness(1.08)}
+.game-night-controls button:focus-visible,.game-night-pack summary:focus-visible{outline:3px solid #ffe895;outline-offset:2px}
+.game-night-controls input[hidden]{display:none}
+.game-night-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:15px 0}
+.game-night-counter{display:grid;gap:5px;border:1px solid #668777;border-radius:11px;padding:15px;background:#224443}
+.game-night-counter strong{color:#daf7ae;font-size:1.65rem;font-variant-numeric:tabular-nums}
+.game-night-counter span{color:#cfebdd;font-size:.88rem}
+.game-night-message{min-height:26px;color:#d6e8ce;font-size:.9rem;line-height:1.5}
+@media(max-width:610px){
+ .game-night-pack{width:calc(100% - 20px);margin:20px auto}
+ .game-night-body{padding:0 12px 17px}
+ .game-night-summary{grid-template-columns:1fr}
+ .game-night-controls button{flex:1 1 170px}
+}
+@media print{
+ .game-night-pack{background:#fff;color:#111;box-shadow:none}
+ .game-night-controls{display:none}
+ .game-night-counter{color:#111;background:#fff}
+}
