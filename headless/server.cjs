@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createClubResults}=require('./club-results.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createClubResults}=require('./club-results.cjs'),{createPlayerReports}=require('./player-reports.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -16,6 +16,7 @@ function createServer(options={}){
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
   clubResults=dataDir?createClubResults(dataDir):null,
+  playerReports=dataDir?createPlayerReports(dataDir):null,
   parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
    clubForUser:user=>clubs?.membership(user)?.id||null}):null,
   authHits=new Map(),securityHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
@@ -668,7 +669,25 @@ function createServer(options={}){
    if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
-   if(r.quickMatch&&!['in','input','chat'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
+   if(r.quickMatch&&!['in','input','chat','reportPlayer'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
+   if(d.type==='reportPlayer'){
+    const reporter=ws.account&&accounts.user(ws.accountToken)?.toLowerCase();
+    if(!reporter)throw Error('Sign in to report another player.');
+    if(!playerReports)throw Error('Player reporting requires server storage.');
+    if(!Number.isSafeInteger(d.id)||d.id<1||d.id===ws.playerId||
+       typeof d.reason!=='string'||typeof d.note!=='string')
+     throw Error('Choose a connected player and reason.');
+    const accused=r.sockets.get(d.id);
+    if(!accused||r.botIds.has(d.id)||accused===ws)
+     throw Error('Choose a connected human player to report.');
+    const authenticated=accused.account&&accounts.user(accused.accountToken)?.toLowerCase();
+    const name=String(r.hb.getPlayer(d.id)?.name||accused.name||'Player')
+     .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25);
+    playerReports.submit({room:r.id,from:reporter,to:authenticated||null,
+     nick:name,reason:d.reason,note:d.note});
+    send(ws,{type:'playerReportStatus',ok:true});
+    return;
+   }
    if(d.type==='chat'){
     const mutedUntil=r.chatMutes.get(ws.playerId)||0;
     if(mutedUntil>now){
