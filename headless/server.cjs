@@ -317,6 +317,8 @@ function createServer(options={}){
     if(ws.room)throw Error('Leave the current room before searching.');
     const account=accounts.user(d.token);
     if(!account)throw Error('Log in to search for real human players.');
+    if([...clients].some(peer=>peer!==ws&&peer.readyState===1&&peer.room&&peer.account?.toLowerCase()===account.toLowerCase()))
+     throw Error('This account is already playing in an online room.');
     ws.account=account;ws.accountToken=d.token;ws.name=account;
     ws.netcode=d.netcode===2?2:3;ws.mesh=false;ws.resumeEnabled=true;
     quickMatch.join(ws,account.toLowerCase(),d.mode,history?.stats(account));
