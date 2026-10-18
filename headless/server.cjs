@@ -57,6 +57,8 @@ function createServer(options={}){
       throw Error('Invalid player or room.');
      const to=data.to.toLowerCase(),room=rooms.get(data.room);
      if(!social.areFriends(user,to))throw Error('You can only invite mutual friends.');
+     if(room?.clubId&&clubs?.membership(to)?.id!==room.clubId)
+      throw Error('Club-only room invitations require Club membership.');
      if(room?.locked)throw Error('This room is locked. Unlock it before inviting friends.');
      if(!room||![...room.sockets.values()].some(ws=>ws.readyState===1&&ws.account?.toLowerCase()===user&&accounts.user(ws.accountToken)?.toLowerCase()===user))
       throw Error('Join a live room before sending invitations.');
@@ -81,7 +83,13 @@ function createServer(options={}){
   const token=(req.headers.authorization||'').replace(/^Bearer /,'');
   const account=accounts.user(token),user=account?.toLowerCase();
   if(!user)return json(401,{error:'Sign in to manage a Club.'});
-  if(req.method==='GET')return json(200,clubs.view(user));
+  const clubPayload=()=>{
+   const view=clubs.view(user),member=clubs.membership(user);
+   return{...view,rooms:member?[...rooms.values()]
+    .filter(r=>r.clubId===member.id&&!r.locked&&!r.quickMatch)
+    .slice(0,8).map(r=>({room:r.id,players:r.sockets.size,started:r.started===true})):[]};
+  };
+  if(req.method==='GET')return json(200,clubPayload());
   if(req.method!=='POST')return json(405,{error:'GET or POST required.'});
   const now=Date.now(),key=user+':'+(req.socket.remoteAddress||'');
   const hits=(clubHits.get(key)||[]).filter(t=>now-t<300000);
@@ -97,8 +105,8 @@ function createServer(options={}){
     const data=JSON.parse(body||'{}');
     if(!data||typeof data!=='object'||Array.isArray(data)||
       typeof data.action!=='string')throw Error('Invalid Club request.');
-    const result=clubs.action(user,data.action,data,target=>accounts.reserved(target));
-    return json(200,result);
+    clubs.action(user,data.action,data,target=>accounts.reserved(target));
+    return json(200,clubPayload());
    }catch(e){return json(400,{error:e?.message||'Club change unavailable.'});}
   });
  }
@@ -186,7 +194,7 @@ function createServer(options={}){
     try{history.append(records);}catch{console.warn('Match history write unavailable; completed round remains unrecorded.');}
    },
    send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,listed:false,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -216,8 +224,14 @@ function createServer(options={}){
  // A per-connection bearer ticket is never placed in the room URL, status, or host snapshots.
  function issueTicket(ws,r,id){const ticket=crypto.randomBytes(32).toString('hex');r.sessionTokens.set(id,ticket);send(ws,{type:'resumeTicket',ticket,windowMs:reconnectMs});}
  function roomControl(r){
-  const msg={type:'roomControl',locked:r.locked,listed:r.listed===true,owner:r.owner,banMinutes:10};
-  for(const client of r.sockets.values())send(client,msg);
+  for(const client of r.sockets.values()){
+   const ownerAccount=client.playerId===r.owner&&client.account&&
+    accounts.user(client.accountToken)?.toLowerCase()===client.account.toLowerCase()?
+    clubs?.membership(client.account):null;
+   send(client,{type:'roomControl',locked:r.locked,listed:r.listed===true,
+    clubOnly:!!r.clubId,canClubLock:!!ownerAccount,
+    owner:r.owner,banMinutes:10});
+  }
  }
  // Temporary account-scoped ban; never block a shared public IP, and never
  // trust a self-reported account label. Only account identities authenticated
@@ -242,8 +256,22 @@ function createServer(options={}){
    r.locked=d.action==='lock';if(r.locked)r.listed=false;roomControl(r);return;
   }
   if(d.action==='publish'||d.action==='unpublish'){
-   if(d.action==='publish'&&r.locked)throw Error('Unlock room joins before publishing.');
+   if(d.action==='publish'&&(r.locked||r.clubId))throw Error('Unlock joins and disable Club-only access before publishing.');
    r.listed=d.action==='publish';roomControl(r);return;
+  }
+  if(d.action==='clubOnly'||d.action==='clubOpen'){
+   if(d.action==='clubOnly'){
+    const account=ws.account&&accounts.user(ws.accountToken);
+    const member=account?clubs?.membership(account):null;
+    if(!member)throw Error('Sign in as a Club member to restrict this room.');
+    for(const peer of r.sockets.values()){
+     if(!peer.account||accounts.user(peer.accountToken)?.toLowerCase()!==peer.account.toLowerCase()||
+       clubs.membership(peer.account)?.id!==member.id)
+      throw Error('All connected players must belong to your Club before enabling Club-only access.');
+    }
+    r.clubId=member.id;r.listed=false;
+   }else r.clubId=null;
+   roomControl(r);return;
   }
   if(!['kick','ban'].includes(d.action)||!Number.isSafeInteger(d.id)||d.id<1)
    throw Error('Invalid room moderation action.');
@@ -266,11 +294,16 @@ function createServer(options={}){
   for(const [pid,p]of r.parked){if(p.ticket.length===ticket.length&&crypto.timingSafeEqual(Buffer.from(p.ticket),Buffer.from(ticket))){id=pid;claim=p;break;}}
   if(id===null||Date.now()>claim.expiresAt||!r.clients.has(id)||r.sockets.has(id))throw Error('Session expired. Join the room again.');
   if(claim.account&&claim.account!==ws.account)throw Error('Session belongs to a different account.');
+  if(r.clubId&&(!ws.account||clubs?.membership(ws.account)?.id!==r.clubId))
+   throw Error('Only members of this Club can rejoin the room.');
   clearTimeout(claim.timer);r.parked.delete(id);ws.room=r;ws.playerId=id;r.sockets.set(id,ws);
   const c=r.clients.get(id);c.timeline=r.v3&&ws.netcode===3?Netcode.createInputTimeline():null;c.lastInputSeq=0;
   send(ws,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:claim.account,netcode:c.timeline?3:2,resumed:true});
   issueTicket(ws,r,id);r.setConnected(id,true);
-  send(ws,{type:'roomControl',locked:r.locked,listed:r.listed===true,owner:r.owner,banMinutes:10});
+  send(ws,{type:'roomControl',locked:r.locked,listed:r.listed===true,
+   clubOnly:!!r.clubId,canClubLock:!!(ws.playerId===r.owner&&ws.account&&
+    accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase()&&
+    clubs?.membership(ws.account)),owner:r.owner,banMinutes:10});
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
@@ -371,7 +404,9 @@ function createServer(options={}){
    }
    if(d.type==='queueCancel'){quickMatch.remove(ws);return;}
    if(d.type==='queueReadyResponse'){quickMatch.respond(ws,d.id,d.accept===true?true:d.accept===false?false:null);return;}
-   if(d.type==='join'){quickMatch.remove(ws,true);if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');if(r.quickMatch&&!d.resume)throw Error('Quick Match rooms are reserved for the matched players.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
+   if(d.type==='join'){quickMatch.remove(ws,true);if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');if(r.quickMatch&&!d.resume)throw Error('Quick Match rooms are reserved for the matched players.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(r.clubId&&(!account||clubs?.membership(account)?.id!==r.clubId))
+    throw Error('Only members of this Club can join this room.');
+   if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
    if(r.quickMatch&&!['in','input','chat'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
