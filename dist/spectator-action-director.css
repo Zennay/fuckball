@@ -1,0 +1,23 @@
+/* Spectator Action Director: local camera only, no match commands. */
+.spectator-director-toggle{
+ border:1px solid #a2bd99;border-radius:8px;padding:9px 12px;
+ background:#1e3940;color:#def5cd;font-weight:850;font-size:11px;
+ min-height:41px;letter-spacing:.03em;white-space:nowrap
+}
+.spectator-director-toggle[aria-pressed="true"]{
+ border-color:#bce89a;color:#162b28;background:#d1f0a7
+}
+.spectator-director-toggle:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+.spectator-director-settings{grid-column:1/-1;display:grid;gap:10px;margin-top:12px;
+ padding:15px;border:1px solid #608e7e;border-radius:10px;background:#1b3439}
+.spectator-director-settings h3{margin:0;color:#def5ba;letter-spacing:.075em;font-size:15px}
+.spectator-director-settings>p{margin:0;font-size:12px;line-height:1.55;color:#d0e0d9}
+.spectator-director-settings label{display:grid;gap:7px;font-size:12px;color:#e4f2e0}
+.spectator-director-settings select{min-height:44px;border-radius:8px;border:1px solid #8baba0;
+ background:#122a31;color:#effaf0;padding:10px;min-width:0}
+.spectator-director-settings .spectator-director-status{
+ color:#d6f4b3;font-size:11px;min-height:16px;overflow-wrap:anywhere
+}
+.spectator-director-settings select:focus-visible{outline:3px solid #ddffae;outline-offset:3px}
+@media(max-width:580px){.spectator-director-toggle{min-height:44px;padding:9px 8px;font-size:10px}
+.spectator-director-settings{padding:12px}}
