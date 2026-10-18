@@ -1,0 +1,18 @@
+.player-report-panel[hidden],.player-report-panel form[hidden]{display:none!important}
+.player-report-panel{margin:20px 0 0;padding:18px;background:#1a3031;
+ border:1px solid #779887;border-radius:12px;color:#e4f3e3}
+.player-report-panel h3{font-size:14px;color:#e0ffa5;letter-spacing:.05em;margin:0 0 9px}
+.player-report-panel>p{font-size:11px;line-height:1.55;color:#bdd1c4;margin:0 0 14px}
+.player-report-panel form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:13px}
+.player-report-panel label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#d6e9d6}
+.player-report-panel select,.player-report-panel textarea{width:100%;box-sizing:border-box;
+ background:#0e262a;color:#eff8e9;border:1px solid #829a8c;border-radius:8px;
+ padding:9px;min-height:42px}
+.player-report-panel textarea{resize:vertical}
+.player-report-panel button{align-self:end;min-height:44px;border:1px solid #b5cbaa;
+ background:#294838;color:#f0ffe6;font-weight:750;border-radius:9px;padding:10px 15px}
+.player-report-panel button:disabled{opacity:.5;cursor:not-allowed}
+.player-report-panel button:focus-visible,.player-report-panel select:focus-visible,
+.player-report-panel textarea:focus-visible{outline:3px solid #d5f2ac;outline-offset:3px}
+.player-report-status{font-size:12px;color:#e4ffbd;min-height:16px}
+@media(max-width:580px){.player-report-panel{padding:14px}.player-report-panel button{width:100%}}

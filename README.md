@@ -1,5 +1,19 @@
 # Fuckball 26
 
+## Native online game features in current source
+
+**Play:** human-only casual Quick Match in 1v1–4v4 and an opt-in **Club vs Club 4v4** playlist for two complete authenticated four-player squads, with an explicit individual ready check. No ranked Elo or automatic bot opponents in human queues. Custom Rooms support shared links, four active humans per side, benches, spectators, substitutions, chat and host-only admission/moderation.
+
+**Account:** Profile → Account security changes passwords and revokes other sessions. Profile → All my server data exports personal account information. Native Club histories show server-recorded casual Club-vs-Club results only to current Club members; records are bounded and not a ranked leaderboard.
+
+**Room access:** hosts can publish/unpublish, lock joins, restrict to Club members, require login for newcomers or cap a room at 8/12/16/24/64 humans. Existing players and valid reconnects remain. The public directory only lists host-approved rooms and their honest available capacity.
+
+**Player reporting:** signed-in players may report a connected human during any native online match via **Esc → Report a player**. The server verifies both sockets, applies account-level rate limits and stores reports privately for operator review. Reports do **not** automatically sanction, ban or award ranked results.
+
+**Operator handling:** reports are written under `FUCKBALL_DATA_DIR/player-reports.json` (or the configured state directory), **outside public `dist/`**. Keep the file private to the server operator; it contains personal account identifiers, nicknames and voluntarily supplied notes. A bounded, 30-day retained inbox is pruned on new writes; no public report-list endpoint or automatic operator notification exists. Review must be done through authorized server access, not a game client.
+
+On the authorized server, the read-only moderation view is `node scripts/report-inbox.cjs --last=20` (optionally `--reason=suspected-cheating` or `--json`). It uses the same configured data directory and performs no remote request, punishment, deletion or publishing. Limit access to trusted operators because reports contain sensitive player-provided details. Production deploys still require the protected immutable release process.
+
 ## Play online on free hosting
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Zennay/fuckball)
