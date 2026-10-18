@@ -61,6 +61,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  else if(d.type==='matchResult'){notify((d.winner===1?'Red':d.winner===2?'Blue':'Neither side')+' wins · '+d.red+' : '+d.blue+'.');openMatchMenu();}
  else if(d.type==='matchRestart'){notify(d.rematch?'Rematch started · teams swapped':'New game started');if(menuOpen)closeMatchMenu();}
  else if(d.type==='goal'){beep(650,.22);log((d.team===1?'Red':'Blue')+' scores');}
+ else if(d.type==='chat'){window.onNativeRoomChat?.(d);}
  else channel?.onmessage?.(event);
  };
  }catch(e){$('serverRoomStatus').textContent=e.message;notify(e.message);}}
