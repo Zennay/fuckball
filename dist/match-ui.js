@@ -6,7 +6,7 @@ const menuPanes={menuMatch:'menuMatchPane',menuHelp:'menuControlsPane',menuVideo
 function refreshMenu(){refreshSpectatorControls(true);const g=(replay||room).gameState;$('menuScore').textContent=(g?.redScore||0)+' : '+(g?.blueScore||0);$('menuClock').textContent=fmt(g?.timeElapsed);$('menuStadium').textContent=(replay?.state?.stadium||stadium).name;$('cameraMode').value=settings.camera||'stadium';$('matchZoom').value=settings.zoom;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';$('matchSound').checked=settings.sound;if(document.activeElement!==$('menuName'))$('menuName').value=settings.name;const online=!!serverLink;$('menuCopyLink').hidden=!online;$('inviteButton').hidden=!online;$('menuOnline').hidden=online||peerConnected;$('disconnectPeer').hidden=true;}
 function menuPane(id,button){for(const [b,pane]of Object.entries(menuPanes)){$(pane).hidden=pane!==id;$(b).classList.toggle('selected',b===button);}if(id==='menuControlsPane')renderBindings();}
 function openMatchMenu(pane='menuMatchPane',button='menuMatch'){if($('matchView').hidden)showView('play');if(!$('chatForm').hidden)closeChat();if(!menuOpen){releaseInputs();menuOpen=true;$('pauseMenu').hidden=false;document.body.classList.add('menu-open');}updateLobby();rosterKey='';updateRoster();refreshMenu();menuPane(pane,button);$(button)?.focus?.();$('pauseMenu').setAttribute?.('aria-modal','true');}
-function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;refreshSpectatorControls(true);$('pauseMenu').hidden=true;document.body.classList.remove('menu-open');$('pauseMenu').removeAttribute?.('aria-modal');updateLobby();$('gameCanvas').focus();}
+function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;refreshSpectatorControls(true);document.body.classList.remove('menu-open');$('pauseMenu').removeAttribute?.('aria-modal');updateLobby();$('gameCanvas').focus();}
 function toggleMatchMenu(){if(menuOpen)closeMatchMenu();else openMatchMenu();}
 const originalShowView=showView;showView=function(view){if(view!=='play')closeMatchMenu();originalShowView(view);document.body.classList.toggle('match-active',view==='play');updateCamera();scheduleFastFrames();if(view==='play'&&!started&&!replay&&!menuOpen)openMatchMenu();};
 document.addEventListener('visibilitychange',scheduleFastFrames);
@@ -72,7 +72,7 @@ spectatorNext.onclick=()=>cycleSpectatorTarget(1);
 spectatorSelect.onchange=()=>chooseSpectatorTarget(Number(spectatorSelect.value));
 function refreshSpectatorControls(force=false){
  const active=isSpectatorCamera(),players=active?cameraPlayers():[];
- const rosterKey=JSON.stringify([active,players,spectatorTargetId,settings.camera]);
+ const rosterKey=JSON.stringify([active,players,spectatorTargetId,settings.camera,menuOpen,$('matchView').hidden]);
  if(!force&&rosterKey===spectatorRosterKey)return;
  spectatorRosterKey=rosterKey;
  const target=spectatorTarget(players),show=active&&players.length>0;
