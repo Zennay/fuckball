@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createClubResults}=require('./club-results.cjs'),{createPlayerReports}=require('./player-reports.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createClubResults}=require('./club-results.cjs'),{createPlayerReports}=require('./player-reports.cjs'),{createPresetLocker}=require('./room-preset-locker.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -17,6 +17,8 @@ function createServer(options={}){
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
   clubResults=dataDir?createClubResults(dataDir):null,
   playerReports=dataDir?createPlayerReports(dataDir):null,
+  presetLocker=dataDir?createPresetLocker(dataDir):null,
+  presetHits=new Map(),
   parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
    clubForUser:user=>clubs?.membership(user)?.id||null}):null,
   authHits=new Map(),securityHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
@@ -249,6 +251,45 @@ function createServer(options={}){
    }
   });
  }
+ // Fully private per-account cross-device preset locker. A snapshot must be
+ // uploaded intentionally; local device presets are never silently replaced.
+ function presetLockerApi(req,res){
+  const json=(status,value)=>{res.writeHead(status,{
+   'Content-Type':'application/json; charset=utf-8',
+   'Cache-Control':'no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff'
+  });res.end(JSON.stringify(value));};
+  if(!presetLocker)return json(503,{error:'Account preset sync requires server storage.'});
+  if(!['GET','POST'].includes(req.method))return json(405,{error:'GET or POST required.'});
+  const token=String(req.headers.authorization||'').replace(/^Bearer /,'');
+  const account=accounts.user(token)?.toLowerCase();
+  if(!account)return json(401,{error:'Sign in to sync room presets.'});
+  if(req.method==='GET'){
+   try{return json(200,{source:'this-native-server',presets:presetLocker.get(account)});}
+   catch{return json(503,{error:'Account preset locker unavailable.'});}
+  }
+  const now=Date.now(),key=account+':'+(req.socket.remoteAddress||'');
+  const times=(presetHits.get(key)||[]).filter(t=>now-t<600000);
+  if(times.length>=6)return json(429,{error:'Preset uploads are temporarily rate limited.'});
+  times.push(now);presetHits.set(key,times);
+  if(presetHits.size>1000)for(const [k,hits]of presetHits)
+   if(hits.every(t=>now-t>600000))presetHits.delete(k);
+  let body='',oversized=false;
+  req.setEncoding('utf8');req.on('data',part=>{
+   if(oversized)return;
+   body+=part;
+   if(Buffer.byteLength(body,'utf8')>600000){body='';oversized=true;}
+  });
+  req.on('end',()=>{
+   if(oversized)return json(413,{error:'Preset upload exceeds server size limit.'});
+   try{
+    const d=JSON.parse(body||'{}');
+    if(!d||typeof d!=='object'||Array.isArray(d)||d.action!=='replaceAll')
+     return json(400,{error:'Invalid preset upload action.'});
+    const count=presetLocker.replace(account,d.presets);
+    return json(200,{ok:true,count});
+   }catch(e){return json(400,{error:String(e?.message||'Preset upload failed.').slice(0,160)});}
+  });
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -274,7 +315,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/account/export'){accountExportApi(req,res);return;}if(route==='/api/account/security'){accountSecurityApi(req,res);return;}if(route==='/api/quick-match/availability'){
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/account/export'){accountExportApi(req,res);return;}if(route==='/api/account/room-presets'){presetLockerApi(req,res);return;}if(route==='/api/account/security'){accountSecurityApi(req,res);return;}if(route==='/api/quick-match/availability'){
    if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(quickMatch.availability()));return;
