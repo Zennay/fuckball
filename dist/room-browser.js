@@ -31,10 +31,10 @@
  for(const value of ['all','1v1','2v2','3v3','4v4','custom'])
   modeFilter.add(new Option(value==='all'?'Any mode':value==='custom'?'Custom / bots':value,value));
  const order=document.createElement('select');order.setAttribute('aria-label','Sort public rooms');
- for(const [value,label] of [['default','Server order'],['pinned','Pinned first'],['most','Most players'],['fewest','Fewest players'],['stadium','Stadium A–Z']])
+ for(const [value,label] of [['default','Server order'],['pinned','Pinned first'],['most','Most players'],['fewest','Fewest players'],['seats','Most available seats'],['stadium','Stadium A–Z']])
   order.add(new Option(label,value));
  const accessFilter=document.createElement('select');accessFilter.setAttribute('aria-label','Available room seats');
- for(const [value,label] of [['all','All rooms'],['space','Rooms with open seats'],['guest','Guest-accessible with seats'],['lobby','Open lobbies']])
+ for(const [value,label] of [['all','All rooms'],['space','Rooms with open seats'],['eligible','Rooms I can join'],['guest','Guest-accessible with seats'],['lobby','Open lobbies']])
   accessFilter.add(new Option(label,value));
  for(const control of [search,statusFilter,modeFilter,order,accessFilter])filters.append(control);
  const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
@@ -67,6 +67,8 @@
  body.append(bookmarkBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ const PUBLIC_LISTING_MAX_AGE=45000;
+ const listingFresh=()=>lastLoadedAt>0&&Date.now()-lastLoadedAt<=PUBLIC_LISTING_MAX_AGE;
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
  const validRoom=code=>typeof code==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(code);
  function readPinned(){
@@ -185,9 +187,15 @@
  function freeSeats(room){const cap=capacity(room);return cap===null?null:Math.max(0,cap-room.occupied);}
  function canBrowseJoin(room){
   const seats=freeSeats(room);
-  return seats!==null&&seats>0;
+  // A once-public room might have been unpublished, ended or moved private.
+  // Old directory results are only historical display data, not admission hints.
+  return listingFresh()&&roomsCache.some(x=>x.room===room.room)&&seats!==null&&seats>0;
  }
  function requestJoin(room){
+  if(!canBrowseJoin(room)){
+   status.textContent='Room directory is stale, unavailable or full. Refresh before attempting to join. Server admission is always required.';
+   return false;
+  }
   if(busyWithMatch()){
    status.textContent='Leave your current match or cancel Quick Match before joining a different room.';
    return false;
@@ -248,6 +256,7 @@
    (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
    (accessFilter.value==='all'||
     accessFilter.value==='space'&&canBrowseJoin(r)||
+    accessFilter.value==='eligible'&&canBrowseJoin(r)&&(!r.requiresAccount||!!settings.account?.token)||
     accessFilter.value==='guest'&&canBrowseJoin(r)&&!r.requiresAccount||
     accessFilter.value==='lobby'&&canBrowseJoin(r)&&!r.started)&&
    (modeFilter.value==='all'||(modeFilter.value==='custom'?
@@ -257,6 +266,7 @@
   if(order.value==='pinned')visible.sort((a,b)=>Number(pins.includes(b.room))-Number(pins.includes(a.room))||a.room.localeCompare(b.room));
   else if(order.value==='most')visible.sort((a,b)=>b.players-a.players||a.room.localeCompare(b.room));
   else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
+  else if(order.value==='seats')visible.sort((a,b)=>(freeSeats(b)??-1)-(freeSeats(a)??-1)||a.room.localeCompare(b.room));
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
   list.replaceChildren();
   for(const room of visible)putRoom(room,pins);
@@ -292,7 +302,15 @@
    lastLoadedAt=Date.now();
    renderRooms();
    return true;
-  }catch(e){if(current===sequence&&shown)status.textContent=e.message||'Room directory unavailable.';return false;}
+  }catch(e){
+   if(current===sequence&&shown){
+    // Network failure invalidates the directory, but never touches saved pins.
+    // A stale published code must not remain as an actionable public listing.
+    roomsCache=[];lastLoadedAt=0;renderRooms();
+    status.textContent=(e.message||'Room directory unavailable.')+' Pinned room codes are kept, but current public availability is unknown.';
+   }
+   return false;
+  }
   finally{busy=false;refresh.disabled=false;}
  }
  function close(){
@@ -325,6 +343,7 @@
     (loggedIn||!r.requiresAccount)&&
     (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
     (accessFilter.value==='all'||accessFilter.value==='space'||
+     accessFilter.value==='eligible'&&(loggedIn||!r.requiresAccount)||
      accessFilter.value==='guest'&&!r.requiresAccount||
      accessFilter.value==='lobby'&&!r.started)&&
     (modeFilter.value==='all'||modeFilter.value==='custom'?
