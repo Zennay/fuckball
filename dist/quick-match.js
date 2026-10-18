@@ -142,6 +142,7 @@
  function refresh(){
   modeButtons.forEach(b=>b.disabled=searching);
   preferredSelect.disabled=quickStart.disabled=searching;
+  if(typeof pulseAction!=='undefined')pulseAction.disabled=searching||!pulseMode;
   cancel.hidden=!searching;
   readyBox.hidden=!ready;
   if(ready){
@@ -196,6 +197,48 @@
  manualRefresh.setAttribute('aria-label','Refresh live occupancy of the selected game server');
  availabilityActions.append(manualRefresh);
  availability.insertAdjacentElement('afterend',availabilityActions);
+ // Uses the same validated human-only queue snapshot as the four mode tiles.
+ // Observed occupancy is NOT an ETA, matchmaking guarantee or ranking metric.
+ const pulse=document.createElement('section');pulse.className='quick-queue-pulse';pulse.hidden=true;
+ pulse.setAttribute('aria-label','Human queue snapshot suggestion');
+ const pulseHead=document.createElement('strong');pulseHead.textContent='LIVE HUMAN QUEUE PULSE';
+ const pulseDetail=document.createElement('p');pulseDetail.setAttribute('role','status');
+ pulseDetail.setAttribute('aria-live','polite');
+ const pulseAction=document.createElement('button');pulseAction.type='button';
+ pulseAction.className='primary';
+ const pulseWarning=document.createElement('small');
+ pulseWarning.textContent='Occupancy on your selected server only. Not a wait estimate, ranked result, or promise of an opponent. Matchmaking and ready checks remain server-controlled.';
+ pulse.append(pulseHead,pulseDetail,pulseAction,pulseWarning);
+ availabilityActions.insertAdjacentElement('afterend',pulse);
+ let pulseMode=null,pulseAt=0,previousPulse=null;
+ const clearPulse=()=>{pulse.hidden=true;pulseMode=null;pulseAt=0;previousPulse=null;};
+ pulseAction.addEventListener('click',()=>{
+  if(!pulseMode||searching||document.hidden||home.hidden||
+     !sameOriginGameServer().valid||Date.now()-pulseAt>25000){
+   clearPulse();notice.textContent='Current queue snapshot expired. Refresh queue counts before choosing an observed playlist.';
+   return;
+  }
+  // Every entry requires a fresh user click; never automatically changes queue.
+  start(pulseMode);
+ });
+ function updatePulse(data){
+  const candidates=standardModes.map(mode=>({mode,...data.modes[mode]}));
+  candidates.sort((a,b)=>(b.waiting+b.confirming)-(a.waiting+a.confirming)||
+    b.waiting-a.waiting||standardModes.indexOf(a.mode)-standardModes.indexOf(b.mode));
+  const best=candidates[0],total=best.waiting+best.confirming;
+  const delta=previousPulse&&previousPulse.mode===best.mode?
+    total-previousPulse.total:null;
+  previousPulse={mode:best.mode,total};pulseAt=Date.now();pulse.hidden=false;
+  pulseMode=total>0?best.mode:null;
+  pulseDetail.textContent=total?
+   'Most occupied right now: '+best.mode+' · '+best.waiting+' waiting, '+best.confirming+
+    ' confirming'+(delta===null?'':delta>0?' · '+delta+' more than last refresh':
+      delta<0?' · '+Math.abs(delta)+' fewer than last refresh':' · unchanged since last refresh')+'.':
+   'No human players waiting or confirming in these queues right now. Any playlist can still be started manually.';
+  pulseAction.hidden=!pulseMode;pulseAction.disabled=searching||!pulseMode;
+  pulseAction.textContent=pulseMode?'▶ Search '+pulseMode+' with real people':'';
+ }
+
  const genericLabels=()=>{
   for(const [mode,sub]of modeDetails)
    sub.textContent=(Number(mode[0])*2)+' human players required';
@@ -217,15 +260,15 @@
   return{valid:true};
  }
  async function loadAvailability(){
-  if(document.hidden||home.hidden)return;
+  if(document.hidden||home.hidden){clearPulse();return;}
   const requestId=++listingRequest;
   const selected=sameOriginGameServer();
   if(!selected.valid){
-   genericLabels();availability.textContent=selected.label;manualRefresh.disabled=false;
+   clearPulse();genericLabels();availability.textContent=selected.label;manualRefresh.disabled=false;
    return;
   }
   if(navigator.onLine===false){
-   genericLabels();availability.textContent='You appear offline · real-player queues require a connection.';
+   clearPulse();genericLabels();availability.textContent='You appear offline · real-player queues require a connection.';
    manualRefresh.disabled=false;return;
   }
   manualRefresh.disabled=true;
@@ -250,22 +293,24 @@
     sub.textContent=row.waiting+' waiting · '+row.confirming+
       ' confirming · '+row.needed+' needed';
    }
+   updatePulse(data);
    availability.textContent='Real-player queues on your selected server ('+location.host+') · refreshed just now. Ready-check acceptance is still required.';
   }catch{
    if(requestId!==listingRequest)return;
-   genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
+   clearPulse();genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
   }finally{clearTimeout(timer);if(requestId===listingRequest)manualRefresh.disabled=false;}
  }
  manualRefresh.onclick=loadAvailability;
  document.getElementById('serverAddress')?.addEventListener('input',()=>{
   // Abandon any obsolete response before displaying counts from a new target.
-  ++listingRequest;clearTimeout(addressTimer);genericLabels();
+  clearPulse();++listingRequest;clearTimeout(addressTimer);genericLabels();
   availability.textContent='Checking whether live counts belong to your selected game server…';
   addressTimer=setTimeout(loadAvailability,450);
  });
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){clearReadyAlert();loadAvailability();}
+  else clearPulse();
  });
  window.addEventListener('online',loadAvailability);
  window.addEventListener('offline',loadAvailability);
