@@ -46,3 +46,13 @@
  color:#d3eac5;font-weight:750;font-size:12px;line-height:1.5;margin:4px 0 13px}
 .quick-queue-mode small{line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 @media(max-width:550px){.quick-queue-panel>.quick-queue-availability{font-size:11px}}
+
+/* Only explicitly opted-in hidden-tab ready checks generate system notifications. */
+.quick-queue-alerts{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:2px 0 12px}
+.quick-queue-alerts button{min-height:42px;padding:10px 14px;border:1px solid #a8c69a;
+ border-radius:9px;color:#e2f7da;background:#264237;font-weight:700;cursor:pointer}
+.quick-queue-alerts button[aria-pressed="true"]{background:#34522e;border-color:#b8e58e}
+.quick-queue-alerts button:disabled{opacity:.55;cursor:not-allowed}
+.quick-queue-alerts button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+.quick-queue-alerts span{flex:1 1 250px;font-size:11px;line-height:1.55;color:#bdd3bd}
+@media(max-width:550px){.quick-queue-alerts button{width:100%}}
