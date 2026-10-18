@@ -17,25 +17,35 @@ a one-hour placeholder duration, honest qualifier names and no invitations.
 
 The normal **Match CSV** and **Save JSON** contain each saved kickoff and venue,
 including on cups created before this feature (whose older matches simply
-start unscheduled). **Game Night Pack v2** preserves those fields when
+start unscheduled). **Game Night Pack v3** preserves those fields when
 moving a cup to another device. Neither planned cup dates nor user-entered
 results are validated as official online competitive fixtures.
 
-## Portable Game Night Pack with private posters
+## Private best-of series and Game Night Pack v3
 
-Open **Home → Game Night Pack** to download one local JSON archive covering your
-private round-robin leagues, knockout cups, formation plans **and up to eight
-Matchday Poster Designer drafts**. Restoring a pack appends new private copies,
-using new local IDs; it never overwrites existing plans. Exported scores and
-poster result text are always user-entered, not official server history.
-Restores are all-or-nothing where browser storage permits, and the importer
-refuses simultaneous-tab conflicts rather than silently replacing newer data.
+Open **Home → Matchday Hub → Best-of Series** to create a private best-of-three,
+best-of-five or best-of-seven event between two named teams. Enter only actual,
+decisive scores in game order; the organiser counts wins, stops at a clinched
+series and supports undoing the latest result. You can assign **provisional**
+kickoffs and venues to individual games and download a local CSV or ICS file
+(60-minute placeholder). Earlier planned games after a series is decided are
+not proof those games took place. The organiser also supports a dedicated JSON
+backup of your series collection and add-only restoration as fresh local copies.
 
-Game Night Pack **v2** includes posters. The Restore action still accepts older
-**v1** packs, which simply contain no poster drafts. Archives remain on your
-device unless you deliberately share the downloaded file. They do **not**
-contain account sessions, room links, personal tokens, or recorded HBR2 game
-files. Use **My Games → Backup all ZIP** separately for HBR2 recordings.
+Open **Home → Game Night Pack** to download a single **v3** local JSON archive
+covering round-robin leagues, knockout cups, up to twelve best-of series,
+formation plans and up to eight Matchday Poster Designer drafts. Restoring a
+pack appends copies with new private IDs; it never overwrites existing plans.
+Game Night Pack **v3** can restore older **v1** and **v2** files: v1 has no
+posters or series, and v2 has posters but no series. Import validates every
+collection and available capacity before writes, rejects simultaneous-tab
+changes and rolls back partial localStorage writes where possible.
+
+These are **user-organised and self-reported** schedules, scores and designs,
+not official server results. Downloaded exports remain on your device unless
+you deliberately share them. The packs do not contain account sessions, room
+links, personal tokens or recorded HBR2 game files. Use **My Games → Backup all
+ZIP** separately for HBR2 recordings.
 
 ## Native online game features in current source
 
