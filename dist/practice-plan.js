@@ -257,11 +257,11 @@
   return{targets,streams,milestones:snapshotMilestones(data.milestones)};
  }
  function mergeSnapshot(snapshot){
-  const updates=new Map(),changes={};let added=0,skipped=0;
+  const updates=new Map();let added=0,skipped=0,milestoneChanges=0,combinedGoals=[];
   for(const source of SOURCES){
    const current=records(source).map(e=>normalizeSnapshotRecord(e,source));
    const saved=snapshot.streams[source.id],merged=[...current],known=new Set(current.map(x=>JSON.stringify(x)));
-   // Importing a snapshot never rewrites or silently discards current sessions.
+   // Never overwrite or silently remove current local practice sessions.
    for(const record of saved){
     const signature=JSON.stringify(record);
     if(known.has(signature)){skipped++;continue;}
@@ -270,13 +270,29 @@
     merged.push(record);known.add(signature);added++;
    }
    if(merged.length>source.limit)
-    throw Error(source.name+' history is full. Export or clear old local results before restoring.');
+    throw Error(source.name+' history is full. Export or clear older local sessions before restoring.');
    merged.sort((a,b)=>b.at-a.at);
-   updates.set(source.key,JSON.stringify(merged));changes[source.id]=merged.length-current.length;
+   if(source.id==='goals')combinedGoals=merged;
+   updates.set(source.key,JSON.stringify(merged));
   }
+  const existing=readMilestones();
+  if(snapshot.milestones.firstTouchAt&&!existing.firstTouchAt){
+   updates.set(FIRST_TOUCH_KEY,JSON.stringify({version:1,at:snapshot.milestones.firstTouchAt}));
+   milestoneChanges++;
+  }
+  const goalRushBest={...existing.goalRushBest};
+  for(const duration of GOAL_DURATIONS){
+   const recorded=combinedGoals.filter(x=>x.duration===Number(duration))
+    .reduce((highest,x)=>Math.max(highest,x.goals),0);
+   const top=Math.max(recorded,goalRushBest[duration]??0,
+    snapshot.milestones.goalRushBest[duration]??0);
+   if(top>(goalRushBest[duration]??0)){goalRushBest[duration]=top;milestoneChanges++;}
+  }
+  if(JSON.stringify(goalRushBest)!==JSON.stringify(existing.goalRushBest))
+   updates.set(GOAL_BEST_KEY,JSON.stringify(goalRushBest));
   if(restoreTargets.checked)
    updates.set(PLAN_KEY,JSON.stringify({version:1,goals:snapshot.targets}));
-  return{updates,added,skipped,changes};
+  return{updates,added,skipped,milestoneChanges};
  }
  async function importSnapshot(file){
   if(!file||file.size<=0||file.size>128*1024)throw Error('Choose a valid local snapshot smaller than 128 KB.');
@@ -284,10 +300,11 @@
   catch{throw Error('Practice snapshot is not valid JSON.');}
   const snapshot=preparedSnapshot(parsed),result=mergeSnapshot(snapshot);
   const count=result.added;
-  if(!count&&!restoreTargets.checked){
-   notice.textContent='All snapshot sessions are already saved locally. No changes made.';return;
+  if(!count&&!restoreTargets.checked&&!result.milestoneChanges){
+   notice.textContent='All practice sessions and milestones are already saved locally.';return;
   }
   const ask='Restore '+count+' new local practice session'+(count===1?'':'s')+
+   (result.milestoneChanges?' and '+result.milestoneChanges+' local milestone update(s)':'')+
    (restoreTargets.checked?' and apply the saved weekly goals':'')+
    '? Existing history remains untouched. These are private, unverified practice records.';
   if(!window.confirm(ask)){notice.textContent='Practice restore cancelled.';return;}
@@ -309,6 +326,7 @@
   render();
   notice.textContent='Imported '+count+' private practice session'+(count===1?'':'s')+
    (result.skipped?' · '+result.skipped+' duplicates skipped':'')+
+   (result.milestoneChanges?' · local achievements restored (reload for First Touch)':'')+
    (restoreTargets.checked?' · weekly goals restored':'')+'. No server upload.';
  }
  importButton.onclick=()=>importFile.click();
