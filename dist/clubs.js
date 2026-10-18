@@ -148,6 +148,11 @@
    render(data);notice.textContent='Signed in as '+settings.account.username+'.';
   }catch(e){if(request===generation)notice.textContent=e.message||'Clubs unavailable.';}
  }
+ // Keep the small profile badge current without exposing the club roster
+ // or sending any cross-account lookup request.
+ if(settings.account?.token)api().then(data=>{
+  if(settings.account?.token){clubBadge.hidden=!data.club;clubBadge.textContent=data.club?'['+data.club.tag+']':'';}
+ }).catch(()=>{});
  open.onclick=()=>{dialog.showModal();refresh();timer=setInterval(refresh,30000);};
  dialog.addEventListener('close',()=>{generation++;if(timer){clearInterval(timer);timer=null;}});
  document.addEventListener('visibilitychange',()=>{if(dialog.open&&document.visibilityState==='visible')refresh();});
