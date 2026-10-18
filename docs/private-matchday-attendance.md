@@ -50,3 +50,7 @@ organiser notes*, not an online team roster, authoritative attendance or an invi
 Does not affect approved BFF 60 Hz physics, AI champion/training, live match
 server state, online matchmaking, Clubs or competitive ratings. A downloaded
 private attendance roster is not proof that anyone actually attended a match.
+
+## Included in Game Night Pack v4
+
+The existing Game Night Pack now backs up attendance for the included private competitions. On restore, fixture attendance follows the **newly copied league, cup or series**, never the original. The dedicated Attendance JSON export remains useful for preserving old/unattached fixture notes. See [Game Night Pack v4](game-night-pack-v4-attendance.md).
