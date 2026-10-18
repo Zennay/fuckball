@@ -1,0 +1,40 @@
+/* Clubs live under Social — private member and invitation lists by default. */
+.club-social-entry{border:1px solid #79947d!important;border-radius:7px!important;
+ padding:8px 12px!important;color:#def5c9!important;font-weight:800!important}
+.club-social-dialog{width:min(770px,95vw);max-width:95vw;max-height:90dvh;
+ overflow-y:auto;border:1px solid #688778;border-radius:14px;padding:0;
+ background:#142c30;color:#eff8e8;box-shadow:0 24px 95px #000b}
+.club-social-dialog::backdrop{background:#031419b9}
+.club-social-shell{padding:clamp(19px,4vw,30px);display:grid;gap:16px}
+.club-social-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.club-social-head h2{font-size:clamp(26px,4vw,39px);letter-spacing:-.055em;
+ font-weight:950;font-style:italic;margin:0;flex:1}
+.club-social-head button{border-radius:8px;padding:8px 12px;min-height:42px}
+.club-social-head button[aria-label="Close Club"]{font-size:24px;min-width:43px}
+.club-social-intro{font-size:13px;color:#bdcfc3;margin:0;line-height:1.55}
+.club-social-status{min-height:20px;font-size:12px;color:#c6e8af;margin:0}
+.club-social-content{display:grid;gap:17px}
+.club-social-group{border:1px solid #4f7367;border-radius:11px;padding:clamp(15px,3vw,22px);
+ background:#20383a;min-width:0;display:grid;gap:10px}
+.club-social-group h3{font-size:18px;color:#d4f8a6;font-weight:900;margin:0;overflow-wrap:anywhere}
+.club-social-group>p{font-size:12px;color:#b9cfc5;line-height:1.5;margin:0}
+.club-social-identity{background:linear-gradient(120deg,#294638,#233b44)}
+.club-social-controls{display:flex;gap:8px;flex-wrap:wrap}
+.club-social-row{display:flex;align-items:center;justify-content:space-between;gap:11px;
+ flex-wrap:wrap;border-top:1px solid #617b6a5c;padding-top:12px}
+.club-social-row>strong{font-size:12px;overflow-wrap:anywhere}
+.club-social-row-actions{display:flex;flex-wrap:wrap;gap:7px}
+.club-social-row-actions button,.club-social-controls button{border:1px solid #78917a;border-radius:7px;
+ padding:9px 11px;font-size:11px;min-height:37px}
+.club-social-row button.club-danger,.club-social-controls .club-danger{color:#ffd4d4;border-color:#996c69;background:#433037}
+.club-social-form{display:flex;gap:9px;flex-wrap:wrap;margin:5px 0}
+.club-social-form input{background:#102529;border:1px solid #7d9a92;
+ color:#f6fff2;border-radius:7px;padding:10px 12px;min-height:42px;
+ font-size:14px;flex:1 1 185px;min-width:0}
+.club-social-form button{min-height:42px;border-radius:8px;padding:10px 16px;font-weight:800}
+.club-social-create input{flex:1 1 140px}
+.club-social-dialog button:focus-visible,.club-social-dialog input:focus-visible,
+.club-social-entry:focus-visible{outline:3px solid #d2ffab;outline-offset:3px}
+@media(max-width:600px){.club-social-row{align-items:stretch}.club-social-row-actions button{flex:1 1 110px}
+ .club-social-create input,.club-social-create button{flex:1 1 100%}}
+@media(prefers-reduced-motion:reduce){.club-social-dialog *{animation:none!important;transition:none!important}}
