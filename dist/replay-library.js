@@ -103,7 +103,7 @@ async function renderMyGames(){
   const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term));
   if(gamesSort.value==='oldest')items.sort((a,b)=>a.createdAt-b.createdAt);
   if(gamesSort.value==='longest')items.sort((a,b)=>(b.frames||0)-(a.frames||0)||b.createdAt-a.createdAt);
-  gamesList.replaceChildren();gamesEmpty.hidden=items.length===0;
+  gamesList.replaceChildren();gamesEmpty.hidden=all.length!==0;
   $('gamesCount').textContent=all.length+' / 30 saved';
   for(const item of items){
    const row=document.createElement('article');row.className='game-entry';
