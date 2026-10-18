@@ -283,6 +283,48 @@
   arm.hidden=state.armedAt!==null;
   open.disabled=check.disabled=state.armedAt===null;
  }
+ // Nonmodal companion for genuine local play only. It never observes,
+ // starts or changes an online room, and never guesses at unsaved results.
+ const match=document.getElementById('matchView');
+ const companion=make('aside',null,'solo-academy-companion');
+ companion.hidden=true;companion.setAttribute('aria-label','Current offline Academy mission');
+ const companionHeading=make('strong');
+ const companionText=make('span');
+ const companionButtons=make('div',null,'solo-academy-companion-actions');
+ const companionClaim=button('Claim saved result',()=>{
+  advance();showCompanion();
+ });
+ const companionHome=button('Academy ↗',()=>{
+  document.getElementById('tabHome')?.click();
+  root.scrollIntoView({block:'start',behavior:'auto'});
+  check.focus({preventScroll:true});
+ });
+ companionButtons.append(companionClaim,companionHome);
+ companion.append(companionHeading,companionText,companionButtons);
+ match?.append(companion);
+ function showCompanion(){
+  const active=state&&state!==false&&state.next<MAX&&state.armedAt!==null;
+  const safeLocal=typeof serverLink!=='undefined'&&!serverLink&&
+   typeof peerConnected!=='undefined'&&!peerConnected&&
+   typeof replay!=='undefined'&&!replay&&
+   typeof started!=='undefined'&&!!started&&!match?.hidden&&!document.hidden;
+  const competingHUD=!!match?.querySelector('.practice-circuit-hud:not([hidden])');
+  const show=active&&safeLocal&&!competingHUD;
+  if(!show){companion.hidden=true;return;}
+  const task=tasks[state.next];
+  const result=evidenceFor(task,state.armedAt);
+  companionHeading.textContent='SOLO ACADEMY · '+(state.next+1)+' / '+MAX+' · '+task.name;
+  companionText.textContent=result?
+   'A matching fresh native completion is saved. Claim to advance this private campaign.':
+   'Armed: '+task.detail+' Play in the original local mode; unsaved activity never counts.';
+  companion.dataset.complete=result?'yes':'no';
+  companionClaim.hidden=!result;
+  companion.hidden=false;
+ }
+ if(match){
+  setInterval(showCompanion,1300);
+  document.getElementById('tabHome')?.addEventListener('click',()=>{companion.hidden=true;});
+ }
  window.addEventListener('storage',e=>{
   if(e.key!==KEY&&e.key!==null)return;
   snapshot=rawState();state=decode(snapshot);render();

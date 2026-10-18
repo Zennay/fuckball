@@ -53,3 +53,22 @@
  .solo-academy-progress{flex:1 1 100%}}
 @media print{.solo-academy-actions{display:none!important}
  .solo-academy-chapter{break-inside:avoid}}
+
+/* Live mission companion is a nonmodal reminder, not a live result oracle. */
+.solo-academy-companion{position:absolute;z-index:4;bottom:max(76px,env(safe-area-inset-bottom));
+ left:clamp(10px,2vw,27px);width:min(340px,calc(100vw - 30px));
+ background:#183633ed;border:1px solid #c2dea9;border-radius:11px;padding:12px;
+ box-shadow:0 14px 42px #061e1e9e;color:#eff9e4;display:grid;gap:8px}
+.solo-academy-companion[hidden]{display:none!important}
+.solo-academy-companion strong{font-size:.79rem;letter-spacing:.045em;color:#e8f6b9}
+.solo-academy-companion span{font-size:.75rem;line-height:1.5;color:#d2e9dc}
+.solo-academy-companion[data-complete=yes]{border-color:#a5efb0;background:#1c453aec}
+.solo-academy-companion-actions{display:flex;flex-wrap:wrap;gap:8px}
+.solo-academy-companion button{min-height:38px;font:inherit;font-size:.75rem;font-weight:800;
+ border:1px solid #b0d3a8;border-radius:7px;padding:7px 10px;background:#d8f3b5;
+ color:#19392b;cursor:pointer}
+.solo-academy-companion button[hidden]{display:none!important}
+.solo-academy-companion button:focus-visible{outline:3px solid #ffe3a1;outline-offset:3px}
+@media(max-width:640px){.solo-academy-companion{bottom:max(102px,env(safe-area-inset-bottom));
+ width:min(260px,calc(100vw - 22px));padding:10px;left:10px}}
+@media print{.solo-academy-companion{display:none!important}}
