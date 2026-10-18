@@ -7,3 +7,25 @@ body.match-active{overflow:hidden}.match-active>.club-header{display:none}#match
 .bot-level{width:88px;min-width:70px;padding:5px;font-size:11px;margin-left:auto}.player{gap:8px}#selfplayProgress{width:100%;margin-top:16px}
 
 .match-invite{position:absolute;right:150px;top:max(24px,env(safe-area-inset-top));z-index:5;padding:10px 14px;background:#101a20de;border:1px solid #7c90834d;color:#f3f5ea;font-weight:700;letter-spacing:.04em}.match-invite[hidden]{display:none}@media (max-width:700px){.match-invite{right:76px;top:16px;padding:8px 10px}}
+
+
+/* Match menu: performance and accessibility modes.
+   These affect only compositing and controls, never the pitch renderer. */
+.low-menu-transparency .room-menu{
+ backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+ background:#111d25!important;
+}
+.low-menu-transparency .room-menu .rm-card{
+ backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+ background:#172831!important;
+}
+.rm-performance-option{display:flex;align-items:center;gap:8px;line-height:1.45;cursor:pointer}
+.rm-performance-option input{width:18px;height:18px;flex:0 0 auto;accent-color:#d3ef9f}
+.room-menu button:focus-visible,.room-menu input:focus-visible,
+.room-menu select:focus-visible,.room-menu a:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:3px;
+}
+.low-menu-motion .room-menu,.low-menu-motion .room-menu *,
+.low-menu-motion .room-menu *::before,.low-menu-motion .room-menu *::after{
+ scroll-behavior:auto!important;animation:none!important;transition:none!important;
+}
