@@ -70,7 +70,9 @@
    if(party.leader!==settings.account.username.toLowerCase())
     throw Error('Only your party leader can invite teammates. Leave the current party before forming a new one.');
    status.textContent='Club party ready. Invite teammates from the Club roster, or open Friends → Party.';
-   window.openFriendParty?.();
+   if(typeof window.openFriendParty==='function'){
+    dialog.close();window.openFriendParty();
+   }
   }catch(e){status.textContent=e.message||'Could not create Club party.';}
   finally{busy=false;}
  }
