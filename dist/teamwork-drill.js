@@ -102,7 +102,7 @@
  };
  refresh();
  function ready(){
-  if(serverLink?.room||peerConnected||replay||!room||!started||paused||match.hidden)return null;
+  if(serverLink||peerConnected||replay||!room||!started||paused||match.hidden)return null;
   if(document.getElementById('mode')?.value!=='4v4'||!room.gameState)return null;
   const human=room.state?.players?.find?.(p=>p.id===1);
   const team=human?.team?.id;
@@ -111,10 +111,11 @@
   return team;
  }
  function blocked(){
-  if(serverLink?.room||peerConnected)return 'Leave the active online room before starting a local drill.';
+  if(serverLink||peerConnected)return 'Leave or cancel the active online room or connecting session before starting a local drill.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])'))return 'Cancel the human Quick Match search before local practice.';
   const readyCheck=document.querySelector('.quick-ready:not([hidden])');
   if(readyCheck)return 'Complete or decline the human matchmaking ready-check first.';
+  if(document.getElementById('joinScreen')?.hidden===false)return 'Close the open room invitation before starting local practice.';
   return '';
  }
  function paint(){
