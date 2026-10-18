@@ -51,7 +51,7 @@
    (!item.frames||x.frameNo<=item.frames)&&[1,2].includes(x.teamId));
  }
  const format=frames=>{
-  if(!Number.isSafeInteger(frames)||frames<=0)return 'Unknown';
+  if(!Number.isSafeInteger(frames)||frames<0)return 'Unknown';
   const total=Math.floor(frames/60);
   return Math.floor(total/60)+'m '+String(total%60).padStart(2,'0')+'s';
  };
