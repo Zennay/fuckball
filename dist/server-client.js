@@ -18,7 +18,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   // Dropped connection (Wi-Fi switch, proxy hiccup): rejoin the same room a few times.
   if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1});},delay);}else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
- if(['queueStatus','quickMatchFound','quickMatchCancelled'].includes(d.type)){
+ if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
   if(d.type==='quickMatchFound'){link.quickMatchMode=d.mode;link.roomControl={locked:true};}
   if(d.type==='quickMatchCancelled')notify(d.reason||'Quick Match cancelled.');
   window.onQuickMatchEvent?.(d);
