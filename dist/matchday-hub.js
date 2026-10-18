@@ -24,14 +24,16 @@
   return data;
  }
  function league(raw){
-  if(!raw||!cleanName(raw.name)||!Array.isArray(raw.teams)||
+  if(!raw||raw.version!==1||typeof raw.id!=='string'||
+   !/^[a-f0-9-]{16,50}$/i.test(raw.id)||!cleanName(raw.name)||!Array.isArray(raw.teams)||
    raw.teams.length<2||raw.teams.length>12||raw.teams.some(x=>!cleanName(x))||
    new Set(raw.teams.map(x=>x.toLocaleLowerCase())).size!==raw.teams.length||
    ![1,2].includes(raw.legs)||!Array.isArray(raw.fixtures)||raw.fixtures.length>132)
    throw Error('Invalid local league.');
-  const rounds=[],teams=raw.teams;
+  const rounds=[],teams=raw.teams,seenFixtures=new Set();
   for(const x of raw.fixtures){
-   if(!x||!Number.isSafeInteger(x.round)||x.round<1||x.round>24||
+   if(!x||typeof x.id!=='string'||!/^r[1-9]\d*g[1-9]\d*$/.test(x.id)||
+    seenFixtures.has(x.id)||!Number.isSafeInteger(x.round)||x.round<1||x.round>24||
     !Number.isSafeInteger(x.home)||!Number.isSafeInteger(x.away)||
     x.home<0||x.home>=teams.length||x.away<0||x.away>=teams.length||x.home===x.away||
     !safeScore(x.homeScore)||!safeScore(x.awayScore)||
@@ -39,6 +41,7 @@
     !safeTime(x.kickoff===undefined?null:x.kickoff)||
     typeof (x.venue===undefined?'':x.venue)!=='string'||
     (x.venue||'').length>60)throw Error('Invalid league fixture.');
+   seenFixtures.add(x.id);
    rounds.push({...x,kickoff:x.kickoff===undefined?null:x.kickoff,venue:x.venue||''});
   }
   // Only compute a self-reported leader for a partially completed league.
@@ -51,7 +54,14 @@
   }
   table.sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
   const count=rounds.filter(f=>f.homeScore!==null).length;
-  return {type:'League',name:raw.name,played:count,total:rounds.length,
+  const allFixtures=rounds.map(f=>({
+   tournamentId:raw.id,fixtureId:f.id,
+   uid:raw.id+'-'+f.id,round:f.round,
+   home:teams[f.home],away:teams[f.away],
+   time:f.kickoff,venue:f.venue,competition:raw.name,
+   homeScore:f.homeScore,awayScore:f.awayScore
+  }));
+  return {type:'League',name:raw.name,played:count,total:rounds.length,fixtures:allFixtures,
    leader:count?table[0]?.name:null,
    upcoming:rounds.filter(f=>f.homeScore===null&&f.kickoff!==null&&f.kickoff>Date.now())
     .map(f=>({name:teams[f.home]+' vs '+teams[f.away],time:f.kickoff,
@@ -115,17 +125,92 @@
  header.append(lead,buttons);
  const totals=dom('div',null,'matchday-totals');
  const competitionList=dom('div',null,'matchday-competitions');
+ const control=dom('section',null,'matchday-control');
+ control.setAttribute('aria-label','Private league fixture control center');
+ const controlHeader=dom('div',null,'matchday-control-header');
+ const controlIntro=dom('div');
+ controlIntro.append(dom('h3','MATCHDAY CONTROL CENTER'),
+  dom('p','Find any private league fixture, schedule a kickoff or enter a result in Tournament Desk. Nothing here records official server outcomes.'));
+ const controlTools=dom('div',null,'matchday-control-tools');
+ const search=dom('input');search.type='search';search.maxLength=90;
+ search.placeholder='Search league or team…';
+ search.setAttribute('aria-label','Search private league fixtures');
+ const display=dom('select');display.setAttribute('aria-label','Filter private league fixtures');
+ for(const [value,label]of [
+   ['pending','Still to play'],['undated','Needs kickoff time'],
+   ['scheduled','Scheduled ahead'],['completed','Manually recorded'],['all','Every fixture']
+ ])display.add(new Option(label,value));
+ const refresh=button('↻ Refresh fixtures',()=>render());
+ controlTools.append(search,display,refresh);
+ controlHeader.append(controlIntro,controlTools);
+ const controlRows=dom('div',null,'matchday-control-rows');
+ const controlStatus=dom('p',null,'matchday-control-status');
+ controlStatus.setAttribute('role','status');controlStatus.setAttribute('aria-live','polite');
+ control.append(controlHeader,controlRows,controlStatus);
  const upcoming=dom('div',null,'matchday-upcoming');
  const note=dom('p',null,'matchday-status');note.setAttribute('role','status');note.setAttribute('aria-live','polite');
- content.append(header,totals,competitionList,upcoming,note);details.append(content);section.append(details);
+ content.append(header,totals,competitionList,control,upcoming,note);details.append(content);section.append(details);
  const cards=home.querySelector('.mode-cards');
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
- let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0;
+ let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
+ const openFixture=(f,field)=>{
+   window.dispatchEvent(new CustomEvent('fuckball:open-private-league-fixture',{
+     detail:{tournamentId:f.tournamentId,fixtureId:f.fixtureId,field}
+   }));
+   controlStatus.textContent='Opening the original private fixture editor. Only its Save buttons change local data.';
+ };
+ function renderControl(){
+   const term=search.value.trim().toLocaleLowerCase(),mode=display.value,now=Date.now();
+   const matching=fixtureCards.filter(f=>
+     (!term||[f.home,f.away,f.competition].some(x=>x.toLocaleLowerCase().includes(term)))&&
+     (mode==='all'||
+      (mode==='pending'&&f.homeScore===null)||
+      (mode==='undated'&&f.homeScore===null&&f.time===null)||
+      (mode==='scheduled'&&f.homeScore===null&&f.time!==null&&f.time>=now)||
+      (mode==='completed'&&f.homeScore!==null))
+   );
+   const ordered=matching.sort((a,b)=>{
+     const at=a.time===null?Number.MAX_SAFE_INTEGER:a.time;
+     const bt=b.time===null?Number.MAX_SAFE_INTEGER:b.time;
+     return at-bt||a.competition.localeCompare(b.competition)||a.round-b.round;
+   });
+   const limit=30,visible=ordered.slice(0,limit);
+   controlRows.replaceChildren();
+   for(const f of visible){
+     const card=dom('article',null,'matchday-control-row');
+     const info=dom('div',null,'matchday-control-fixture');
+     const when=f.time===null?'Kickoff not set':
+       new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
+     const result=f.homeScore===null?'Score not recorded':
+       f.homeScore+' – '+f.awayScore+' · self-reported';
+     info.append(dom('small',f.competition+' · Round '+f.round),
+       dom('strong',f.home+' vs '+f.away),
+       dom('span',when+' · '+result+(f.venue?' · '+f.venue:'')));
+     const actions=dom('div',null,'matchday-control-row-actions');
+     actions.append(
+       button(f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')),
+       button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')),
+       button('Poster',()=>window.dispatchEvent(
+         new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}})))
+     );
+     card.append(info,actions);controlRows.append(card);
+   }
+   if(!visible.length)controlRows.append(dom('p',
+     fixtureCards.length?'No private fixtures match your search and filter.':
+     'No local league fixtures are available yet. Create a tournament first.'));
+   controlStatus.textContent=matching.length+' of '+fixtureCards.length+
+     ' private league fixtures shown'+(matching.length>limit?' · first '+limit+' displayed; refine your search':'')+
+     '. Scores here are never server-verified.';
+ }
+ search.addEventListener('input',renderControl);
+ display.addEventListener('change',renderControl);
  function render(){
   let leagueData=[],cupData=[];failures=0;
   try{leagueData=read(LEAGUES,128*1024,8).map(league);}catch{failures++;}
   try{cupData=read(CUPS,96*1024,8).map(cup);}catch{failures++;}
   competitions=[...leagueData,...cupData].sort((a,b)=>a.name.localeCompare(b.name));
+  fixtureCards=leagueData.flatMap(c=>c.fixtures);
+  renderControl();
   allUpcoming=leagueData.flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
