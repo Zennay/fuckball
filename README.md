@@ -1,5 +1,11 @@
 # Fuckball 26
 
+## Your private practice coaching journal
+
+Open **My Games → Practice Journal** after completing local AI matches. The journal records actual local scoreboard results and time; it is not ranked or server-verified. Set a personal focus (finishing, passing, defending, positioning or decision-making), write up to 240 characters of reflection per match and filter your history by outcome or focus. The dashboard shows your five most recent outcomes, without inventing a rating.
+
+All focus tags, reflections and match records remain in **this browser's localStorage** and are included if you deliberately export your private journal JSON. Old entries work unchanged, with no note/focus until you add one. A double-confirmation clears only the practice journal, not online results, accounts or HBR2 replays. Private-mode browsers or disabled storage may prevent saving. Existing online matchmaking and approved physics never depend on these notes.
+
 ## Native online game features in current source
 
 **Play:** human-only casual Quick Match in 1v1–4v4 and an opt-in **Club vs Club 4v4** playlist for two complete authenticated four-player squads, with an explicit individual ready check. No ranked Elo or automatic bot opponents in human queues. Custom Rooms support shared links, four active humans per side, benches, spectators, substitutions, chat and host-only admission/moderation.
