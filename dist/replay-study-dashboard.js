@@ -96,6 +96,7 @@
   setTimeout(()=>URL.revokeObjectURL(url),60000);
  }
  function cleanLine(value){return String(value??'').replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').slice(0,600);}
+ const savedUTC=value=>Number.isFinite(new Date(value).getTime())?new Date(value).toISOString():'Unknown';
  function reportNotes(){
   const entries=filteredNotes();
   if(!entries.length||loading||opening)return null;
@@ -109,7 +110,7 @@
    return '"'+value.replace(/"/g,'""')+'"';
   };
   const rows=[['Replay name','Date saved (UTC)','Replay time','Theme','Note title','Observation'],
-   ...notes.map(n=>[n.name,new Date(n.recordedAt).toISOString(),frameStamp(n.frameNo),
+   ...notes.map(n=>[n.name,savedUTC(n.recordedAt),frameStamp(n.frameNo),
     labels[n.category]||'Other',n.label,n.text])];
   downloadReport('\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\r\n')+'\r\n',
    'fuckball-private-replay-study.csv','text/csv;charset=utf-8');
@@ -139,7 +140,7 @@
   ];
   for(const n of notes){
    out.push('');
-   out.push(cleanLine(n.name)+' · '+new Date(n.recordedAt).toISOString().slice(0,10)+
+   out.push(cleanLine(n.name)+' · '+savedUTC(n.recordedAt).slice(0,10)+
     ' · '+frameStamp(n.frameNo)+' · '+(labels[n.category]||'Other'));
    out.push('  '+cleanLine(n.label));
    if(n.text)out.push('  '+cleanLine(n.text));
