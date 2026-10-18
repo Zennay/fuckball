@@ -237,7 +237,6 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
   feedback.textContent='Saved a private training summary. No player identity or online score was included.';
  };
- home.addEventListener('focusin',()=>render());
  document.getElementById('tabHome')?.addEventListener('click',render);
  window.addEventListener('storage',event=>{
   if(event.key===null||Object.values(keys).includes(event.key))render();
