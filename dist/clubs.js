@@ -5,6 +5,10 @@
  const nav=document.querySelector('.main-nav');if(!nav)return;
  const open=document.createElement('button');open.type='button';open.textContent='Clubs';
  open.setAttribute('aria-label','My club and club invitations');nav.append(open);
+ const profile=document.querySelector('.profile');
+ const clubBadge=document.createElement('span');clubBadge.className='profile-club-tag';
+ clubBadge.hidden=true;
+ if(profile)profile.insertBefore(clubBadge,profile.firstChild);
  const menu=document.querySelector('.rm-head-actions');
  if(menu){const ingame=open.cloneNode(true);ingame.onclick=()=>open.click();menu.append(ingame);}
  const dialog=document.createElement('dialog');dialog.className='club-social-dialog';
@@ -61,6 +65,7 @@
  function render(data){
   area.replaceChildren();if(!data||!Array.isArray(data.invites))throw Error('Invalid club response.');
   const club=data.club;
+  clubBadge.hidden=!club;clubBadge.textContent=club?'['+club.tag+']':'';
   if(!club){
    const create=card('CREATE YOUR CLUB','Pick a unique club tag and name. You will become its captain.');
    const form=document.createElement('form');form.className='club-social-form';
