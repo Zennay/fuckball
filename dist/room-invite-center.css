@@ -1,0 +1,30 @@
+/* Current native Custom Room invitations only. Share actions never grant access. */
+.room-invite-center{margin:16px 0;padding:18px;border:1px solid #789c8a;
+ border-radius:14px;background:#183839;color:#ebf7ed;display:grid;gap:12px;min-width:0}
+.room-invite-center[hidden]{display:none!important}
+.room-invite-center-heading{display:flex;justify-content:space-between;gap:10px;
+ align-items:center;flex-wrap:wrap}
+.room-invite-center-heading strong{color:#ddffba;font-size:15px;letter-spacing:.05em}
+.room-invite-center-state{border:1px solid #75998d;border-radius:999px;
+ padding:6px 10px;font-size:11px;color:#d1eee0;line-height:1.35}
+.room-invite-center>p{font-size:12px;line-height:1.55;margin:0;color:#cde3db}
+.room-invite-center .room-invite-center-code{font:800 clamp(23px,3.4vw,35px) ui-monospace,monospace;
+ letter-spacing:.09em;color:#e9ffb9}
+.room-invite-center label{font-size:11px;color:#dbf4e6;display:grid;gap:7px}
+.room-invite-center label input{width:100%;min-height:43px;box-sizing:border-box;
+ padding:10px;background:#112c30;color:#f3fff3;border:1px solid #7baa95;
+ border-radius:9px;text-overflow:ellipsis;font:12px ui-monospace,monospace}
+.room-invite-center-actions{display:flex;gap:9px;flex-wrap:wrap}
+.room-invite-center button{background:#32504e;color:#f2ffef;border:1px solid #87a9a0;
+ border-radius:8px;padding:10px 12px;min-height:44px;cursor:pointer;font:700 12px system-ui,sans-serif}
+.room-invite-center button:hover:not(:disabled){background:#42675d}
+.room-invite-center button:focus-visible,.room-invite-center input:focus-visible{
+ outline:3px solid #dcffaa;outline-offset:3px}
+.room-invite-center-actions button{flex:1 1 140px}
+.room-invite-center-actions button:first-child{background:#d4f5a6;color:#18342a;border-color:#d4f5a6}
+.room-invite-center .room-invite-center-caution{color:#f2d6b0}
+.room-invite-center .room-invite-center-status{color:#dfffaf;min-height:17px}
+.room-invite-center-refresh{justify-self:start}
+@media(max-width:570px){.room-invite-center{padding:12px}
+ .room-invite-center-actions button{flex:1 1 100%}}
+@media print{.room-invite-center{display:none!important}}
