@@ -52,7 +52,7 @@
  section.append(header,strip,legend,bar,filters,list,expand,status);
  controls.append(section);
  let id='',playback=null,events=[],frameLimit=0,name='',serial=0,busy=false;
- let all=false,lastLoad=0,frameCache=-1,previousKey='',lastView='',ready=false;
+ let all=false,lastLoad=0,frameCache=-1;
  const fmt=frame=>{
   const seconds=Math.floor(Math.max(0,frame)/60);
   return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
@@ -91,6 +91,10 @@
   next.disabled=!available.some(e=>e.frameNo>frame+15);
   for(const button of ticks.children)
    button.classList.toggle('is-past',Number(button.dataset.frame)<=frame);
+  for(const row of list.children){
+   const point=Number(row.dataset.frame);
+   if(Number.isFinite(point))row.classList.toggle('is-current',Math.abs(point-frame)<=30);
+  }
  }
  function step(direction){
   if(!ours())return;
@@ -122,6 +126,7 @@
   const showing=all?items:items.slice(0,12);
   for(const entry of showing){
    const row=make('li','replay-event-entry is-'+entry.kind);
+   row.dataset.frame=String(entry.frameNo);
    const button=make('button','replay-event-jump');
    button.type='button';button.onclick=()=>seek(entry);
    const time=make('strong','',fmt(entry.frameNo));
@@ -168,8 +173,9 @@
    const priority={goal:0,bookmark:1,note:2};
    list.sort((a,b)=>a.frameNo-b.frameNo||priority[a.kind]-priority[b.kind]);
    if(token!==serial||!active()||replay!==recording||activeLocalReplayId!==replayId)return;
+   const changed=id!==replayId||playback!==recording;
    id=replayId;playback=recording;frameLimit=limit;name=String(item.name||'Replay').slice(0,100);
-   events=list;lastLoad=Date.now();all=false;frameCache=-1;
+   events=list;lastLoad=Date.now();if(changed)all=false;frameCache=-1;
    status.textContent='Timeline read from local HBR2 goal markers, saved moments and private notes.';
    render();
   }catch(error){
