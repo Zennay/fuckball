@@ -511,6 +511,7 @@ function createServer(options={}){
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
  function park(ws){const r=ws.room,id=ws.playerId;if(!r||id==null||!r.clients.has(id))return false;
+  if(r.quickMatch)cancelQuickRematch(r,'A player disconnected.');
   if(r.authority!=='server'&&r.standby)failover(r,'participant disconnected');
   if(r.authority!=='server')return false;
   const ticket=r.sessionTokens.get(id);if(!ticket)return false;
@@ -548,7 +549,7 @@ function createServer(options={}){
    clubMatch={red:clubRed,blue:clubBlue};
   }
   const r=createRoom();
-  r.quickMatch={mode,clubMatch,startedAt:Date.now()};
+  r.quickMatch={mode,clubMatch,startedAt:Date.now(),roster:[],vote:null,voteSeq:0,votesThisRound:0};
   r.mode=mode==='2v2'?'2v2':mode==='1v1'?'bot':'4v4';
   try{
    for(let i=0;i<red.length;i++)for(const entry of [red[i],blue[i]]){
@@ -558,6 +559,12 @@ function createServer(options={}){
     join(ws,r);
    }
    stripQuickBots(r);
+   // Record actual server IDs/teams after admission. Never trust browser
+   // reported names, roster badges, teams or ready status for a rematch.
+   r.quickMatch.roster=[...red.map(p=>({id:p.ws.playerId,user:p.user,side:1})),
+    ...blue.map(p=>({id:p.ws.playerId,user:p.user,side:2}))];
+   if(r.quickMatch.roster.some(p=>r.hb.getPlayer(p.id)?.team!==p.side))
+    throw Error('The human teams did not match the server lineup.');
    r.mode=mode==='club4v4'?'4v4':mode;
    r.locked=true; // Only existing exact-session reconnects can enter.
    r.reset(true);
@@ -575,7 +582,91 @@ function createServer(options={}){
    throw e;
   }
  }
- function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
+ // Human-only casual Quick Match rematches use a separate server policy,
+ // not the owner-only Custom Room rematch or browser-host control channel.
+ // Every original account must remain connected and consent anew. Nothing
+ // from the browser may change team membership, physics or game settings.
+ function currentQuickRematchRoster(r){
+  const match=r.quickMatch,roster=match?.roster;
+  if(!match||r.authority!=='server'||r.started||!r.lastResult||
+     r.lastResult.round!==r.round||!Array.isArray(roster)||
+     ![2,4,6,8].includes(roster.length)||r.sockets.size!==roster.length||
+     r.clients.size!==roster.length||r.parked.size||r.botIds.size)return null;
+  const members=new Set();
+  for(const player of roster){
+   const ws=r.sockets.get(player.id);
+   if(!ws||ws.readyState!==1||ws.room!==r||ws.playerId!==player.id||
+      !ws.account||accounts.user(ws.accountToken)?.toLowerCase()!==player.user||
+      r.hb.getPlayer(player.id)?.team!==player.side||members.has(player.user))
+    return null;
+   members.add(player.user);
+  }
+  if(roster.some((p,i)=>roster.slice(i+1).some(q=>!social?.canShareMatch(p.user,q.user))))
+   return null;
+  if(match.clubMatch){
+   const sides={1:match.clubMatch.red,2:match.clubMatch.blue};
+   if(sides[1]===sides[2]||
+      roster.some(p=>clubs?.membership(p.user)?.id!==sides[p.side]))return null;
+  }
+  return roster;
+ }
+ function broadcastQuickRematch(r,status,reason){
+  const vote=r.quickMatch?.vote;
+  const payload={type:'quickRematchStatus',status,id:vote?.id||null,
+   expiresAt:vote?.expiresAt||null,required:vote?[...vote.required]:[],
+   accepted:vote?[...vote.accepted]:[],
+   ...(reason?{reason:String(reason).slice(0,140)}:{})};
+  for(const ws of r.sockets.values())send(ws,payload);
+ }
+ function cancelQuickRematch(r,reason){
+  const match=r.quickMatch;if(!match?.vote)return;
+  clearTimeout(match.vote.timer);
+  // Broadcast the final cancellation *without* leaking other account names.
+  broadcastQuickRematch(r,'cancelled',reason);
+  match.vote=null;match.cooldownUntil=Date.now()+10000;
+ }
+ function quickRematchAction(ws,r,d){
+  const match=r.quickMatch;
+  if(!match||r.sockets.get(ws.playerId)!==ws)throw Error('Not an admitted Quick Match player.');
+  const roster=currentQuickRematchRoster(r);
+  if(!roster){cancelQuickRematch(r,'Players or team eligibility changed.');
+   throw Error('A complete connected human lineup is required for a rematch.');}
+  if(d.type==='quickRematchRequest'){
+   if(match.vote)throw Error('A rematch vote is already active.');
+   if(Date.now()<(match.cooldownUntil||0))throw Error('Wait before requesting another rematch.');
+   if(match.votesThisRound>=2)throw Error('Rematch proposals are limited to two per completed round.');
+   const id=++match.voteSeq,required=new Set(roster.map(p=>p.id));
+   const vote={id,required,accepted:new Set([ws.playerId]),
+    expiresAt:Date.now()+45000,timer:null};
+   match.vote=vote;match.votesThisRound++;
+   vote.timer=setTimeout(()=>{if(match.vote===vote)
+    cancelQuickRematch(r,'Rematch vote expired.');},45000);
+   vote.timer.unref?.();broadcastQuickRematch(r,'pending');return;
+  }
+  const vote=match.vote;
+  if(!vote||!Number.isSafeInteger(d.id)||d.id!==vote.id||
+     typeof d.accept!=='boolean'||!vote.required.has(ws.playerId)||
+     vote.accepted.has(ws.playerId)||Date.now()>=vote.expiresAt)
+   throw Error('No active rematch proposal for this player.');
+  if(!d.accept){cancelQuickRematch(r,'A player declined this rematch.');return;}
+  vote.accepted.add(ws.playerId);
+  if(vote.accepted.size!==vote.required.size){broadcastQuickRematch(r,'pending');return;}
+  if(!currentQuickRematchRoster(r)){cancelQuickRematch(r,'Players or teams changed.');return;}
+  clearTimeout(vote.timer);match.vote=null;
+  // All players have explicitly accepted. Swap the actual native engine
+  // teams while the completed game is stopped; restart the exact same mode.
+  for(const player of roster)r.hb.setPlayerTeam(player.id,3-player.side);
+  for(const player of roster)player.side=3-player.side;
+  if(match.clubMatch)[match.clubMatch.red,match.clubMatch.blue]=
+   [match.clubMatch.blue,match.clubMatch.red];
+  match.votesThisRound=0;match.cooldownUntil=0;
+  r.reset(true);
+  for(const player of roster){
+   const peer=r.sockets.get(player.id);
+   if(peer)send(peer,{type:'matchRestart',round:r.round,rematch:true,quickMatch:true});
+  }
+ }
+ function leave(ws){const r=ws.room;if(!r)return;if(r.quickMatch)cancelQuickRematch(r,'A player left the match.');ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;if(id===r.owner)r.listed=false; // A new host must consent before re-publishing.
   r.sockets.delete(id);r.reports.delete(id);r.chatMutes.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
   if(r.authority===id){if(!r.sockets.size){r.destroy();rooms.delete(r.id);return;}failover(r,'host left');}
@@ -669,7 +760,11 @@ function createServer(options={}){
    if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
-   if(r.quickMatch&&!['in','input','chat','reportPlayer'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
+   if(r.quickMatch&&['quickRematchRequest','quickRematchVote'].includes(d.type)){
+    quickRematchAction(ws,r,d);return;
+   }
+   if(r.quickMatch&&!['in','input','chat','reportPlayer'].includes(d.type))
+    throw Error('Quick Match settings are controlled by the server.');
    if(d.type==='reportPlayer'){
     const reporter=ws.account&&accounts.user(ws.accountToken)?.toLowerCase();
     if(!reporter)throw Error('Sign in to report another player.');
