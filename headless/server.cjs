@@ -115,7 +115,7 @@ function createServer(options={}){
    const announceServer=!m||m.to!=='server';resume(r,state);if(announceServer){r.epoch++;r.migration={frame:state.frame};announce(r,'server');r.migration=null;}return;}
   // Not a candidate again until a fresh report says it can host (e.g. its tab is visible again).
   if(d.type==='hostRelease'){const rep=r.reports.get(ws.playerId);if(rep)rep.eligible=false;if(!r.migration)migrate(r,'server',d.reason||'host released');}}
- wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{if(shuttingDown||ws.intentionalLeave||!park(ws))leave(ws);clients.delete(ws);});ws.on('message',(raw,binary)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
+ wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{if(shuttingDown||ws.intentionalLeave||ws.peerClosed||!park(ws))leave(ws);clients.delete(ws);});ws.on('message',(raw,binary)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
    // Snapshot bytes from a browser host for a client without a direct channel to it.
    if(binary){if(r0&&r0.authority===ws.playerId&&raw.length>8&&raw.readUInt32BE(0)===RELAY){const to=r0.sockets.get(raw.readUInt32BE(4));if(to&&to.socket.writableLength<65536)send(to,raw.subarray(8));}return;}
    const d=JSON.parse(raw.toString());
