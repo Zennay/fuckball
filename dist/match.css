@@ -37,3 +37,37 @@ body.match-active{overflow:hidden}.match-active>.club-header{display:none}#match
  color:#b2d9b5;background:#19302d;font:600 10px/1.4 ui-monospace,monospace;
 }
 .rm-player .rm-ping.rm-ping-poor{color:#ffd0bd;background:#3d2a28;border-color:#a36b61}
+
+/* Spectator/replay follow camera. This toolbar is local-view-only. */
+.spectator-camera-toolbar{
+ position:absolute;z-index:6;right:24px;bottom:max(26px,env(safe-area-inset-bottom));
+ display:flex;align-items:center;gap:8px;max-width:min(360px,calc(100vw - 48px));
+ padding:7px;border:1px solid #6b847d;border-radius:10px;
+ background:#122129ed;box-shadow:0 12px 28px #0006;
+ backdrop-filter:blur(8px);color:#f0f7e9;
+}
+.spectator-camera-toolbar[hidden],.spectator-target-setting[hidden]{display:none!important}
+.spectator-camera-toolbar button{
+ width:38px;height:38px;flex:0 0 auto;border-radius:7px;
+ border:1px solid #66867b;background:#203932;color:#daefc6;
+ font-size:23px;line-height:1;cursor:pointer;
+}
+.spectator-camera-toolbar button:disabled{opacity:.45;cursor:default}
+.spectator-camera-toolbar span{
+ display:block;min-width:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap;font-size:11px;font-weight:800;letter-spacing:.04em;
+}
+.spectator-camera-toolbar button:focus-visible,.spectator-target-setting select:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:2px;
+}
+.spectator-target-setting{display:grid;gap:6px}
+.spectator-target-setting select{width:100%;max-width:330px}
+.spectator-target-setting small{font-size:11px;color:#a9c3b7;line-height:1.4}
+@media(max-width:650px),(pointer:coarse){
+ .spectator-camera-toolbar{top:82px;bottom:auto;right:14px;padding:5px;gap:6px}
+ .spectator-camera-toolbar button{height:36px;width:36px}
+ .spectator-camera-toolbar span{max-width:154px;font-size:10px}
+}
+@media(prefers-reduced-transparency:reduce){
+ .spectator-camera-toolbar{backdrop-filter:none;background:#14262a}
+}

@@ -3,23 +3,131 @@
 // Opening it never pauses the game; P (or the Pause button) does that.
 let menuOpen=false;
 const menuPanes={menuMatch:'menuMatchPane',menuHelp:'menuControlsPane',menuVideo:'menuVideoPane'};
-function refreshMenu(){const g=(replay||room).gameState;$('menuScore').textContent=(g?.redScore||0)+' : '+(g?.blueScore||0);$('menuClock').textContent=fmt(g?.timeElapsed);$('menuStadium').textContent=(replay?.state?.stadium||stadium).name;$('cameraMode').value=settings.camera||'stadium';$('matchZoom').value=settings.zoom;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';$('matchSound').checked=settings.sound;if(document.activeElement!==$('menuName'))$('menuName').value=settings.name;const online=!!serverLink;$('menuCopyLink').hidden=!online;$('inviteButton').hidden=!online;$('menuOnline').hidden=online||peerConnected;$('disconnectPeer').hidden=true;}
+function refreshMenu(){refreshSpectatorControls(true);const g=(replay||room).gameState;$('menuScore').textContent=(g?.redScore||0)+' : '+(g?.blueScore||0);$('menuClock').textContent=fmt(g?.timeElapsed);$('menuStadium').textContent=(replay?.state?.stadium||stadium).name;$('cameraMode').value=settings.camera||'stadium';$('matchZoom').value=settings.zoom;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';$('matchSound').checked=settings.sound;if(document.activeElement!==$('menuName'))$('menuName').value=settings.name;const online=!!serverLink;$('menuCopyLink').hidden=!online;$('inviteButton').hidden=!online;$('menuOnline').hidden=online||peerConnected;$('disconnectPeer').hidden=true;}
 function menuPane(id,button){for(const [b,pane]of Object.entries(menuPanes)){$(pane).hidden=pane!==id;$(b).classList.toggle('selected',b===button);}if(id==='menuControlsPane')renderBindings();}
 function openMatchMenu(pane='menuMatchPane',button='menuMatch'){if($('matchView').hidden)showView('play');if(!$('chatForm').hidden)closeChat();if(!menuOpen){releaseInputs();menuOpen=true;$('pauseMenu').hidden=false;document.body.classList.add('menu-open');}updateLobby();rosterKey='';updateRoster();refreshMenu();menuPane(pane,button);$(button)?.focus?.();$('pauseMenu').setAttribute?.('aria-modal','true');}
-function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;document.body.classList.remove('menu-open');$('pauseMenu').removeAttribute?.('aria-modal');updateLobby();$('gameCanvas').focus();}
+function closeMatchMenu(){if(!menuOpen)return;cancelBinding();menuOpen=false;$('pauseMenu').hidden=true;refreshSpectatorControls(true);document.body.classList.remove('menu-open');$('pauseMenu').removeAttribute?.('aria-modal');updateLobby();$('gameCanvas').focus();}
 function toggleMatchMenu(){if(menuOpen)closeMatchMenu();else openMatchMenu();}
 const originalShowView=showView;showView=function(view){if(view!=='play')closeMatchMenu();originalShowView(view);document.body.classList.toggle('match-active',view==='play');updateCamera();scheduleFastFrames();if(view==='play'&&!started&&!replay&&!menuOpen)openMatchMenu();};
 document.addEventListener('visibilitychange',scheduleFastFrames);
 // Starting from the menu drops you straight into the match.
 const originalStartStop=startStop;startStop=function(){const wasStarted=started;originalStartStop();if(!wasStarted)closeMatchMenu();};
-let cameraSignature='';function updateCamera(render=true){if(!renderer)return;const rect=$('gameCanvas').getBoundingClientRect(),map=replay?.state?.stadium||stadium;if((settings.camera||'stadium')==='stadium'){renderer.followPlayerId=-1;renderer.zoomCoeff=Math.max(.1,Math.min(rect.width/(map.width*2+90),rect.height/(map.height*2+100)))*settings.zoom;}else{renderer.followPlayerId=peerRole==='guest'?networkPlayerId:1;renderer.zoomCoeff=settings.zoom;}if(render)renderer.render();}
-// Refit from the active state on every frame, including remote snapshots and replay seeks.
-const originalRender=renderer.render;renderer.render=function(...args){const map=replay?.state?.stadium||stadium,key=[map?.width,map?.height,settings.camera,settings.zoom,peerRole,networkPlayerId].join(':');if(key!==cameraSignature){cameraSignature=key;updateCamera(false);}return originalRender.apply(this,args);};
+// Spectators and replay viewers can follow any active player without taking
+// control of them. The selection is intentionally local-only and cannot send
+// room commands or alter authoritative match state.
+let cameraSignature='',spectatorTargetId=null,spectatorRosterKey='',spectatorUiDue=0;
+const spectatorToolbar=document.createElement('div');
+spectatorToolbar.className='spectator-camera-toolbar';spectatorToolbar.hidden=true;
+spectatorToolbar.setAttribute('aria-label','Spectator camera');
+const spectatorPrevious=document.createElement('button'),spectatorNext=document.createElement('button');
+const spectatorCaption=document.createElement('span');
+spectatorPrevious.type=spectatorNext.type='button';
+spectatorPrevious.textContent='‹';spectatorNext.textContent='›';
+spectatorPrevious.setAttribute('aria-label','Follow previous player');
+spectatorNext.setAttribute('aria-label','Follow next player');
+spectatorCaption.setAttribute('aria-live','polite');
+spectatorToolbar.append(spectatorPrevious,spectatorCaption,spectatorNext);
+$('matchView').append(spectatorToolbar);
+const spectatorSetting=document.createElement('label');
+spectatorSetting.className='spectator-target-setting';
+spectatorSetting.textContent='Spectator target';
+const spectatorSelect=document.createElement('select');
+spectatorSelect.setAttribute('aria-label','Player to follow');
+const spectatorHint=document.createElement('small');
+spectatorHint.textContent='Changes your camera only. Your team and match remain unchanged.';
+spectatorSetting.append(spectatorSelect,spectatorHint);
+$('menuVideoPane').querySelector('.rm-form')?.append(spectatorSetting);
+function cameraPlayers(){
+ const players=(replay?.state||room?.state)?.players;
+ return Array.isArray(players)?players.filter(p=>Number.isSafeInteger(p?.id)&&[1,2].includes(p.team?.id))
+  .map(p=>({id:p.id,name:String(p.name||'Player').slice(0,25),side:p.team.id}))
+  .sort((a,b)=>a.side-b.side||a.id-b.id):[];
+}
+function isSpectatorCamera(){
+ if(replay)return true;
+ if(!serverLink&&$('mode')?.value==='watch')return true;
+ const players=room?.state?.players||[];
+ const id=serverLink?networkPlayerId:1;
+ return players.some(p=>p.id===id&&p.team?.id===0);
+}
+function spectatorTarget(players){
+ if(!players.length)return null;
+ return players.find(p=>p.id===spectatorTargetId)||players[0];
+}
+function chooseSpectatorTarget(id){
+ const players=cameraPlayers(),selected=players.find(p=>p.id===id);
+ if(!selected||!isSpectatorCamera())return;
+ spectatorTargetId=selected.id;
+ settings.camera='follow';$('cameraMode').value='follow';savePrefs();
+ cameraSignature='';refreshSpectatorControls(true);updateCamera();
+}
+function cycleSpectatorTarget(delta){
+ const players=cameraPlayers(),selected=spectatorTarget(players);
+ if(!selected)return;
+ const next=(players.findIndex(p=>p.id===selected.id)+delta+players.length)%players.length;
+ chooseSpectatorTarget(players[next].id);
+}
+spectatorPrevious.onclick=()=>cycleSpectatorTarget(-1);
+spectatorNext.onclick=()=>cycleSpectatorTarget(1);
+spectatorSelect.onchange=()=>chooseSpectatorTarget(Number(spectatorSelect.value));
+function refreshSpectatorControls(force=false){
+ const active=isSpectatorCamera(),players=active?cameraPlayers():[];
+ const rosterKey=JSON.stringify([active,players,spectatorTargetId,settings.camera,menuOpen,$('matchView').hidden]);
+ if(!force&&rosterKey===spectatorRosterKey)return;
+ spectatorRosterKey=rosterKey;
+ const target=spectatorTarget(players),show=active&&players.length>0;
+ spectatorToolbar.hidden=!show||$('matchView').hidden||menuOpen;
+ spectatorSetting.hidden=!show;
+ if(!show){spectatorSelect.replaceChildren();return;}
+ const currentOptions=spectatorSelect.options||spectatorSelect.children||[];
+ if(force||currentOptions.length!==players.length||
+    [...currentOptions].some((o,i)=>Number(o.value)!==players[i].id)){
+  spectatorSelect.replaceChildren();
+  for(const p of players){const option=document.createElement('option');option.value=String(p.id);option.textContent=(p.side===1?'RED':'BLUE')+' · '+p.name;spectatorSelect.add(option);}
+ }
+ spectatorSelect.value=String(target.id);
+ spectatorPrevious.disabled=spectatorNext.disabled=players.length<=1;
+ spectatorCaption.textContent=settings.camera==='stadium'?'FULL PITCH · select a player':
+  (target.side===1?'RED':'BLUE')+' · '+target.name;
+}
+function updateCamera(render=true){
+ if(!renderer)return;
+ const rect=$('gameCanvas').getBoundingClientRect(),map=replay?.state?.stadium||stadium;
+ if((settings.camera||'stadium')==='stadium'){
+  renderer.followPlayerId=-1;
+  renderer.zoomCoeff=Math.max(.1,Math.min(rect.width/(map.width*2+90),rect.height/(map.height*2+100)))*settings.zoom;
+ }else{
+  const selected=isSpectatorCamera()?spectatorTarget(cameraPlayers()):null;
+  renderer.followPlayerId=selected?.id??(peerRole==='guest'?networkPlayerId:1);
+  renderer.zoomCoeff=settings.zoom;
+ }
+ if(render)renderer.render();
+}
+// Refit after remote snapshots/replay seeks without rebuilding menu options
+// on every high-refresh rendered frame.
+const originalRender=renderer.render;
+renderer.render=function(...args){
+ const map=replay?.state?.stadium||stadium,watching=isSpectatorCamera();
+ const target=watching?spectatorTarget(cameraPlayers())?.id:null;
+ const key=[map?.width,map?.height,settings.camera,settings.zoom,peerRole,networkPlayerId,watching,target].join(':');
+ if(key!==cameraSignature){cameraSignature=key;updateCamera(false);}
+ if(performance.now()>=spectatorUiDue){spectatorUiDue=performance.now()+250;refreshSpectatorControls();}
+ return originalRender.apply(this,args);
+};
+// The window capture listener complements (never replaces) the game's document input listener.
+window.addEventListener('keydown',event=>{
+ if(event.repeat||menuOpen||!isSpectatorCamera()||!$('joinScreen').hidden||
+    $('matchView').hidden||['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName))return;
+ if(event.code==='BracketLeft'||event.code==='BracketRight'){
+  event.preventDefault();cycleSpectatorTarget(event.code==='BracketRight'?1:-1);
+ }
+},true);
+
 $('matchMenuButton').onclick=toggleMatchMenu;for(const b of Object.keys(menuPanes))$(b).onclick=()=>menuPane(menuPanes[b],b);
 $('menuHome').onclick=()=>{if(serverLink||peerConnected)disconnect();showView('home');};$('compatButton').onclick=()=>openDialog('compatDialog');
 $('menuFullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('matchView').requestFullscreen();}catch{notify('Fullscreen is unavailable.');}};
 $('helpButton').onclick=()=>{showView('play');openMatchMenu('menuControlsPane','menuHelp');};
-$('cameraMode').onchange=()=>{settings.camera=$('cameraMode').value;savePrefs();updateCamera();};$('matchZoom').oninput=()=>{settings.zoom=+$('matchZoom').value;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';savePrefs();updateCamera();};$('matchSound').onchange=()=>{settings.sound=$('matchSound').checked;savePrefs();};
+$('cameraMode').onchange=()=>{settings.camera=$('cameraMode').value;savePrefs();cameraSignature='';refreshSpectatorControls(true);updateCamera();};$('matchZoom').oninput=()=>{settings.zoom=+$('matchZoom').value;$('matchZoomValue').textContent=settings.zoom.toFixed(2)+'×';savePrefs();updateCamera();};$('matchSound').onchange=()=>{settings.sound=$('matchSound').checked;savePrefs();};
 $('menuName').onchange=()=>setName($('menuName').value);
 $('lobbyStart').onclick=()=>{if(!started)startStop();};$('lobbyMenu').onclick=()=>openMatchMenu();
 const originalLoadReplay=loadReplay;loadReplay=function(bytes,name){closeMatchMenu();showView('play');originalLoadReplay(bytes,name);updateCamera();};const originalCloseReplay=closeReplay;closeReplay=function(){originalCloseReplay();updateCamera();};
