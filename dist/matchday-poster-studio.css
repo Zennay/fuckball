@@ -77,3 +77,13 @@
  body.poster-custom-print .matchday-posters-body>canvas{display:none!important}
  body.poster-custom-print .matchday-posters-body>.matchday-poster-studio{display:block!important}
 }
+/* Opt-in portable draft archive: deliberately distinct from poster downloads. */
+.poster-studio-portability{
+ display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 0 15px
+}
+.poster-studio-portability button{
+ border:1px solid #6f8c7e;border-radius:9px;background:#294039;
+ color:#edffed;padding:10px 14px;font-weight:750;cursor:pointer
+}
+.poster-studio-portability button:disabled{opacity:.5;cursor:not-allowed}
+@media print{.poster-studio-portability{display:none!important}}
