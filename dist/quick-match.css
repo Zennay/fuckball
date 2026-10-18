@@ -1,0 +1,24 @@
+/* Unranked real-player matchmaking. Never imply a ranked rating or bot fills. */
+.quick-queue-panel{
+ margin:clamp(24px,5vw,58px) auto 12px;padding:clamp(22px,4vw,38px);
+ max-width:1160px;border:1px solid #698569;border-radius:18px;
+ background:linear-gradient(120deg,#1b3031,#213927);color:#f0f5e8;
+ box-shadow:0 15px 50px #07120d33;
+}
+.quick-queue-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.quick-queue-heading h2{margin:0;font-size:clamp(30px,4.3vw,54px);font-style:italic;letter-spacing:-.075em}
+.quick-queue-badge{border-radius:40px;background:#d2fa9a;color:#193126;font-size:10px;font-weight:850;letter-spacing:.1em;padding:8px 11px}
+.quick-queue-panel>p{font-size:13px;line-height:1.6;max-width:800px;color:#adc6b8}
+.quick-queue-modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}
+.quick-queue-mode{display:grid;text-align:left;gap:7px;padding:20px;border:1px solid #658879;background:#182d30;border-radius:10px;color:#edf6ea;cursor:pointer;min-width:0}
+.quick-queue-mode:hover:not(:disabled){background:#2b4534;border-color:#bce88c}
+.quick-queue-mode strong{font-size:clamp(22px,3vw,34px);letter-spacing:-.04em}
+.quick-queue-mode small{font-size:11px;color:#b1ccbc}
+.quick-queue-mode:disabled{opacity:.45;cursor:not-allowed}
+.quick-queue-status{margin:10px 0;color:#ddf4c5!important;font-size:12px;min-height:20px}
+.quick-queue-actions{display:flex;justify-content:flex-start}
+.quick-queue-actions button{border:1px solid #a77d7c;background:#4b2e32;color:#fbd9d9;padding:12px 20px;border-radius:9px;font-size:12px;cursor:pointer}
+.quick-queue-actions button[hidden]{display:none}
+.quick-queue-mode:focus-visible,.quick-queue-actions button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:750px){.quick-queue-modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:360px){.quick-queue-mode{padding:13px}.quick-queue-panel{margin:20px 12px}}
