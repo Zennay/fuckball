@@ -37,6 +37,11 @@
  for(const [value,label] of [['all','All rooms'],['space','Rooms with open seats'],['eligible','Rooms I can join'],['guest','Guest-accessible with seats'],['lobby','Open lobbies']])
   accessFilter.add(new Option(label,value));
  for(const control of [search,statusFilter,modeFilter,order,accessFilter])filters.append(control);
+ const resetFilters=document.createElement('button');
+ resetFilters.type='button';resetFilters.className='room-browser-reset';
+ resetFilters.textContent='Clear filters';
+ resetFilters.title='Show every currently advertised public room again';
+ filters.append(resetFilters);
  const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
  const status=document.createElement('p');status.className='room-browser-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -281,6 +286,10 @@
  for(const control of [search,statusFilter,modeFilter,order,accessFilter]){
   control.addEventListener(control===search?'input':'change',renderRooms);
  }
+ resetFilters.onclick=()=>{
+  search.value='';statusFilter.value='all';modeFilter.value='all';
+  order.value='default';accessFilter.value='all';renderRooms();
+ };
  async function load(){
   if(!shown||busy)return false;
   busy=true;const current=++sequence;refresh.disabled=true;
