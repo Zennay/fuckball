@@ -7,6 +7,11 @@
  const open=document.createElement('button');open.type='button';open.textContent='Friends';
  open.setAttribute('aria-label','Friends, requests and room invitations');
  nav.append(open);
+ // Also available in the full-screen in-match menu, where the top navbar
+ // is intentionally hidden.
+ const matchActions=document.querySelector('.rm-head-actions');
+ if(matchActions){const inGame=open.cloneNode(true);inGame.textContent='Friends';inGame.onclick=()=>open.click();matchActions.append(inGame);}
+
  const dialog=document.createElement('dialog');dialog.className='social-dialog';
  dialog.setAttribute('aria-label','Friends and room invitations');
  const shell=document.createElement('div');shell.className='social-shell';
