@@ -265,9 +265,9 @@
     }));
    }
    window.dispatchEvent(new Event('fuckball:private-competition-change'));
+   inspect();
    info('Restored '+totals.leagues+' leagues, '+totals.cups+' knockout cups and '+
     totals.formations+' tactics plans as additional private copies. No server data changed.');
-   inspect();
   }catch(error){info('Game Night Pack not restored: '+(error.message||'File/storage error'));}
   finally{busy=false;importButton.disabled=false;}
  };
