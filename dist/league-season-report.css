@@ -53,3 +53,11 @@
 @media(prefers-reduced-motion:reduce){.league-season-centre *{scroll-behavior:auto!important}}
 @media print{.league-season-actions,.league-season-controls{display:none!important}
  .league-season-fixture{break-inside:avoid}}
+
+.league-season-fixture .league-fixture-open{font:inherit;font-size:.78rem;min-height:40px;
+ padding:8px 10px;border:1px solid #9cbab0;border-radius:8px;background:#365c4b;
+ color:#f5fbe6;cursor:pointer}
+.league-season-fixture .league-fixture-open:focus-visible{outline:3px solid #ffe39b;outline-offset:3px}
+.league-season-fixture{grid-template-columns:1.4fr 1.7fr auto auto}
+@media(max-width:720px){.league-season-fixture{grid-template-columns:1fr}}
+@media print{.league-fixture-open{display:none!important}}

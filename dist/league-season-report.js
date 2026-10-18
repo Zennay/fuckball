@@ -188,7 +188,14 @@
           const score=el('span',recorded(f)?
             f.homeScore+' – '+f.awayScore+' · entered score':'Awaiting result',
             recorded(f)?'league-fixture-played':'league-fixture-pending');
-          fixture.append(title,detail,score);rows.append(fixture);
+          const edit=button(recorded(f)?'Open score':'Set kickoff / score',()=>{
+            window.dispatchEvent(new CustomEvent('fuckball:open-private-league-fixture',{
+              detail:{tournamentId:f.tournamentId,fixtureId:f.fixtureId,
+                field:recorded(f)?'score':'schedule'}
+            }));
+          });
+          edit.className='league-fixture-open';
+          fixture.append(title,detail,score,edit);rows.append(fixture);
         }
         if(!items.length)rows.append(el('p','No fixtures in this view.'));
         count.textContent=items.length>24?

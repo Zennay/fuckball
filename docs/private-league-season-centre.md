@@ -4,7 +4,7 @@ In **Home → Matchday Hub → Saved competitions**, expand a league's **League 
 
 - Select **All teams** or one saved team. Four season counters track games recorded, unplayed fixtures, goals and either team points or total teams.
 - For a team, see the last five *recorded* match results (W/D/L, most recent on the left). Hover or focus the letters for the teams and actual score, and explore its opponent-by-opponent record.
-- Switch the match list between unplayed fixtures, recorded scores and the full schedule. The on-screen list is intentionally capped at 24; both exports include **every** fixture in the selected team/all-teams view.
+- Switch the match list between unplayed fixtures, recorded scores and the full schedule. Use **Open score** or **Set kickoff / score** to jump straight to that fixture in the original private league editor. The on-screen list is intentionally capped at 24; both exports include **every** fixture in the selected team/all-teams view.
 - **Season fixtures CSV** uses UTF-8 BOM, quoted fields and formula-prefix escaping, includes saved venue/kickoff, and explicitly distinguishes entered from unplayed scores.
 - **Printable season report** downloads a self-contained offline HTML page: full standings and all filtered fixtures. Open that file to print. No third-party scripts or remote data are required.
 
