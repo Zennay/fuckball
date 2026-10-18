@@ -157,6 +157,28 @@ const ReplayLibrary=(()=>{
   return updateMeta(id,item=>({...item,bookmarks:normalizeBookmarks(
    (item.bookmarks||[]).filter(b=>b.frameNo!==frameNo),item.frames)}));
  }
+ // Notes are personal coaching annotations, never authoritative match events.
+ function normalizeNotes(raw,frames){
+  if(raw===undefined)return[];
+  if(!Array.isArray(raw)||raw.length>12)throw Error('A replay can have at most 12 coaching notes.');
+  const max=Number.isSafeInteger(frames)&&frames>0?frames:86400000;
+  const seen=new Set(),categories=['decision','positioning','passing','defense','finishing','other'];
+  const cleaned=raw.map(value=>{
+   if(!value||typeof value!=='object'||Array.isArray(value)||
+    !Number.isSafeInteger(value.frameNo)||value.frameNo<0||value.frameNo>max||
+    seen.has(value.frameNo)||typeof value.label!=='string'||!value.label.trim()||
+    value.label.trim().length>60||typeof value.text!=='string'||!value.text.trim()||
+    value.text.trim().length>360||!categories.includes(value.category)||
+    /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value.label+value.text))
+    throw Error('Invalid time-specific replay coaching note.');
+   seen.add(value.frameNo);
+   return{frameNo:value.frameNo,label:value.label.trim(),category:value.category,text:value.text.trim()};
+  });
+  return cleaned.sort((a,b)=>a.frameNo-b.frameNo);
+ }
+ function setNotes(id,notes){
+  return updateMeta(id,item=>({...item,notes:normalizeNotes(notes,item.frames)}));
+ }
  // Only portable user-owned archives may restore local display metadata.
  // Never import account IDs, server results or any claim of verified rankings.
  function restoreDetails(id,details){
@@ -164,10 +186,12 @@ const ReplayLibrary=(()=>{
    details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
   return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite,
    bookmarks:normalizeBookmarks(details.bookmarks,item.frames),
-   tags:normalizeTags(details.tags),review:normalizeReview(details.review)}));
+   tags:normalizeTags(details.tags),review:normalizeReview(details.review),
+   notes:normalizeNotes(details.notes,item.frames)}));
  }
  return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails,
-  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags,normalizeReview,setReview};
+  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags,normalizeReview,setReview,
+  normalizeNotes,setNotes};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
@@ -196,7 +220,7 @@ const reviewFilterLabel=document.createElement('label');reviewFilterLabel.textCo
 reviewFilterLabel.append(reviewFilter);
 document.querySelector('.my-games-tools').insertBefore(reviewFilterLabel,$('gamesImport'));
 reviewFilter.onchange=renderMyGames;
-gamesSearch.placeholder='Search replay names or your coaching notes';
+gamesSearch.placeholder='Search replay names, reviews and moment notes';
 gamesSearch.setAttribute('aria-label','Find saved replays by name or private coaching notes');
 
 function recordingLength(frames){
@@ -327,7 +351,8 @@ async function renderMyGames(){
   const items=all.filter(item=>(
     item.name.toLocaleLowerCase().includes(term)||
     (item.review?.note||'').toLocaleLowerCase().includes(term)||
-    (item.review?.next||'').toLocaleLowerCase().includes(term))&&
+    (item.review?.next||'').toLocaleLowerCase().includes(term)||
+    (item.notes||[]).some(n=>(n.label+' '+n.text+' '+n.category).toLocaleLowerCase().includes(term)))&&
     (reviewFilter.value==='all'||(reviewFilter.value==='reviewed')===Boolean(item.review))&&
    (!favoritesOnly||item.favorite===true)&&
    (selectedTag==='all'||(item.tags||[]).some(tag=>tag.toLocaleLowerCase()===selectedTag)));
@@ -343,7 +368,7 @@ async function renderMyGames(){
    const detail=document.createElement('div');detail.className='game-entry-info';
    const title=document.createElement('strong');title.textContent=item.name;
    const metadata=document.createElement('span');
-   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · LOCAL';
+   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · '+(item.notes?.length||0)+' coaching notes · LOCAL';
    detail.append(title,metadata);
    if(item.tags?.length){
     const chips=document.createElement('div');chips.className='games-tag-chips';
@@ -373,7 +398,8 @@ async function renderMyGames(){
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      loadReplay(bytes,item.name);activeLocalReplayId=item.id;
-     if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();gamesMessage('');
+     if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+     if(typeof refreshReplayNotes==='function')await refreshReplayNotes();gamesMessage('');
     }),
     star,
     makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),

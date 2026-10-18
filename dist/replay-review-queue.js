@@ -141,6 +141,7 @@
    activeLocalReplayId=id;
    active=index;lastObserved=-1;seenProgress=false;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    feedback.textContent='Review '+(index+1)+' / '+queue.length+' started. Use Next / Previous above the replay.';
   }catch(error){
    feedback.textContent='Could not open recording: '+(error.message||'Playback error');
