@@ -29,9 +29,19 @@
  const tools=document.createElement('div');tools.className='moment-tools';
  const count=document.createElement('strong');count.textContent='0 saved';
  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh';
+ const searchLabel=document.createElement('label');searchLabel.className='moment-filter-label';searchLabel.textContent='Find';
+ const search=document.createElement('input');search.type='search';search.maxLength=80;
+ search.placeholder='Search captions';search.setAttribute('aria-label','Search private photo captions');
+ searchLabel.append(search);
+ const filterLabel=document.createElement('label');filterLabel.className='moment-filter-label';filterLabel.textContent='Show';
+ const favoriteFilter=document.createElement('select');favoriteFilter.setAttribute('aria-label','Filter saved moments');
+ favoriteFilter.add(new Option('All photos','all'));favoriteFilter.add(new Option('★ Favorites','favorite'));
+ filterLabel.append(favoriteFilter);
  const erase=document.createElement('button');erase.type='button';erase.className='moment-danger';
  erase.textContent='Delete all photos';
- tools.append(count,refresh,erase);
+ const clearOthers=document.createElement('button');clearOthers.type='button';clearOthers.className='moment-danger';
+ clearOthers.textContent='Delete non-favorites';
+ tools.append(count,searchLabel,filterLabel,refresh,clearOthers,erase);
  const status=document.createElement('p');status.className='moment-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const list=document.createElement('div');list.className='moment-grid';
@@ -105,37 +115,112 @@
   };
   return b;
  }
+ // Reuse the existing IndexedDB record: no migration or additional user data.
+ async function updatePhoto(id,changes){
+  await edit(store=>{
+   const request=store.get(id);
+   request.onsuccess=()=>{
+    const current=request.result;
+    if(current&&current.blob instanceof Blob)store.put({...current,...changes});
+   };
+  });
+ }
+ function makeEditor(item){
+  const editor=document.createElement('dialog');editor.className='moment-edit-dialog';
+  const form=document.createElement('form');form.className='moment-edit-form';
+  const h=document.createElement('h2');h.textContent='Name this moment';
+  const desc=document.createElement('p');
+  desc.textContent='Only the local gallery caption changes. The original PNG stays untouched.';
+  const label=document.createElement('label');label.textContent='Caption (max 80 characters)';
+  const input=document.createElement('input');input.type='text';input.required=true;
+  input.maxLength=80;input.value=String(item.label||'Match snapshot').slice(0,80);
+  label.append(input);
+  const buttons=document.createElement('div');buttons.className='moment-edit-actions';
+  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';
+  const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Save caption';
+  cancel.onclick=()=>editor.close();
+  buttons.append(cancel,save);form.append(h,desc,label,buttons);editor.append(form);
+  document.body.append(editor);
+  editor.addEventListener('close',()=>editor.remove(),{once:true});
+  form.addEventListener('submit',async event=>{
+   event.preventDefault();
+   const caption=input.value.trim().replace(/\\s+/g,' ');
+   if(!caption){input.setCustomValidity('Enter a short caption.');input.reportValidity();return;}
+   save.disabled=true;
+   try{await updatePhoto(item.id,{label:caption});editor.close();await render();}
+   catch(error){desc.textContent=error.message||'Caption could not be saved.';save.disabled=false;}
+  });
+  input.addEventListener('input',()=>input.setCustomValidity(''));
+  editor.showModal();input.focus();input.select();
+ }
+ function viewPhoto(item){
+  const viewer=document.createElement('dialog');viewer.className='moment-view-dialog';
+  viewer.setAttribute('aria-label','Full size saved pitch moment');
+  const close=document.createElement('button');close.type='button';close.textContent='Close photo';
+  const image=document.createElement('img');image.alt='Saved pitch: '+String(item.label||'Match snapshot').slice(0,80);
+  const url=URL.createObjectURL(item.blob);image.src=url;
+  const caption=document.createElement('p');caption.textContent=String(item.label||'Match snapshot');
+  viewer.append(close,image,caption);document.body.append(viewer);
+  close.onclick=()=>viewer.close();
+  viewer.addEventListener('close',()=>{URL.revokeObjectURL(url);viewer.remove();},{once:true});
+  viewer.showModal();close.focus();
+ }
  async function render(){
   const seq=++rendering;
   status.textContent='Loading moments…';
   const items=await all();
   if(seq!==rendering||!dialog.open)return;
-  cleanup();list.replaceChildren();count.textContent=items.length+' / '+LIMIT+' saved';
+  cleanup();list.replaceChildren();
+  const favorites=items.filter(item=>item.favorite===true).length;
+  count.textContent=items.length+' / '+LIMIT+' saved · ★ '+favorites;
   erase.disabled=!items.length;
-  if(!items.length){
+  clearOthers.disabled=items.length===favorites;
+  const term=search.value.trim().toLocaleLowerCase();
+  const shown=items.filter(item=>(favoriteFilter.value!=='favorite'||item.favorite===true)&&
+    String(item.label||'Match snapshot').toLocaleLowerCase().includes(term))
+   .sort((a,b)=>Number(b.favorite===true)-Number(a.favorite===true)||b.at-a.at);
+  if(!shown.length){
    const empty=document.createElement('p');empty.className='moment-empty';
-   empty.textContent='No screenshots yet. While in a match, press ◎ Capture to save a moment here.';
-   list.append(empty);status.textContent='Only you can see moments stored in this browser.';return;
+   empty.textContent=items.length?'No saved moments match this search or filter.':
+    'No screenshots yet. While in a match, press ◎ Capture to save a moment here.';
+   list.append(empty);status.textContent='Private local screenshots only.';return;
   }
-  for(const item of items){
-   const card=document.createElement('article');card.className='moment-card';
+  for(const item of shown){
+   const card=document.createElement('article');
+   card.className='moment-card'+(item.favorite===true?' moment-card-favorite':'');
    const preview=document.createElement('img');preview.alt='Pitch screenshot from '+new Date(item.at).toLocaleString();
    preview.loading='lazy';preview.src=URL.createObjectURL(item.blob);urls.push(preview.src);
+   const previewButton=document.createElement('button');previewButton.type='button';
+   previewButton.className='moment-preview';previewButton.setAttribute('aria-label','Enlarge '+String(item.label||'saved moment'));
+   previewButton.onclick=()=>viewPhoto(item);previewButton.append(preview);
    const label=document.createElement('strong');label.textContent=item.label||'Match snapshot';
    const meta=document.createElement('small');meta.textContent=new Date(item.at).toLocaleString()+
     ' · '+(item.blob.size/1048576).toFixed(1)+' MB · LOCAL';
    const buttons=document.createElement('div');buttons.className='moment-card-actions';
    buttons.append(
+    action(item.favorite===true?'★ Favorite':'☆ Favorite',async()=>{
+     await updatePhoto(item.id,{favorite:item.favorite!==true});await render();
+    }),
+    action('Edit caption',()=>makeEditor(item)),
     action('↓ PNG',()=>download(item)),
     action('Share',()=>share(item)),
     action('Delete',async()=>{
      if(!confirm('Delete this saved screenshot from this browser?'))return;
      await edit(store=>store.delete(item.id));await render();
     })
-   );card.append(preview,label,meta,buttons);list.append(card);
+   );card.append(previewButton,label,meta,buttons);list.append(card);
   }
-  status.textContent='Photos are local, not authenticated match records.';
+  status.textContent='Favorites stay pinned to the top. Only your browser stores these photos.';
  }
+ search.addEventListener('input',()=>render().catch(e=>status.textContent=e.message));
+ favoriteFilter.addEventListener('change',()=>render().catch(e=>status.textContent=e.message));
+ clearOthers.onclick=async()=>{
+  const items=await all(),others=items.filter(item=>item.favorite!==true);
+  if(!others.length)return;
+  if(!confirm('Delete '+others.length+' non-favorite screenshots? Favorites are preserved.'))return;
+  try{await edit(store=>{for(const item of others)store.delete(item.id);});await render();}
+  catch(error){status.textContent=error.message||'Could not delete non-favorites.';}
+ };
  async function snap(){
   if(building)return;
   if(document.getElementById('matchView')?.hidden){
@@ -176,7 +261,8 @@
  library.onclick=()=>{dialog.showModal();render().catch(e=>status.textContent=e.message);};
  refresh.onclick=()=>render().catch(e=>status.textContent=e.message);
  erase.onclick=async()=>{
-  if(!confirm('Delete ALL local match screenshots? This does not remove replay files.'))return;
+  if(!confirm('Delete ALL local match screenshots, including favorites? Replay files stay untouched.'))return;
+  if(!confirm('This permanently removes every saved screenshot from this browser. Continue?'))return;
   try{await edit(store=>store.clear());await render();}
   catch(e){status.textContent=e.message||'Could not erase photos.';}
  };
