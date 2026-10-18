@@ -188,18 +188,47 @@
  setPreferred(preferred,false);
  // Discover honest, current occupancy only on this server, never estimated bots,
  // global concurrency, matchmaking guarantees or another player's identity.
- let listingRequest=0;
+ let listingRequest=0,addressTimer=null;
+ const availabilityActions=document.createElement('div');
+ availabilityActions.className='quick-queue-availability-actions';
+ const manualRefresh=document.createElement('button');
+ manualRefresh.type='button';manualRefresh.textContent='↻ Refresh queue counts';
+ manualRefresh.setAttribute('aria-label','Refresh live occupancy of the selected game server');
+ availabilityActions.append(manualRefresh);
+ availability.insertAdjacentElement('afterend',availabilityActions);
  const genericLabels=()=>{
   for(const [mode,sub]of modeDetails)
    sub.textContent=(Number(mode[0])*2)+' human players required';
  };
+ // The selectable WS server and same-origin HTTP API may NOT point to the
+ // same backend. Never present website occupancy as another server's queue.
+ function sameOriginGameServer(){
+  const address=document.getElementById('serverAddress')?.value.trim();
+  if(!address)return{valid:false,label:'Choose a multiplayer server before checking its live queues.'};
+  let selected;
+  try{selected=new URL(address);}catch{
+   return{valid:false,label:'Enter a valid ws:// or wss:// game server address.'};
+  }
+  if(!['ws:','wss:'].includes(selected.protocol))
+   return{valid:false,label:'Queue status requires a websocket game server address.'};
+  const scheme=location.protocol==='https:'?'wss:':'ws:';
+  if(selected.host!==location.host||selected.protocol!==scheme||selected.pathname!=='/ws')
+   return{valid:false,label:'Selected server: '+selected.host+'. Queue counts from this website may refer to another server, so they are hidden. You can still connect and search normally.'};
+  return{valid:true};
+ }
  async function loadAvailability(){
   if(document.hidden||home.hidden)return;
   const requestId=++listingRequest;
-  if(navigator.onLine===false){
-   genericLabels();availability.textContent='You appear offline · connect to view real player queues.';
+  const selected=sameOriginGameServer();
+  if(!selected.valid){
+   genericLabels();availability.textContent=selected.label;manualRefresh.disabled=false;
    return;
   }
+  if(navigator.onLine===false){
+   genericLabels();availability.textContent='You appear offline · real-player queues require a connection.';
+   manualRefresh.disabled=false;return;
+  }
+  manualRefresh.disabled=true;
   const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000);
   try{
    const response=await fetch('/api/quick-match/availability',{
@@ -221,12 +250,19 @@
     sub.textContent=row.waiting+' waiting · '+row.confirming+
       ' confirming · '+row.needed+' needed';
    }
-   availability.textContent='Live server queues refreshed · real signed-in players only. Matches still require everyone to accept.';
+   availability.textContent='Real-player queues on your selected server ('+location.host+') · refreshed just now. Ready-check acceptance is still required.';
   }catch{
    if(requestId!==listingRequest)return;
    genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
-  }finally{clearTimeout(timer);}
+  }finally{clearTimeout(timer);if(requestId===listingRequest)manualRefresh.disabled=false;}
  }
+ manualRefresh.onclick=loadAvailability;
+ document.getElementById('serverAddress')?.addEventListener('input',()=>{
+  // Abandon any obsolete response before displaying counts from a new target.
+  ++listingRequest;clearTimeout(addressTimer);genericLabels();
+  availability.textContent='Checking whether live counts belong to your selected game server…';
+  addressTimer=setTimeout(loadAvailability,450);
+ });
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){clearReadyAlert();loadAvailability();}
