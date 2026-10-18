@@ -73,7 +73,7 @@ function createRoomCore(opts){
   const p=r.pendingSubs.get(team);if(!p||!p.accepted)return false;
   if(r.started&&!r.paused)return false;
   const valid=Date.now()<=p.expiresAt&&r.clients.has(p.inId)&&r.clients.has(p.outId)&&
-   r.clients.has(p.requestedBy)&&(p.requestedBy===r.owner||r.captains.get(team)===p.requestedBy)&&
+   r.clients.has(p.requestedBy)&&!r.disconnected.has(p.outId)&&!r.disconnected.has(p.inId)&&(p.requestedBy===r.owner||r.captains.get(team)===p.requestedBy)&&
    r.benches.get(p.inId)===team&&hb.getPlayer(p.inId)?.team===0&&hb.getPlayer(p.outId)?.team===team;
   r.pendingSubs.delete(team);
   if(!valid)return false;
@@ -100,7 +100,7 @@ function createRoomCore(opts){
    status();snapshot();return;
   }
   if(d.type==='subRequest'){
-   if(!Number.isSafeInteger(d.outId)||!Number.isSafeInteger(d.inId)||d.outId===d.inId||!r.clients.has(d.outId)||!r.clients.has(d.inId))throw Error('Invalid substitution participants.');
+   if(!Number.isSafeInteger(d.outId)||!Number.isSafeInteger(d.inId)||d.outId===d.inId||!r.clients.has(d.outId)||!r.clients.has(d.inId)||r.disconnected.has(d.outId)||r.disconnected.has(d.inId))throw Error('Invalid substitution participants.');
    const team=hb.getPlayer(d.outId)?.team;
    if(r.owner!==id&&r.captains.get(team)!==id)throw Error('Only host or own-team captain may request a substitution.');
    if(![1,2].includes(team)||hb.getPlayer(d.inId)?.team!==0||r.benches.get(d.inId)!==team)throw Error('Incoming player must be on the outgoing team bench.');
@@ -117,14 +117,14 @@ function createRoomCore(opts){
    throw Error('Pause the match before changing the active lineup.');
   if(d.type==='appointCaptain'){
    if(!Number.isSafeInteger(d.team)||![1,2].includes(d.team)||!Number.isSafeInteger(d.id)||d.id<0)throw Error('Invalid captain assignment.');
-   if(d.id!==0&&(!r.clients.has(d.id)||hb.getPlayer(d.id)?.team!==d.team))throw Error('Captain must be a connected active player on that team.');
+   if(d.id!==0&&(!r.clients.has(d.id)||r.disconnected.has(d.id)||hb.getPlayer(d.id)?.team!==d.team))throw Error('Captain must be a connected active player on that team.');
    const previous=r.captains.get(d.team);
    if(d.id===0)r.captains.delete(d.team);else r.captains.set(d.team,d.id);
    if(previous!==d.id)for(const [side,p]of r.pendingSubs)if(p.requestedBy===previous&&side===d.team)r.pendingSubs.delete(side);
    status();return;
   }
   if(d.type==='bench'){
-   if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
+   if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||r.disconnected.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
    for(const [team,p]of r.pendingSubs)if(p.inId===d.id||p.outId===d.id)r.pendingSubs.delete(team);
    if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
    status();return;
