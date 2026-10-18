@@ -236,6 +236,8 @@
       return seeds;
     };
     const build=button('Create seeded cup',()=>{
+      if(!storageHealthy||localStorage.getItem(KEY)!==storageSnapshot)
+        return inform('The league data changed or became unreadable. Reload before creating a playoff.');
       const n=Number(qualify.value),standings=tableFor(t);
       if(!possible.includes(n)||standings.length<n||t.fixtures.every(f=>f.homeScore===null))
         return inform('Record at least one private league result before generating playoff seeds.');
@@ -248,7 +250,7 @@
         detail:{sourceId:t.id,sourceName:t.name,teams,recorded:known,total:t.fixtures.length}
       }));
     });
-    build.disabled=done===0||!possible.length;
+    build.disabled=done===0||!possible.length||!storageHealthy;
     const updatePreview=()=>{
       const n=Number(qualify.value),standings=tableFor(t);
       const leader=standings[0]?.name||'none';
