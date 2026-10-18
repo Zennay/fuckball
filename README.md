@@ -8,6 +8,14 @@ Use the **Free** Render web-service plan for the complete multiplayer game (HTTP
 
 A full-viewport football game, using the same unmodified node-haxball 2.3.1 physics engine in the browser, headless training and the authoritative multiplayer server. The original BFF Big v4 stadium is preserved byte-for-byte.
 
+## Friends parties — human-only team matchmaking
+
+Open **Friends → Party** to create an ephemeral social party (up to four authenticated players), invite mutually accepted friends by account name, or accept/decline private invitations. Each player explicitly selects **Ready**; the leader can then choose an appropriate casual 2v2, 3v3 or 4v4 playlist. The party launches only if all members are ready and its size fits the selected team. Party formation and launch are server-owned, with a 30-second group-connection deadline and expiring invitations.
+
+Every group member joins matchmaking using their own authenticated WebSocket session. The server atomically queues the complete group; the matchmaker never splits that party between Red and Blue and never inserts bots into the human lobby. Each real person still receives the independent 15-second match ready-check. A teammate's rejection or lost connection cancels that group's proposed match; solo queues continue separately. Premade balance is a preference signal, not a claim of ranked matchmaking or region-specific ping.
+
+These parties exist only on the current native server, survive neither server restart nor cross-server travel, and do not create ranked results. Club membership is not required. The server rejects arbitrary client-reported party roles and membership.
+
 ## Human Quick Match — explicit ready check
 
 The Home screen's **1v1, 2v2, 3v3 and 4v4** search connects authenticated players on the same trusted Node server. It matches humans only and remains **casual/unranked**; matches do not award ranked rating.

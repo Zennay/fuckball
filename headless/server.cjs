@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createQuickMatch,SIZES}=require('./quick-match.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),{createClubs}=require('./clubs.cjs'),{createParties}=require('./parties.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -14,7 +14,9 @@ function createServer(options={}){
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
-  social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,authHits=new Map(),clubHits=new Map();
+  social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
+  parties=dataDir?createParties({social,exists:name=>accounts.reserved(name)}):null,
+  authHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
  // Room invitations are ephemeral: only a live room participant may share
  // an existing room with a mutually accepted friend. Never persist room links.
  const friendInvites=new Map(),socialHits=new Map(),INVITE_TTL=5*60000;
@@ -120,6 +122,37 @@ function createServer(options={}){
    }catch(e){return json(400,{error:e?.message||'Club change unavailable.'});}
   });
  }
+ // Private account-scoped, ephemeral party invitations and queue consent.
+ function partyApi(req,res){
+  const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json',
+   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
+  if(!parties)return json(503,{error:'Parties require the signed-in multiplayer server.'});
+  const token=(req.headers.authorization||'').replace(/^Bearer /,'');
+  const user=accounts.user(token)?.toLowerCase();
+  if(!user)return json(401,{error:'Sign in to create or join a friend party.'});
+  if(req.method==='GET')return json(200,parties.snapshot(user));
+  if(req.method!=='POST')return json(405,{error:'GET or POST required.'});
+  const now=Date.now(),key=user+':'+(req.socket.remoteAddress||'');
+  const hits=(partyHits.get(key)||[]).filter(x=>now-x<300000);
+  if(hits.length>=30)return json(429,{error:'Too many party actions.'});
+  hits.push(now);partyHits.set(key,hits);
+  if(partyHits.size>2000)for(const [name,times]of partyHits)
+   if(times.every(t=>now-t>300000))partyHits.delete(name);
+  let raw='',tooLarge=false;req.setEncoding('utf8');
+  req.on('data',chunk=>{raw+=chunk;if(raw.length>2048){tooLarge=true;req.destroy();}});
+  req.on('end',()=>{
+   if(tooLarge)return;
+   try{
+    const data=JSON.parse(raw||'{}');
+    if(!data||typeof data!=='object'||Array.isArray(data)||
+     typeof data.action!=='string')throw Error('Invalid party action.');
+    const prior=parties.snapshot(user).party;
+    const result=parties.action(user,data);
+    if(prior?.launchMode&&['cancel'].includes(data.action))cancelPendingParty(prior.id,'Party search cancelled by leader.');
+    return json(200,result);
+   }catch(e){return json(400,{error:e?.message||'Party action failed.'});}
+  });
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -145,7 +178,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
   if(route==='/api/public-rooms'){
     if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
     const listings=[...rooms.values()].filter(r=>r.listed===true&&!r.locked&&!r.quickMatch)
@@ -168,6 +201,15 @@ function createServer(options={}){
  });
  const wss=new WebSocketServer({server,maxPayload:2*1024*1024});
  const send=(ws,data)=>{if(ws.readyState===1&&ws.socket.writableLength<262144)ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
+ function cancelPendingParty(id,reason){
+  const pending=partyPending.get(id);
+  if(!pending)return;
+  partyPending.delete(id);parties?.consume(id);
+  for(const ws of pending.sockets.values()){
+   quickMatch.remove(ws,true);
+   send(ws,{type:'queueStatus',status:'error',reason});
+  }
+ }
  const RoomCore=require('../dist/room-core.js'),quickMatch=createQuickMatch({send,start:createMatchedRoom,
   validAccount:ws=>!!ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase()}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
  /* Peer hosting (docs/netcode-plan.md): the room can run in a player's browser when that gives everyone a
@@ -395,7 +437,10 @@ function createServer(options={}){
    const announceServer=!m||m.to!=='server';resume(r,state);if(announceServer){r.epoch++;r.migration={frame:state.frame};announce(r,'server');r.migration=null;}return;}
   // Not a candidate again until a fresh report says it can host (e.g. its tab is visible again).
   if(d.type==='hostRelease'){const rep=r.reports.get(ws.playerId);if(rep)rep.eligible=false;if(!r.migration)migrate(r,'server',d.reason||'host released');}}
- wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{quickMatch.remove(ws);if(shuttingDown||ws.intentionalLeave||ws.peerClosed||!park(ws))leave(ws);clients.delete(ws);});ws.on('message',(raw,binary)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
+ wss.on('connection',ws=>{clients.add(ws);ws.lastSeen=Date.now();ws.rateStart=Date.now();ws.messages=0;ws.on('close',()=>{
+  for(const [id,pending]of partyPending)if([...pending.sockets.values()].includes(ws))
+   cancelPendingParty(id,'A party member disconnected.');
+  quickMatch.remove(ws);if(shuttingDown||ws.intentionalLeave||ws.peerClosed||!park(ws))leave(ws);clients.delete(ws);});ws.on('message',(raw,binary)=>{try{const now=Date.now();ws.lastSeen=now;const r0=ws.room;if(now-ws.rateStart>1000){ws.rateStart=now;ws.messages=0;}if(++ws.messages>(r0&&r0.authority===ws.playerId?2000:180))throw Error('Too many messages.');
    // Snapshot bytes from a browser host for a client without a direct channel to it.
    if(binary){if(r0&&r0.authority===ws.playerId&&raw.length>8&&raw.readUInt32BE(0)===RELAY){const to=r0.sockets.get(raw.readUInt32BE(4));if(to&&to.socket.writableLength<65536)send(to,raw.subarray(8));}return;}
    const d=JSON.parse(raw.toString());
@@ -409,10 +454,44 @@ function createServer(options={}){
      throw Error('This account is already playing in an online room.');
     ws.account=account;ws.accountToken=d.token;ws.name=account;
     ws.netcode=d.netcode===2?2:3;ws.mesh=false;ws.resumeEnabled=true;
-    quickMatch.join(ws,account.toLowerCase(),d.mode,history?.stats(account));
+    if(d.party===true){
+     const party=parties?.queueFor(account,d.mode);
+     if(!party)throw Error('Your party launch is not active. Ready up and ask the leader to start.');
+     let pending=partyPending.get(party.id);
+     if(!pending){
+      pending={id:party.id,mode:d.mode,users:party.users,sockets:new Map(),expiresAt:Date.now()+30000};
+      partyPending.set(party.id,pending);
+     }
+     if(pending.mode!==d.mode||pending.sockets.has(account.toLowerCase())||
+        pending.users.length!==party.users.length||
+        pending.users.some(user=>!party.users.includes(user)))
+      throw Error('This party search has changed. Start again.');
+     pending.sockets.set(account.toLowerCase(),ws);
+     send(ws,{type:'queueStatus',status:'partyGathering',mode:d.mode,
+      waiting:pending.sockets.size,needed:pending.users.length,humanOnly:true});
+     for(const member of pending.sockets.values())if(member!==ws)
+      send(member,{type:'queueStatus',status:'partyGathering',mode:d.mode,
+       waiting:pending.sockets.size,needed:pending.users.length,humanOnly:true});
+     if(pending.sockets.size===party.users.length){
+      try{
+       const entries=party.users.map(user=>{
+        const socket=pending.sockets.get(user);
+        if(!socket||accounts.user(socket.accountToken)?.toLowerCase()!==user)
+         throw Error('Party member session expired.');
+        return{ws:socket,user,stats:history?.stats(user)};
+       });
+       quickMatch.joinGroup(entries,d.mode,party.id);
+       parties.consume(party.id);partyPending.delete(party.id);
+      }catch(e){cancelPendingParty(party.id,e.message||'Party search could not start.');}
+     }
+    }else quickMatch.join(ws,account.toLowerCase(),d.mode,history?.stats(account));
     return;
    }
-   if(d.type==='queueCancel'){quickMatch.remove(ws);return;}
+   if(d.type==='queueCancel'){
+    for(const [id,pending]of partyPending)if([...pending.sockets.values()].includes(ws))
+     cancelPendingParty(id,'Party search cancelled.');
+    quickMatch.remove(ws);return;
+   }
    if(d.type==='queueReadyResponse'){quickMatch.respond(ws,d.id,d.accept===true?true:d.accept===false?false:null);return;}
    if(d.type==='join'){quickMatch.remove(ws,true);if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');if(r.quickMatch&&!d.resume)throw Error('Quick Match rooms are reserved for the matched players.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(r.clubId&&(!account||clubs?.membership(account)?.id!==r.clubId))
     throw Error('Only members of this Club can join this room.');
@@ -447,7 +526,15 @@ function createServer(options={}){
    const m=r.migration;if(m&&m.from==='server'&&m.to!=='server'&&r.frame>=m.frame){if(r.sockets.has(m.to))takeover(r,m.to,r.exportState());else{r.migration=null;announce(r,'server');}}}
   else{const m=r.migration,late=m?Date.now()-m.started>3000+standbyTimeout:Date.now()-r.standbyAt>standbyTimeout;if(late)failover(r,m?'release timeout':'standby timeout');}
   if(r.clock%60===0)election(r);}
- let previous=performance.now(),accumulator=0,frame=0;const timer=setInterval(()=>{const now=performance.now();accumulator+=Math.min(250,now-previous);previous=now;let advanced=false;while(accumulator>=1000/60){for(const r of rooms.values())tickRoom(r);accumulator-=1000/60;frame++;advanced=true;}if(advanced&&frame%120===0)quickMatch.drainAll();if(advanced&&frame%600===0)for(const ws of clients)if(Date.now()-ws.lastSeen>45000)ws.close(1001,'Timeout');},4);timer.unref();
+ let previous=performance.now(),accumulator=0,frame=0;const timer=setInterval(()=>{const now=performance.now();accumulator+=Math.min(250,now-previous);previous=now;let advanced=false;while(accumulator>=1000/60){for(const r of rooms.values())tickRoom(r);accumulator-=1000/60;frame++;advanced=true;}if(advanced&&frame%120===0){
+   quickMatch.drainAll();
+   parties?.purge();
+   for(const [id,pending]of partyPending)
+    if(Date.now()>pending.expiresAt||
+      ![...pending.sockets.entries()].every(([user,socket])=>
+        socket.readyState===1&&accounts.user(socket.accountToken)?.toLowerCase()===user))
+     cancelPendingParty(id,'The party could not gather on the server in time.');
+  }if(advanced&&frame%600===0)for(const ws of clients)if(Date.now()-ws.lastSeen>45000)ws.close(1001,'Timeout');},4);timer.unref();
  // Give every admitted human an independently measured WebSocket round-trip
  // without trusting claimed ping values or revealing cross-room identities.
  const latencyTimer=setInterval(()=>{

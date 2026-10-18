@@ -59,7 +59,7 @@
  function done(message){
   searching=false;matchMode=null;ready=null;readyAccepted=false;stopClock();refresh();notice.textContent=message;
  }
- function start(mode){
+ function start(mode,party=false){
   if(searching)return;
   if(serverLink?.room){notice.textContent='Leave your current room before starting another match.';return;}
   if(!settings.account?.token){
@@ -71,7 +71,7 @@
   }
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
-  connectServer(false,'','',null,mode);
+  connectServer(false,'','',null,mode,party);
  }
  for(const mode of ['1v1','2v2','3v3','4v4']){
   const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';
@@ -97,6 +97,11 @@
   if(!searching)return;
   try{serverLink?.send({type:'queueCancel'});}catch{}
   disconnect();done('Search cancelled. Choose another playlist whenever you want.');
+ };
+ window.startPartyQuickMatch=mode=>{
+  if(!['2v2','3v3','4v4'].includes(mode))return false;
+  if(searching||serverLink?.room)return false;
+  start(mode,true);return searching;
  };
  window.onQuickMatchEvent=d=>{
   if(d.type==='queueReady'){
@@ -128,7 +133,9 @@
   }else if(d.type==='quickMatchCancelled'){
    done(d.reason||'Your match was cancelled.');
   }else if(d.type==='queueStatus'){
-   if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
+   if(d.status==='partyGathering'&&searching&&d.mode===matchMode&&d.humanOnly===true){
+    notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
+   }else if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     waiting=d.waiting;needed=d.needed;refresh();
    }else if(d.status==='cancelled')done('Search cancelled.');
    else if(d.status==='error'||d.status==='disconnected')
