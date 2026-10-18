@@ -1,0 +1,22 @@
+/* Replay archive is intentionally distinct from official results/rankings. */
+.my-games-view{max-width:1120px;min-height:calc(100dvh - 75px);margin:0 auto;padding:clamp(25px,5vw,70px) clamp(18px,4vw,50px)}
+.my-games-head{display:flex;align-items:end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:34px}
+.my-games-head h1{font-size:clamp(40px,6vw,72px);font-style:italic;letter-spacing:-.06em;margin:12px 0}
+.my-games-head p,.games-disclaimer{color:#a7b9ba;line-height:1.6;max-width:650px}
+.my-games-tools{display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+.my-games-tools button,.game-entry-actions button{padding:12px 18px;border-radius:7px}
+#gamesCount{font-size:12px;color:#d1e7bd}
+#gamesStatus{min-height:22px;color:#c1d1d3;margin:12px 0}
+#gamesEmpty{padding:52px 20px;text-align:center;border:1px dashed #60737b;border-radius:12px;background:#202f34}
+#gamesEmpty strong{display:block;font-size:19px;margin-bottom:8px}
+#gamesEmpty p{color:#a7b9ba}
+#gamesList{display:grid;gap:10px}
+.game-entry{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px;background:#24353c;border:1px solid #47575b;border-radius:10px}
+.game-entry-info{display:grid;gap:8px;min-width:0}
+.game-entry-info strong{font-size:15px;overflow-wrap:anywhere}
+.game-entry-info span{color:#9aafb2;font-size:11px}
+.game-entry-actions{display:flex;gap:8px;flex-wrap:wrap}
+.game-entry-actions button:first-child{background:#caec86;color:#182a1d;font-weight:bold}
+.game-entry-actions button:last-child{color:#ffc1b9}
+.game-entry-actions button:focus-visible,.my-games-tools button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:660px){.game-entry{align-items:stretch;flex-direction:column}.game-entry-actions button{flex:1}.my-games-view{padding-bottom:40px}}
