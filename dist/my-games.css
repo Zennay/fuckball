@@ -131,3 +131,21 @@
 .games-tag-chip{font-size:11px;padding:5px 9px;border:1px solid #84a49a;background:#2d4c4b;color:#e2f2d9;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
 .my-games-tools .games-tags-filter{min-width:135px}
 @media(max-width:660px){.my-games-tools .games-tags-filter{width:100%;min-width:0}}
+
+/* Optional private HBR2 reflections. Local subjective rating is not official. */
+.game-review-summary{display:grid;gap:5px;padding:10px 12px;background:#1d3a3b;border-left:3px solid #bde997;border-radius:6px;max-width:620px}
+.game-review-summary strong{font-size:12px!important;color:#d8f1bd}
+.game-review-summary span{font-size:12px!important;line-height:1.5;color:#c4dbce;overflow-wrap:anywhere;white-space:pre-wrap}
+.game-review-dialog{background:#162b32;color:#f2faee;border:1px solid #7b9b8d;border-radius:14px;padding:0;max-width:95vw;width:min(560px,95vw)}
+.game-review-dialog::backdrop{background:#061116e0}
+.game-review-form{padding:clamp(18px,3vw,29px);display:grid;gap:16px}
+.game-review-form h2{font-size:24px;letter-spacing:-.03em;font-style:italic;margin:0}
+.game-review-form p{font-size:12px;line-height:1.6;color:#c0d5c9;margin:0}
+.game-review-form label{display:grid;gap:7px;font-size:12px;color:#dbecdf}
+.game-review-form :is(select,textarea){box-sizing:border-box;min-height:42px;width:100%;max-width:100%;padding:10px;border:1px solid #8aa99a;border-radius:8px;background:#0b222a;color:#eef8ee;font-size:14px}
+.game-review-form textarea{resize:vertical;line-height:1.55;min-height:82px}
+.game-review-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.game-review-actions button{min-height:43px;padding:10px 13px;border-radius:8px;border:1px solid #829989;color:#eff6e7;background:#345145}
+.game-review-actions .danger{border-color:#c58c89;color:#ffcbc5}
+.game-review-form :is(button,select,textarea):focus-visible{outline:3px solid #e1f6a6;outline-offset:3px}
+@media(max-width:550px){.game-review-actions button{flex:1 1 115px}.game-review-form{padding:17px}}
