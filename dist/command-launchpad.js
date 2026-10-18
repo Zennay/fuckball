@@ -12,6 +12,7 @@
  };
  const commands=[
   {id:'home',label:'Home & game modes',group:'Play',desc:'Return to the main play menu',view:'home',selector:'.mode-cards',terms:'play home local mode'},
+  {id:'play-hub',label:'Play Hub · choose how to play',group:'Play',desc:'Human matchmaking, custom rooms or local practice',view:'home',selector:'.play-hub',terms:'start discover quick play now modes'},
   {id:'human',label:'Find a human match',group:'Play',desc:'Open the existing human Quick Match queue',view:'home',click:'heroFindMatch',terms:'online matchmaking people multiplayer'},
   {id:'room',label:'Browse available rooms',group:'Play',desc:'Explore publicly advertised rooms; join through native controls',view:'home',selector:'.room-browser',terms:'custom join multiplayer'},
   {id:'friends',label:'Friends & parties',group:'Play',desc:'Find your existing friendship and party tools',view:'home',selector:'.friend-party',terms:'invite friends group'},
