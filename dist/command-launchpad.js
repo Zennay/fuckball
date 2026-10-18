@@ -30,6 +30,7 @@
   {id:'games',label:'My Games / Replay Library',group:'Replays',desc:'Manage real locally saved HBR2 recordings',view:'games',selector:'.my-games-tools',terms:'replay record archive'},
   {id:'import-desk',label:'Import HBR2 recordings',group:'Replays',desc:'Drag and drop multiple local replays into My Games',view:'games',selector:'.replay-import-desk',terms:'drop files bulk recordings import'},
   {id:'bulk-organize',label:'Organize multiple recordings',group:'Replays',desc:'Bulk labels and favorites for private HBR2 replays',view:'games',selector:'.replay-bulk-organizer',terms:'organize tags favorites collections batch'},
+  {id:'share-replays',label:'Export selected recordings',group:'Replays',desc:'Create an offline ZIP from chosen genuine HBR2 replays',view:'games',selector:'.replay-selective-archive',terms:'archive share download backup transfer zip'},
   {id:'replay-collections',label:'Replay Collections',group:'Replays',desc:'Your permanent private folders and study guides',view:'games',selector:'.replay-collections',terms:'folders highlights playlist'},
   {id:'replay-review',label:'Replay Review Queue',group:'Replays',desc:'Play a curated study session with Next / Previous',view:'games',selector:'.replay-review-queue',terms:'watchlist autoplay coaching'},
   {id:'replay-study',label:'Replay Study Hub',group:'Replays',desc:'Find personal timeline coaching observations',view:'games',selector:'.replay-study-dashboard',terms:'notes insights'},
