@@ -10,14 +10,14 @@ function b64(bytes){if(typeof Buffer!=='undefined')return Buffer.from(bytes).toS
 /* opts: {hb, id, AI, Netcode, v3=true, send(clientId, objectOrUint8Array), canSend(clientId)} */
 function createRoomCore(opts){
  const {hb,AI,Netcode}=opts,send=opts.send,canSend=opts.canSend||(()=>true),API=hb._runtime.API;
- const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map(),subSeq:0,captains:new Map(),activeFrames:new Map(),subEvents:[]};
+ const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map(),subSeq:0,captains:new Map(),activeFrames:new Map(),subEvents:[],disconnected:new Set()};
  const broadcast=data=>{for(const id of r.clients.keys())send(id,data);};
  // Expired consent requests must never hold a side's substitution slot forever.
  // This cleanup also applies to accepted requests waiting for a later pause.
  function expireSubs(now=Date.now()){let changed=false;for(const [team,p]of r.pendingSubs)if(!Number.isFinite(p.expiresAt)||now>p.expiresAt){r.pendingSubs.delete(team);changed=true;}return changed;}
  hb.onGameTick=()=>{r.tick++;if(!r.started||r.paused)return;if(r.tick%2===0)for(const p of hb._room.state.players)if(r.botIds.has(p.id))hb.setPlayerInput(p.id,AI.tactical(hb._room.state,p.id,r.tick,{difficulty:r.botLevels[p.id]||r.difficulty,profile:r.teamProfile}));};
  hb.onTeamGoal=team=>broadcast({type:'goal',team});hb.onTeamVictory=()=>{r.started=false;status();snapshot();};
- function status(){expireSubs();broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
+ function status(){expireSubs();broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),disconnectedIds:[...r.disconnected],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
  // The same preflight is required for BOTH match configuration and live
  // difficulty changes. Never mutate a running room before reading user data.
  function normalizeProfile(raw){
@@ -59,7 +59,13 @@ function createRoomCore(opts){
   hb.addPlayer(id,c.name,assigned);
   send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
- function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.benches.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.disconnected.delete(id);r.benches.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ // A disconnected participant retains their reserved team slot during a short reconnection window.
+ // No buffered/previous input or disconnected time may affect the live match.
+ function setConnected(id,connected){if(!r.clients.has(id))return false;
+  if(connected)r.disconnected.delete(id);else{r.disconnected.add(id);hb.setPlayerInput(id,0);for(const [team,p]of r.pendingSubs)if([p.inId,p.outId,p.requestedBy].includes(id))r.pendingSubs.delete(team);}
+  status();snapshot();return true;
+ }
  // An approved substitute executes only while the game is stopped/paused.
  // It changes team slots atomically in one JavaScript turn: no score, clock,
  // session id, room id or physics state reset.
@@ -153,17 +159,17 @@ function createRoomCore(opts){
   }else if(d.type==='record'){if(!hb._room.isRecording()){hb.startRecording();send(id,{type:'recordingStatus',active:true});}else{send(id,{type:'recordingStatus',active:false});const bytes=hb.stopRecording();send(id,{type:'recording',bytes:b64(bytes)});}}
  }
  /* One 60 Hz step: buffered inputs for this frame, the engine tick, then (every other frame) snapshots. */
- function step(){for(const [id,c]of r.clients)if(c.timeline){const v=c.timeline.valueAt(r.frame),p=hb._room.state.players.find(p=>p.id===id);if(p&&p.input!==v)hb.setPlayerInput(id,v);}
+ function step(){for(const [id,c]of r.clients){if(r.disconnected.has(id)){if(hb.getPlayer(id)?.input)hb.setPlayerInput(id,0);continue;}if(c.timeline){const v=c.timeline.valueAt(r.frame),p=hb._room.state.players.find(p=>p.id===id);if(p&&p.input!==v)hb.setPlayerInput(id,v);}}
   // Use authoritative 60 Hz game steps, not wall clock or total socket lifetime.
   // Spectators, benches, paused frames and bots never gain human play time.
-  if(r.started&&!r.paused)for(const p of hb.getPlayerList())if(r.clients.has(p.id)&&[1,2].includes(p.team))r.activeFrames.set(p.id,(r.activeFrames.get(p.id)||0)+1);
+  if(r.started&&!r.paused)for(const p of hb.getPlayerList())if(r.clients.has(p.id)&&!r.disconnected.has(p.id)&&[1,2].includes(p.team))r.activeFrames.set(p.id,(r.activeFrames.get(p.id)||0)+1);
   hb.step(1);r.frame++;if(r.frame%60===0){if(expireSubs())status();if(r.started&&!r.paused)broadcast({type:'playingTime',frame:r.frame,activeFrames:[...r.activeFrames]});}if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
  /* final: the room really moves (a recording cannot move with it); standby copies leave it running. */
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
   return{v:1,recording:!final&&recording,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
  function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
-  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.clients.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
+  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.clients.clear();r.disconnected.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
   // Legacy states can omit botIds; their connected client roster still proves
   // which high numeric IDs are people. New exports carry explicit bot IDs.
   r.botIds=new Set(Array.isArray(s.botIds)?s.botIds:hb._room.state.players.filter(p=>p.id>=100&&!humanIds.has(p.id)).map(p=>p.id));
@@ -186,7 +192,7 @@ function createRoomCore(opts){
    }
   }
  }
- return Object.assign(r,{status,snapshot,join,leave,message,step,exportState,restore,bots,reset,
+ return Object.assign(r,{status,snapshot,join,leave,setConnected,message,step,exportState,restore,bots,reset,
   hostTime:fraction=>r.frame+Math.max(0,Math.min(1,fraction||0)),
   pong:(t,fraction)=>({type:'pong',t,frame:r.frame+Math.max(0,Math.min(1,fraction||0))}),
   destroy:()=>hb.destroy()});
