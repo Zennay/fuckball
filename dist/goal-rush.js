@@ -5,6 +5,7 @@
  const home=document.getElementById('homeView'),match=document.getElementById('matchView');
  if(!home||!match||!document.getElementById('quickPractice'))return;
  const STORAGE='fuckball-local-goal-rush-v1';
+ const ATTEMPTS='fuckball-local-goal-rush-history-v1';
  const card=document.createElement('section');card.className='goal-rush-setup';
  card.setAttribute('aria-label','Local goal rush practice');
  const title=document.createElement('h2');title.textContent='GOAL RUSH.';
@@ -24,7 +25,19 @@
  fields.append(durationLabel,targetLabel,launch);
  const history=document.createElement('p');history.className='goal-rush-history';
  history.setAttribute('role','status');history.setAttribute('aria-live','polite');
- card.append(title,explanation,fields,history);
+ const journey=document.createElement('section');journey.className='goal-rush-journey';
+ const journeyTitle=document.createElement('h3');journeyTitle.textContent='YOUR RECENT DRILLS';
+ const journeyNote=document.createElement('p');
+ journeyNote.textContent='Only completed local practice attempts are recorded here. These are not verified match statistics or rankings.';
+ const journeyRows=document.createElement('div');journeyRows.className='goal-rush-journey-rows';
+ const journeyActions=document.createElement('div');journeyActions.className='goal-rush-journey-actions';
+ const exportJourney=document.createElement('button');exportJourney.type='button';
+ exportJourney.textContent='↓ Export my progress';
+ const clearJourney=document.createElement('button');clearJourney.type='button';
+ clearJourney.textContent='Clear attempt history';
+ journeyActions.append(exportJourney,clearJourney);
+ journey.append(journeyTitle,journeyNote,journeyRows,journeyActions);
+ card.append(title,explanation,fields,history,journey);
  const quickPanel=home.querySelector('.quick-queue-panel');
  if(quickPanel)quickPanel.insertAdjacentElement('afterend',card);
  else home.append(card);
@@ -50,6 +63,60 @@
     /^(60|120|180)$/.test(k)&&Number.isSafeInteger(v)&&v>=0&&v<=999));
   }catch{return{};}
  }
+ function readAttempts(){
+  try{
+   const value=JSON.parse(localStorage.getItem(ATTEMPTS)||'[]');
+   if(!Array.isArray(value)||value.length>20)return[];
+   return value.filter(a=>a&&[60,120,180].includes(a.duration)&&
+    [1,3,5].includes(a.target)&&Number.isSafeInteger(a.goals)&&a.goals>=0&&a.goals<=999&&
+    Number.isSafeInteger(a.elapsed)&&a.elapsed>=0&&a.elapsed<=180&&
+    Number.isSafeInteger(a.at)&&a.at>0&&a.at<=Date.now()+86400000&&
+    typeof a.completed==='boolean');
+  }catch{return[];}
+ }
+ function renderAttempts(){
+  const all=readAttempts();
+  journeyRows.replaceChildren();
+  exportJourney.disabled=clearJourney.disabled=!all.length;
+  if(!all.length){
+   const empty=document.createElement('p');empty.textContent='Finish a Goal Rush drill to build your local progress history.';
+   journeyRows.append(empty);return;
+  }
+  for(const a of all.slice(0,6)){
+   const row=document.createElement('article');row.className='goal-rush-journey-row';
+   const label=document.createElement('strong');
+   label.textContent=a.goals+' / '+a.target+' goals · '+(a.completed?'TARGET MET':'TIME UP');
+   const sub=document.createElement('span');sub.textContent=a.duration+'s drill · '+a.elapsed+'s played · '+new Date(a.at).toLocaleDateString();
+   const track=document.createElement('div');track.className='goal-rush-attempt-meter';
+   const fill=document.createElement('span');
+   fill.style.width=Math.min(100,Math.round(a.goals/a.target*100))+'%';
+   track.append(fill);row.append(label,sub,track);journeyRows.append(row);
+  }
+ }
+ function saveAttempt(s){
+  const attempt={duration:s.duration,target:s.target,goals:s.goals,
+   elapsed:Math.min(180,Math.max(0,Math.ceil(s.frames/60))),
+   completed:s.goals>=s.target,at:Date.now()};
+  const entries=[attempt,...readAttempts()].slice(0,20);
+  try{localStorage.setItem(ATTEMPTS,JSON.stringify(entries));}catch{}
+  renderAttempts();
+ }
+ exportJourney.onclick=()=>{
+  const attempts=readAttempts();if(!attempts.length)return;
+  const output={format:'fuckball-local-goal-rush',version:1,
+   source:'unverified-local-practice',exportedAt:new Date().toISOString(),attempts};
+  const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download='fuckball-goal-rush-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(anchor);anchor.click();anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+ };
+ clearJourney.onclick=()=>{
+  if(!confirm('Clear all Goal Rush attempt history from this device? Personal bests will remain.'))return;
+  try{localStorage.removeItem(ATTEMPTS);}catch{}
+  renderAttempts();
+ };
+ renderAttempts();
  function updateBest(){
   const best=readBest(),time=duration.value;
   history.textContent=Number.isSafeInteger(best[time])?
@@ -84,7 +151,7 @@
  function finish(message,save=true){
   const s=session;if(!s)return;
   session=null;
-  if(save)saveRecord(s.duration,s.goals);
+  if(save){saveRecord(s.duration,s.goals);saveAttempt(s);}
   status.textContent=message;
   clock.textContent=s.goals+' goal(s) in '+Math.ceil(s.frames/60)+'s of active local play';
   progress.textContent=s.goals>=s.target?'Target achieved!': 'Target not reached. Continue practicing anytime.';
