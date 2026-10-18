@@ -246,6 +246,94 @@
   result.append(title,numbers,detail,progress);
   head.append(result,button('Undo latest game result',()=>undoGame(v)));
   board.append(head);
+  const planner=text('details',null,'series-batch-schedule');
+  const plannerSummary=text('summary','🗓 Plan every remaining game');
+  const plannerBody=text('div',null,'series-batch-body');
+  const help=text('p','Set one starting local kickoff and the number of days between games. Preview exact dates before changing anything. Recorded results are never modified; existing kickoffs are preserved by default.');
+  const inputs=text('form',null,'series-batch-form');
+  const first=text('input');first.type='datetime-local';first.required=true;
+  first.setAttribute('aria-label','First game local kickoff');
+  const gap=text('input');gap.type='number';gap.min='1';gap.max='30';gap.step='1';gap.value='2';gap.required=true;
+  const place=text('input');place.type='text';place.maxLength=60;place.placeholder='Optional shared venue';
+  const keep=text('input');keep.type='checkbox';keep.checked=true;
+  const preserve=label('Preserve already planned kickoffs',keep);preserve.className='series-batch-preserve';
+  const previewButton=button('Preview entire series',()=>previewPlan());
+  const saveButton=text('button','Confirm and save plan');saveButton.type='submit';saveButton.disabled=true;
+  const output=text('div',null,'series-batch-preview');
+  output.setAttribute('role','status');output.setAttribute('aria-live','polite');
+  let prepared=null;
+  const planSignature=()=>JSON.stringify([v.id,snapshot,first.value,gap.value,place.value,keep.checked]);
+  function clearPreview(){
+   prepared=null;saveButton.disabled=true;output.replaceChildren();
+  }
+  for(const control of [first,gap,place,keep]){
+   control.addEventListener('input',clearPreview);
+   control.addEventListener('change',clearPreview);
+  }
+  function calculatePlan(){
+   if(!healthy||current()?.id!==v.id)throw Error('Select a readable series first.');
+   if(data.winner)throw Error('The series is already decided. No further games need scheduling.');
+   const value=first.value;
+   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
+    throw Error('Choose a first kickoff time in your local timezone.');
+   const start=new Date(value);
+   if(!Number.isFinite(start.getTime())||localTime(start.getTime())!==value||!when(start.getTime()))
+    throw Error('First kickoff is invalid or outside the supported years.');
+   const step=Number(gap.value),venue=place.value.trim();
+   if(!Number.isSafeInteger(step)||step<1||step>30)
+    throw Error('Choose 1–30 days between games.');
+   if(venue.length>60||/[\u0000-\u001f\u007f-\u009f]/.test(venue))
+    throw Error('Venue must be a single line under 60 characters.');
+   const proposed=new Map(),diff=[];
+   for(let i=0;i<v.games.length;i++){
+    const game=v.games[i];
+    if(game.redScore!==null||(keep.checked&&game.kickoff!==null))continue;
+    const date=new Date(start.getTime());
+    // Calendar-day arithmetic keeps the intended local clock time through DST.
+    date.setDate(start.getDate()+i*step);
+    const kickoff=date.getTime();
+    if(!when(kickoff))throw Error('One planned kickoff exceeds the supported calendar years.');
+    proposed.set(game.id,{...game,kickoff,venue:venue||game.venue});
+    diff.push({game:i+1,kickoff,venue:venue||game.venue});
+   }
+   if(!diff.length)throw Error('No unscheduled games. Uncheck Preserve to reschedule unplayed games.');
+   const candidate=inspect({...v,updatedAt:Math.max(v.createdAt,Date.now()),
+    games:v.games.map(g=>proposed.get(g.id)||g)}).series;
+   return{signature:planSignature(),candidate,diff};
+  }
+  function previewPlan(){
+   clearPreview();
+   try{
+    prepared=calculatePlan();saveButton.disabled=false;
+    output.append(text('strong',prepared.diff.length+' proposed private kickoffs · no server fixtures created.'));
+    const list=text('ol');
+    for(const entry of prepared.diff){
+     const item=text('li','Game '+entry.game+' · '+
+      new Date(entry.kickoff).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})+
+      (entry.venue?' · '+entry.venue:''));
+     list.append(item);
+    }
+    output.append(list,text('p','All existing game results and winning records stay unchanged. '+
+     'Later matches may become unnecessary if a team clinches the series early.'));
+   }catch(error){output.append(text('p',error.message||'Cannot plan games.'));}
+  }
+  inputs.onsubmit=e=>{
+   e.preventDefault();
+   if(!prepared||prepared.signature!==planSignature()){
+    clearPreview();return inform('The series plan changed. Preview it again before saving.');
+   }
+   if(!window.confirm('Save '+prepared.diff.length+' provisional kickoff dates for "'+v.name+
+     '"? Scores remain unchanged and no invitations are sent.'))return;
+   try{
+    persist(items.map(x=>x.id===v.id?prepared.candidate:x));
+    message=prepared.diff.length+' provisional series kickoffs saved. Export Calendar ICS to share dates.';
+    render();
+   }catch(error){clearPreview();inform('Schedule not saved: '+(error.message||'Storage error'));}
+  };
+  inputs.append(label('First local kickoff',first),label('Days between games',gap),
+   label('Shared venue · optional',place),preserve,previewButton,saveButton);
+  plannerBody.append(help,inputs,output);planner.append(plannerSummary,plannerBody);
+  if(!data.winner)board.append(planner);
   const grid=text('div',null,'series-fixtures');
   for(const [i,g]of v.games.entries()){
    const card=text('article',null,'series-game');
