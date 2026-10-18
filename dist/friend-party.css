@@ -38,3 +38,9 @@
 .friend-party-banner button:focus-visible{outline:3px solid #ddfdaa;outline-offset:3px}
 @media(max-width:570px){.friend-party-group>button,.friend-party-form button,.friend-party-row-buttons button{flex:1 1 150px}}
 @media(prefers-reduced-motion:reduce){.friend-party-dialog *{animation:none!important;transition:none!important}}
+
+/* Dedicated social Club playlist — deliberately unranked and opt-in. */
+.friend-party-club{display:grid;gap:9px;padding:14px;margin:12px 0 0;border:1px solid #87b298;border-radius:10px;background:#233b34}
+.friend-party-club p{margin:0;color:#c9e4d0;font-size:12px;line-height:1.55}
+.friend-party-club button{min-height:44px;width:100%;font-weight:800}
+.friend-party-club button:disabled{opacity:.55;cursor:not-allowed}
