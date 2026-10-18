@@ -57,7 +57,8 @@
  }
  function refresh(){
   const next=snapshot();section.hidden=!next;
-  if(!next){current=null;link.value='';code.textContent='';return;}
+  if(!next){hideQr();current=null;link.value='';code.textContent='';return;}
+  if(renderedQrUrl&&renderedQrUrl!==next.url)hideQr();
   // Keep copy/share actions bound to the *currently* active room.
   current=next;code.textContent='ROOM '+next.room;link.value=next.url;
   state.textContent=eligibility(next);
@@ -96,6 +97,43 @@
    else status.textContent=e.message||'Device sharing failed.';
   }
  });
+ // QR is encoded entirely in-browser from the currently valid, native room URL.
+ // The local bundled MIT generator never sends private invitation codes away.
+ const qrPanel=document.createElement('section');qrPanel.className='room-invite-qr';qrPanel.hidden=true;
+ qrPanel.setAttribute('aria-label','Scan this room invitation QR');
+ const qrHeading=document.createElement('strong');qrHeading.textContent='SCAN TO JOIN THIS ROOM';
+ const qrCanvas=document.createElement('div');qrCanvas.className='room-invite-qr-image';
+ const qrCodeText=document.createElement('p');qrCodeText.className='room-invite-qr-code';
+ const qrHelp=document.createElement('p');
+ qrHelp.textContent='Scan with the Fuckball Join your team QR reader or your phone camera. Sharing this link does not bypass the server’s room permissions.';
+ qrPanel.append(qrHeading,qrCanvas,qrCodeText,qrHelp);
+ let renderedQrUrl=null;
+ function hideQr(){
+  renderedQrUrl=null;qrPanel.hidden=true;qrCanvas.replaceChildren();
+  qrCodeText.textContent='';
+  if(typeof qrButton!=='undefined'){
+   qrButton.textContent='Show room QR';qrButton.setAttribute('aria-expanded','false');
+  }
+ }
+ const qrButton=button('Show room QR',()=>{
+  try{
+   const now=currentRoom();
+   if(renderedQrUrl===now.url){hideQr();return;}
+   hideQr();
+   if(typeof QRCode!=='function')throw Error('QR rendering unavailable. Copy the native invite link instead.');
+   new QRCode(qrCanvas,{text:now.url,width:224,height:224,colorDark:'#122c2b',
+    colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+   renderedQrUrl=now.url;qrCodeText.textContent='ROOM '+now.room;
+   qrPanel.hidden=false;qrButton.textContent='Hide room QR';
+   qrButton.setAttribute('aria-expanded','true');
+   status.textContent='QR generated on this device. '+warning(now);
+  }catch(error){
+   hideQr();status.textContent=error?.message||'Could not generate a room QR.';
+  }
+ });
+ qrButton.setAttribute('aria-expanded','false');
+ qrButton.setAttribute('aria-controls','roomInviteQr');
+ qrPanel.id='roomInviteQr';
  function escapeXml(value){
   return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
@@ -131,16 +169,16 @@
  const reload=button('↻ Refresh room access',()=>{refresh();status.textContent=current?
   'Current room invitation and server-reported admission settings refreshed.':'No active Custom Room.';});
  reload.className='room-invite-center-refresh';
- section.append(heading,description,code,linkLabel,actions,caution,status);
+ section.append(heading,description,code,linkLabel,actions,qrPanel,caution,status);
  pane.append(section);section.hidden=true;
  // The menu is controlled by the existing game UI. Refresh only while opened,
  // never fetch a room directory, persist a code or mutate server settings.
  let latestRoom='';
  setInterval(()=>{
   const visible=typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
-  if(!visible){section.hidden=true;return;}
+  if(!visible){section.hidden=true;if(renderedQrUrl)hideQr();return;}
   const next=snapshot();
-  if(!next){section.hidden=true;current=null;latestRoom='';return;}
+  if(!next){section.hidden=true;current=null;latestRoom='';hideQr();return;}
   if(next.room!==latestRoom||next.url!==link.value||
     eligibility(next)!==state.textContent||warning(next)!==caution.textContent){
    latestRoom=next.room;status.textContent='';refresh();

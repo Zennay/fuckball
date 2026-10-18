@@ -1,12 +1,14 @@
-# Native Custom Room QR invite scanner
+# Native Custom Room QR invitations · sender and recipient
 
-The existing **Play → Join your team** invite section now offers two explicitly user-initiated QR input options where the browser supports native `BarcodeDetector` for `qr_code`:
+Fuckball now supports two halves of a local, explicit Custom Room invitation:
 
-- **Scan QR with camera** requests local camera access after a click and stops all media tracks after successful decoding, Stop camera, page hide, invalid permission, or a camera error. Only the visible page processes video; no images or frames are uploaded to Fuckball or a third party.
-- **Read QR from image** accepts only PNG/JPEG/WebP files of at most 6 MiB and decoded images at most 4096×4096 pixels, using the browser's local ImageBitmap and closing its buffer afterward. The image is never stored or uploaded.
+1. **Host / sender:** From the **live match menu → Invite your team**, press **Show room QR** to show a scannable QR code containing a current native same-site room invite URL. This is generated only after a click, from `serverLink.room` (verified eight-character room code), using a **bundled** copy of MIT-licensed qrcodejs. There is no external QR API and the private code does not leave the device merely to render the QR. When the room changes, the menu hides, or the room becomes invalid/disconnects, the QR is cleared. The current lock/club/account status stays visible; the QR conveys no entry authority.
+2. **Recipient:** From **Play → Join your team**, use **Scan QR with camera** or **Read QR from image**, where supported by the browser's built-in `BarcodeDetector` for `qr_code`. The camera opens only after a click. Camera tracks close after reading a valid invite, choosing Stop camera, hiding the tab, or a camera error; no footage is uploaded or retained. Local PNG/JPEG/WebP images up to 6 MiB, at most 4096 px per side, are decoded on-device and discarded.
 
-Both decode paths call the same strict `parseInvite` routine as manual paste: an eight-character native room code or an exact same-origin, same-path invitation link with one `room` parameter. Other domains, additional query parameters, fragments, credentials, unrecognized codes and malformed QR values are rejected.
+Both QR input paths use the *original* strict `parseInvite` routine, the same as paste: only exactly eight permitted room-code characters or an exact same-origin and same-path invitation URL with one `room` query parameter, without fragments/credentials/extraneous query fields. On valid scan, **only the room-code input is populated**. The recipient must personally click **JOIN ROOM** and pass native server admission, club membership, lock, account and capacity rules.
 
-A valid scan **only fills the room-code field**. The person must choose **JOIN ROOM**; the original server join flow still enforces room availability, lock/club/account permissions and current connection state. If the native QR API or camera is unavailable (for example in Firefox), manual paste and clipboard invite entry remain fully functional. No bot, physics, matchmaking, ranking, account, replay or server policy is changed.
+If the browser does not provide native BarcodeDetector or camera, existing paste/clipboard and manual room-code joins remain functional. Sender-side QR rendering is separate and broadly supported. No ranked results, account information, players, server matchmaking, active room permissions, AI, game physics, release or production deployment changes.
 
-There are no cloud QR APIs, extra permissions in the web manifest, automatic camera startup, background scanning or saved images. Browser camera permission remains browser-managed. The service worker's offline cache key was bumped to ship this client-side capability.
+## Third-party library
+
+`dist/vendor/qrcodejs.min.js`: [davidshimjs/qrcodejs](https://github.com/davidshimjs/qrcodejs), MIT license (2012 David Shim); full notice in `dist/vendor/LICENSE-qrcodejs.txt` and `dist/vendor/THIRD-PARTY.txt`. Code is bundled and served locally, not fetched from CDN or QR generation service. The service worker asset manifest and cache version include the library and QR UI.

@@ -21,3 +21,9 @@ JSZip: https://github.com/Stuk/jszip
 License: MIT (see LICENSE-jszip.txt)
 
 HaxBall is created by basro. Fuckball is an independent game, not affiliated with or endorsed by HaxBall.
+
+QR rendering:
+  qrcodejs (David Shim), MIT License, Copyright (c) 2012 davidshimjs
+  Bundled file: qrcodejs.min.js; full license: LICENSE-qrcodejs.txt
+  Upstream: https://github.com/davidshimjs/qrcodejs
+  Used only to render native room invites locally; no external QR service.
