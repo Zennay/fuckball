@@ -203,5 +203,49 @@
   refresh();
   return refresh;
  }
+
+ // Carry the player's optional self-set focus into the main Play landing page.
+ // Read-only and session-bound; it neither starts a match nor marks a goal complete.
+ function pinHomeGoal(){
+  const home=document.getElementById('homeView');
+  const hero=home?.querySelector('.hero-grid');
+  if(!hero)return;
+  const banner=document.createElement('aside');
+  banner.className='private-coach-home';banner.hidden=true;
+  banner.setAttribute('aria-label','My saved next-match focus');
+  const label=document.createElement('span');label.textContent='MY PRIVATE NEXT-MATCH GOAL';
+  const focus=document.createElement('strong');
+  const action=document.createElement('p');
+  const edit=document.createElement('button');edit.type='button';
+  edit.textContent='Edit in My Games →';
+  edit.addEventListener('click',()=>document.getElementById('tabReplay')?.click());
+  banner.append(label,focus,action,edit);
+  hero.insertAdjacentElement('afterend',banner);
+  function refresh(){
+   const account=typeof settings!=='undefined'?settings.account:null;
+   if(!account?.token||typeof account.username!=='string'||!account.username||
+      account.username.length>80){banner.hidden=true;return;}
+   let plan=null;
+   try{plan=readPlan(localStorage.getItem(PREFIX+
+    encodeURIComponent(account.username.toLowerCase())));}catch{}
+   if(!plan){banner.hidden=true;return;}
+   focus.textContent=FOCI[plan.focus];
+   action.textContent=plan.action;
+   banner.hidden=false;
+  }
+  // Account sign-in/out and server-driven session invalidation call renderAccount,
+  // which updates this native button; observation avoids polling during 60 Hz play.
+  const accountButton=document.getElementById('accountButton');
+  if(accountButton)new MutationObserver(refresh).observe(accountButton,
+   {childList:true,subtree:true,characterData:true});
+  window.addEventListener('storage',e=>{
+   if(e.key===null||e.key.startsWith(PREFIX)||e.key==='fuckball.settings')refresh();
+  });
+  document.getElementById('tabHome')?.addEventListener('click',refresh);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+  window.addEventListener('focus',refresh);
+  refresh();
+ }
+ pinHomeGoal();
  window.FuckballPrivateMatchCoach={mount};
 })();

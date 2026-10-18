@@ -31,3 +31,12 @@
 .private-coach :is(button,select,textarea,input):focus-visible{outline:3px solid #d4ef9c;outline-offset:2px}
 @media(max-width:670px){.private-coach{padding:12px}.private-coach-goal{grid-template-columns:1fr}.private-coach-tiles{grid-template-columns:1fr}.private-coach-recents{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.private-coach *{scroll-behavior:auto;animation:none!important;transition:none!important}}
+/* Read-only coaching goal carried into Play without touching native queue consent. */
+.private-coach-home[hidden]{display:none!important}
+.private-coach-home{margin:15px auto 20px;max-width:1200px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px 18px;padding:16px 20px;border:1px solid #789a79;background:#24433d;border-radius:12px}
+.private-coach-home span{grid-column:1/-1;font-size:10px;letter-spacing:.09em;color:#c7e7b0;font-weight:850}
+.private-coach-home strong{font-size:clamp(15px,2vw,21px);color:#e2f7bf}
+.private-coach-home p{margin:0;grid-column:1;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4efe2;font-size:13px;line-height:1.5}
+.private-coach-home button{grid-column:2;grid-row:2 / span 2;padding:10px 14px;border:1px solid #a0c996;border-radius:8px;background:#30564a;color:#f2ffe9;min-height:43px;cursor:pointer}
+.private-coach-home button:focus-visible{outline:3px solid #deffa6;outline-offset:3px}
+@media(max-width:600px){.private-coach-home{grid-template-columns:1fr}.private-coach-home button{grid-column:1;grid-row:auto}}
