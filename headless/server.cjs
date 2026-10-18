@@ -11,7 +11,7 @@ function createServer(options={}){
  const reconnectMs=Math.max(5000,Math.min(120000,Number(options.reconnectWindowMs)||DEFAULT_RECONNECT_MS));
  let shuttingDown=false;
  const root=path.resolve(__dirname,'../dist'),bff=fs.readFileSync(path.join(root,'stadiums/bff-big-v4.hbs'),'utf8'),rooms=new Map(),clients=new Set();
- const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
+ const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
