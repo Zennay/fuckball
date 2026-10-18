@@ -87,3 +87,12 @@
 }
 .poster-studio-portability button:disabled{opacity:.5;cursor:not-allowed}
 @media print{.poster-studio-portability{display:none!important}}
+
+/* Editing a saved design is deliberately distinct from creating a new copy. */
+.poster-studio-draft.active{
+ border-left:4px solid #d8fb74;padding-left:12px;background:#243936
+}
+.poster-studio-actions button[hidden]{display:none!important}
+.poster-studio-draft.active strong::after{
+ content:" · Editing";font-size:.75rem;color:#d8fb74;font-weight:700
+}
