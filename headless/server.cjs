@@ -86,7 +86,9 @@ function createServer(options={}){
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
- function park(ws){const r=ws.room,id=ws.playerId;if(!r||id==null||r.authority!=='server'||!r.clients.has(id))return false;
+ function park(ws){const r=ws.room,id=ws.playerId;if(!r||id==null||!r.clients.has(id))return false;
+  if(r.authority!=='server'&&r.standby)failover(r,'participant disconnected');
+  if(r.authority!=='server')return false;
   const ticket=r.sessionTokens.get(id);if(!ticket)return false;
   ws.room=null;r.sockets.delete(id);r.reports.delete(id);
   const claim={ticket,account:ws.account||null,expiresAt:Date.now()+reconnectMs,timer:null};
