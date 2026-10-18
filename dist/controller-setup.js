@@ -255,6 +255,15 @@
   hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
   dialog.showModal();mapping.focus();
  };
+ window.addEventListener('fuckball-gamepad-config',event=>{
+  const v=event.detail;
+  if(!v||!kickValid(v.kick)||!Number.isFinite(v.deadzone)||v.deadzone<.15||
+   v.deadzone>.65||!['left','right'].includes(v.stick)||
+   typeof v.invertX!=='boolean'||typeof v.invertY!=='boolean')return;
+  config={kick:v.kick,deadzone:v.deadzone,stick:v.stick,
+   invertX:v.invertX,invertY:v.invertY};
+  fill();
+ });
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
  window.addEventListener('gamepadconnected',()=>{if(active){refreshSources();present(controller());}});
  window.addEventListener('gamepaddisconnected',()=>{if(active){refreshSources();present(controller());}});
