@@ -54,6 +54,7 @@
  stickSelect.value=preferences.stick;flipX.checked=preferences.invertX;flipY.checked=preferences.invertY;
  function save(){
   try{localStorage.setItem(KEY,JSON.stringify(preferences));}catch{}
+  window.dispatchEvent(new CustomEvent('fuckball-gamepad-config',{detail:{...preferences}}));
  }
  kickSelect.onchange=()=>{if(!kickValid(kickSelect.value))return;preferences.kick=kickSelect.value;save();};
  stickSelect.onchange=()=>{if(!['left','right'].includes(stickSelect.value))return;
