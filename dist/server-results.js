@@ -56,9 +56,10 @@
  insights.append(insightsHeading,insightsText,insightsStats,trend,playlists);
  const list=document.createElement('div');list.className='server-results-grid';list.setAttribute('aria-label','My online match results');
  const divider=document.createElement('h2');divider.className='server-local-heading';divider.textContent='SAVED REPLAYS ON THIS DEVICE';
+ const reviewVault=document.createElement('div');reviewVault.className='server-review-vault-anchor';
  const detail=document.createElement('p');detail.className='server-results-note';
  detail.textContent='Online result receipts do not include HBR2 playback. Your local recordings below stay on this device. Account totals may outlive the 50 most recent server receipts.';
- panel.append(heading,controls,status,summary,form,insights,list,detail);
+ panel.append(heading,controls,status,summary,form,insights,list,reviewVault,detail);
  games.insertBefore(panel,document.getElementById('gamesStatus'));
  games.insertBefore(divider,document.getElementById('gamesStatus'));
  let generation=0,currentToken=null,currentUser=null,items=null,busy=false;
@@ -82,7 +83,7 @@
  function reset(message){
   items=null;currentToken=null;currentUser=null;list.replaceChildren();
   summary.textContent='';form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();status.textContent=message;
-  exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
+  exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;reviewVault.replaceChildren();
  }
  function renderInsights(scope){
   insights.hidden=!scope.length;
@@ -159,6 +160,11 @@
    items.length+' recent server receipts · unranked';
   form.replaceChildren();
   renderInsights(scope);
+  if(window.FuckballOnlineMatchReviews&&currentToken&&currentUser){
+   window.FuckballOnlineMatchReviews.renderToolbar(reviewVault,currentUser,()=>
+    !!items&&!!currentToken&&authenticated()?.token===currentToken&&
+    authenticated()?.username===currentUser,items);
+  }else reviewVault.replaceChildren();
   if(scope.length){
    const count=type=>scope.reduce((n,x)=>n+Number(outcome(x)===type),0);
    const gf=scope.reduce((n,x)=>n+(x.team===1?x.red:x.blue),0);
@@ -207,7 +213,11 @@
     }catch(error){status.textContent=error?.message||'Could not share this result.';}
     finally{share.disabled=false;}
    });
-   actions.append(share);card.append(top,sub,when,actions);list.append(card);
+   actions.append(share);card.append(top,sub,when,actions);
+   window.FuckballOnlineMatchReviews?.renderInto(card,item,currentUser,()=>
+    !!items?.includes(item)&&!!currentToken&&authenticated()?.token===currentToken&&
+    authenticated()?.username===currentUser);
+   list.append(card);
   }
  }
  async function load(){
@@ -293,8 +303,13 @@
  showView=function(next){
   previousShowView(next);
   if(next==='games')load();
-  else{generation++;currentToken=null;items=null;form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
+  else{generation++;currentToken=null;items=null;reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
+ window.addEventListener('fuckball:online-review-imported',()=>{
+  if(items&&currentToken&&!games.hidden&&authenticated()?.token===currentToken){
+   render();status.textContent='Your own private notes were restored on this device; genuine server receipts are unchanged.';
+  }
+ });
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&!games.hidden&&authenticated()?.token!==currentToken)load();
  });
