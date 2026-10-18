@@ -13,7 +13,7 @@
  cancel.hidden=true;
  const state=document.createElement('span');state.setAttribute('role','status');
  state.setAttribute('aria-live','polite');state.className='replay-clip-status';
- state.textContent='Local replay → video file. Field only, no scoreboard overlay or audio.';
+ state.textContent='Exports visible field pixels, including player-name labels if shown. No audio or upload; review before sharing.';
  row.append(save,cancel,state);
  controls.append(row);
  const MAX_VIDEO=48*1024*1024,CLIP_MS=10000;
@@ -72,7 +72,7 @@
      const url=URL.createObjectURL(blob),link=document.createElement('a');
      link.href=url;link.download=session.name;document.body.append(link);link.click();link.remove();
      setTimeout(()=>URL.revokeObjectURL(url),60000);
-     state.textContent='WebM clip downloaded. Device-local recording; not ranked footage.';
+     state.textContent='WebM clip downloaded. It may show player-name labels; review before sharing. Not ranked footage.';
     }catch(error){state.textContent=error?.message||'Video download failed.';}
    };
    // Preserve the recorded replay, not the player simulation or networking path.
