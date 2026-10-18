@@ -170,3 +170,24 @@ includes the full selected overlap set (not only the first 24 visible rows),
 neutralises formula-sensitive cells, and leaves local storage unchanged. No
 calendar invite, remote message, match result, real room or server database is
 changed by this view or export.
+
+## All upcoming private fixtures and calendar export
+
+The **Matchday Hub → Upcoming private fixtures** panel now lists every validated
+future, unplayed local league, knockout and active best-of-series kickoff. It
+shows twelve initially and provides **Show 12 more** to reveal the remaining
+saved fixtures without discarding or truncating them. Events are grouped by
+local calendar day and can be searched by the original saved competition,
+team or venue. A period control supports the next 7, 30 or 90 days, or all
+future dates. The matching-count label makes it clear when search or date
+filters hide some events.
+
+Every row opens the **original competition's schedule editor** for that exact
+league fixture, private cup match or best-of game. This is a navigation
+shortcut, not an additional writer, room invitation or verified result.
+The All fixtures ICS download now contains **all validated upcoming fixture
+records**, not a previously fixed 200-item slice, subject to the existing
+strict source collection limits. Events retain the existing placeholder
+60-minute duration; HaxLab does not claim to know actual match durations.
+No player account, online match, live team assignment or network API is
+modified by browsing or exporting the local schedule.
