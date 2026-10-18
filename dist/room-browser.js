@@ -69,9 +69,18 @@
  transferActions.append(exportPins,importPins,replaceLabel,importFile);
  bookmarkBar.append(bookmarkTitle,bookmarkHelp,transferActions);
  const list=document.createElement('div');list.className='room-browser-list';
- body.append(bookmarkBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
+ const watchBar=document.createElement('section');watchBar.className='room-browser-watch';
+ watchBar.setAttribute('aria-label','Pinned public room live availability');
+ const watchButton=document.createElement('button');watchButton.type='button';
+ watchButton.textContent='◎ Watch pinned availability';watchButton.setAttribute('aria-pressed','false');
+ const watchText=document.createElement('p');watchText.setAttribute('role','status');
+ watchText.setAttribute('aria-live','polite');
+ watchText.textContent='Optional, tab-visible only. Uses the existing public-room refresh; no background tracking or automatic joins.';
+ watchBar.append(watchButton,watchText);
+ body.append(bookmarkBar,watchBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ let watching=false,sawSnapshot=false,previousAvailable=new Set();
  const PUBLIC_LISTING_MAX_AGE=45000;
  const listingFresh=()=>lastLoadedAt>0&&Date.now()-lastLoadedAt<=PUBLIC_LISTING_MAX_AGE;
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
@@ -91,6 +100,7 @@
      list.some(code=>!validRoom(code)))throw Error('Invalid pinned room list.');
   try{localStorage.setItem(SAVED_KEY,JSON.stringify(list));}
   catch{throw Error('Could not save room pins to this device.');}
+  catchupWatchBaseline();
  }
  function downloadPins(){
   let pins;
@@ -168,15 +178,23 @@
     (age!==null&&age<=45?'Recently advertised public':'Previously advertised public')+
     ' · last seen '+(age??'?')+'s ago · '+published.players+' players · '+published.map:
     'Not in the last public listing · access and availability unknown';
-   info.append(label,hint);
+   const current=!!published&&canBrowseJoin(published);
+   const badge=document.createElement('span');badge.className='room-browser-availability';
+   badge.dataset.open=current?'yes':'no';
+   badge.textContent=current?'PUBLIC · OPEN SEATS':
+    (published&&listingFresh()?'PUBLIC · NO FREE SEATS':'CURRENT STATUS UNKNOWN');
+   info.append(label,badge,hint);
    const actions=document.createElement('div');actions.className='room-browser-actions';
+   const joinOpen=button(published?.requiresAccount?'Sign in / join public':'Join public room',
+     ()=>{if(published)requestJoin(published);});
+   joinOpen.disabled=!current;joinOpen.className='room-browser-live-join';
    const open=button('Open saved room',()=>openSavedRoom(code));
    const remove=button('Unpin',()=>{
     try{savePinned(readPinned().filter(value=>value!==code));renderRooms();
      status.textContent='Unpinned '+code+' from this device.';}
     catch(e){status.textContent=e.message;}
    });
-   actions.append(open,remove);card.append(info,actions);savedGrid.append(card);
+   actions.append(joinOpen,open,remove);card.append(info,actions);savedGrid.append(card);
   }
  }
  clearSaved.onclick=()=>{
@@ -196,6 +214,48 @@
   // Old directory results are only historical display data, not admission hints.
   return listingFresh()&&roomsCache.some(x=>x.room===room.room)&&seats!==null&&seats>0;
  }
+ function availablePins(){
+  let pins=[];try{pins=readPinned();}catch{return new Set();}
+  return new Set(pins.filter(code=>{
+   const room=roomsCache.find(r=>r.room===code);
+   return !!room&&canBrowseJoin(room);
+  }));
+ }
+ // Fresh public-listing data only. Pin and visibility changes are baselined
+ // rather than mistaken for a server transition; an old code is never trusted.
+ function catchupWatchBaseline(){
+  sawSnapshot=false;previousAvailable=new Set();
+  if(watching&&listingFresh()){
+   previousAvailable=availablePins();sawSnapshot=true;
+  }
+ }
+ function watchFreshListing(){
+  if(!watching)return;
+  const open=availablePins();
+  if(!sawSnapshot){previousAvailable=open;sawSnapshot=true;}
+  else{
+   const arrivals=[...open].filter(code=>!previousAvailable.has(code));
+   if(arrivals.length){
+    watchText.textContent='New since the previous public listing: '+arrivals.join(', ')+
+     '. These pinned rooms advertise a free seat now. Server entry is still checked when you join.';
+   }
+   previousAvailable=open;
+   if(arrivals.length)return;
+  }
+  watchText.textContent=
+   open.size+' pinned public room'+(open.size===1?'':'s')+
+   ' currently advertise open seats. Availability can change at any moment.';
+ }
+ watchButton.addEventListener('click',()=>{
+  watching=!watching;
+  watchButton.setAttribute('aria-pressed',String(watching));
+  watchButton.textContent=watching?'● Stop watching':'◎ Watch pinned availability';
+  watchText.textContent=watching?
+   'Watching only while this room directory is open and this tab is visible. Waiting for refreshed public listings.':
+   'Watch stopped. Nothing runs in the background.';
+  catchupWatchBaseline();
+  if(watching&&listingFresh())watchFreshListing();
+ });
  function requestJoin(room){
   if(!canBrowseJoin(room)){
    status.textContent='Room directory is stale, unavailable or full. Refresh before attempting to join. Server admission is always required.';
@@ -256,6 +316,7 @@
   let pins=[];
   try{pins=readPinned();}catch(e){status.textContent=e.message;return;}
   renderPinned(pins);
+  watchBar.hidden=!pins.length;
   const needle=search.value.trim().toLocaleLowerCase();
   const visible=roomsCache.filter(r=>
    (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
@@ -309,13 +370,15 @@
     typeof room.started==='boolean'&&typeof room.map==='string'&&
     room.map.length<=60&&typeof room.mode==='string');
    lastLoadedAt=Date.now();
+   watchFreshListing();
    renderRooms();
    return true;
   }catch(e){
    if(current===sequence&&shown){
     // Network failure invalidates the directory, but never touches saved pins.
     // A stale published code must not remain as an actionable public listing.
-    roomsCache=[];lastLoadedAt=0;renderRooms();
+    roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();renderRooms();
+    if(watching)watchText.textContent='Public directory is unavailable; no pinned room is confirmed open.';
     status.textContent=(e.message||'Room directory unavailable.')+' Pinned room codes are kept, but current public availability is unknown.';
    }
    return false;
@@ -323,7 +386,7 @@
   finally{busy=false;refresh.disabled=false;}
  }
  function close(){
-  shown=false;sequence++;roomsCache=[];lastLoadedAt=0;body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
+  shown=false;sequence++;roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
  }
