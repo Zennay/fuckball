@@ -15,7 +15,8 @@ function createServer(options={}){
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
-  parties=dataDir?createParties({social,exists:name=>accounts.reserved(name)}):null,
+  parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
+   clubForUser:user=>clubs?.membership(user)?.id||null}):null,
   authHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
  // Room invitations are ephemeral: only a live room participant may share
  // an existing room with a mutually accepted friend. Never persist room links.
