@@ -208,7 +208,7 @@
   }catch(error){history.textContent=error.message||'Practice challenge unavailable.';session=null;hud.hidden=true;}
  };
  stop.onclick=()=>{finish('DRILL STOPPED',false);};
- restart.onclick=()=>{quit();launch.click();};
+ restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
  window.setInterval(tick,150);
  const previousShowView=showView;
