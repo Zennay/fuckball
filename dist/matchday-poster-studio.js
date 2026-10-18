@@ -277,8 +277,62 @@
     theme.value=s.theme;format.value=s.format;scoreRow.hidden=s.format!=='result';
     choose.value='';draw();
   }
+  // Explicit, offline-only transfer. Never includes account IDs or recording bytes.
+  const portableFields=['competition','home','away','venue','tagline','kickoff',
+    'theme','format','redScore','blueScore'];
+  const backupButton=button('↓ Backup drafts JSON',backupDrafts);
+  const importButton=button('↑ Restore drafts JSON',()=>restoreFile.click());
+  const restoreFile=make('input');
+  restoreFile.type='file';restoreFile.accept='.json,application/json';restoreFile.hidden=true;
+  restoreFile.setAttribute('aria-label','Restore private poster drafts from JSON');
+  function backupDrafts(){
+    if(draftsBlocked||!drafts.length)return notify('No verified drafts are available for backup.');
+    const safe=drafts.map(d=>Object.fromEntries(portableFields.map(k=>[k,d[k]])));
+    const payload=JSON.stringify({format:'fuckball-private-poster-drafts',version:1,
+      drafts:safe},null,2)+'\n';
+    if(new TextEncoder().encode(payload).byteLength>65536)
+      return notify('Draft archive exceeds the safe export size.');
+    download(new Blob([payload],{type:'application/json'}),
+      'fuckball-private-poster-drafts.json');
+    notify('Your private draft archive was saved. The file contains no logins or game recordings.');
+  }
+  async function restoreDrafts(file){
+    if(!file)return;
+    if(draftsBlocked)return notify('Local drafts are unavailable. Reload and recover local storage before importing.');
+    if(file.size===0||file.size>65536)return notify('Archive must be a nonempty JSON file of at most 64 KiB.');
+    let incoming;
+    try{
+      const payload=JSON.parse(await file.text());
+      if(payload?.format!=='fuckball-private-poster-drafts'||payload.version!==1||
+        !Array.isArray(payload.drafts)||payload.drafts.length<1||
+        payload.drafts.length>MAX_DRAFTS||
+        payload.drafts.some(d=>!valid(d)||portableFields.some(k=>typeof d[k]!=='string')))
+        throw Error('Unsupported poster archive.');
+      incoming=payload.drafts.map(d=>Object.fromEntries(portableFields.map(k=>[k,d[k]])));
+    }catch{return notify('Archive rejected. No saved posters were changed.');}
+    if(incoming.length+drafts.length>MAX_DRAFTS)
+      return notify('Not enough space: delete saved posters before importing these '+incoming.length+' drafts.');
+    if(!confirm('Import '+incoming.length+' private poster drafts as NEW entries on this device? Existing drafts will be kept.'))
+      return notify('Import cancelled without changes.');
+    const previous=drafts;
+    const newId=()=>crypto.randomUUID?crypto.randomUUID():
+      Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+    drafts=[...previous,...incoming.map(d=>({id:newId(),...d}))];
+    try{saveState();renderDrafts();notify(incoming.length+' private designs imported; your existing drafts were kept.');}
+    catch{drafts=previous;notify('Import failed; stored posters were not replaced. Reload if another tab made changes.');}
+  }
+  restoreFile.addEventListener('change',async()=>{
+    const file=restoreFile.files?.[0];
+    try{await restoreDrafts(file);}
+    finally{restoreFile.value='';}
+  });
   function renderDrafts(){
     saved.replaceChildren(make('h3','SAVED POSTERS · ON THIS DEVICE'));
+    const tools=make('div',null,'poster-studio-portability');
+    backupButton.disabled=draftsBlocked||drafts.length===0;
+    importButton.disabled=draftsBlocked||drafts.length>=MAX_DRAFTS;
+    tools.append(backupButton,importButton,restoreFile);
+    saved.append(tools);
     if(!drafts.length)return saved.append(make('p','Save up to eight designs. They never appear on your server account.'));
     for(const d of drafts){
       const row=make('div',null,'poster-studio-draft');
