@@ -22,3 +22,12 @@
 .room-listing-toggle[aria-pressed="true"]{background:#314e34!important;border-color:#94d68f!important;color:#d9ffb6!important}
 .room-browser button:focus-visible,.room-listing-toggle:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
 @media(max-width:600px){.room-browser-actions button,.room-browser-tools button{flex:1 1 130px}}
+
+/* Client-only search over the host-published, never-private directory. */
+.room-browser-filters:not([hidden]){display:flex;flex-wrap:wrap;gap:9px;padding:12px 0 4px}
+.room-browser-filters input,.room-browser-filters select{min-height:43px;background:#13262b;color:#e7f4e8;
+ border:1px solid #688780;border-radius:8px;padding:10px;min-width:0;flex:1 1 145px}
+.room-browser-filters input{flex:2 1 210px}
+.room-browser-filters input:focus-visible,.room-browser-filters select:focus-visible{
+ outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-filters input,.room-browser-filters select{flex:1 1 100%}}
