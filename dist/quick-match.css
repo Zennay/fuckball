@@ -90,3 +90,16 @@
 .quick-queue-pulse button:disabled{opacity:.55;cursor:default}
 @media(max-width:580px){.quick-queue-pulse{padding:12px}
  .quick-queue-pulse button{width:100%}}
+
+/* Explicit human queue recovery after an interrupted or expired ready check. */
+.quick-queue-recovery{margin:13px 0;padding:15px;border:1px solid #b5caa2;
+ border-radius:11px;background:#263e37;display:grid;gap:9px}
+.quick-queue-recovery[hidden]{display:none!important}
+.quick-queue-recovery strong{font-size:.82rem;letter-spacing:.07em;color:#f0efbd}
+.quick-queue-recovery p{line-height:1.6;color:#e0ebdf;font-size:.82rem;margin:0}
+.quick-queue-recovery-actions{display:flex;flex-wrap:wrap;gap:9px}
+.quick-queue-recovery-actions button{min-height:44px;padding:9px 13px;border-radius:8px;
+ border:1px solid #acc7aa;background:#325647;color:#edf9df;font:inherit;font-weight:760;cursor:pointer}
+.quick-queue-recovery-actions button.primary{background:#cff1ae;color:#18392b}
+.quick-queue-recovery-actions button:focus-visible{outline:3px solid #ffe5a2;outline-offset:3px}
+@media(max-width:550px){.quick-queue-recovery-actions button{flex:1 1 100%}}
