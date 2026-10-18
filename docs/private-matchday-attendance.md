@@ -54,3 +54,15 @@ private attendance roster is not proof that anyone actually attended a match.
 ## Included in Game Night Pack v4
 
 The existing Game Night Pack now backs up attendance for the included private competitions. On restore, fixture attendance follows the **newly copied league, cup or series**, never the original. The dedicated Attendance JSON export remains useful for preserving old/unattached fixture notes. See [Game Night Pack v4](game-night-pack-v4-attendance.md).
+
+## Central knockout schedule recovery
+
+The Matchday Hub also reads the original private cup fixture's optional
+`kickoff` and `venue` values rather than treating every cup as undated. A
+provisional scheduled knockout now appears in the shared upcoming fixture list,
+central CSV/ICS overview and attendance selector. Cup brackets with unknown
+qualifying teams explicitly remain labelled **Qualifiers pending**; setting a
+date is not evidence a finalist is known or that a game has been played.
+
+Use **Set kickoff / Edit kickoff** on a cup fixture to open its existing Cup
+Builder editor, which remains the sole writer for those local match fields.
