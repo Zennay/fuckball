@@ -129,6 +129,44 @@ function createAccounts(dir){
     }
    }
   },
+  // Password-authenticated account maintenance is transactional: only
+  // persistently acknowledged changes revoke sessions or replace verifier data.
+  security(token,currentPassword,newPassword=null){
+   const username=this.user(token);
+   if(!username)throw Error('Account session expired. Sign in again.');
+   if(typeof currentPassword!=='string'||currentPassword.length<6||
+      currentPassword.length>100)throw Error('Enter your current account password.');
+   const id=key(username),current=data.users[id];
+   if(!current)throw Error('Account unavailable.');
+   const provided=Buffer.from(hash(currentPassword,current.salt),'hex');
+   if(!crypto.timingSafeEqual(provided,Buffer.from(current.hash,'hex')))
+    throw Error('Current password is incorrect.');
+   const changing=newPassword!==null;
+   if(changing&&(typeof newPassword!=='string'||newPassword.length<10||
+       newPassword.length>100))throw Error('New password must be 10–100 characters.');
+   if(changing&&crypto.timingSafeEqual(Buffer.from(hash(newPassword,current.salt),'hex'),
+       Buffer.from(current.hash,'hex')))
+    throw Error('Choose a password different from the current password.');
+   const previousSessions=data.sessions,previousUser=data.users[id];
+   const nextSessions=Object.assign(Object.create(null),data.sessions);
+   const currentHash=sha(token);
+   let revoked=0;
+   for(const [digest,session]of Object.entries(nextSessions)){
+    if(session.u!==id||!changing&&digest===currentHash)continue;
+    delete nextSessions[digest];revoked++;
+   }
+   let issued=null;
+   if(changing){
+    const salt=crypto.randomBytes(16).toString('hex');
+    data.users[id]={...current,salt,hash:hash(newPassword,salt)};
+    issued=crypto.randomBytes(32).toString('hex');
+    nextSessions[sha(issued)]={u:id,exp:Date.now()+TOKEN_DAYS*864e5};
+   }
+   data.sessions=nextSessions;
+   try{save();}
+   catch(e){data.sessions=previousSessions;data.users[id]=previousUser;throw e;}
+   return{username,token:issued,revoked,changed:changing};
+  },
   reserved(name){return Object.hasOwn(data.users,key(String(name).trim()));},
   flush(){if(dirty)save();}
  };
