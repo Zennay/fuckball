@@ -232,6 +232,7 @@ function createServer(options={}){
     if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
     const listings=[...rooms.values()].filter(r=>r.listed===true&&!r.locked&&!r.quickMatch)
      .slice(0,16).map(r=>({room:r.id,players:r.sockets.size,
+      requiresAccount:r.accountsOnly===true,capacity:r.maxHumans,
       mode:['bot','1v1','2v2','3v3','4v4'].includes(r.mode)?r.mode:'custom',
       started:r.started===true,map:String(r.hb._room.state.stadium.name||'Stadium').slice(0,60)}));
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
