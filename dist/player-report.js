@@ -30,7 +30,7 @@
  status.className='player-report-status';
  form.append(selectLabel,whyLabel,noteLabel,button);
  panel.append(heading,intro,form,status);pane.append(panel);
- let submitting=false;
+ let submitting=false,attempt=0;
  function render(){
   const current=serverLink?.room;
   panel.hidden=!current;
@@ -67,16 +67,17 @@
    status.textContent='Details must be 200 printable characters or less.';return;
   }
   if(!confirm('Submit this report privately to the server operator for review? No automatic punishment will be applied.'))return;
-  submitting=true;button.disabled=true;status.textContent='Sending report securely…';
+  submitting=true;attempt++;const currentAttempt=attempt;
+  button.disabled=true;status.textContent='Sending report securely…';
   try{serverLink.send({type:'reportPlayer',id,reason:reason.value,note:text});}
   catch{submitting=false;status.textContent='Could not send the report. Please reconnect and try again.';render();}
-  setTimeout(()=>{if(submitting){submitting=false;status.textContent='No confirmation received. Check your connection before retrying.';render();}},7000);
+  setTimeout(()=>{if(submitting&&attempt===currentAttempt){submitting=false;status.textContent='No confirmation received. Check your connection before retrying.';render();}},7000);
  };
  window.onPlayerReportStatus=d=>{
   if(!submitting)return;
   submitting=false;
   if(d?.ok===true){note.value='';status.textContent='Report saved privately on this server for moderation review. Thank you.';}
-  else status.textContent='Report was not saved. Try again later.';
+  else status.textContent=typeof d?.message==='string'?d.message.slice(0,160):'Report was not saved. Try again later.';
   render();
  };
  window.renderPlayerReportPanel=render;render();
