@@ -269,7 +269,7 @@
        f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')));
      if(f.type!=='Knockout'){
        actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
-       actions.append(button('Poster',()=>window.dispatchEvent(
+       if(f.type!=='Series')actions.append(button('Poster',()=>window.dispatchEvent(
          new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
      }
      card.append(info,actions);controlRows.append(card);
