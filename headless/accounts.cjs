@@ -129,6 +129,35 @@ function createAccounts(dir){
     }
    }
   },
+  changePassword(token,currentPassword,newPassword){
+   // Credential rotation is a single atomic registry write. On failure both
+   // the old credential and all previous sessions remain valid and unchanged.
+   if(typeof token!=='string'||!/^[0-9a-f]{64}$/.test(token))
+    throw Error('Session expired. Sign in again.');
+   const session=data.sessions[sha(token)];
+   if(!session||session.exp<=Date.now()||!Object.hasOwn(data.users,session.u))
+    throw Error('Session expired. Sign in again.');
+   const old=data.users[session.u];
+   if(typeof currentPassword!=='string'||currentPassword.length>100||
+      typeof newPassword!=='string'||newPassword.length<6||newPassword.length>100)
+    throw Error('Enter your current password and a new password of 6–100 characters.');
+   const current=hash(currentPassword,old.salt);
+   if(!crypto.timingSafeEqual(Buffer.from(current,'hex'),Buffer.from(old.hash,'hex')))
+    throw Error('Current password is incorrect.');
+   if(currentPassword===newPassword)throw Error('Choose a different new password.');
+   const salt=crypto.randomBytes(16).toString('hex');
+   const updated={...old,salt,hash:hash(newPassword,salt)};
+   const freshToken=crypto.randomBytes(32).toString('hex');
+   const remaining=Object.create(null);
+   for(const [digest,entry]of Object.entries(data.sessions))
+    if(entry.u!==session.u)remaining[digest]=entry;
+   remaining[sha(freshToken)]={u:session.u,exp:Date.now()+TOKEN_DAYS*864e5};
+   const priorSessions=data.sessions;
+   data.users[session.u]=updated;data.sessions=remaining;
+   try{save();}
+   catch(e){data.users[session.u]=old;data.sessions=priorSessions;throw e;}
+   return{username:old.name,token:freshToken};
+  },
   reserved(name){return Object.hasOwn(data.users,key(String(name).trim()));},
   flush(){if(dirty)save();}
  };
