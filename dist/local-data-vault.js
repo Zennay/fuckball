@@ -15,12 +15,34 @@
   {id:'cup',key:'fuckball.private-knockout-cups.v1',name:'Private knockout cups',limit:8,chars:96*1024},
   {id:'series',key:'fuckball.private-series.v1',name:'Private best-of series',limit:12,chars:128*1024},
   {id:'attendance',key:'fuckball.private-match-attendance.v1',name:'Private match attendance',limit:200,chars:1024*1024},
-  {id:'pins',key:'fuckball.pinned-public-rooms.v1',name:'Pinned public room codes',limit:12,chars:4096}
+  {id:'pins',key:'fuckball.pinned-public-rooms.v1',name:'Pinned public room codes',limit:12,chars:4096},
+  {id:'loadouts',key:'fuckball.local-match-loadouts.v1',name:'Local match loadouts',limit:8,chars:12000},
+  {id:'academy',key:'fuckball.solo-academy.v1',name:'Solo Academy progress',limit:1,chars:12000}
  ];
  const known=new Map(SCOPES.map(scope=>[scope.id,scope]));
  const format='fuckball-local-data-vault',version=1,MAX_FILE=1536*1024;
  const itemValid=(scope,item)=>{
   if(scope.id==='pins')return typeof item==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(item);
+  if(scope.id==='loadouts')return !!item&&typeof item==='object'&&!Array.isArray(item)&&
+   typeof item.name==='string'&&item.name.length>0&&item.name.length<=38&&
+   item.name===item.name.trim()&&
+   !/[\u0000-\u001f\u007f-\u009f]/.test(item.name)&&
+   ['bot','practice','2v2','4v4'].includes(item.mode)&&
+   ['easy','normal','hard','elite'].includes(item.difficulty)&&
+   [0,3,5,10].includes(item.scoreLimit)&&Number.isSafeInteger(item.timeLimit)&&
+   item.timeLimit>=0&&item.timeLimit<=99&&Number.isSafeInteger(item.stadium)&&
+   item.stadium>=0&&item.stadium<64;
+  if(scope.id==='academy')return !!item&&typeof item==='object'&&!Array.isArray(item)&&
+   item.version===1&&Number.isSafeInteger(item.startedAt)&&
+   item.startedAt>0&&item.startedAt<=Date.now()+86400000&&
+   Number.isSafeInteger(item.next)&&item.next>=0&&item.next<=12&&
+   Array.isArray(item.proofs)&&item.proofs.length===item.next&&
+   (item.armedAt===null||Number.isSafeInteger(item.armedAt)&&
+    item.armedAt>0&&item.armedAt<=Date.now()+86400000)&&
+   item.proofs.every((proof,i)=>proof&&proof.mission===i&&
+    ['touch','goals','team','match'].includes(proof.type)&&
+    Number.isSafeInteger(proof.at)&&proof.at>0&&proof.at<=Date.now()+86400000&&
+    Number.isSafeInteger(proof.armedAt)&&proof.armedAt>0&&proof.armedAt<proof.at);
   if(scope.id==='attendance')return !!item&&typeof item==='object'&&
    typeof item.key==='string'&&Array.isArray(item.people)&&item.people.length<=24;
   return !!item&&typeof item==='object'&&!Array.isArray(item)&&item.version===1&&
@@ -33,7 +55,9 @@
   if(JSON.stringify(items).length>scope.chars)
    throw Error(scope.name+': source exceeds the supported size.');
   const ids=items.map(item=>scope.id==='pins'?item:
-   scope.id==='attendance'?item.key:item.id);
+   scope.id==='attendance'?item.key:
+    scope.id==='loadouts'?item.name.toLocaleLowerCase():
+     scope.id==='academy'?'solo-academy':item.id);
   if(new Set(ids).size!==ids.length)throw Error(scope.name+': duplicate records.');
   return items;
  }
@@ -43,7 +67,10 @@
   if(raw.length>scope.chars)throw Error(scope.name+': saved data too large.');
   const parsed=JSON.parse(raw);
   return validate(scope,scope.id==='attendance'?
-   (parsed?.version===1&&Array.isArray(parsed.entries)?parsed.entries:null):parsed);
+   (parsed?.version===1&&Array.isArray(parsed.entries)?parsed.entries:null):
+   scope.id==='loadouts'?
+    (parsed?.version===1&&Array.isArray(parsed.presets)?parsed.presets:null):
+   scope.id==='academy'?[parsed]:parsed);
  }
  function save(name,payload){
   const json=typeof payload==='string'?payload:JSON.stringify(payload,null,2);
@@ -55,7 +82,7 @@
  const panel=make('section',null,'local-vault');
  panel.setAttribute('aria-label','Device-local data vault');
  const title=make('h2','MY LOCAL DATA VAULT.');
- const intro=make('p','Review and archive private competition plans, attendance notes and room bookmarks saved on this device. These are NOT your online account, HBR2 replay files or authenticated match results.');
+ const intro=make('p','Review and archive private competitions, match attendance, saved public room codes and native solo training progress and loadouts on this device. These are NOT your online account, HBR2 replay files or authenticated match results.');
  const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. No data is uploaded or deleted by this vault.','local-vault-warning');
  const top=make('div',null,'local-vault-actions');
  const downloadAll=click('↓ Export selected archive',()=>downloadArchive());
@@ -107,7 +134,7 @@
   }
   downloadAll.disabled=browse.disabled=readable===0;
   message.textContent=(problems?problems+' category read failure(s). ':'')+
-   'Only the five explicitly listed browser keys are inspected. Your account credentials and IndexedDB replays are never included.';
+   'Only the seven explicitly listed browser keys are inspected. Your account credentials and IndexedDB replays are never included.';
  }
  function archive(){
   const selected=SCOPES.filter(scope=>checks.get(scope.id).check.checked);
@@ -151,7 +178,7 @@
  function showArchive(datasets){
   extractList.replaceChildren();
   extractInfo.textContent='Preview only: '+datasets.length+
-   ' categories. Nothing has been written to browser storage. Download a native-format file below, then restore it through its original private editor.';
+   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Academy proof summaries are read-only and cannot be restored as missions.';
   for(const {scope,items}of datasets){
    const group=make('div',null,'local-vault-extract-group');
    group.append(make('strong',scope.name+' · '+items.length+' records'));
@@ -174,6 +201,22 @@
    }else if(scope.id==='pins'){
     actions.append(click('↓ Public bookmarks backup',()=>save('fuckball-public-room-bookmarks.json',
      {format:'fuckball-public-room-bookmarks',version:1,exportedAt:new Date().toISOString(),rooms:items})));
+   }else if(scope.id==='loadouts'){
+    actions.append(click('↓ Native local match loadouts',()=>save('fuckball-local-match-loadouts.json',
+     {format:'fuckball-local-match-loadouts',version:1,source:'private-device-only',
+      exportedAt:new Date().toISOString(),presets:items})));
+   }else if(scope.id==='academy'){
+    const progress=items[0];
+    if(progress)actions.append(click('↓ Academy progress proof summary (read-only)',()=>{
+     save('fuckball-solo-academy-progress.json',{
+      format:'fuckball-solo-academy',version:1,exportedAt:new Date().toISOString(),
+      source:'local recorded drill evidence; non-ranked and not server-verified',
+      completed:progress.next,startedAt:progress.startedAt,
+      proofs:progress.proofs.map((proof,i)=>({mission:i+1,
+       completedAt:new Date(proof.at).toISOString(),kind:proof.type}))
+     });
+     message.textContent='Academy proof summary downloaded for reference. It cannot be restored as completed missions on another device.';
+    }));
    }
    if(!actions.children.length)actions.append(make('p','No records in this category.'));
    group.append(actions);extractList.append(group);
