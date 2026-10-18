@@ -347,9 +347,13 @@
       ' confirming · '+row.needed+' needed';
    }
    updatePulse(data);
+   window.dispatchEvent(new CustomEvent('fuckball:queue-availability',{detail:{
+    modes:data.modes,humanOnly:data.humanOnly,ranked:data.ranked,server:location.host,at:Date.now()
+   }}));
    availability.textContent='Real-player queues on your selected server ('+location.host+') · refreshed just now. Ready-check acceptance is still required.';
   }catch{
    if(requestId!==listingRequest)return;
+   window.dispatchEvent(new Event('fuckball:queue-unavailable'));
    clearPulse();genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
   }finally{clearTimeout(timer);if(requestId===listingRequest)manualRefresh.disabled=false;}
  }

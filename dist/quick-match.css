@@ -91,6 +91,7 @@
 @media(max-width:580px){.quick-queue-pulse{padding:12px}
  .quick-queue-pulse button{width:100%}}
 
+
 /* Explicit human queue recovery after an interrupted or expired ready check. */
 .quick-queue-recovery{margin:13px 0;padding:15px;border:1px solid #b5caa2;
  border-radius:11px;background:#263e37;display:grid;gap:9px}
