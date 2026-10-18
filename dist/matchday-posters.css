@@ -29,9 +29,8 @@
  .matchday-posters-actions button{flex:1 1 auto}
 }
 @media print{
- body *{visibility:hidden}
- .matchday-posters,.matchday-posters canvas,.matchday-posters canvas *{visibility:visible}
- .matchday-posters{position:absolute;left:0;top:0;width:100%;margin:0;background:white}
- .matchday-posters-tools,.matchday-posters-actions,.matchday-posters-status{display:none}
+ .matchday-posters{background:white;color:#111;box-shadow:none}
+ .matchday-posters summary,.matchday-posters-tools,.matchday-posters-actions,
+ .matchday-posters-status,.matchday-posters h2,.matchday-posters-body>p{display:none}
  .matchday-posters canvas{box-shadow:none;border:none;width:100%}
 }
