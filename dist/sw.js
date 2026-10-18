@@ -52,6 +52,8 @@ const CORE=[
  "./account-export.js",
  "./room-chat.js",
  "./room-chat.css",
+ "./mobile-controls.js",
+ "./mobile-controls.css",
  "./pwa.js",
  "./pwa.css",
  "./manifest.json",

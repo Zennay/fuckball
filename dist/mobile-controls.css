@@ -1,0 +1,28 @@
+/* Local mobile accessibility; controls keep existing input event handlers. */
+.touch-controls.fb-touch-left{flex-direction:row-reverse!important}
+.touch-controls #joystick{
+ width:var(--fb-touch-pad,88px)!important;height:var(--fb-touch-pad,88px)!important;
+ flex:0 0 auto
+}
+.touch-controls #stick{
+ width:var(--fb-touch-stick,38px)!important;height:var(--fb-touch-stick,38px)!important;
+ left:50%!important;top:50%!important;translate:-50% -50%!important
+}
+.touch-controls #touchKick{
+ width:var(--fb-touch-kick,72px)!important;height:var(--fb-touch-kick,72px)!important;
+ flex:0 0 auto
+}
+.touch-settings{grid-column:1/-1;display:grid;gap:10px;padding:15px;
+ background:#1c3537;border:1px solid #61867b;border-radius:10px}
+.touch-settings h3{font-size:15px;font-weight:900;color:#d9f5a9;margin:0;letter-spacing:.07em}
+.touch-settings>p{font-size:11px;color:#c2d6c3;line-height:1.6;margin:0}
+.touch-settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:15px}
+.touch-settings-grid label{display:grid;gap:6px;font-size:12px;color:#e3f3de}
+.touch-settings-grid label.touch-settings-check{display:flex;align-items:center;gap:10px}
+.touch-settings input[type=range]{width:100%;accent-color:#c5eca3}
+.touch-settings input[type=checkbox]{width:20px;height:20px;accent-color:#d2f5ac}
+.touch-settings output{font-size:11px;color:#d2f5ac;font-variant-numeric:tabular-nums}
+.touch-settings-reset{justify-self:start;min-height:42px;padding:10px 15px;
+ border:1px solid #77988b;border-radius:8px;background:#24413d;color:#edffe9;font-weight:800}
+.touch-settings .touch-settings-status{color:#d2efbb;min-height:18px}
+.touch-settings :is(input,button):focus-visible{outline:3px solid #d9ffba;outline-offset:3px}
