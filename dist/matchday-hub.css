@@ -150,3 +150,20 @@
 .matchday-lineup-actions button{flex:0 1 auto}
 @media(max-width:580px){.matchday-lineup-actions button{flex:1 1 100%}}
 @media print{.matchday-lineup-actions{display:none}}
+
+
+/* Copy-only player name reuse; never propagate another event's RSVP or team side. */
+.matchday-squad-reuse{padding:15px 17px;border:1px solid #688d7c;border-radius:12px;background:#244343;display:grid;gap:10px}
+.matchday-squad-reuse h4{margin:0;letter-spacing:.05em;font-size:.9rem;color:#ddf4af}
+.matchday-squad-reuse>p{margin:0;line-height:1.5;color:#c8dbce;font-size:.87rem}
+.matchday-squad-reuse-picker{display:grid;gap:7px;font-weight:750;font-size:.78rem;letter-spacing:.05em}
+.matchday-squad-reuse-picker select{width:100%;max-width:710px}
+.matchday-squad-reuse-filter{display:flex;gap:10px;align-items:center;font-size:.85rem}
+.matchday-squad-reuse-filter input{min-height:20px;width:20px;accent-color:#cdf0a0}
+.matchday-squad-reuse-summary{font-size:.85rem;color:#cbe0d5;margin:0}
+.matchday-squad-reuse button{justify-self:start}
+@media(max-width:580px){
+ .matchday-squad-reuse{padding:12px}
+ .matchday-squad-reuse button{width:100%}
+}
+@media print{.matchday-squad-reuse{display:none}}

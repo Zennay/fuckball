@@ -426,6 +426,20 @@
  const picker=dom('label',null,'matchday-attendance-picker');
  picker.append(dom('span','SELECT MATCH'),fixtureChoice);
  const counts=dom('div',null,'matchday-attendance-counts');
+ const squadReuse=dom('section',null,'matchday-squad-reuse');
+ const sourceName=dom('select');sourceName.setAttribute('aria-label','Copy names from a saved private match');
+ const goingOnly=dom('input');goingOnly.type='checkbox';
+ const goingOnlyLabel=dom('label',null,'matchday-squad-reuse-filter');
+ goingOnlyLabel.append(goingOnly,dom('span','Only previously marked Going'));
+ const copySummary=dom('p',null,'matchday-squad-reuse-summary');
+ copySummary.setAttribute('aria-live','polite');
+ const copyNames=button('＋ Copy names as Maybe',copySquad);
+ const sourceLabel=dom('label',null,'matchday-squad-reuse-picker');
+ sourceLabel.append(dom('span','SOURCE PRIVATE MATCH'),sourceName);
+ squadReuse.append(dom('h4','REUSE FRIENDS FOR ANOTHER MATCH'),
+  dom('p','Copy player names from a previous private match. Attendance, team side and notes are never inherited.'),
+  sourceLabel,goingOnlyLabel,copySummary,copyNames);
+
  const lineupPreview=dom('div',null,'matchday-lineup-preview');
  lineupPreview.setAttribute('aria-label','Provisional private 4v4 team preview');
  const peopleView=dom('div',null,'matchday-attendance-rows');
@@ -444,14 +458,15 @@
  lineupActions.append(arrange,resetDraft);
  const tools=dom('div',null,'matchday-attendance-actions');
  const csv=button('↓ Attendance CSV',exportAttendanceCSV);
+ const sheet=button('↓ Private team sheet TXT',exportSquadSheet);
  const backup=button('↓ Backup JSON',exportAttendanceJSON);
  const upload=dom('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
  const restore=button('↑ Restore JSON',()=>upload.click());
  const clear=button('Clear match list',clearAttendance);
- tools.append(csv,backup,restore,clear,upload);
+ tools.append(csv,sheet,backup,restore,clear,upload);
  const info=dom('p',null,'matchday-attendance-message');
  info.setAttribute('role','status');info.setAttribute('aria-live','polite');
- attendanceBody.append(picker,counts,lineupPreview,lineupActions,peopleView,form,tools,info);
+ attendanceBody.append(picker,counts,squadReuse,lineupPreview,lineupActions,peopleView,form,tools,info);
  attendancePanel.append(attendanceBody);
  const attendeeKey=f=>f.type+':'+(f.tournamentId||f.cupId||f.seriesId)+':'+(f.fixtureId||f.matchId||f.gameId);
  const attendeePattern=/^(?:League|Knockout|Series):[a-f0-9-]{16,50}:(?:r[1-9]\d*g[1-9]\d*|r[1-9]\d*m[1-9]\d*|g[1-7])$/i;
@@ -549,12 +564,14 @@
   }
   fixtureChoice.value=chosen;fixtureChoice.disabled=!fixtures.length;
   const active=!!chosen&&rsvpAvailable;
-  for(const el of [friend,response,noteField,add,csv,clear,arrange,resetDraft])el.disabled=!active;
+  for(const el of [friend,response,noteField,add,csv,sheet,clear,arrange,resetDraft])el.disabled=!active;
   // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
   backup.disabled=!rsvpAvailable;
   restore.disabled=!rsvpAvailable;
   peopleView.replaceChildren();counts.replaceChildren();lineupPreview.replaceChildren();
   const selected=roster();
+  renderSquadReuse();
+  sheet.disabled=!active||!selected.length;
   arrange.disabled=!active||selected.filter(p=>p.status==='going').length<2;
   resetDraft.disabled=!active||!selected.some(p=>p.side==='red'||p.side==='blue');
   for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
@@ -674,6 +691,84 @@
   saveLocal(JSON.stringify({version:1,entries:rsvpRows},null,2),
    'fuckball-private-attendance.json','application/json');
  }
+
+ function sourceEntries(){
+  return rsvpRows.filter(entry=>entry.key!==chosen&&entry.people.length);
+ }
+ function copyPlan(entry){
+  const previous=entry?.people.filter(p=>!goingOnly.checked||p.status==='going')||[];
+  const names=new Set(roster().map(p=>p.name.toLocaleLowerCase()));
+  const missing=previous.filter(p=>!names.has(p.name.toLocaleLowerCase()));
+  const available=Math.max(0,24-roster().length);
+  return {previous,dupes:previous.length-missing.length,selected:missing.slice(0,available),overflow:Math.max(0,missing.length-available)};
+ }
+ function renderSquadReuse(){
+  const previous=sourceName.value;
+  const options=sourceEntries();
+  sourceName.replaceChildren();
+  for(const entry of options){
+   const known=fixtureCards.find(f=>attendeeKey(f)===entry.key);
+   const title=known?known.competition+' · '+known.home+' vs '+known.away:
+    'Archived private fixture '+entry.key.slice(-10);
+   sourceName.add(new Option(title+' · '+entry.people.length+' names',entry.key));
+  }
+  if(!options.length)sourceName.add(new Option('No other locally saved attendance',''));
+  sourceName.value=options.some(e=>e.key===previous)?previous:options[0]?.key||'';
+  const source=options.find(e=>e.key===sourceName.value);
+  const usable=rsvpAvailable&&!!chosen&&!!source;
+  sourceName.disabled=!usable;goingOnly.disabled=!usable;
+  if(!usable){
+   copyNames.disabled=true;copySummary.textContent=options.length?
+    'Select an unsplayed target match first.':'Add friends to another private fixture to reuse names.';return;
+  }
+  const {previous:old,dupes,selected,overflow}=copyPlan(source);
+  copyNames.disabled=!selected.length;
+  copySummary.textContent=old.length+' source names · '+selected.length+' new · '+dupes+
+   ' already listed · '+overflow+' beyond the 24-player limit. New names start Maybe / bench.';
+ }
+ function copySquad(){
+  const source=sourceEntries().find(e=>e.key===sourceName.value);
+  if(!source||!rsvpAvailable||!chosen)return;
+  const {selected,dupes,overflow}=copyPlan(source);
+  if(!selected.length)return void(info.textContent='No new player names fit in this fixture.');
+  if(!confirm('Add '+selected.length+' names as Maybe / unassigned? No old attendance confirmations, team roles or notes will be copied.'))return;
+  const saved=editRoster(people=>{
+   const names=new Set(people.map(p=>p.name.toLocaleLowerCase()));
+   if(people.length+selected.length>24||selected.some(p=>names.has(p.name.toLocaleLowerCase())))
+    throw Error('Destination roster changed. Refresh before copying');
+   for(const p of selected){people.push({name:p.name,status:'maybe',note:'',side:'bench'});}
+  });
+  if(saved)info.textContent='Copied '+selected.length+' fresh Maybe names. '+
+   dupes+' were already listed; '+overflow+' exceeded capacity. No invitations were sent.';
+ }
+ sourceName.addEventListener('change',renderSquadReuse);
+ goingOnly.addEventListener('change',renderSquadReuse);
+ function exportSquadSheet(){
+  if(!rsvpAvailable||!chosen)return;
+  const fixture=eligible().find(f=>f.attendanceId===chosen);
+  if(!fixture)return;
+  const clean=x=>String(x).replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').slice(0,160);
+  const out=['FUCKBALL · UNOFFICIAL PRIVATE MATCH SHEET',
+   'Not a verified online roster or match result.','',
+   'Competition: '+clean(fixture.competition),
+   'Match: '+clean(fixture.home)+' vs '+clean(fixture.away),
+   'Kickoff: '+(fixture.time===null?'Not scheduled':new Date(fixture.time).toLocaleString()),
+   'Venue: '+(fixture.venue?clean(fixture.venue):'Not set'),''];
+  for(const [id,label] of [['red','RED · PROVISIONAL'],['blue','BLUE · PROVISIONAL'],
+   ['bench','AVAILABLE BENCH'],['maybe','NOT CONFIRMED'],['out','UNAVAILABLE']]){
+   const people=roster().filter(p=>
+    id==='maybe'?p.status==='maybe':id==='out'?p.status==='out':
+    p.status==='going'&&p.side===id);
+   out.push(label+' · '+people.length);
+   for(const p of people)out.push('• '+clean(p.name)+(p.note?' — '+clean(p.note):''));
+   if(!people.length)out.push('No players listed');
+   out.push('');
+  }
+  out.push('Organiser-entered only. Sharing the downloaded file is your own choice.');
+  saveLocal(out.join('\r\n')+'\r\n','fuckball-private-team-sheet.txt','text/plain;charset=utf-8');
+  info.textContent='Private match sheet downloaded; no server submission or invitation.';
+ }
+
  function clearAttendance(){
   if(!chosen||!roster().length)return;
   if(!confirm('Clear this selected private match attendance list?')||
