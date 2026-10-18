@@ -196,3 +196,24 @@
 @media(max-width:500px){.matchday-clashes{padding:12px}
  .matchday-clash-actions button,.matchday-clashes-controls button{flex:1 1 100%}}
 @media print{.matchday-clashes-controls,.matchday-clash-actions{display:none}}
+
+
+/* Full private kickoff browser, preserving native writer ownership of dates. */
+.matchday-upcoming-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0 18px}
+.matchday-upcoming-controls input,.matchday-upcoming-controls select{font:inherit;min-height:44px;
+ box-sizing:border-box;min-width:0;border:1px solid #83a398;border-radius:9px;background:#14313a;
+ color:#f3fff2;padding:9px 11px}
+.matchday-upcoming-controls input{flex:2 1 220px}.matchday-upcoming-controls select{flex:1 1 180px}
+.matchday-upcoming :is(input,select,button):focus-visible{outline:3px solid #e4f5ad;outline-offset:3px}
+.matchday-upcoming-list{display:grid;gap:8px}
+.matchday-upcoming-day{font-size:.84rem;letter-spacing:.055em;text-transform:uppercase;
+ color:#e4f3bc;margin:15px 0 3px;padding-bottom:6px;border-bottom:1px solid #5e776e}
+.matchday-upcoming-list>p{font-size:.88rem;color:#c5ddce;line-height:1.5}
+.matchday-upcoming-summary{font-size:.81rem;line-height:1.5;color:#d2e8d5;margin:13px 0}
+.matchday-upcoming-more{min-height:44px;padding:10px 15px;border:1px solid #a6c9ab;
+ border-radius:9px;color:#eaffe0;background:#335d4b;font-weight:700;cursor:pointer}
+.matchday-upcoming-more[hidden]{display:none!important}
+@media(max-width:600px){.matchday-upcoming-controls{display:grid;grid-template-columns:1fr}
+ .matchday-upcoming-controls input,.matchday-upcoming-controls select{width:100%}
+ .matchday-upcoming-more{width:100%}}
+@media print{.matchday-upcoming-controls,.matchday-upcoming-more{display:none}}
