@@ -112,7 +112,7 @@
  }
  function blocked(){
   if(serverLink?.room||peerConnected)return 'Leave the active online room before starting a local drill.';
-  if(!document.querySelector('.quick-queue-actions button[hidden]')&&document.querySelector('.quick-queue-actions button'))return 'Cancel the human Quick Match search before local practice.';
+  if(document.querySelector('.quick-queue-actions button:not([hidden])'))return 'Cancel the human Quick Match search before local practice.';
   const readyCheck=document.querySelector('.quick-ready:not([hidden])');
   if(readyCheck)return 'Complete or decline the human matchmaking ready-check first.';
   return '';
