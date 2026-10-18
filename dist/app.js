@@ -149,7 +149,12 @@ const toggleFullscreen=async()=>{try{if(document.fullscreenElement)await documen
 // Chat lives in the bottom-left corner: always readable, opened with the chat key.
 function openChat(){releaseInputs();$('chatForm').hidden=false;document.body.classList.add('chat-open');$('chatInput').focus();}
 function closeChat(){$('chatForm').hidden=true;$('chatInput').value='';document.body.classList.remove('chat-open');$('gameCanvas').focus();}
-$('chatForm').onsubmit=e=>{e.preventDefault();const msg=$('chatInput').value.trim();if(msg.startsWith('/'))runCommand(msg);else if(msg){const text=settings.name+': '+msg;log(text,false);if(peerConnected)send({type:'chat',text});}closeChat();};
+$('chatForm').onsubmit=e=>{e.preventDefault();const msg=$('chatInput').value.trim();if(msg.startsWith('/'))runCommand(msg);else if(msg){
+ // Online room messages only appear after the real server acknowledges
+ // their authenticated author. Direct peer chat preserves its existing path.
+ if(serverLink?.room)serverLink.send({type:'chat',text:msg.slice(0,140)});
+ else{const text=settings.name+': '+msg;log(text,false);if(peerConnected)send({type:'chat',text});}
+ }closeChat();};
 // Chat slash commands change local settings; they are never sent to the room.
 function setFpsLimit(v){settings.fpsLimit=v;$('fpsLimit').value=String(v);if($('fpsLimit').value!==String(v)){const o=new Option(v+' (custom)',String(v));$('fpsLimit').append(o);$('fpsLimit').value=String(v);}frameStats.lastPaint=-Infinity;savePrefs();scheduleFastFrames();}
 const commands={
