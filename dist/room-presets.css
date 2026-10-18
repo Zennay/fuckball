@@ -25,3 +25,11 @@
 .room-presets-empty{font-size:12px;color:#aac4b5;margin:5px 0!important}
 .room-presets button:focus-visible,.room-presets input:focus-visible{outline:3px solid #e1ffb1;outline-offset:3px}
 @media(max-width:550px){.room-presets{padding:15px}.room-presets-save button{flex:1 1 125px}}
+
+/* Portable room configurations can be exported without revealing any account data. */
+.room-presets-transfer{display:flex;gap:9px;flex-wrap:wrap}
+.room-presets-transfer button{flex:1 1 165px;min-height:42px;padding:10px 14px;
+ border-radius:8px;border:1px solid #729581;background:#17343a;color:#e8ffd2;font-weight:750}
+.room-presets-transfer button:disabled{opacity:.5;cursor:default}
+.room-presets-transfer input[hidden]{display:none}
+@media(max-width:550px){.room-presets-transfer button{flex:1 1 100%}}
