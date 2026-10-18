@@ -2,10 +2,11 @@
 // Portable, device-local game night: no account, server, room or verified match state.
 (function(){
  const home=document.getElementById('homeView');if(!home)return;
- const FORMAT='fuckball-private-game-night',VERSION=2,MAX_FILE=480*1024;
+ const FORMAT='fuckball-private-game-night',VERSION=3,MAX_FILE=640*1024;
  const TYPES=[
   {kind:'leagues',key:'fuckball.local-tournaments.v1',max:8,bytes:128*1024},
   {kind:'cups',key:'fuckball.private-knockout-cups.v1',max:8,bytes:96*1024},
+  {kind:'series',key:'fuckball.private-series.v1',max:12,bytes:128*1024},
   {kind:'formations',key:'fuckball.private-formation-studio.v1',max:12,bytes:64*1024},
   {kind:'posters',key:'fuckball.custom-poster-drafts.v1',max:8,bytes:96*1024}
  ];
@@ -163,7 +164,38 @@
    venue:x.venue,tagline:x.tagline,kickoff:x.kickoff,
    theme:x.theme,format:x.format,redScore:x.redScore,blueScore:x.blueScore};
  }
- const validators={leagues:league,cups:cup,formations:formation,posters:poster};
+function bestOfSeries(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||raw.version!==1||
+   !idOk(raw.id)||!nameOk(raw.name,60)||![3,5,7].includes(raw.bestOf)||
+   !nameOk(raw.red,35)||!nameOk(raw.blue,35)||
+   raw.red.toLocaleLowerCase()===raw.blue.toLocaleLowerCase()||
+   !atOk(raw.createdAt)||!atOk(raw.updatedAt)||raw.updatedAt<raw.createdAt||
+   !Array.isArray(raw.games)||raw.games.length!==raw.bestOf)
+   throw Error('Invalid private best-of-series metadata.');
+  const need=Math.floor(raw.bestOf/2)+1;
+  let red=0,blue=0,emptySeen=false,decided=false;
+  const games=raw.games.map((g,i)=>{
+   const kickoff=g?.kickoff===undefined?null:g.kickoff;
+   const venue=g?.venue===undefined?'':g.venue;
+   if(!g||g.id!=='g'+(i+1)||!scoreOk(g.redScore)||!scoreOk(g.blueScore)||
+    (g.redScore===null)!==(g.blueScore===null)||
+    (g.redScore!==null&&g.redScore===g.blueScore)||
+    !(kickoff===null||(Number.isSafeInteger(kickoff)&&kickoff>=1577836800000&&kickoff<=4102444800000))||
+    typeof venue!=='string'||venue.length>60||venue!==venue.trim()||
+    /[\u0000-\u001f\u007f-\u009f]/.test(venue))
+    throw Error('Invalid private best-of game score or schedule.');
+   if(g.redScore===null)emptySeen=true;
+   else{
+    if(emptySeen||decided)throw Error('Private series contains impossible result order.');
+    if(g.redScore>g.blueScore)red++;else blue++;
+    if(red===need||blue===need)decided=true;
+   }
+   return{id:g.id,redScore:g.redScore,blueScore:g.blueScore,kickoff,venue};
+  });
+  return{version:1,id:raw.id,name:raw.name,red:raw.red,blue:raw.blue,
+   bestOf:raw.bestOf,createdAt:raw.createdAt,updatedAt:raw.updatedAt,games};
+ }
+ const validators={leagues:league,cups:cup,series:bestOfSeries,formations:formation,posters:poster};
  function validated(type,items){
   const schema=TYPES.find(x=>x.kind===type);
   if(!schema||!Array.isArray(items)||items.length>schema.max)
@@ -191,7 +223,7 @@
  const summary=dom('summary','🎒 GAME NIGHT PACK · OPEN');
  const inner=dom('div',undefined,'game-night-body');
  inner.append(dom('h2','TAKE YOUR GAME NIGHT WITH YOU.'),
-  dom('p','Backup private league calendars, knockout brackets, tactical diagrams and saved matchday poster designs together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
+  dom('p','Backup private league calendars, knockout cups, best-of series, tactical diagrams and saved matchday posters together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
  const controls=dom('div',undefined,'game-night-controls');
  const exportButton=button('↓ Backup game night',exportPack);
  const importButton=button('↑ Restore game night',()=>file.click());
@@ -210,7 +242,7 @@
   grid.replaceChildren();
   try{
    const {lists}=readAll();
-   for(const [type,title]of [['leagues','Round-robin leagues'],['cups','Knockout cups'],['formations','Tactics plans'],['posters','Matchday poster designs']]){
+   for(const [type,title]of [['leagues','Round-robin leagues'],['cups','Knockout cups'],['series','Best-of series'],['formations','Tactics plans'],['posters','Matchday poster designs']]){
     const card=dom('article',undefined,'game-night-counter');
     card.append(dom('strong',lists[type].length),dom('span',title));grid.append(card);
    }
@@ -219,7 +251,7 @@
  }
  function download(filename,value){
   const blob=new Blob([value],{type:'application/json'});
-  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 480 KiB portable limit.');
+  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 640 KiB portable limit.');
   const url=URL.createObjectURL(blob),link=dom('a');
   link.href=url;link.download=filename;link.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -239,15 +271,15 @@
  file.onchange=async()=>{
   const candidate=file.files?.[0];file.value='';if(!candidate||busy)return;
   if(candidate.size<1||candidate.size>MAX_FILE)
-   return info('Select a private Game Night Pack JSON file smaller than 480 KiB.');
+   return info('Select a private Game Night Pack JSON file smaller than 640 KiB.');
   busy=true;importButton.disabled=true;
   try{
    const data=JSON.parse(await candidate.text());
-   if(data?.format!==FORMAT||![1,VERSION].includes(data.version)||!atOk(data.createdAt))
+   if(data?.format!==FORMAT||![1,2,VERSION].includes(data.version)||!atOk(data.createdAt))
     throw Error('Unsupported Game Night Pack.');
    const imported={};
    for(const item of TYPES)imported[item.kind]=validated(item.kind,
-     data.version===1&&item.kind==='posters'?[]:data[item.kind]);
+     (data.version===1&&item.kind==='posters')||(data.version<3&&item.kind==='series')?[]:data[item.kind]);
    const {snapshots,lists}=readAll(),next={},totals={};
    const now=Date.now();
    for(const item of TYPES){
@@ -263,10 +295,10 @@
     next[item.key]=JSON.stringify(validated(item.kind,[...lists[item.kind],...additions]));
     totals[item.kind]=additions.length;
    }
-   if(!totals.leagues&&!totals.cups&&!totals.formations&&!totals.posters)
+   if(!totals.leagues&&!totals.cups&&!totals.series&&!totals.formations&&!totals.posters)
     throw Error('This pack has no game night items to restore.');
    if(!window.confirm('Add '+totals.leagues+' leagues, '+totals.cups+' cups, '+
-      totals.formations+' tactics plans and '+totals.posters+
+      totals.series+' best-of series, '+totals.formations+' tactics plans and '+totals.posters+
       ' poster designs to this device? Existing items are preserved.'))return;
    // localStorage has no multi-key transaction. Snapshot each old value, stage every new
    // value, then do bounded synchronous writes with rollback on a storage exception.
@@ -290,7 +322,7 @@
     }
     throw Error('Import was interrupted; reload and inspect existing items before retrying. '+(error.message||''));
    }
-   // Notify all four same-tab consumers only after the complete set has been written.
+   // Notify all five same-tab consumers only after the complete set has been written.
    for(const item of TYPES){
     window.dispatchEvent(new StorageEvent('storage',{
      key:item.key,oldValue:snapshots[item.key],newValue:next[item.key],
@@ -300,7 +332,7 @@
    window.dispatchEvent(new Event('fuckball:private-competition-change'));
    inspect();
    info('Restored '+totals.leagues+' leagues, '+totals.cups+' knockout cups, '+
-    totals.formations+' tactics plans and '+totals.posters+
+    totals.series+' best-of series, '+totals.formations+' tactics plans and '+totals.posters+
     ' poster designs as additional private copies. No server data changed.');
   }catch(error){info('Game Night Pack not restored: '+(error.message||'File/storage error'));}
   finally{busy=false;importButton.disabled=false;}
