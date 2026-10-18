@@ -139,7 +139,10 @@
   target.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
   target.querySelector('summary')?.focus({preventScroll:true});
  };
- buttons.append(button('🏆 Leagues',()=>go('.tournament-desk')),
+ buttons.append(button('🗓 Plan league rounds',()=>{
+   go('.tournament-desk');
+   window.dispatchEvent(new Event('fuckball:open-private-league-planner'));
+  }),button('🏆 Leagues',()=>go('.tournament-desk')),
   button('🏅 Cups',()=>go('.knockout-desk')),
   button('⚽ Tactics',()=>go('.formation-studio')),
   button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV),
