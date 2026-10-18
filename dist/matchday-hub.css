@@ -80,3 +80,47 @@
  .matchday-control-row-actions button{flex:1 1 45%}}
 @media print{.matchday-control-tools,.matchday-control-row-actions{display:none!important}
  .matchday-control-rows{max-height:none}}
+
+
+/* Device-local organiser-managed availability; never official team presence. */
+.matchday-attendance{margin-top:24px;border:1px solid #6f9580;border-radius:14px;background:#173535;overflow:hidden}
+.matchday-attendance>summary{cursor:pointer;padding:17px 20px;font-weight:800;letter-spacing:.05em;color:#d3f2a7}
+.matchday-attendance>summary:focus-visible{outline:3px solid #ffe28e;outline-offset:-3px}
+.matchday-attendance-body{padding:2px 20px 20px;display:grid;gap:16px}
+.matchday-attendance-body h3{font-size:1.05rem;letter-spacing:.05em;margin:0}
+.matchday-attendance-body>p{margin:0;color:#c8ddd1;max-width:76ch;line-height:1.5}
+.matchday-attendance-picker{display:grid;gap:8px;font-weight:750;font-size:.85rem;letter-spacing:.04em}
+.matchday-attendance :is(input,select){font:inherit;max-width:100%;min-width:0;min-height:43px;box-sizing:border-box;background:#10292e;border:1px solid #7b9b8e;border-radius:9px;color:#f3fcf4;padding:9px 11px}
+.matchday-attendance :is(input,select,button):focus-visible{outline:3px solid #ffe28e;outline-offset:2px}
+.matchday-attendance :is(input,select):disabled{opacity:.65}
+.matchday-attendance-counts{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-attendance-counts span{padding:8px 13px;border:1px solid #507266;border-radius:8px;background:#244744;font-weight:700;font-variant-numeric:tabular-nums}
+.matchday-attendance-rows{display:grid;gap:8px}
+.matchday-attendance-rows>p{color:#bed9c7;line-height:1.5}
+.matchday-attendance-row{display:grid;grid-template-columns:minmax(130px,1fr) 135px minmax(150px,1.4fr) auto auto;gap:9px;align-items:center;padding:10px;background:#20403e;border:1px solid #537a6e;border-radius:10px}
+.matchday-attendance-row strong{overflow-wrap:anywhere}
+.matchday-attendance-form{display:grid;grid-template-columns:minmax(140px,1fr) 135px minmax(160px,1.5fr) auto;gap:10px;padding-top:14px;border-top:1px solid #56796c}
+.matchday-attendance-actions{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-attendance button{min-height:43px}
+.matchday-attendance-message{font-size:.85rem;color:#c9e5d0;margin:0;line-height:1.55}
+@media(max-width:950px){
+ .matchday-attendance-row{grid-template-columns:minmax(140px,1fr) minmax(130px,1fr)}
+ .matchday-attendance-row strong{grid-column:1}
+ .matchday-attendance-row input{grid-column:1/-1}
+ .matchday-attendance-row button{justify-self:start}
+ .matchday-attendance-form{grid-template-columns:1fr 1fr}
+ .matchday-attendance-form input:nth-child(3){grid-column:1/-1}
+}
+@media(max-width:580px){
+ .matchday-attendance-body{padding:4px 12px 16px}
+ .matchday-attendance-row,.matchday-attendance-form{grid-template-columns:1fr}
+ .matchday-attendance-row strong,.matchday-attendance-row input,.matchday-attendance-form input:nth-child(3){grid-column:auto}
+ .matchday-attendance-row button,.matchday-attendance-form button{width:100%}
+ .matchday-attendance-actions button{flex:1 1 135px}
+}
+@media print{
+ .matchday-attendance{background:white;color:#111;border-color:#aaa}
+ .matchday-attendance>summary{color:#111}
+ .matchday-attendance-actions,.matchday-attendance-form,.matchday-attendance-row button{display:none}
+ .matchday-attendance-row{background:white;color:#111;border-color:#aaa}
+}

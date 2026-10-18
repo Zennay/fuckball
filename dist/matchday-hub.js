@@ -82,6 +82,10 @@
     const m=raw.matches[i];
     if(!m||m.id!=='r'+(r+1)+'m'+(g+1)||m.round!==r||m.game!==g||
      !safeScore(m.homeScore)||!safeScore(m.awayScore)||
+     !safeTime(m.kickoff===undefined?null:m.kickoff)||
+     typeof (m.venue===undefined?'':m.venue)!=='string'||
+     (m.venue||'').length>60||(m.venue||'')!==(m.venue||'').trim()||
+     /[\u0000-\u001f\u007f-\u009f]/.test(m.venue||'')||
      ((m.homeScore===null)!==(m.awayScore===null))||
      ![null,'home','away'].includes(m.tiebreak)||
      (m.homeScore!==null&&m.homeScore===m.awayScore&&m.tiebreak===null)||
@@ -115,15 +119,19 @@
      home:home===null?'Qualifying winner pending':raw.teams[home],
      away:away===null?'Qualifying winner pending':raw.teams[away],
      homeScore:match.homeScore,awayScore:match.awayScore,
-     tiebreak:match.tiebreak,unlocked,time:null,venue:''
+     tiebreak:match.tiebreak,unlocked,time:match.kickoff===undefined?null:match.kickoff,
+     venue:match.venue||'',uid:raw.id+'-'+match.id
     });
    }
   }
   const count=cupFixtures.filter(x=>x.homeScore!==null).length;
+  const upcoming=cupFixtures.filter(f=>f.homeScore===null&&f.time!==null&&f.time>Date.now())
+   .map(f=>({name:f.home+' vs '+f.away+' · Round '+f.round,time:f.time,venue:f.venue,
+    competition:raw.name,uid:f.uid,type:'Knockout',cupId:raw.id,matchId:f.matchId}));
   const winner=resolve(rounds-1,0);
   return {type:'Knockout',id:raw.id,name:raw.name,played:count,total:matches.size,
    fixtures:cupFixtures,
-   leader:winner===null?null:raw.teams[winner],upcoming:[]};
+   leader:winner===null?null:raw.teams[winner],upcoming};
  }
  function series(raw){
   if(!raw||raw.version!==1||typeof raw.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(raw.id)||
@@ -181,7 +189,8 @@
   button('🏅 Cups',()=>go('.knockout-desk')),
   button('⚔ Best-of series',()=>go('.best-of-series')),
   button('⚽ Tactics',()=>go('.formation-studio')),
-  button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV),
+  button('✓ Attendance',()=>{attendancePanel.open=true;renderAttendance();attendancePanel.scrollIntoView({block:'start'});}),
+  button('↻ Refresh',()=>render()),button('↓ Complete fixture CSV',exportCSV),
   button('↓ All fixtures ICS',exportCalendar));
  header.append(lead,buttons);
  const totals=dom('div',null,'matchday-totals');
@@ -211,7 +220,9 @@
  control.append(controlHeader,controlRows,controlStatus);
  const upcoming=dom('div',null,'matchday-upcoming');
  const note=dom('p',null,'matchday-status');note.setAttribute('role','status');note.setAttribute('aria-live','polite');
- content.append(header,totals,competitionList,control,upcoming,note);details.append(content);section.append(details);
+ const attendancePanel=dom('details',null,'matchday-attendance');
+ attendancePanel.append(dom('summary','✓ PRIVATE MATCH ATTENDANCE · OPEN'));
+ content.append(header,totals,competitionList,control,upcoming,attendancePanel,note);details.append(content);section.append(details);
  const cards=home.querySelector('.mode-cards');
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
  let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
@@ -240,8 +251,8 @@
      (mode==='all'||
       (mode==='pending'&&f.homeScore===null&&f.active!==false)||
       (mode==='ready'&&f.homeScore===null&&f.unlocked!==false&&f.active!==false)||
-      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null&&f.active!==false)||
-      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
+      (mode==='undated'&&f.homeScore===null&&f.time===null&&f.active!==false)||
+      (mode==='scheduled'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
       (mode==='completed'&&f.homeScore!==null))
    );
    const ordered=matching.sort((a,b)=>{
@@ -254,10 +265,9 @@
    for(const f of visible){
      const card=dom('article',null,'matchday-control-row');
      const info=dom('div',null,'matchday-control-fixture');
-     const when=f.type==='Knockout'?
-       (f.unlocked?'Both qualifiers known':'Waiting for previous round'):
-       f.time===null?'Kickoff not set':
-       new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
+     const when=(f.time===null?'Kickoff not set':
+       new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}))+
+       (f.type==='Knockout'?(f.unlocked?' · Both qualifiers known':' · Qualifiers pending'):'');
      const result=f.homeScore===null?'Score not recorded':
        f.homeScore+' – '+f.awayScore+
        (f.tiebreak?' · '+(f.tiebreak==='home'?f.home:f.away)+' won tiebreak':'')+
@@ -268,8 +278,8 @@
      const actions=dom('div',null,'matchday-control-row-actions');
      actions.append(button(f.type==='Knockout'&&f.unlocked===false?'View bracket':
        f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')));
+     actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
      if(f.type!=='Knockout'){
-       actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
        actions.append(button('Poster',()=>window.dispatchEvent(
          new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
      }
@@ -292,7 +302,7 @@
   competitions=[...leagueData,...cupData,...seriesData].sort((a,b)=>a.name.localeCompare(b.name));
   fixtureCards=[...leagueData,...cupData,...seriesData].flatMap(c=>c.fixtures);
   renderControl();
-  allUpcoming=[...leagueData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
+  allUpcoming=[...leagueData,...cupData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
   const finished=competitions.reduce((n,c)=>n+c.played,0);
@@ -324,7 +334,7 @@
   }
   upcoming.replaceChildren(dom('h3','UPCOMING PRIVATE FIXTURES'));
   if(!upcomingMatches.length)
-   upcoming.append(dom('p','No future kickoff times in readable leagues or active series. Schedule a private game first.'));
+   upcoming.append(dom('p','No future kickoff times in readable leagues, knockouts or active series. Schedule a private game first.'));
   for(const f of upcomingMatches){
    const row=dom('article',null,'matchday-upcoming-item');
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
@@ -332,10 +342,13 @@
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
    if(f.type==='Series')row.append(button('Open series',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId,gameId:f.gameId,field:'schedule'}}))));
-   row.append(button('Design poster',()=>window.dispatchEvent(
+   if(f.type==='Knockout')row.append(button('Open cup fixture',()=>window.dispatchEvent(
+    new CustomEvent('fuckball:open-private-cup-fixture',{detail:{cupId:f.cupId,matchId:f.matchId}}))));
+   else row.append(button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
+  renderAttendance();
   note.textContent=(failures?'Some local competition data was invalid or unavailable and has been excluded. ':'')+
     'All outcomes are manually entered, unverified and remain on this device. No online rooms or accounts were queried.';
  }
@@ -348,16 +361,30 @@
   };
   const rows=[['Competition type','Name','Recorded fixtures','Total fixtures','Leader or winner (manual)'],
    ...competitions.map(c=>[c.type,c.name,c.played,c.total,c.leader||''])];
-  rows.push([],['Upcoming fixture','Competition','Local kickoff','Venue']);
-  for(const f of upcomingMatches)rows.push([f.name,f.competition,new Date(f.time).toLocaleString(),f.venue]);
+  rows.push([],['Private fixture ID','Type','Competition','Round or game','Home / provisional qualifier',
+   'Away / provisional qualifier','Local kickoff','UTC kickoff','Venue','Score status',
+   'Self-entered home goals','Self-entered away goals','Self-entered tiebreak','Qualifiers']);
+  const exported=fixtureCards.filter(f=>f.homeScore!==null||f.active!==false)
+   .sort((a,b)=>(a.time??Number.MAX_SAFE_INTEGER)-(b.time??Number.MAX_SAFE_INTEGER)||
+    a.competition.localeCompare(b.competition)||a.round-b.round);
+  for(const f of exported){
+   const id=f.fixtureId||f.matchId||f.gameId;
+   rows.push([id,f.type,f.competition,f.round,f.home,f.away,
+    f.time===null?'':new Date(f.time).toLocaleString(),
+    f.time===null?'':new Date(f.time).toISOString(),f.venue,
+    f.homeScore===null?'Not played':'Manually recorded — unverified',
+    f.homeScore===null?'':f.homeScore,f.awayScore===null?'':f.awayScore,
+    f.tiebreak||'',f.type==='Knockout'?(f.unlocked?'Known':'Pending'):'']);
+  }
   const data='\uFEFF'+rows.map(row=>row.map(sanitize).join(',')).join('\r\n')+'\r\n';
   const url=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));
-  const a=dom('a');a.href=url;a.download='fuckball-private-matchday-overview.csv';a.click();
+  const a=dom('a');a.href=url;a.download='fuckball-private-matchday-complete-fixtures.csv';a.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
-  note.textContent='Local, unofficial competition overview saved to CSV.';
+  note.textContent='Local CSV exported with '+exported.length+
+   ' actual private fixture rows, including provisional cup pairings and self-entered scores. No server verification implied.';
  }
  function exportCalendar(){
-  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league or active series first.');
+  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league, cup or active series first.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const date=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
@@ -387,6 +414,242 @@
   setTimeout(()=>URL.revokeObjectURL(url),60000);
   note.textContent=items.length+' private upcoming friendlies exported with 60-minute placeholder durations. No invitations sent.';
  }
+
+ // Private RSVP board: only the existing validated browser-private fixtures are selectable.
+ // These labels are organiser-entered, never server-sourced availability or accounts.
+ const ATTENDANCE_KEY='fuckball.private-match-attendance.v1';
+ const attendanceBody=dom('div',null,'matchday-attendance-body');
+ attendanceBody.append(dom('h3','WHO CAN PLAY?'),
+  dom('p','Organise friends for one unsplayed private fixture. This list stays on this device, is not a room reservation and does not contact or invite other players.'));
+ const fixtureChoice=dom('select');
+ fixtureChoice.setAttribute('aria-label','Choose a private fixture for availability');
+ const picker=dom('label',null,'matchday-attendance-picker');
+ picker.append(dom('span','SELECT MATCH'),fixtureChoice);
+ const counts=dom('div',null,'matchday-attendance-counts');
+ const peopleView=dom('div',null,'matchday-attendance-rows');
+ const form=dom('form',null,'matchday-attendance-form');
+ const friend=dom('input');friend.required=true;friend.maxLength=35;friend.placeholder='Player or friend';
+ friend.setAttribute('aria-label','Friend name');
+ const response=dom('select');response.setAttribute('aria-label','Availability');
+ for(const [v,label] of [['going','Going'],['maybe','Maybe'],['out','Cannot play']])
+  response.add(new Option(label,v));
+ const noteField=dom('input');noteField.maxLength=120;noteField.placeholder='Optional note';
+ noteField.setAttribute('aria-label','Availability note');
+ const add=dom('button','+ Add');add.type='submit';form.append(friend,response,noteField,add);
+ const tools=dom('div',null,'matchday-attendance-actions');
+ const csv=button('↓ Attendance CSV',exportAttendanceCSV);
+ const backup=button('↓ Backup JSON',exportAttendanceJSON);
+ const upload=dom('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
+ const restore=button('↑ Restore JSON',()=>upload.click());
+ const clear=button('Clear match list',clearAttendance);
+ tools.append(csv,backup,restore,clear,upload);
+ const info=dom('p',null,'matchday-attendance-message');
+ info.setAttribute('role','status');info.setAttribute('aria-live','polite');
+ attendanceBody.append(picker,counts,peopleView,form,tools,info);
+ attendancePanel.append(attendanceBody);
+ const attendeeKey=f=>f.type+':'+(f.tournamentId||f.cupId||f.seriesId)+':'+(f.fixtureId||f.matchId||f.gameId);
+ const attendeePattern=/^(?:League|Knockout|Series):[a-f0-9-]{16,50}:(?:r[1-9]\d*g[1-9]\d*|r[1-9]\d*m[1-9]\d*|g[1-7])$/i;
+ const safeGuest=s=>typeof s==='string'&&s===s.trim()&&s.length>0&&s.length<=35&&
+  !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+ const safeNote=s=>typeof s==='string'&&s.length<=120&&
+  !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+ const choices=['going','maybe','out'];
+ let chosen='',rsvpRows=[],rsvpSnapshot='',rsvpAvailable=false;
+ function eligible(){
+  const seen=new Set();
+  return fixtureCards.filter(f=>f.homeScore===null&&f.active!==false)
+   .map(f=>({...f,attendanceId:attendeeKey(f)}))
+   .filter(f=>attendeePattern.test(f.attendanceId)&&!seen.has(f.attendanceId)&&seen.add(f.attendanceId))
+   .sort((a,b)=>(a.time??Number.MAX_SAFE_INTEGER)-(b.time??Number.MAX_SAFE_INTEGER)||
+    a.competition.localeCompare(b.competition)||a.round-b.round);
+ }
+ function parseRSVP(raw){
+  if(raw.length>1024*1024)throw Error('Backup exceeds the 1 MiB size limit');
+  if(!raw)return [];
+  const parsed=JSON.parse(raw);
+  if(!parsed||parsed.version!==1||!Array.isArray(parsed.entries)||parsed.entries.length>200)
+   throw Error('Invalid attendance backup format');
+  const keys=new Set();
+  for(const entry of parsed.entries){
+   if(!entry||typeof entry.key!=='string'||!attendeePattern.test(entry.key)||
+     keys.has(entry.key)||!Array.isArray(entry.people)||entry.people.length>24)
+    throw Error('Invalid match attendance collection');
+   keys.add(entry.key);
+   const names=new Set();
+   for(const p of entry.people){
+    if(!p||!safeGuest(p.name)||!choices.includes(p.status)||!safeNote(p.note)||
+      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid player entry');
+    names.add(p.name.toLocaleLowerCase());
+   }
+  }
+  return parsed.entries.map(e=>({key:e.key,people:e.people.map(p=>({
+   name:p.name,status:p.status,note:p.note
+  }))}));
+ }
+ function loadRSVP(){
+  try{
+   const raw=localStorage.getItem(ATTENDANCE_KEY)||'';
+   const data=parseRSVP(raw);
+   rsvpSnapshot=raw;rsvpRows=data;rsvpAvailable=true;return true;
+  }catch{
+   rsvpAvailable=false;rsvpRows=[];
+   info.textContent='Existing private attendance storage is invalid or unavailable. It has not been overwritten. Restore browser storage before editing.';
+   return false;
+  }
+ }
+ function roster(){return rsvpRows.find(e=>e.key===chosen)?.people||[];}
+ function changeRows(mutator){
+  if(!rsvpAvailable)return false;
+  try{
+   if((localStorage.getItem(ATTENDANCE_KEY)||'')!==rsvpSnapshot){
+    loadRSVP();renderAttendance();
+    info.textContent='Another tab changed attendance. Latest data loaded; repeat your action.';
+    return false;
+   }
+   const rows=rsvpRows.map(e=>({key:e.key,people:e.people.map(p=>({...p}))}));
+   mutator(rows);
+   const filtered=rows.filter(e=>e.people.length);
+   const serialized=JSON.stringify({version:1,entries:filtered});
+   if(serialized.length>1024*1024)throw Error('1 MiB storage limit reached');
+   localStorage.setItem(ATTENDANCE_KEY,serialized);
+   rsvpRows=filtered;rsvpSnapshot=serialized;
+   renderAttendance();return true;
+  }catch(e){
+   info.textContent='Not saved: '+String(e.message||'storage unavailable')+'. Your online matches are unchanged.';
+   return false;
+  }
+ }
+ function editRoster(fn){
+  if(!chosen||!eligible().some(f=>f.attendanceId===chosen))return false;
+  return changeRows(rows=>{
+   let entry=rows.find(e=>e.key===chosen);
+   if(!entry){if(rows.length>=200)throw Error('200 match limit');
+    entry={key:chosen,people:[]};rows.push(entry);}
+   fn(entry.people);
+  });
+ }
+ function renderAttendance(){
+  const fixtures=eligible(),valid=new Set(fixtures.map(f=>f.attendanceId));
+  if(!valid.has(chosen))chosen=fixtures[0]?.attendanceId||'';
+  fixtureChoice.replaceChildren();
+  for(const f of fixtures){
+   const when=f.time===null?'Not scheduled':new Date(f.time).toLocaleString(undefined,{dateStyle:'short',timeStyle:'short'});
+   fixtureChoice.add(new Option(f.competition+' · '+f.home+' vs '+f.away+' · '+when,f.attendanceId));
+  }
+  fixtureChoice.value=chosen;fixtureChoice.disabled=!fixtures.length;
+  const active=!!chosen&&rsvpAvailable;
+  for(const el of [friend,response,noteField,add,csv,clear])el.disabled=!active;
+  // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
+  backup.disabled=!rsvpAvailable;
+  restore.disabled=!rsvpAvailable;
+  peopleView.replaceChildren();counts.replaceChildren();
+  const selected=roster();
+  for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
+   counts.append(dom('span',label+': '+selected.filter(p=>p.status===status).length));
+  if(!rsvpAvailable){
+   peopleView.append(dom('p','No editing is allowed until unreadable local attendance data is recovered.'));return;
+  }
+  if(!fixtures.length)peopleView.append(dom('p','Create an unsplayed private league, cup or best-of game first.'));
+  else if(!selected.length)peopleView.append(dom('p','Add friends below to track their organiser-entered availability.'));
+  for(const p of selected){
+   const row=dom('div',null,'matchday-attendance-row'),label=dom('strong',p.name);
+   const state=dom('select');state.setAttribute('aria-label','Availability for '+p.name);
+   for(const [value,name] of [['going','Going'],['maybe','Maybe'],['out','Cannot play']])
+    state.add(new Option(name,value));
+   state.value=p.status;
+   state.addEventListener('change',()=>{
+    editRoster(people=>{const target=people.find(x=>x.name===p.name);
+     if(!target)throw Error('Player no longer exists');target.status=state.value;});
+   });
+   const note=dom('input');note.value=p.note;note.maxLength=120;
+   note.placeholder='Optional note';note.setAttribute('aria-label','Note for '+p.name);
+   const save=button('Save note',()=>{
+    const value=note.value.trim();
+    if(!safeNote(value))return void(info.textContent='Note must be 120 characters or fewer.');
+    editRoster(people=>{const target=people.find(x=>x.name===p.name);
+     if(!target)throw Error('Player no longer exists');target.note=value;});
+   });
+   const remove=button('Remove',()=>{
+    if(!confirm('Remove '+p.name+' from this private match list?'))return;
+    editRoster(people=>{const idx=people.findIndex(x=>x.name===p.name);
+     if(idx<0)throw Error('Player no longer exists');people.splice(idx,1);});
+   });
+   row.append(label,state,note,save,remove);peopleView.append(row);
+  }
+  info.textContent=fixtures.length+' private unsplayed fixtures · '+selected.length+
+   ' listed friends. Nothing here is server-verified or sent as an invitation.';
+ }
+ fixtureChoice.addEventListener('change',()=>{chosen=fixtureChoice.value;renderAttendance();});
+ form.addEventListener('submit',event=>{
+  event.preventDefault();
+  const name=friend.value.trim(),note=noteField.value.trim(),status=response.value;
+  if(!safeGuest(name)||!safeNote(note)||!choices.includes(status))
+   return void(info.textContent='Name must be 1–35 characters; optional note at most 120.');
+  if(editRoster(people=>{
+   if(people.length>=24)throw Error('24-person per-match limit');
+   if(people.some(p=>p.name.toLocaleLowerCase()===name.toLocaleLowerCase()))
+    throw Error('Player already listed');
+   people.push({name,status,note});
+  })){friend.value='';noteField.value='';friend.focus();}
+ });
+ function saveLocal(content,filename,type){
+  const url=URL.createObjectURL(new Blob([content],{type}));
+  const a=dom('a');a.href=url;a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ function exportAttendanceCSV(){
+  if(!chosen||!rsvpAvailable)return;
+  const fixture=eligible().find(f=>f.attendanceId===chosen);if(!fixture)return;
+  const cell=x=>{
+   let s=String(x);if(/^\s*[=+\-@]/.test(s))s="'"+s;
+   return '"'+s.replace(/"/g,'""')+'"';
+  };
+  const rows=[['Competition','Match','Person','Availability','Note'],
+   ...roster().map(p=>[fixture.competition,fixture.home+' vs '+fixture.away,p.name,p.status,p.note])];
+  saveLocal('\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n',
+   'fuckball-private-attendance.csv','text/csv;charset=utf-8');
+ }
+ function exportAttendanceJSON(){
+  if(!rsvpAvailable)return;
+  saveLocal(JSON.stringify({version:1,entries:rsvpRows},null,2),
+   'fuckball-private-attendance.json','application/json');
+ }
+ function clearAttendance(){
+  if(!chosen||!roster().length)return;
+  if(!confirm('Clear this selected private match attendance list?')||
+    !confirm('Confirm permanent removal of this match list unless backed up.'))return;
+  changeRows(rows=>{const i=rows.findIndex(e=>e.key===chosen);if(i>=0)rows.splice(i,1);});
+ }
+ upload.addEventListener('change',async()=>{
+  const file=upload.files?.[0];upload.value='';
+  if(!file||!rsvpAvailable)return;
+  if(file.size>1024*1024)return void(info.textContent='JSON backup exceeds 1 MiB.');
+  try{
+   const imported=parseRSVP(await file.text()),valid=new Set(eligible().map(f=>f.attendanceId));
+   let added=0,skipped=0;
+   const applied=changeRows(rows=>{
+    for(const e of imported){
+     if(!valid.has(e.key)){skipped+=e.people.length;continue;}
+     let target=rows.find(x=>x.key===e.key);
+     if(!target){if(rows.length>=200)throw Error('200 match limit');target={key:e.key,people:[]};rows.push(target);}
+     for(const p of e.people){
+      if(target.people.some(x=>x.name.toLocaleLowerCase()===p.name.toLocaleLowerCase())||
+        target.people.length>=24){skipped++;continue;}
+      target.people.push({...p});added++;
+     }
+    }
+   });
+   if(applied)info.textContent='Restored '+added+' new friends; '+skipped+
+    ' skipped (duplicate, full or unavailable match). Saved friends were not overwritten.';
+  }catch(e){info.textContent='No data imported: '+String(e.message||'invalid JSON')+'.';}
+ });
+ window.addEventListener('storage',event=>{
+  if(event.key!==ATTENDANCE_KEY)return;
+  loadRSVP();renderAttendance();
+  if(rsvpAvailable)info.textContent='Attendance updated in another tab; latest saved roster loaded.';
+ });
+ loadRSVP();
+
  details.addEventListener('toggle',()=>{if(details.open)render();});
  document.getElementById('tabHome')?.addEventListener('click',render);
  window.addEventListener('fuckball:private-competition-change',render);
