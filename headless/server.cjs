@@ -683,9 +683,14 @@ function createServer(options={}){
     const authenticated=accused.account&&accounts.user(accused.accountToken)?.toLowerCase();
     const name=String(r.hb.getPlayer(d.id)?.name||accused.name||'Player')
      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25);
-    playerReports.submit({room:r.id,from:reporter,to:authenticated||null,
-     nick:name,reason:d.reason,note:d.note});
-    send(ws,{type:'playerReportStatus',ok:true});
+    try{
+     playerReports.submit({room:r.id,from:reporter,to:authenticated||null,
+      nick:name,reason:d.reason,note:d.note});
+     send(ws,{type:'playerReportStatus',ok:true});
+    }catch(error){
+     send(ws,{type:'playerReportStatus',ok:false,
+      message:String(error?.message||'Report unavailable.').slice(0,160)});
+    }
     return;
    }
    if(d.type==='chat'){
