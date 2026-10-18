@@ -104,6 +104,25 @@ const ReplayLibrary=(()=>{
    seen.add(key);return tag;
   });
  }
+ // Browser-private coaching notes, not rated match statistics.
+ function normalizeReview(raw){
+  if(raw===undefined||raw===null)return null;
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||
+   !['none','finishing','passing','defense','positioning','decision'].includes(raw.focus)||
+   !Number.isSafeInteger(raw.rating)||raw.rating<0||raw.rating>5||
+   typeof raw.note!=='string'||raw.note.length>400||
+   typeof raw.next!=='string'||raw.next.length>240||
+   !Number.isSafeInteger(raw.updatedAt)||raw.updatedAt<=0||raw.updatedAt>Date.now()+86400000)
+   throw Error('Invalid local replay coaching note.');
+  if(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(raw.note+raw.next))
+   throw Error('Coaching text contains control characters.');
+  return{focus:raw.focus,rating:raw.rating,note:raw.note.trim(),
+   next:raw.next.trim(),updatedAt:raw.updatedAt};
+ }
+ function setReview(id,review){
+  const normalized=normalizeReview(review);
+  return updateMeta(id,item=>({...item,review:normalized}));
+ }
  function setTags(id,tags){
   const normalized=normalizeTags(tags);
   return updateMeta(id,item=>({...item,tags:normalized}));
@@ -145,10 +164,10 @@ const ReplayLibrary=(()=>{
    details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
   return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite,
    bookmarks:normalizeBookmarks(details.bookmarks,item.frames),
-   tags:normalizeTags(details.tags)}));
+   tags:normalizeTags(details.tags),review:normalizeReview(details.review)}));
  }
  return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails,
-  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags};
+  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags,normalizeReview,setReview};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
