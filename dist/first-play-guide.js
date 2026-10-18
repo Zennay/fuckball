@@ -93,7 +93,9 @@
    result.textContent='First Touch not started; your current local game or replay was kept.';return;
   }
   if(session)finish();
-  practice.click(); // Official local practice route, no alternate engine.
+  if(!quickPlay('bot',true)){
+   result.textContent='The original local practice did not start; your current session was kept.';return;
+  } // Original Home game mode, after deliberate replacement consent.
   const player=localRoom();
   if(!player){result.textContent='Local practice did not start. Please try the Solo Practice button.';return;}
   session={room,stage:0,moved:0,lastPos:{x:player.disc.pos.x,y:player.disc.pos.y},
