@@ -89,7 +89,8 @@ class WebSocket extends EventEmitter {
           if(!validPeerCloseCode(payload.readUInt16BE(0))){this.close(1002,'Invalid close code');return;}
           if(!validUtf8(payload.subarray(2))){this.close(1007,'Invalid UTF-8 close');return;}
         }
-        this.close(1000);return;
+        // Remember a valid peer close handshake. A clean departure is not a network outage.
+        this.peerClosed=true;this.close(1000);return;
       }
       else if(opcode===9){this.frame(10,payload);}
       else if(opcode!==10){this.close(1003,'Unsupported opcode');return;}
