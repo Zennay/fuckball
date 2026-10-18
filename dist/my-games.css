@@ -20,3 +20,25 @@
 .game-entry-actions button:last-child{color:#ffc1b9}
 .game-entry-actions button:focus-visible,.my-games-tools button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 @media(max-width:660px){.game-entry{align-items:stretch;flex-direction:column}.game-entry-actions button{flex:1}.my-games-view{padding-bottom:40px}}
+
+
+.my-games-tools label{display:grid;gap:6px;font-size:11px;color:#b7c9cb}
+.my-games-tools input,.my-games-tools select{
+ min-height:40px;min-width:160px;max-width:260px;padding:8px 12px;border-radius:7px;
+ background:#13252d;border:1px solid #688187;color:#f1f5ee;
+}
+.my-games-tools input:focus-visible,.my-games-tools select:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:2px;
+}
+.replay-controls:not([hidden]){display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px}
+.replay-controls #replaySeek{flex:1 1 170px;min-width:120px}
+.replay-moments:not([hidden]){
+ display:flex;gap:6px;align-items:center;flex-basis:100%;overflow-x:auto;padding:8px 2px 2px;
+ scrollbar-width:thin;
+}
+.replay-moments strong{font-size:10px;white-space:nowrap;text-transform:uppercase;color:#c8d9cd;margin-right:6px}
+.replay-moment{flex-shrink:0;min-height:35px;padding:6px 11px;border-radius:7px;border:1px solid #708489;color:white;font-size:11px}
+.replay-moment.red{border-color:#bd6e7a;color:#ffe0e0}
+.replay-moment.blue{border-color:#6f94c3;color:#d8e8ff}
+.replay-moment:focus-visible{outline:3px solid #d3ef9f;outline-offset:2px}
+@media(max-width:660px){.my-games-tools{align-items:stretch}.my-games-tools label{flex:1 1 130px}.my-games-tools input,.my-games-tools select{width:100%;min-width:0}.replay-controls{bottom:55px!important}}
