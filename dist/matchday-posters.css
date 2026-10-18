@@ -1,0 +1,37 @@
+/* Matchday Poster Studio: private local fixtures and self-entered results only. */
+.matchday-posters{width:min(1120px,calc(100% - 32px));margin:26px auto 44px;color:#effaf0}
+.matchday-posters details{border:1px solid #658d78;border-radius:17px;background:#1a3535;overflow:hidden;box-shadow:0 13px 35px #0002}
+.matchday-posters summary{font-size:.98rem;letter-spacing:.07em;font-weight:850;padding:19px 21px;cursor:pointer;list-style-position:inside}
+.matchday-posters-body{padding:0 20px 24px}
+.matchday-posters h2{font-size:clamp(1.15rem,2.4vw,1.55rem);margin:0 0 10px}
+.matchday-posters-body>p{max-width:74ch;line-height:1.5;color:#d1e4d7}
+.matchday-posters-tools{display:grid;grid-template-columns:minmax(170px,2fr) auto minmax(130px,1fr);gap:9px;margin:18px 0}
+.matchday-posters-tools input,.matchday-posters-tools select{
+ font:inherit;box-sizing:border-box;min-width:0;padding:10px;border-radius:8px;border:1px solid #789c8b;color:#effbec;background:#244342}
+.matchday-posters-tools input{grid-column:span 1}
+.matchday-posters button{font:inherit;font-weight:750;background:#d4f4b1;color:#193631;border-radius:8px;border:1px solid #c6dba3;padding:10px 13px;cursor:pointer}
+.matchday-posters button:hover:not(:disabled){filter:brightness(1.1)}
+.matchday-posters button:disabled{opacity:.45;cursor:not-allowed}
+.matchday-posters :is(button,input,select,summary):focus-visible{outline:3px solid #ffe69b;outline-offset:2px}
+.matchday-posters canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;border:1px solid #74998c;border-radius:12px;box-shadow:0 12px 32px #0005}
+.matchday-posters-actions{display:flex;flex-wrap:wrap;gap:10px;margin:17px 0}
+.matchday-posters-status{color:#d2e6d7;line-height:1.5;min-height:24px}
+@media(max-width:760px){
+ .matchday-posters-tools{grid-template-columns:minmax(0,1fr) auto}
+ .matchday-posters-tools select:first-child{grid-column:1/-1}
+ .matchday-posters-tools input{grid-column:span 1}
+}
+@media(max-width:480px){
+ .matchday-posters{width:calc(100% - 20px);margin:18px auto}
+ .matchday-posters-body{padding:0 12px 16px}
+ .matchday-posters-tools{grid-template-columns:1fr}
+ .matchday-posters-tools>*{grid-column:1!important}
+ .matchday-posters-actions button{flex:1 1 auto}
+}
+@media print{
+ body *{visibility:hidden}
+ .matchday-posters,.matchday-posters canvas,.matchday-posters canvas *{visibility:visible}
+ .matchday-posters{position:absolute;left:0;top:0;width:100%;margin:0;background:white}
+ .matchday-posters-tools,.matchday-posters-actions,.matchday-posters-status{display:none}
+ .matchday-posters canvas{box-shadow:none;border:none;width:100%}
+}
