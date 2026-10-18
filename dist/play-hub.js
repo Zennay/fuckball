@@ -66,7 +66,7 @@
   action('Browse rooms',()=>openSection('.room-browser','No public room browser is available here.','Public room browser opened.'),'play-hub-secondary'),
   action('Join by invite',()=>{
    const state=activeState();
-   if(state.server||state.peer||state.inQueue||state.ready)
+   if(state.server||state.pending||state.peer||state.inQueue||state.ready)
     return announce('Leave your active room or cancel your human matchmaking queue before joining another room.');
    openSection('.direct-invite-join','The invitation form is unavailable.',
     'Paste an invite URL or room code, then confirm the join. Only the server can admit you.');
@@ -109,16 +109,18 @@
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
   const server=typeof serverLink!=='undefined'&&!!serverLink?.room;
+  const pending=typeof serverLink!=='undefined'&&!!serverLink&&!serverLink.room&&!serverLink.quickMatchMode;
   const peer=typeof peerConnected!=='undefined'&&!!peerConnected;
   const inQueue=!!home.querySelector('.quick-queue-actions button:not([hidden])');
   const ready=!!home.querySelector('.quick-ready:not([hidden])');
   const local=typeof started!=='undefined'&&!!started;
   const playingReplay=typeof replay!=='undefined'&&!!replay;
-  return {server,peer,inQueue,ready,local,playingReplay};
+  return {server,pending,peer,inQueue,ready,local,playingReplay};
  }
  function announce(message){status.textContent=message;}
  function canSwitch(what){
   const state=activeState();
+  if(state.pending)return void announce('An online room is still connecting. Cancel that connection explicitly before you '+what+'.');
   if(state.server||state.peer)
    return void announce('You are connected to a live room. Return to the match and leave it explicitly before you '+what+'.');
   if(state.inQueue||state.ready)
@@ -149,8 +151,8 @@
  }
  function openQueue(){
   const state=activeState();
-  if(state.server||state.peer||state.local||state.playingReplay)
-   return announce('A game is currently open. Finish or leave it before searching for humans.');
+  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
+   return announce('A room is connecting or a game is open. Finish or leave it before searching for humans.');
   if(state.inQueue||state.ready)return openSection('.quick-queue-panel',
    'The existing human queue is unavailable.','Returning to your ongoing search or ready check.');
   const native=home.querySelector('.quick-queue-panel');
@@ -165,8 +167,8 @@
  }
  function findHumanNow(){
   const state=activeState();
-  if(state.server||state.peer||state.local||state.playingReplay)
-   return announce('Leave your ongoing game or replay before starting a new human Quick Match.');
+  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
+   return announce('Finish or cancel your connecting room, game or replay before starting human Quick Match.');
   if(state.inQueue||state.ready)
    return openSection('.quick-queue-panel','The human queue is unavailable.',
     'An existing search or ready check is active. Finish or cancel it first.');
@@ -209,6 +211,8 @@
   if(state.server||state.peer){
    current.textContent='↗ Return to online room';
    network.textContent='● ONLINE ROOM ACTIVE';
+  }else if(state.pending){
+   network.textContent='● CONNECTING TO ONLINE ROOM';
   }else if(state.inQueue||state.ready){
    network.textContent='● HUMAN QUEUE / READY CHECK';
   }else if(state.local||state.playingReplay){
