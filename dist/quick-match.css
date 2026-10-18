@@ -22,3 +22,21 @@
 .quick-queue-mode:focus-visible,.quick-queue-actions button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 @media(max-width:750px){.quick-queue-modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:360px){.quick-queue-mode{padding:13px}.quick-queue-panel{margin:20px 12px}}
+
+/* Human Quick Match ready check: explicit consent before the server starts play. */
+.quick-ready[hidden]{display:none!important}
+.quick-ready{
+ margin:18px 0 2px;padding:18px 20px;border:1px solid #b8e58e;
+ border-radius:12px;background:linear-gradient(135deg,#263c30,#1b3035);
+ box-shadow:inset 0 1px 0 #ffffff18;
+}
+.quick-ready h3{margin:0 0 8px;font-size:clamp(20px,2.3vw,30px);
+ font-weight:900;font-style:italic;letter-spacing:-.04em;color:#d3ffa1}
+.quick-ready p{margin:0 0 12px;color:#d2e2d2;font-size:13px;line-height:1.5}
+.quick-ready .quick-ready-progress{color:#f2ffde;font-weight:750;font-variant-numeric:tabular-nums}
+.quick-ready-actions{display:flex;gap:10px;flex-wrap:wrap}
+.quick-ready-actions button{min-height:44px;padding:10px 19px;border-radius:8px;font-weight:800}
+.quick-ready-actions button:disabled{opacity:.58;cursor:not-allowed}
+.quick-ready-actions button:focus-visible{outline:3px solid #efffb0;outline-offset:3px}
+@media(max-width:540px){.quick-ready-actions button{flex:1 1 140px}.quick-ready{padding:16px}}
+@media(prefers-reduced-motion:reduce){.quick-ready *{animation:none!important;transition:none!important}}

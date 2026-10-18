@@ -8,6 +8,14 @@ Use the **Free** Render web-service plan for the complete multiplayer game (HTTP
 
 A full-viewport football game, using the same unmodified node-haxball 2.3.1 physics engine in the browser, headless training and the authoritative multiplayer server. The original BFF Big v4 stadium is preserved byte-for-byte.
 
+## Human Quick Match — explicit ready check
+
+The Home screen's **1v1, 2v2, 3v3 and 4v4** search connects authenticated players on the same trusted Node server. It matches humans only and remains **casual/unranked**; matches do not award ranked rating.
+
+When a compatible full roster is found, **each player gets a 15-second ready prompt**. The server reserves those sockets for that offer and starts the match only after **every person explicitly clicks I'm ready**. Declining, a lost connection, or an expired offer prevents the match from starting. Players who already accepted return to their original search position if the group falls apart; others must opt into a new search rather than being silently reused. Search remains cancelable and private room gameplay is unaffected. The server checks the authenticated socket again just before creating the room; never trust a client-side ready badge or claimed player count.
+
+This does not implement friends parties, regional matchmaking, rated rankings, or a persistent match server. The separate persistent match receipts remain server-local and are not anti-cheat-ranked history.
+
 ## Play and host
 
 Node.js 22 or newer; no Node dependencies required for the game/server:
