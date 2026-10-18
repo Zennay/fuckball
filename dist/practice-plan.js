@@ -27,7 +27,16 @@
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export practice snapshot';
  const refreshButton=document.createElement('button');refreshButton.type='button';refreshButton.textContent='↻ Refresh progress';
  const notice=document.createElement('p');notice.className='practice-plan-notice';notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
- actions.append(refreshButton,exportButton);
+ const importButton=document.createElement('button');importButton.type='button';
+ importButton.textContent='↑ Restore practice snapshot';
+ const importFile=document.createElement('input');importFile.type='file';
+ importFile.accept='.json,application/json';importFile.hidden=true;
+ importFile.setAttribute('aria-label','Choose private practice snapshot JSON');
+ const restoreTargetLabel=document.createElement('label');
+ restoreTargetLabel.className='practice-plan-restore-goals';
+ const restoreTargets=document.createElement('input');restoreTargets.type='checkbox';
+ restoreTargetLabel.append(restoreTargets,document.createTextNode('Restore weekly targets too'));
+ actions.append(refreshButton,exportButton,importButton,restoreTargetLabel,importFile);
  const trend=document.createElement('div');trend.className='practice-plan-trend';
  const streak=document.createElement('p');streak.className='practice-plan-streak';
  section.append(top,cards,trend,streak,actions,notice);
@@ -181,6 +190,109 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
   notice.textContent='Private practice snapshot downloaded. Nothing was uploaded.';
  };
+ // Restore only exports from this local feature, never claimed as verified matches.
+ function normalizeSnapshotRecord(value,source){
+  if(!validRecord(value,source.type))throw Error('Backup has an invalid '+source.name+' record.');
+  if(source.type==='goal')return{at:value.at,duration:value.duration,target:value.target,
+   goals:value.goals,elapsed:value.elapsed,completed:value.completed};
+  if(source.type==='team')return{at:value.at,seconds:value.seconds,target:value.target,
+   links:value.links,attempts:value.attempts,elapsed:value.elapsed,completed:value.completed};
+  const allowedFocus=['none','finishing','passing','defense','positioning','decision'];
+  const focus=typeof value.focus==='string'&&allowedFocus.includes(value.focus)?value.focus:'none';
+  const note=typeof value.note==='string'?value.note.slice(0,240):'';
+  return{at:value.at,mode:value.mode,stadium:value.stadium,side:value.side,red:value.red,
+   blue:value.blue,seconds:value.seconds,focus,note};
+ }
+ function targetSnapshot(data){
+  if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Missing saved weekly goals.');
+  const result={};
+  for(const key of Object.keys(defaultGoals)){
+   const value=data[key];
+   if(!Number.isSafeInteger(value)||value<0||value>14)
+    throw Error('Invalid weekly target for '+key+'.');
+   result[key]=value;
+  }
+  return result;
+ }
+ function preparedSnapshot(data){
+  if(data?.format!=='fuckball-personal-practice-snapshot'||data.version!==1||
+   data.source!=='device-local-unverified-practice'||!data.sessions||
+   typeof data.sessions!=='object'||Array.isArray(data.sessions))
+   throw Error('This is not a Fuckball local practice snapshot.');
+  const targets=targetSnapshot(data.targets),streams={};
+  for(const source of SOURCES){
+   const list=data.sessions[source.id];
+   if(!Array.isArray(list)||list.length>source.limit)
+    throw Error('Backup exceeds local '+source.name+' history limit.');
+   streams[source.id]=list.map(item=>normalizeSnapshotRecord(item,source));
+  }
+  if(Object.keys(data.sessions).some(key=>!SOURCES.some(x=>x.id===key)))
+   throw Error('Unknown session type in practice backup.');
+  return{targets,streams};
+ }
+ function mergeSnapshot(snapshot){
+  const updates=new Map(),changes={};let added=0,skipped=0;
+  for(const source of SOURCES){
+   const current=records(source).map(e=>normalizeSnapshotRecord(e,source));
+   const saved=snapshot.streams[source.id],merged=[...current],known=new Set(current.map(x=>JSON.stringify(x)));
+   // Importing a snapshot never rewrites or silently discards current sessions.
+   for(const record of saved){
+    const signature=JSON.stringify(record);
+    if(known.has(signature)){skipped++;continue;}
+    if(merged.some(item=>item.at===record.at))
+     throw Error('Conflicting '+source.name+' timestamp; no existing result was changed.');
+    merged.push(record);known.add(signature);added++;
+   }
+   if(merged.length>source.limit)
+    throw Error(source.name+' history is full. Export or clear old local results before restoring.');
+   merged.sort((a,b)=>b.at-a.at);
+   updates.set(source.key,JSON.stringify(merged));changes[source.id]=merged.length-current.length;
+  }
+  if(restoreTargets.checked)
+   updates.set(PLAN_KEY,JSON.stringify({version:1,goals:snapshot.targets}));
+  return{updates,added,skipped,changes};
+ }
+ async function importSnapshot(file){
+  if(!file||file.size<=0||file.size>128*1024)throw Error('Choose a valid local snapshot smaller than 128 KB.');
+  let parsed;try{parsed=JSON.parse(await file.text());}
+  catch{throw Error('Practice snapshot is not valid JSON.');}
+  const snapshot=preparedSnapshot(parsed),result=mergeSnapshot(snapshot);
+  const count=result.added;
+  if(!count&&!restoreTargets.checked){
+   notice.textContent='All snapshot sessions are already saved locally. No changes made.';return;
+  }
+  const ask='Restore '+count+' new local practice session'+(count===1?'':'s')+
+   (restoreTargets.checked?' and apply the saved weekly goals':'')+
+   '? Existing history remains untouched. These are private, unverified practice records.';
+  if(!window.confirm(ask)){notice.textContent='Practice restore cancelled.';return;}
+  // localStorage offers no multi-key transaction: stage originals so quota
+  // failures can be rolled back instead of hiding partially written histories.
+  const originals=new Map();
+  try{
+   for(const key of result.updates.keys())originals.set(key,localStorage.getItem(key));
+   for(const [key,value] of result.updates)localStorage.setItem(key,value);
+  }catch(error){
+   let rolledBack=true;
+   for(const [key,original] of originals){
+    try{if(original===null)localStorage.removeItem(key);else localStorage.setItem(key,original);}
+    catch{rolledBack=false;}
+   }
+   throw Error(rolledBack?'Browser storage refused the restore; prior data was restored.':
+    'Browser storage failed and rollback could not be guaranteed. Inspect your local journals before retrying.');
+  }
+  render();
+  notice.textContent='Imported '+count+' private practice session'+(count===1?'':'s')+
+   (result.skipped?' · '+result.skipped+' duplicates skipped':'')+
+   (restoreTargets.checked?' · weekly goals restored':'')+'. No server upload.';
+ }
+ importButton.onclick=()=>importFile.click();
+ importFile.addEventListener('change',async()=>{
+  const file=importFile.files?.[0];importFile.value='';if(!file)return;
+  importButton.disabled=true;
+  try{await importSnapshot(file);}
+  catch(error){notice.textContent='Practice restore refused: '+(error.message||'invalid snapshot');}
+  finally{importButton.disabled=false;}
+ });
  home.addEventListener('focusin',render);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
  window.addEventListener('storage',e=>{if(e.key===PLAN_KEY||SOURCES.some(s=>s.key===e.key))render();});
