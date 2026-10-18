@@ -28,6 +28,7 @@
   {id:'game-night',label:'Game Night Pack',group:'Competitions',desc:'Export and restore local competition and tactics plans',view:'home',selector:'.game-night-pack',terms:'backup restore portable'},
   {id:'formation',label:'4v4 Formation Studio',group:'Competitions',desc:'Private tactics, HBS stadium drawings and passing routes',view:'home',selector:'.formation-studio',terms:'lineup tactics coach'},
   {id:'games',label:'My Games / Replay Library',group:'Replays',desc:'Manage real locally saved HBR2 recordings',view:'games',selector:'.my-games-tools',terms:'replay record archive'},
+  {id:'import-desk',label:'Import HBR2 recordings',group:'Replays',desc:'Drag and drop multiple local replays into My Games',view:'games',selector:'.replay-import-desk',terms:'drop files bulk recordings import'},
   {id:'replay-collections',label:'Replay Collections',group:'Replays',desc:'Your permanent private folders and study guides',view:'games',selector:'.replay-collections',terms:'folders highlights playlist'},
   {id:'replay-review',label:'Replay Review Queue',group:'Replays',desc:'Play a curated study session with Next / Previous',view:'games',selector:'.replay-review-queue',terms:'watchlist autoplay coaching'},
   {id:'replay-study',label:'Replay Study Hub',group:'Replays',desc:'Find personal timeline coaching observations',view:'games',selector:'.replay-study-dashboard',terms:'notes insights'},
