@@ -8,17 +8,19 @@ const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serv
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
 function connectServer(create,roomId='',joinName=''){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView('play');const ws=new WebSocket(url),link={ws,isOwner:false,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
- $('inviteBox').hidden=true;ws.onopen=()=>link.send({type:'join',create,room:roomId,name:joinName||settings.name,token:settings.account?.token||undefined,netcode:settings.netcode==='classic'?2:3,mesh:peerHostingSupported()});ws.onerror=()=>{$('serverRoomStatus').textContent='Could not connect to server.';};ws.onclose=()=>{if(serverLink!==link)return;const room=link.room,tries=(link.retries||0);disconnect();if(link.failed)return;
+ $('inviteBox').hidden=true;ws.onopen=()=>link.send({type:'join',create,room:roomId,name:joinName||settings.name,token:settings.account?.token||undefined,netcode:settings.netcode==='classic'?2:3,mesh:peerHostingSupported()});ws.onerror=()=>{$('serverRoomStatus').textContent='Could not connect to server.';};ws.onclose=()=>{if(serverLink!==link)return;const room=link.room,tries=(link.retries||0),previousId=networkPlayerId;disconnect();if(link.failed)return;
   // Dropped connection (Wi-Fi switch, proxy hiccup): rejoin the same room a few times.
-  if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room);if(serverLink){serverLink.retries=tries+1;serverLink.room=room;serverLink.reconnect=true;}},delay);}else notify('Disconnected.');};
+  if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room);if(serverLink){serverLink.retries=tries+1;serverLink.room=room;serverLink.reconnect=true;serverLink.previousId=previousId;}},delay);}else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(d.type==='peering'){if(!link.net)startPeering(link,ws);return;}if(link.net&&link.net.handleServer(d))return;
- if(d.type==='welcome'){link.retries=0;networkPlayerId=d.id;link.isOwner=d.owner===d.id;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=false;$('inviteButton').hidden=false;setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify('Reconnected');else openMatchMenu();if(create)copyInvite(true);else if(!link.reconnect)notify('Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
- else if(d.type==='room'){link.isOwner=d.owner===networkPlayerId;botIds=new Set(d.botIds||[]);$('mode').value=d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;updateRoster();link.roomText='Room '+d.room+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel;setButtons();rosterKey='';updateRoster();}
+ if(d.type==='welcome'){link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=false;$('inviteButton').hidden=false;setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(link.identityChanged?'Reconnected with a new player slot; your former team and playing time may not be restored.':'Reconnected');else openMatchMenu();if(create)copyInvite(true);else if(!link.reconnect)notify('Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
+ else if(d.type==='room'){link.roomState=d;link.isOwner=d.owner===networkPlayerId;botIds=new Set(d.botIds||[]);$('mode').value=d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;updateRoster();link.roomText='Room '+d.room+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();}
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
  else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
  else if(d.type==='recordingStatus'){$('recordIndicator').hidden=!d.active;$('recordButton').textContent=d.active?'■ Save recording':'● Record';}
  else if(d.type==='recording'){const decoded=atob(d.bytes);saveBlob(Uint8Array.from(decoded,c=>c.charCodeAt(0)),'fuckball-server-'+Date.now()+'.hbr2','application/octet-stream');notify('Replay saved.');}
+ else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
+ else if(d.type==='subApplied'){notify('Substitution: '+d.outId+' → '+d.inId+' ('+(d.team===1?'Red':'Blue')+').');renderSubPanel();}
  else if(d.type==='goal'){beep(650,.22);log((d.team===1?'Red':'Blue')+' scores');}
  else channel?.onmessage?.(event);
  };
@@ -50,7 +52,7 @@ function startPeering(link,ws){
   canHost:()=>settings.peerHost!==false&&document.visibilityState!=='hidden',
   // A new host: restart the clock estimate from samples taken against it before the switch.
   onClockSwitch:samples=>{predictor.pingClock.reset();for(const s of samples)predictor.pong(s.frame,s.sentAt);},
-  onAuthority:info=>{const host=info.pending??info.host;if(info.pending==null){hostLabel=host==='server'?'':host===networkPlayerId?' · Hosted by you':' · Hosted by '+(info.name||link.hostName||'a player');if(host===networkPlayerId)notify('Your browser now hosts this room (best connection for everyone).');}else link.hostName=info.name;$('connectionText').textContent=(link.roomText||'Online room')+hostLabel;},
+  onAuthority:info=>{const host=info.pending??info.host;if(info.pending==null){hostLabel=host==='server'?'':host===networkPlayerId?' · Hosted by you':' · Hosted by '+(info.name||link.hostName||'a player');if(host===networkPlayerId)notify('Your browser now hosts this room (best connection for everyone).');}else link.hostName=info.name;$('connectionText').textContent=(link.roomText||'Online room')+hostLabel+(link.identityChanged?' · New player ID':'');},
   onError:message=>console.warn('Peer host:',message)});
  link.netTimer=setInterval(()=>{if(serverLink===link)link.net?.tick();},50);
 }
@@ -72,3 +74,89 @@ $('accountButton').onclick=()=>{if(settings.account){const token=settings.accoun
 renderAccount();
 // Drop a stored session the server no longer knows.
 if(settings.account?.token&&defaultServer)fetch('/api/me',{headers:{Authorization:'Bearer '+settings.account.token}}).then(r=>{if(r.status===401){settings.account=null;savePrefs();renderAccount();}}).catch(()=>{});
+
+
+// Player-facing online 4v4 substitutions. Every action is authorized again by
+// the server; UI state and local button visibility are never permission grants.
+function populateSubSelect(id,items,empty){
+ const control=$(id),previous=control.value;
+ control.replaceChildren();
+ if(!items.length){const opt=document.createElement('option');opt.value='';opt.textContent=empty;control.append(opt);control.value='';return;}
+ for(const item of items){const option=document.createElement('option');option.value=String(item.id);option.textContent=item.name;control.append(option);}
+ control.value=items.some(item=>String(item.id)===previous)?previous:String(items[0].id);
+}
+function renderSubPanel(){
+ const panel=$('subPanel'),link=serverLink,state=link?.roomState;
+ panel.hidden=!(link?.room&&state);
+ if(panel.hidden)return;
+ const players=(room?.state?.players||[]).filter(p=>Number.isSafeInteger(p.id)&&!botIds.has(p.id));
+ const nameOf=id=>players.find(p=>p.id===id)?.name||'Player '+id;
+ const team=Number($('subTeam').value)===2?2:1;
+ const teamName=team===1?'Red':'Blue',benches=new Map(state.benches||[]),captains=new Map(state.captains||[]);
+ const active=players.filter(p=>p.team?.id===team||p.team===team);
+ const inactive=players.filter(p=>p.team?.id===0||p.team===0);
+ const bench=inactive.filter(p=>benches.get(p.id)===team);
+ const asOption=p=>({id:p.id,name:p.name||'Player '+p.id});
+ populateSubSelect('subBenchPlayer',inactive.map(asOption),'No inactive players');
+ populateSubSelect('subOutPlayer',active.map(asOption),'No active players');
+ populateSubSelect('subInPlayer',bench.map(asOption),'No team bench players');
+ populateSubSelect('subCaptainPlayer',[{id:0,name:'No captain'},...active.map(asOption)],'No active players');
+ const roleCaptain=captains.get(team),isHost=!!link.isOwner;
+ const mayPropose=isHost||roleCaptain===networkPlayerId;
+ $('subAssignBench').disabled=!isHost||!inactive.length;
+ $('subClearBench').disabled=!isHost||!inactive.length;
+ $('subAppointCaptain').disabled=!isHost;
+ const queued=(state.pendingSubs||[]).find(p=>p.team===team);
+ $('subPropose').disabled=!mayPropose||!active.length||!bench.length||!!queued;
+ const timeFrames=new Map(state.activeFrames||[]);
+ const total=(timeFrames.get(networkPlayerId)||0)/60;
+ $('subSummary').textContent=(isHost?'Host':roleCaptain===networkPlayerId?'Team captain':'Player')+
+  ' · '+teamName+' captain: '+(roleCaptain?nameOf(roleCaptain):'not assigned')+
+  ' · Your active time: '+total.toFixed(1)+'s';
+ const requests=state.pendingSubs||[];
+ const recent=Array.isArray(state.recentSubs)?state.recentSubs.at(-1):null;
+ $('subPending').textContent=requests.length?
+  requests.map(p=>(p.team===1?'Red':'Blue')+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
+   (p.accepted?' · accepted, waiting for pause':' · awaiting player consent')).join(' | '):
+  recent&&[1,2].includes(recent.team)&&Number.isSafeInteger(recent.frame)?
+   'Last completed swap · '+(recent.team===1?'Red':'Blue')+': '+
+   nameOf(recent.outId)+' → '+nameOf(recent.inId)+' · frame '+recent.frame:
+   'No substitution pending.';
+ const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
+ $('subConsent').hidden=!yourRequest;
+ $('subConsentText').textContent=yourRequest?
+  'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?':'';
+}
+const baseOnlineRefreshMenu=refreshMenu;
+refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};
+// Room-status can arrive before the subsequent native player snapshot. Refresh
+// selectors only when the real roster signature changes, not on every 30Hz
+// snapshot (which would disrupt the player's in-progress selection).
+const baseOnlineUpdateRoster=updateRoster;
+updateRoster=function(){
+ const previous=rosterKey;
+ baseOnlineUpdateRoster();
+ if(menuOpen&&serverLink?.roomState&&rosterKey!==previous)renderSubPanel();
+};
+$('subTeam').onchange=renderSubPanel;
+$('subAssignBench').onclick=()=>{
+ if(serverLink?.isOwner)serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
+};
+$('subClearBench').onclick=()=>{
+ if(serverLink?.isOwner)serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
+};
+$('subAppointCaptain').onclick=()=>{
+ if(serverLink?.isOwner)serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
+};
+$('subPropose').onclick=()=>{
+ if(!serverLink?.roomState)return;
+ const team=Number($('subTeam').value);
+ if(!serverLink.isOwner&&new Map(serverLink.roomState.captains||[]).get(team)!==networkPlayerId)return;
+ serverLink.send({type:'subRequest',outId:Number($('subOutPlayer').value),inId:Number($('subInPlayer').value)});
+};
+for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick=()=>{
+ const pending=serverLink?.roomState?.pendingSubs?.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
+ if(!pending)return;
+ serverLink.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
+};
+renderSubPanel();

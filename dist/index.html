@@ -26,6 +26,27 @@
 <div class="rm-team blue" data-team="2"><div class="rm-team-head"><span>Blue</span><span id="blueCount" class="rm-count">0</span></div><div id="bluePlayers" class="rm-players" data-team="2" tabindex="0" role="group" aria-label="Blue team players"></div><div class="rm-team-foot"><button id="joinBlue">Join</button><button id="addBotBlue" class="rm-addbot">+ Bot</button></div></div>
 </div>
 <p class="rm-hint" id="teamHint">Drag players between the teams.</p>
+<section id="subPanel" class="rm-sub-panel" hidden aria-label="Online room substitutions">
+  <div class="rm-sub-title"><strong>4v4 · Team bench &amp; substitutions</strong><span id="subSummary" aria-live="polite">Waiting for room data</span></div>
+  <div class="rm-sub-controls">
+    <label>Side<select id="subTeam"><option value="1">Red</option><option value="2">Blue</option></select></label>
+    <label>Inactive player<select id="subBenchPlayer" aria-label="Spectator to assign to bench"></select></label>
+    <button id="subAssignBench" type="button">Assign bench</button>
+    <button id="subClearBench" type="button">Make spectator</button>
+    <label>Captain<select id="subCaptainPlayer" aria-label="Appointed team captain"></select></label>
+    <button id="subAppointCaptain" type="button">Set captain</button>
+    <label>Out<select id="subOutPlayer" aria-label="Outgoing active player"></select></label>
+    <label>In<select id="subInPlayer" aria-label="Incoming bench player"></select></label>
+    <button id="subPropose" class="primary" type="button">Propose swap</button>
+  </div>
+  <p id="subPending" class="rm-small" role="status">No substitution pending.</p>
+  <div id="subConsent" class="rm-sub-consent" hidden>
+    <span id="subConsentText">Substitution requested</span>
+    <button id="subApprove" type="button" class="primary">Accept &amp; enter</button>
+    <button id="subDecline" type="button">Decline</button>
+  </div>
+  <p class="rm-small">The incoming player must consent. Accepted live swaps wait for a match pause.</p>
+</section>
 <div class="rm-actions"><button id="startButton" class="primary">▶ Start game</button><button id="pauseButton" disabled>Ⅱ Pause</button><button id="swapTeams" title="Red becomes Blue and Blue becomes Red">⇄ Swap teams</button><button id="allSpec" title="Move everyone to Spectators">↓ All to spectators</button><span class="grow"></span><button id="recordButton">● Record</button></div>
 <div class="rm-settings"><label>Time limit <small>(minutes, 0 = none)</small><input id="timeLimit" type="number" min="0" max="99" step="1" value="7" inputmode="numeric"></label><label>Score limit<select id="scoreLimit"><option value="0">None</option><option selected>3</option><option>5</option><option>10</option></select></label><label class="rm-stadium">Stadium<select id="stadium" aria-label="Stadium"></select></label></div>
 <!-- Legacy controls kept for scripted modes (home quick-play, replays, direct WebRTC); not shown in the menu. -->

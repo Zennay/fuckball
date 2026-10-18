@@ -29,7 +29,7 @@ function createServer(options={}){
  });
  const wss=new WebSocketServer({server,maxPayload:2*1024*1024});
  const send=(ws,data)=>{if(ws.readyState===1&&ws.socket.writableLength<262144)ws.send(typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data));};
- const RoomCore=require('../dist/room-core.js'),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','error','recordingStatus','recording']);
+ const RoomCore=require('../dist/room-core.js'),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','error','recordingStatus','recording']);
  /* Peer hosting (docs/netcode-plan.md): the room can run in a player's browser when that gives everyone a
     better connection. This server stays the coordinator: it measures, elects, hands the room over at an
     exact frame, keeps a standby copy plus every input, and takes the room back instantly when the host
@@ -102,7 +102,7 @@ function createServer(options={}){
     if(d.type==='in'){try{r.message(ws.playerId,d,r.frame);}catch{}if(ws.playerId!==r.authority)send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
     send(hostSocket(r),{type:'hostIn',from:ws.playerId,d});return;}
    r.message(ws.playerId,d,r.hostTime(fraction()));
-  }catch(e){send(ws,{type:'error',message:e.message});}});});
+  }catch(e){const message=typeof e?.message==='string'&&e.message.trim()?e.message:'Invalid room request.';send(ws,{type:'error',message});}});});
  const fraction=()=>accumulator/(1000/60);
  function tickRoom(r){r.clock++;
   if(r.authority==='server'){let n=0;while(r.frame<r.clock&&n++<240)r.step();

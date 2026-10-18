@@ -1,6 +1,6 @@
 'use strict';
-// Regression: online rooms accept far more than 8 players, bot roster remains
-// independently editable, and each team's column scrolls without stretching.
+// Regression: online rooms keep unlimited lobby connections while the active
+// 4v4 roster stays capped, unauthorized promotions fail, and sidebars scroll.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {createServer} = require('../headless/server.cjs');
@@ -49,23 +49,55 @@ async function main() {
     assert.equal(r.clients.size,participants);
     assert.equal(r.hb.getPlayerList().filter(p=>!r.botIds.has(p.id)).length,participants);
     assert.equal(r.owner,1);
-    assert.equal(r.hb.getPlayerList().filter(p=>p.team===1).length+r.hb.getPlayerList().filter(p=>p.team===2).length,participants);
+    const players=()=>r.hb.getPlayerList();
+    const active=team=>players().filter(p=>p.team===team);
+    assert.equal(active(1).length,4,'maximum four active red players');
+    assert.equal(active(2).length,4,'maximum four active blue players');
+    assert.equal(active(0).length,participants-8,'extra connected humans remain spectators');
+    assert.equal(r.sockets.size,participants,'no participant loses the room connection');
 
-    // A new bot is allowed even when more than 16 humans already joined.
+    // No owner, bot or forged client command may make a ninth active player.
+    const errors=()=>host.messages.filter(x=>x.type==='error');
+    let previousErrors=errors().length;
     host.send(JSON.stringify({type:'addBot',team:1}));
+    const fullError=await until(()=>errors()[previousErrors]);
+    assert.match(fullError.message,/full|bench/i);
+    assert.equal(r.botIds.size,0,'a full side cannot receive an extra active bot');
+
+    // Spectator bots can still be registered and safely removed in a full lobby.
+    host.send(JSON.stringify({type:'addBot',team:0}));
     await until(()=>r.botIds.size===1);
     const botId=[...r.botIds][0];
-    assert(r.hb.getPlayer(botId));
-    assert.equal(r.hb.getPlayerList().length,participants+1);
-    const botStatus=await until(()=>host.messages.find(x=>x.type==='room'&&x.botIds?.includes(botId)));
-    assert(botStatus.botIds.includes(botId),'client receives explicit bot identities');
-
+    assert.equal(r.hb.getPlayer(botId).team,0);
+    assert.equal(players().length,participants+1);
+    previousErrors=errors().length;
     host.send(JSON.stringify({type:'team',id:botId,team:2}));
-    await until(()=>r.hb.getPlayer(botId).team===2);
+    await until(()=>errors()[previousErrors]);
+    assert.equal(r.hb.getPlayer(botId).team,0,'no promotion into full blue team');
     host.send(JSON.stringify({type:'removeBot',id:botId}));
     await until(()=>r.botIds.size===0);
-    assert.equal(r.hb.getPlayerList().length,participants);
-    console.log('PASS 21 humans + bot added above old 16 cap, room team changes, removal, and scrollable team UI');
+
+    // Ordinary spectators cannot promote themselves with forged host claims.
+    const unprivileged=sockets[12],spectatorId=13;
+    assert.equal(r.hb.getPlayer(spectatorId).team,0);
+    const beforeGuest=unprivileged.messages.filter(x=>x.type==='error').length;
+    unprivileged.send(JSON.stringify({type:'team',id:spectatorId,team:1,owner:r.owner,admin:true}));
+    const denied=await until(()=>unprivileged.messages.filter(x=>x.type==='error')[beforeGuest]);
+    assert.match(denied.message,/host|permit|authoriz/i);
+    assert.equal(r.hb.getPlayer(spectatorId).team,0);
+
+    // The owner can free exactly one active slot and then assign an existing
+    // inactive member; connected count and team caps stay unchanged.
+    const outgoing=active(1)[0].id;
+    host.send(JSON.stringify({type:'team',id:outgoing,team:0}));
+    await until(()=>r.hb.getPlayer(outgoing).team===0);
+    host.send(JSON.stringify({type:'team',id:spectatorId,team:1}));
+    await until(()=>r.hb.getPlayer(spectatorId).team===1);
+    assert.equal(active(1).length,4);
+    assert.equal(active(2).length,4);
+    assert.equal(active(0).length,participants-8);
+    assert.equal(r.clients.size,participants);
+    console.log('PASS 21 connected humans with exactly 4v4 active, bench/spectators, full-team denial, owner slot transfer, and retained room sockets');
   } finally {
     sockets.forEach(ws=>ws.close());
     await app.close();
