@@ -49,7 +49,7 @@
  async function playReelMoment(index){
   if(!reelActive)return;
   const token=reelToken;
-  await openMoment(index);
+  await openMoment(index,token);
   if(!reelActive||token!==reelToken)return;
   if(selection!==index||!replay){stopReel();return;}
   const marker=moments[index].frameNo*1000/60;
@@ -111,13 +111,13 @@
   // Previous/next controls remain tied to the filtered list only.
   if(selection>=moments.length){selection=-1;navigation.hidden=true;}
  }
- async function openMoment(index){
+ async function openMoment(index,reelRequestToken=null){
   if(opening||index<0||index>=moments.length)return;
   const moment=moments[index],stamp=generation;
   opening=true;
   try{
    const saved=await ReplayLibrary.get(moment.item.id);
-   if(stamp!==generation)return;
+   if(stamp!==generation||reelRequestToken!==null&&(!reelActive||reelRequestToken!==reelToken))return;
    loadReplay(saved.bytes,moment.item.name);
    activeLocalReplayId=moment.item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
