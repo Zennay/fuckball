@@ -127,11 +127,19 @@
       launch.disabled=!ready||!!serverLink?.room;launch.className='primary';
       queue.append(launch);
      }
+     if(p.members.length===4){
+      const club=document.createElement('div');club.className='friend-party-club';
+      const explanation=document.createElement('p');
+      explanation.textContent='Club vs Club · four signed-in members of the same Club compete against a different full Club. Casual only: no Club rating or season ladder.';
+      const launch=btn('⚽ Find Club 4v4',()=>act({action:'launch',mode:'club4v4'}));
+      launch.disabled=!ready||!!serverLink?.room;launch.className='primary';
+      club.append(explanation,launch);queue.append(club);
+     }
      if(!ready)queue.append(document.createTextNode('All teammates must press Ready first.'));
     }
    }else{
     const searching=label('CONNECTING YOUR PARTY',
-     'Playlist '+p.launchMode+' · every approved teammate must join this same server within 30 seconds.');
+     'Playlist '+(p.launchMode==='club4v4'?'Club vs Club 4v4':p.launchMode)+' · every approved teammate must join this same server within 30 seconds.');
     if(leader)searching.append(btn('Cancel party search',()=>act({action:'cancel'}),true));
    }
    if(!p.launchMode)body.append(btn(leader?'Disband / leave party':'Leave party',()=>{
