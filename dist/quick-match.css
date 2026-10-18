@@ -70,3 +70,9 @@
 .quick-queue-mode.is-preferred{border-color:#bde892;box-shadow:inset 0 0 0 1px #bde892}
 .quick-queue-mode.is-preferred strong::after{content:'★';font-size:13px;color:#cfff91;margin-left:7px;vertical-align:middle}
 @media(max-width:580px){.quick-queue-shortcut{padding:13px}.quick-queue-shortcut-actions{flex-basis:100%}}
+
+/* Never imply website queue occupancy describes a different selected server. */
+.quick-queue-availability-actions{display:flex;justify-content:flex-end;gap:8px;margin:3px 0 12px}
+.quick-queue-availability-actions button{background:#1a3835;color:#d2f2cf;border:1px solid #72978b;border-radius:7px;padding:8px 13px;min-height:36px;font-size:12px;cursor:pointer}
+.quick-queue-availability-actions button:disabled{opacity:.5;cursor:default}
+.quick-queue-availability-actions button:focus-visible{outline:3px solid #d3ff91;outline-offset:3px}
