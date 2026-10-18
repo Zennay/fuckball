@@ -125,7 +125,7 @@
  }
  duration.onchange=updateBest;
  updateBest();
- const localReady=()=>!serverLink?.room&&!peerConnected&&!replay&&
+ const localReady=()=>!serverLink&&!peerConnected&&!replay&&
   !!room&&typeof room.currentFrameNo==='number'&&
   !!room.gameState&&Number.isSafeInteger(room.gameState.redScore)&&
   Number.isSafeInteger(room.gameState.blueScore);
@@ -181,6 +181,12 @@
   if(s.frames>=s.duration*60){finish('GOAL RUSH · TIME UP');}
  }
  launch.onclick=()=>{
+  if(serverLink||peerConnected){history.textContent='Leave or cancel your existing online room, connection or human queue before starting Goal Rush.';return;}
+  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
+     document.querySelector('.quick-ready:not([hidden])')||
+     document.getElementById('joinScreen')?.hidden===false){
+   history.textContent='Finish or cancel the active human matchmaking or room invitation first.';return;
+  }
   if(session)quit();
   try{
    document.getElementById('quickPractice').click();

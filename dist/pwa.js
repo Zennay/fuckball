@@ -28,8 +28,9 @@
  launchNotice.setAttribute('role','status');launchNotice.setAttribute('aria-live','polite');
  // Attached with the other panel content below.
  function onlineConflict(){
-  if(typeof serverLink!=='undefined'&&serverLink?.room)
-   return 'Leave your active native online room explicitly before starting offline practice.';
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return serverLink.room?'Leave your active native online room explicitly before starting offline practice.':
+    'An online connection or human search is in progress. Cancel it explicitly before practising.';
   if(typeof peerConnected!=='undefined'&&peerConnected)
    return 'Disconnect from your current peer room before starting offline practice.';
   if(typeof serverLink!=='undefined'&&serverLink?.quickMatchMode)
@@ -123,7 +124,7 @@
   // Do not interrupt a match, native room, Quick Match search or ready check.
   if(!document.getElementById('matchView')?.hidden||
       (typeof peerConnected!=='undefined'&&peerConnected)||
-      (typeof serverLink!=='undefined'&&serverLink?.room)||
+      (typeof serverLink!=='undefined'&&!!serverLink)||
       document.querySelector('.quick-queue-actions button:not([hidden])')||
       document.querySelector('.quick-ready:not([hidden])'))return false;
   return !document.hidden;

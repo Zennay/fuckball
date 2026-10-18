@@ -53,8 +53,8 @@
  }
  form.onsubmit=event=>{
   event.preventDefault();
-  if(serverLink?.room||serverLink?.quickMatchMode){
-   status.textContent='Leave your current match or matchmaking queue before joining another room.';
+  if(serverLink){
+   status.textContent='Leave or cancel the current online room, connection or human queue before joining another room.';
    return;
   }
   try{
