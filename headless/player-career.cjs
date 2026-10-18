@@ -4,12 +4,12 @@
 // Profiles survive pruning of the recent receipt list, but cannot survive
 // deletion or loss of the server's persistent data directory.
 const USER=/^[a-z0-9_-]{3,20}$/;
-const MODES=['bot','2v2','4v4'];
+const MODES=['bot','1v1','2v2','3v3','4v4'];
 const num=x=>Number.isSafeInteger(x)&&x>=0;
 function blank(){
  return {matches:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,
   playedFrames:0,firstAt:null,lastAt:null,winStreak:0,bestWinStreak:0,
-  modes:{bot:0,'2v2':0,'4v4':0}};
+  modes:{bot:0,'1v1':0,'2v2':0,'3v3':0,'4v4':0}};
 }
 function valid(profile){
  if(!profile||typeof profile!=='object'||Array.isArray(profile))return false;
@@ -30,8 +30,17 @@ function cloneProfiles(old){
  if(!old||typeof old!=='object'||Array.isArray(old))throw Error('Invalid stored career statistics.');
  const next=Object.create(null);
  for(const [user,profile] of Object.entries(old)){
-  if(!USER.test(user)||!valid(profile))throw Error('Invalid stored career statistics.');
-  next[user]={...profile,modes:{...profile.modes}};
+  // Up-convert existing persisted v2 careers without fabricating games:
+  // before human Quick Match, only bot/2v2/4v4 modes existed.
+  if(!profile?.modes||typeof profile.modes!=='object'||Array.isArray(profile.modes)||
+   Object.keys(profile.modes).some(mode=>!MODES.includes(mode)))
+   throw Error('Invalid stored career statistics.');
+  const modes={bot:profile?.modes?.bot,'1v1':profile?.modes?.['1v1']??0,
+   '2v2':profile?.modes?.['2v2'],'3v3':profile?.modes?.['3v3']??0,
+   '4v4':profile?.modes?.['4v4']};
+  const upgraded={...profile,modes};
+  if(!USER.test(user)||!valid(upgraded))throw Error('Invalid stored career statistics.');
+  next[user]=upgraded;
  }
  return next;
 }
