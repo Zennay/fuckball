@@ -25,8 +25,18 @@
  const importButton=document.createElement('button');importButton.type='button';importButton.textContent='+ Import preset pack';
  const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.hidden=true;
  transfer.append(exportButton,importButton,picker);
+ const cloud=document.createElement('section');cloud.className='room-presets-cloud';
+ const cloudTitle=document.createElement('strong');cloudTitle.textContent='SYNC TO YOUR ACCOUNT';
+ const cloudHelp=document.createElement('p');
+ cloudHelp.textContent='Optional: upload a snapshot to this native server or download it on another device. These actions never happen automatically and do not merge or expose presets publicly.';
+ const cloudActions=document.createElement('div');cloudActions.className='room-presets-transfer';
+ const upload=document.createElement('button');upload.type='button';
+ upload.textContent='↑ Save device presets to account';
+ const download=document.createElement('button');download.type='button';
+ download.textContent='↓ Restore account presets to device';
+ cloudActions.append(upload,download);cloud.append(cloudTitle,cloudHelp,cloudActions);
  const list=document.createElement('div');list.className='room-presets-list';
- section.append(heading,help,create,transfer,status,list);
+ section.append(heading,help,create,transfer,cloud,status,list);
  pane.append(section);
  const control=id=>$(id);
  const allowed=['bot','2v2','4v4'];
@@ -120,6 +130,67 @@
   }catch(e){message(e.message||'Could not import preset pack.');}
   finally{importButton.disabled=false;picker.value='';}
  };
+ let cloudBusy=false;
+ const cloudIdentity=()=>{
+  const account=settings.account;
+  return account?.token&&account?.username?
+   {token:account.token,user:account.username.toLowerCase()}:null;
+ };
+ const safeCloudSession=previous=>{
+  const current=cloudIdentity();
+  if(!current||current.token!==previous.token||current.user!==previous.user)
+   throw Error('Account changed during sync. Sign in again and retry.');
+ };
+ async function cloudRequest(method,payload,identity){
+  const response=await fetch('/api/account/room-presets',{
+   method,cache:'no-store',headers:{
+    Authorization:'Bearer '+identity.token,
+    ...(method==='POST'?{'Content-Type':'application/json'}:{})
+   },...(method==='POST'?{body:JSON.stringify(payload)}:{})
+  });
+  const data=await response.json().catch(()=>({}));
+  safeCloudSession(identity);
+  if(!response.ok)throw Error(String(data.error||'Account presets unavailable.').slice(0,180));
+  return data;
+ }
+ async function syncPresets(direction){
+  if(cloudBusy)return;
+  const account=cloudIdentity();
+  if(!account){message('Sign in to use private cross-device preset sync.');return;}
+  let local;
+  try{local=read();}catch(e){message(e.message);return;}
+  if(direction==='upload'&&!local.length){
+   message('Save at least one preset on this device before uploading.');return;
+  }
+  if(direction==='upload'&&!confirm('Replace every room preset stored in your account on this native server with '+local.length+' preset(s) from this device? Remote presets are not merged.'))return;
+  cloudBusy=true;upload.disabled=download.disabled=true;
+  message(direction==='upload'?'Uploading account preset snapshot…':'Loading your private preset snapshot…');
+  try{
+   if(direction==='upload'){
+    // The same portable preset validation applies before transmitting.
+    parsePack(JSON.stringify({format:packFormat,version:packVersion,presets:local}));
+    const result=await cloudRequest('POST',{action:'replaceAll',presets:local},account);
+    if(result?.ok!==true||result.count!==local.length)
+     throw Error('Unexpected account preset upload response.');
+    message('Saved '+result.count+' preset(s) to this server account. Local presets were not changed.');
+   }else{
+    const data=await cloudRequest('GET',null,account);
+    if(data?.source!=='this-native-server'||!Array.isArray(data.presets)||
+       data.presets.length>LIMIT)throw Error('Unexpected account preset download response.');
+    if(!data.presets.length){message('No saved room presets in this server account yet.');return;}
+    const incoming=parsePack(JSON.stringify({
+     format:packFormat,version:packVersion,presets:data.presets
+    }));
+    if(!confirm('Replace all '+local.length+' room preset(s) on this device with '+incoming.length+' preset(s) from your account? This does not merge the two lists.'))return;
+    safeCloudSession(account);
+    write(incoming.map(p=>({id:makeId(),...p})));
+    render();message('Restored '+incoming.length+' preset(s) from your account to this device.');
+   }
+  }catch(e){message(e.message||'Cross-device preset sync failed.');}
+  finally{cloudBusy=false;upload.disabled=download.disabled=false;render();}
+ }
+ upload.onclick=()=>syncPresets('upload');
+ download.onclick=()=>syncPresets('download');
  const hostAllowed=()=>!replay&&(!serverLink||serverLink.isOwner&&!serverLink.quickMatchMode);
  const message=text=>status.textContent=text;
  function capture(){
@@ -152,6 +223,11 @@
  function render(){
   const writable=hostAllowed(),items=read();
   create.hidden=!writable;
+  const cloudSigned=!!cloudIdentity();
+  upload.disabled=download.disabled=cloudBusy||!cloudSigned;
+  cloudHelp.textContent=cloudSigned?
+   'Optional private server snapshot. Upload overwrites saved account presets; Restore overwrites device presets. Neither action runs automatically.':
+   'Sign in from Online Rooms to sync private presets with your account on this native server.';
   list.replaceChildren();
   if(!items.length){
    const empty=document.createElement('p');empty.className='room-presets-empty';
