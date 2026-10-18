@@ -22,7 +22,7 @@
  const close=document.createElement('button');close.type='button';close.textContent='×';close.setAttribute('aria-label','Close party');
  close.onclick=()=>dialog.close();
  head.append(title,close);
- const intro=document.createElement('p');intro.textContent='Queue for casual 2v2–4v4 together. All teammates must ready up and accept the match. No bots or ranked ratings.';
+ const intro=document.createElement('p');intro.textContent='Queue with human friends or your Club teammates. A complete four-member Club squad can challenge another Club in casual 4v4. Every player must ready up and confirm; no bots or ranked Elo.';
  intro.className='friend-party-intro';
  const notice=document.createElement('p');notice.className='friend-party-notice';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
@@ -104,7 +104,7 @@
    }
    if(!p.launchMode){
     if(leader&&p.members.length<4){
-     const invite=label('INVITE A FRIEND','Only mutual, accepted friends with an account can join your party.');
+     const invite=label('INVITE A TEAMMATE','Invite accepted friends or existing Club members. All invitees must have a registered account, and blocked accounts cannot join.');
      const form=document.createElement('form');form.className='friend-party-form';
      const input=document.createElement('input');input.type='text';input.maxLength=20;
      input.autocomplete='off';input.placeholder='Exact friend username';
@@ -196,6 +196,7 @@
   notice.textContent='Loading private party…';refresh();
  }
  bannerOpen.onclick=open;entry.onclick=open;
+ window.openFriendParty=open;
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
  setInterval(()=>{if(document.visibilityState==='visible')refresh();},2500);
  // Discover invitations without keeping the Friends dialog open.
