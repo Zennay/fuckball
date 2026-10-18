@@ -72,7 +72,7 @@
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  dialog.append(header,query,toolbar,list,status);
  document.body.append(dialog);
- let selected=0,results=[],isOpen=false;
+ let selected=0,results=[],isOpen=false,navigating=false;
  function setFocusMode(enabled,permanent=true){
   if(permanent)focusMode=enabled;
   document.body.classList.toggle('launchpad-focus-home',enabled);
@@ -149,6 +149,7 @@
  function activate(command){
   recent=[command.id,...recent.filter(x=>x!==command.id)].slice(0,6);
   persist();
+  navigating=true;
   dialog.close();
   navigate(command);
  }
@@ -156,6 +157,7 @@
   if(dialog.open)return;
   query.value='';selected=0;render();
   if(typeof dialog.showModal!=='function')return;
+  if(typeof releaseInputs==='function')releaseInputs();
   dialog.showModal();isOpen=true;query.focus();
  }
  openButton.onclick=show;
@@ -170,7 +172,19 @@
    event.preventDefault();activate(results[selected]);
   }
  });
- dialog.addEventListener('close',()=>{isOpen=false;openButton.focus({preventScroll:true});});
+ dialog.addEventListener('close',()=>{
+  isOpen=false;
+  if(!navigating)openButton.focus({preventScroll:true});
+  navigating=false;
+ });
+ // Prevent gameplay movement keys from reaching the underlying match when the
+ // modal keyboard controls are in use. No online room changes are made.
+ dialog.addEventListener('keydown',event=>{
+  if((event.ctrlKey||event.metaKey)&&event.key?.toLocaleLowerCase()==='k'){
+   event.preventDefault();dialog.close();
+  }
+  event.stopPropagation();
+ });
  dialog.addEventListener('click',event=>{
   if(event.target===dialog)dialog.close();
  });
