@@ -114,6 +114,10 @@
  }
  function present(pad){
   if(!pad){
+   if(sampling){
+    sampling=null;calibrate.disabled=false;suggestion=null;apply.disabled=true;
+    hint.textContent='Controller disconnected during calibration. Reconnect it and restart the measurement.';
+   }
    const msg='No connected controller detected. Connect one and press a gamepad button.';
    if(lastMessage!==msg){state.textContent=msg;lastMessage=msg;}
    visual.setAttribute('aria-label','No gamepad connected');
