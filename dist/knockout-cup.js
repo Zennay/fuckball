@@ -328,6 +328,30 @@
       save([...cups,copy]);active=copy.id;message='Backup restored as a separate local cup.';render();
     }catch(error){info('Import refused: '+(error.message||'Invalid cup backup.'));}
   };
+  // Player-initiated league qualifier handoff. All winners stay user-entered.
+  window.addEventListener('fuckball:create-private-playoff',event=>{
+    const d=event.detail;
+    const reply=(ok,reason='')=>window.dispatchEvent(new CustomEvent(
+      'fuckball:private-playoff-created',{detail:{ok,reason}}));
+    if(!d||typeof d.sourceId!=='string'||!validId(d.sourceId)||
+      !validName(d.sourceName,60)||![2,4,8].includes(d.teams?.length)||
+      d.teams.some(n=>!validName(n,35))||
+      new Set(d.teams.map(n=>n.toLocaleLowerCase())).size!==d.teams.length||
+      !Number.isSafeInteger(d.recorded)||d.recorded<1||
+      !Number.isSafeInteger(d.total)||d.total<d.recorded||d.total>132)
+      return reply(false,'The selected league qualifiers are invalid.');
+    if(cups.length>=MAX)return reply(false,'The eight private cup slots are full.');
+    try{
+      const title=('Playoffs · '+d.sourceName).slice(0,60).trim();
+      const created=initial(title,d.teams.slice());
+      save([...cups,created]);
+      active=created.id;message='Seeded from your self-reported league standings · not verified online.';
+      section.open=true;render();reply(true);
+      main.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+        'auto':'smooth',block:'start'});
+      picker.focus({preventScroll:true});
+    }catch(error){reply(false,error.message||'Local cup storage could not be updated.');}
+  });
   window.addEventListener('fuckball:open-private-competition',event=>{
     const ref=event.detail;
     if(ref?.type!=='Knockout'||typeof ref.id!=='string')return;

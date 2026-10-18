@@ -71,6 +71,17 @@
 .tournament-recovery button{min-height:43px}
 .tournament-recovery[hidden]{display:none!important}
 
+/* Playoffs require one deliberate action; private league standings stay intact. */
+.tournament-playoff{margin:20px 0 5px;border:1px solid #73966c;border-radius:12px;
+ padding:16px;background:#1b3630}
+.tournament-playoff h3{margin:0 0 7px;color:#d5f69f;letter-spacing:.065em;font-size:.96rem}
+.tournament-playoff>p{font-size:.85rem;line-height:1.5;margin:0 0 12px;color:#c2d8cc}
+.tournament-playoff-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tournament-playoff-actions select{flex:1 1 160px}
+.tournament-playoff-actions button{min-height:44px;flex:1 1 180px}
+.tournament-playoff-preview{margin:13px 0 0!important}
+@media print{.tournament-playoff-actions{display:none!important}}
+
 /* Transactional local league batch scheduler. Never implies an official match time. */
 .tournament-batch-planner:not([hidden]){display:grid;gap:12px;margin:16px 0;padding:18px;
  border:1px solid #87b0a2;border-radius:14px;background:#193838}
