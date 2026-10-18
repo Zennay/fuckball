@@ -50,7 +50,7 @@
   const copy=document.createElement('div');copy.className='room-browser-info';
   const title=document.createElement('strong');title.textContent='ROOM '+room.room;
   const details=document.createElement('small');
-  details.textContent=room.players+'/'+([8,12,16,24,64].includes(room.capacity)?room.capacity:'?')+' seats · '+(room.requiresAccount?'Account required':'Guests allowed')+' · '+(room.started?'In progress':'Lobby')+
+  details.textContent=room.players+' online · '+(Number.isSafeInteger(room.occupied)?room.occupied:room.players)+'/'+([8,12,16,24,64].includes(room.capacity)?room.capacity:'?')+' seats occupied · '+(room.requiresAccount?'Account required':'Guests allowed')+' · '+(room.started?'In progress':'Lobby')+
    ' · '+(['1v1','2v2','3v3','4v4'].includes(room.mode)?room.mode.toUpperCase():'Custom')+
    ' · '+String(room.map||'Stadium').slice(0,60);
   copy.append(title,details);
@@ -63,7 +63,7 @@
    showJoinScreen(room.room);
   });
   join.className='primary';
-  if(room.players>=room.capacity){join.disabled=true;join.textContent='Room full';}
+  if((Number.isSafeInteger(room.occupied)?room.occupied:room.players)>=room.capacity){join.disabled=true;join.textContent='Room full';}
   else if(room.requiresAccount&&!settings.account?.token){join.textContent='Sign in to join';}
   const share=button('Copy invite',async()=>{
    const url=location.origin+location.pathname+'?room='+encodeURIComponent(room.room);
@@ -112,6 +112,7 @@
    roomsCache=result.rooms.filter(room=>room&&
     typeof room.room==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(room.room)&&
     Number.isSafeInteger(room.players)&&room.players>=0&&room.players<=128&&
+    Number.isSafeInteger(room.occupied)&&room.occupied>=room.players&&room.occupied<=128&&
     typeof room.started==='boolean'&&typeof room.map==='string'&&
     room.map.length<=60&&typeof room.mode==='string');
    renderRooms();
