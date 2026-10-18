@@ -82,6 +82,10 @@
     const m=raw.matches[i];
     if(!m||m.id!=='r'+(r+1)+'m'+(g+1)||m.round!==r||m.game!==g||
      !safeScore(m.homeScore)||!safeScore(m.awayScore)||
+     !safeTime(m.kickoff===undefined?null:m.kickoff)||
+     typeof (m.venue===undefined?'':m.venue)!=='string'||
+     (m.venue||'').length>60||(m.venue||'')!==(m.venue||'').trim()||
+     /[\u0000-\u001f\u007f-\u009f]/.test(m.venue||'')||
      ((m.homeScore===null)!==(m.awayScore===null))||
      ![null,'home','away'].includes(m.tiebreak)||
      (m.homeScore!==null&&m.homeScore===m.awayScore&&m.tiebreak===null)||
@@ -115,15 +119,19 @@
      home:home===null?'Qualifying winner pending':raw.teams[home],
      away:away===null?'Qualifying winner pending':raw.teams[away],
      homeScore:match.homeScore,awayScore:match.awayScore,
-     tiebreak:match.tiebreak,unlocked,time:null,venue:''
+     tiebreak:match.tiebreak,unlocked,time:match.kickoff===undefined?null:match.kickoff,
+     venue:match.venue||'',uid:raw.id+'-'+match.id
     });
    }
   }
   const count=cupFixtures.filter(x=>x.homeScore!==null).length;
+  const upcoming=cupFixtures.filter(f=>f.homeScore===null&&f.time!==null&&f.time>Date.now())
+   .map(f=>({name:f.home+' vs '+f.away+' · Round '+f.round,time:f.time,venue:f.venue,
+    competition:raw.name,uid:f.uid,type:'Knockout',cupId:raw.id,matchId:f.matchId}));
   const winner=resolve(rounds-1,0);
   return {type:'Knockout',id:raw.id,name:raw.name,played:count,total:matches.size,
    fixtures:cupFixtures,
-   leader:winner===null?null:raw.teams[winner],upcoming:[]};
+   leader:winner===null?null:raw.teams[winner],upcoming};
  }
  function series(raw){
   if(!raw||raw.version!==1||typeof raw.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(raw.id)||
@@ -243,8 +251,8 @@
      (mode==='all'||
       (mode==='pending'&&f.homeScore===null&&f.active!==false)||
       (mode==='ready'&&f.homeScore===null&&f.unlocked!==false&&f.active!==false)||
-      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null&&f.active!==false)||
-      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
+      (mode==='undated'&&f.homeScore===null&&f.time===null&&f.active!==false)||
+      (mode==='scheduled'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
       (mode==='completed'&&f.homeScore!==null))
    );
    const ordered=matching.sort((a,b)=>{
@@ -257,10 +265,9 @@
    for(const f of visible){
      const card=dom('article',null,'matchday-control-row');
      const info=dom('div',null,'matchday-control-fixture');
-     const when=f.type==='Knockout'?
-       (f.unlocked?'Both qualifiers known':'Waiting for previous round'):
-       f.time===null?'Kickoff not set':
-       new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
+     const when=(f.time===null?'Kickoff not set':
+       new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}))+
+       (f.type==='Knockout'?(f.unlocked?' · Both qualifiers known':' · Qualifiers pending'):'');
      const result=f.homeScore===null?'Score not recorded':
        f.homeScore+' – '+f.awayScore+
        (f.tiebreak?' · '+(f.tiebreak==='home'?f.home:f.away)+' won tiebreak':'')+
@@ -271,8 +278,8 @@
      const actions=dom('div',null,'matchday-control-row-actions');
      actions.append(button(f.type==='Knockout'&&f.unlocked===false?'View bracket':
        f.homeScore===null?'Record score':'Edit score',()=>openFixture(f,'score')));
+     actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
      if(f.type!=='Knockout'){
-       actions.append(button(f.time===null?'Set kickoff':'Edit kickoff',()=>openFixture(f,'schedule')));
        actions.append(button('Poster',()=>window.dispatchEvent(
          new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
      }
@@ -295,7 +302,7 @@
   competitions=[...leagueData,...cupData,...seriesData].sort((a,b)=>a.name.localeCompare(b.name));
   fixtureCards=[...leagueData,...cupData,...seriesData].flatMap(c=>c.fixtures);
   renderControl();
-  allUpcoming=[...leagueData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
+  allUpcoming=[...leagueData,...cupData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
   const finished=competitions.reduce((n,c)=>n+c.played,0);
@@ -327,7 +334,7 @@
   }
   upcoming.replaceChildren(dom('h3','UPCOMING PRIVATE FIXTURES'));
   if(!upcomingMatches.length)
-   upcoming.append(dom('p','No future kickoff times in readable leagues or active series. Schedule a private game first.'));
+   upcoming.append(dom('p','No future kickoff times in readable leagues, knockouts or active series. Schedule a private game first.'));
   for(const f of upcomingMatches){
    const row=dom('article',null,'matchday-upcoming-item');
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
@@ -335,7 +342,9 @@
     dom('span',f.competition+(f.venue?' · '+f.venue:'')));
    if(f.type==='Series')row.append(button('Open series',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId,gameId:f.gameId,field:'schedule'}}))));
-   row.append(button('Design poster',()=>window.dispatchEvent(
+   if(f.type==='Knockout')row.append(button('Open cup fixture',()=>window.dispatchEvent(
+    new CustomEvent('fuckball:open-private-cup-fixture',{detail:{cupId:f.cupId,matchId:f.matchId}}))));
+   else row.append(button('Design poster',()=>window.dispatchEvent(
     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:f.uid}}))));
    upcoming.append(row);
   }
@@ -361,7 +370,7 @@
   note.textContent='Local, unofficial competition overview saved to CSV.';
  }
  function exportCalendar(){
-  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league or active series first.');
+  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league, cup or active series first.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const date=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
