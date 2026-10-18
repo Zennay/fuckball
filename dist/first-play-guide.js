@@ -89,6 +89,9 @@
  }
  function launch(){
   const blocked=unavailable();if(blocked){result.textContent=blocked;return;}
+  if((started||replay)&&!window.confirm('Restart local practice for First Touch? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   result.textContent='First Touch not started; your current local game or replay was kept.';return;
+  }
   if(session)finish();
   practice.click(); // Official local practice route, no alternate engine.
   const player=localRoom();

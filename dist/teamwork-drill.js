@@ -144,6 +144,9 @@
  }
  launch.onclick=()=>{
   const reason=blocked();if(reason){status.textContent=reason;return;}
+  if((started||replay)&&!window.confirm('Start Teamwork with a fresh local 4v4 match? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   status.textContent='Current local game or replay kept. Teamwork did not start.';return;
+  }
   quit();
   squad.click(); // Existing sandbox 4v4 setup; no new engine or modified rules.
   const side=ready();
@@ -156,7 +159,7 @@
   paint();
  };
  stop.onclick=()=>finish('TEAMWORK · STOPPED',false);
- restart.onclick=()=>{quit();launch.click();};
+ restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=session,d=event.detail;
