@@ -105,6 +105,18 @@
   }
   requestAnimationFrame(frame);
  }
+ // Controller setup on the Play screen can update the existing input pipeline
+ // immediately; no page reload, alternate movement messages or server changes.
+ window.addEventListener('fuckball-gamepad-config',event=>{
+  const next=event.detail;
+  if(!next||!['default','face','trigger','shoulder'].includes(next.kick)||
+   !Number.isFinite(next.deadzone)||next.deadzone<.15||next.deadzone>.65)return;
+  preferences.kick=next.kick;
+  preferences.deadzone=next.deadzone;
+  kickSelect.value=next.kick;deadzone.value=String(next.deadzone);
+  deadzoneValue.textContent=Math.round(next.deadzone*100)+'%';
+  lastSignature=''; // Reapply a held input on the next native animation frame.
+ });
  window.fuckballGamepad={read};
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
