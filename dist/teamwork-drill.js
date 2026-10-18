@@ -144,6 +144,9 @@
  }
  launch.onclick=()=>{
   const reason=blocked();if(reason){status.textContent=reason;return;}
+  if((started||replay)&&!window.confirm('Start Teamwork with a fresh local 4v4 match? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   status.textContent='Current local game or replay kept. Teamwork did not start.';return;
+  }
   quit();
   squad.click(); // Existing sandbox 4v4 setup; no new engine or modified rules.
   const side=ready();
