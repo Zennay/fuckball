@@ -90,6 +90,24 @@ const ReplayLibrary=(()=>{
    tx.onabort=()=>reject(Error('Replay missing or could not be updated.'));
   });
  }
+ function normalizeTags(raw){
+  if(raw===undefined)return[];
+  if(!Array.isArray(raw)||raw.length>8)throw Error('A replay can have at most 8 tags.');
+  const seen=new Set();
+  return raw.map(value=>{
+   if(typeof value!=='string')throw Error('Replay tag must be text.');
+   const tag=value.trim().replace(/\s+/g,' ');
+   if(!tag||tag.length>24||/[\x00-\x1f\x7f<>]/.test(tag))
+    throw Error('Replay tags must be 1–24 characters without control characters or brackets.');
+   const key=tag.toLocaleLowerCase();
+   if(seen.has(key))throw Error('Duplicate replay tag.');
+   seen.add(key);return tag;
+  });
+ }
+ function setTags(id,tags){
+  const normalized=normalizeTags(tags);
+  return updateMeta(id,item=>({...item,tags:normalized}));
+ }
  function rename(id,value){
   let name=String(value||'').trim().replace(/[\\/<>:"|?*\x00-\x1f]/g,'_');
   if(!name)throw Error('Replay name cannot be empty.');
@@ -126,15 +144,22 @@ const ReplayLibrary=(()=>{
   if(!details||typeof details.favorite!=='boolean'||!Number.isSafeInteger(details.createdAt)||
    details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
   return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite,
-   bookmarks:normalizeBookmarks(details.bookmarks,item.frames)}));
+   bookmarks:normalizeBookmarks(details.bookmarks,item.frames),
+   tags:normalizeTags(details.tags)}));
  }
  return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails,
-  normalizeBookmarks,addBookmark,removeBookmark};
+  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
 gamesSort.add(new Option('Favorites first','favorites'));
-let favoritesOnly=false,activeLocalReplayId=null;
+let favoritesOnly=false,activeLocalReplayId=null,selectedTag='all';
+const tagsFilterLabel=document.createElement('label');tagsFilterLabel.textContent='Collection tag';
+const tagsFilter=document.createElement('select');tagsFilter.setAttribute('aria-label','Filter replays by collection tag');
+tagsFilter.className='games-tags-filter';tagsFilter.add(new Option('All tags','all'));
+tagsFilterLabel.append(tagsFilter);
+document.querySelector('.my-games-tools').insertBefore(tagsFilterLabel,$('gamesImport'));
+tagsFilter.onchange=()=>{selectedTag=tagsFilter.value;renderMyGames();};
 const favoritesToggle=document.createElement('button');
 favoritesToggle.type='button';favoritesToggle.className='games-favorites-toggle';
 favoritesToggle.setAttribute('aria-pressed','false');
@@ -176,6 +201,31 @@ function editGameName(item){
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  document.body.append(dialog);dialog.showModal();input.focus();input.select();
 }
+function editGameTags(item){
+ const dialog=document.createElement('dialog');dialog.className='game-rename-dialog';
+ const form=document.createElement('form');form.className='game-rename-form';
+ const heading=document.createElement('h2');heading.textContent='Organize recording';
+ const hint=document.createElement('p');hint.className='games-tag-hint';
+ hint.textContent='Add up to 8 labels, separated by commas (24 characters each). Kept on this device and included in your ZIP backups.';
+ const label=document.createElement('label');label.textContent='Collection tags';
+ const input=document.createElement('input');input.type='text';input.maxLength=220;
+ input.placeholder='Tournament, best goals, training';input.value=(item.tags||[]).join(', ');
+ label.append(input);
+ const actions=document.createElement('div');actions.className='game-rename-actions';
+ const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();
+ const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Save tags';
+ actions.append(cancel,save);form.append(heading,hint,label,actions);dialog.append(form);
+ form.onsubmit=async event=>{
+  event.preventDefault();save.disabled=true;
+  try{
+   const tags=input.value.trim()?input.value.split(',').map(tag=>tag.trim()):[];
+   await ReplayLibrary.setTags(item.id,tags);
+   dialog.close();await renderMyGames();
+  }catch(e){hint.textContent=e.message||'Could not save tags.';save.disabled=false;}
+ };
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ document.body.append(dialog);dialog.showModal();input.focus();
+}
 function makeGameButton(text,description,handler){
  const button=document.createElement('button');button.type='button';button.textContent=text;
  button.setAttribute('aria-label',description);
@@ -186,7 +236,18 @@ async function renderMyGames(){
  gamesMessage('Loading local replays…');
  try{
   const all=await ReplayLibrary.list(),term=gamesSearch.value.trim().toLocaleLowerCase();
-  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term)&&(!favoritesOnly||item.favorite===true));
+  const availableTags=new Map();
+  for(const item of all)for(const tag of ReplayLibrary.normalizeTags(item.tags)){
+   const key=tag.toLocaleLowerCase();if(!availableTags.has(key))availableTags.set(key,tag);
+  }
+  if(selectedTag!=='all'&&!availableTags.has(selectedTag))selectedTag='all';
+  tagsFilter.replaceChildren(new Option('All tags','all'));
+  for(const [key,name] of [...availableTags].sort((a,b)=>a[1].localeCompare(b[1])))
+   tagsFilter.add(new Option(name,key));
+  tagsFilter.value=selectedTag;
+  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term)&&
+   (!favoritesOnly||item.favorite===true)&&
+   (selectedTag==='all'||(item.tags||[]).some(tag=>tag.toLocaleLowerCase()===selectedTag)));
   const favoriteCount=all.filter(item=>item.favorite===true).length;
   favoritesToggle.textContent=(favoritesOnly?'★ Show all':'☆ Favorites')+' ('+favoriteCount+')';
   if(gamesSort.value==='oldest')items.sort((a,b)=>a.createdAt-b.createdAt);
@@ -201,6 +262,14 @@ async function renderMyGames(){
    const metadata=document.createElement('span');
    metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · LOCAL';
    detail.append(title,metadata);
+   if(item.tags?.length){
+    const chips=document.createElement('div');chips.className='games-tag-chips';
+    for(const tag of item.tags){
+     const chip=document.createElement('span');chip.className='games-tag-chip';
+     chip.textContent=tag;chips.append(chip);
+    }
+    detail.append(chips);
+   }
    const controls=document.createElement('div');controls.className='game-entry-actions';
    const star=makeGameButton(item.favorite===true?'★ Saved':'☆ Favorite',
     'Toggle favorite for '+item.name,async()=>{
@@ -215,6 +284,7 @@ async function renderMyGames(){
     }),
     star,
     makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
+    makeGameButton('Tags','Organize '+item.name+' into collections',()=>editGameTags(item)),
     makeGameButton('↓ Export','Download '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      saveReplayDownload(bytes,item.name);
@@ -227,7 +297,7 @@ async function renderMyGames(){
    row.append(detail,controls);gamesList.append(row);
   }
   gamesMessage(all.length?'Stored only in this browser. Goal markers are from unverified recordings.':(term?'':'Import a recording to get started.'));
-  if(all.length&&!items.length)gamesMessage(favoritesOnly?'No favorite replays match this filter.':'No matching replays. Clear the search to see all recordings.');
+  if(all.length&&!items.length)gamesMessage('No replays match the current search, favorites and tag filters.');
  }catch(e){
   gamesEmpty.hidden=true;gamesList.replaceChildren();
   gamesMessage('Local replay storage is unavailable: '+(e.message||'Unknown error')+'. Downloads still work.');

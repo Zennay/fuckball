@@ -62,7 +62,8 @@
    zip.file(path,bytes,{binary:true,compression:'STORE',createFolders:false});
    entries.push({id:item.id,path,name:normalizedName(item.name),createdAt:item.createdAt,
     size:bytes.length,favorite:item.favorite===true,
-    bookmarks:ReplayLibrary.normalizeBookmarks(item.bookmarks,item.frames),sha256:await sha256(bytes)});
+    bookmarks:ReplayLibrary.normalizeBookmarks(item.bookmarks,item.frames),
+    tags:ReplayLibrary.normalizeTags(item.tags),sha256:await sha256(bytes)});
    gamesMessage('Preparing backup '+(i+1)+' / '+items.length+'…');
   }
   const manifest=JSON.stringify({format:'fuckball-local-replays',version:1,entries});
@@ -94,6 +95,7 @@
     // Bookmarks are optional for legacy v1 archives, mandatory to validate when present.
     // The frame count is checked against the actual HBR2 after decompression.
     ReplayLibrary.normalizeBookmarks(entry.bookmarks);
+    ReplayLibrary.normalizeTags(entry.tags);
     const zipped=zip.file(entry.path);
     if(!zipped||zipSize(zipped)!==entry.size)throw Error('Backup replay is missing or has an invalid size.');
     paths.add(entry.path);
@@ -121,7 +123,7 @@
     throw Error('Replay checksum mismatch: '+normalizedName(entry.name));
    let recording;
    try{recording=ReplayLibrary.parseRecording(bytes);}catch{throw Error('Invalid HBR2 replay: '+normalizedName(entry.name));}
-   try{ReplayLibrary.normalizeBookmarks(entry.bookmarks,recording.frames);}
+   try{ReplayLibrary.normalizeBookmarks(entry.bookmarks,recording.frames);ReplayLibrary.normalizeTags(entry.tags);}
    catch{throw Error('Invalid bookmarks in replay: '+normalizedName(entry.name));}
    const normalized=normalizedName(entry.name);
    let duplicate=false;
@@ -147,7 +149,7 @@
     const item=prepared[i],saved=await ReplayLibrary.save(item.bytes,item.name);
     inserted.push(saved.id);
     await ReplayLibrary.restoreDetails(saved.id,{createdAt:item.entry.createdAt,favorite:item.entry.favorite,
-     bookmarks:item.entry.bookmarks});
+     bookmarks:item.entry.bookmarks,tags:item.entry.tags});
     gamesMessage('Restoring '+(i+1)+' / '+prepared.length+'…');
    }
   }catch(error){
