@@ -40,3 +40,11 @@
  .formation-disclosure,.formation-workspace canvas{background:#fff;box-shadow:none}
  .formation-toolbar,.formation-controls{display:none}
 }
+/* Stadium-aware formation plans: controls stay optional and entirely local. */
+.formation-toolbar select[aria-label="4v4 tactical formation preset"]{flex:0 1 190px}
+.formation-toolbar button{white-space:normal}
+.formation-studio [hidden]{display:none!important}
+@media(max-width:680px){
+ .formation-toolbar select[aria-label="4v4 tactical formation preset"]{flex:1 1 100%}
+ .formation-toolbar button{flex:1 1 145px}
+}
