@@ -80,15 +80,21 @@
   for(let r=0;r<rounds;r++){
    for(let j=0;j<x.teams.length/(2**(r+1));j++,i++){
     const m=x.matches[i];
+    const kickoff=m?.kickoff===undefined?null:m.kickoff;
+    const venue=m?.venue===undefined?'':m.venue;
     const tie=m?.homeScore!==null&&m?.homeScore===m?.awayScore;
     if(!m||m.id!=='r'+(r+1)+'m'+(j+1)||m.round!==r||m.game!==j||
      !scoreOk(m.homeScore)||!scoreOk(m.awayScore)||
      (m.homeScore===null)!==(m.awayScore===null)||
      ![null,'home','away'].includes(m.tiebreak)||
+     !(kickoff===null||(Number.isSafeInteger(kickoff)&&
+       kickoff>=1577836800000&&kickoff<=4102444800000))||
+     typeof venue!=='string'||venue.length>60||venue!==venue.trim()||
+     /[\u0000-\u001f\u007f-\u009f]/.test(venue)||
      (tie&&m.tiebreak===null)||(!tie&&m.tiebreak!==null))
      throw Error('Invalid knockout pairing or tiebreak.');
     matches.push({id:m.id,round:r,game:j,homeScore:m.homeScore,
-     awayScore:m.awayScore,tiebreak:m.tiebreak});
+     awayScore:m.awayScore,tiebreak:m.tiebreak,kickoff,venue});
    }
   }
   const resolve=(r,g)=>{
