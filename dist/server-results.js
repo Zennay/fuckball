@@ -152,6 +152,11 @@
  function render(){
   list.replaceChildren();
   if(!items)return;
+  // Never keep another account's private results visible after sign-out or a switch.
+  const active=authenticated();
+  if(active?.token!==currentToken||active?.username!==currentUser){
+   generation++;reset('Account changed. Private online results have been hidden.');return;
+  }
   const scope=items.filter(item=>
    (mode.value==='all'||item.mode===mode.value)&&
    (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
@@ -231,7 +236,7 @@
     headers:{Authorization:'Bearer '+account.token},cache:'no-store'
    });
    const data=await response.json().catch(()=>({}));
-   if(seq!==generation||authenticated()?.token!==account.token)return;
+   if(seq!==generation||authenticated()?.token!==account.token||authenticated()?.username!==account.username)return;
    if(response.status===401)throw Error('Session expired. Sign in again.');
    if(!response.ok)throw Error(data.error||'Online match history unavailable.');
    if(data.source!=='native-server'||data.ranked!==false||
@@ -305,6 +310,34 @@
   if(next==='games')load();
   else{generation++;currentToken=null;items=null;reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
+ // The native account UI is updated on login, logout and server-forced
+ // invalidation. Clear sensitive match cards synchronously on the next DOM
+ // microtask, without touching authentication/server-client or polling gameplay.
+ function syncAccount(){
+  const account=authenticated();
+  if(account?.token===currentToken&&account?.username===currentUser)return;
+  generation++;reset(account?'Account changed. Fetching only your own server results…':
+   'Signed out. Private server results and coaching notes were hidden.');
+  if(account&&!games.hidden)load();
+ }
+ const accountLabel=document.getElementById('joinAccount');
+ if(accountLabel)new MutationObserver(syncAccount).observe(accountLabel,
+  {childList:true,subtree:true,characterData:true});
+ window.addEventListener('storage',event=>{
+  if(event.key!==null&&event.key!=='fuckball.settings')return;
+  // A second tab may have logged out or switched accounts. Do not reuse
+  // stale in-memory credentials or display old account-owned cards.
+  try{
+   const prefs=JSON.parse(localStorage.getItem('fuckball.settings')||'null');
+   const persisted=prefs?.account;
+   const current=authenticated();
+   if(persisted?.token!==current?.token||persisted?.username!==current?.username){
+    generation++;reset('Account changed in another tab. Reload to see private online results.');
+   }
+  }catch{
+   generation++;reset('Account storage changed. Reload before viewing private online results.');
+  }
+ });
  window.addEventListener('fuckball:online-review-imported',()=>{
   if(items&&currentToken&&!games.hidden&&authenticated()?.token===currentToken){
    render();status.textContent='Your own private notes were restored on this device; genuine server receipts are unchanged.';
