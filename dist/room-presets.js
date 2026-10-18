@@ -61,12 +61,12 @@
   return pack.presets.map(value=>{
    if(!value||typeof value!=='object'||Array.isArray(value)||
       typeof value.name!=='string'||!value.name.trim()||value.name.length>36||
-      /[\\x00-\\x1f]/.test(value.name)||!allowed.includes(value.mode)||
+      /[\x00-\x1f]/.test(value.name)||!allowed.includes(value.mode)||
       !Number.isInteger(value.scoreLimit)||value.scoreLimit<0||value.scoreLimit>99||
       !Number.isInteger(value.timeLimit)||value.timeLimit<0||value.timeLimit>99||
       typeof value.stadium!=='string'||!value.stadium.length||value.stadium.length>MAX_MAP)
     throw Error('Preset pack contains invalid room settings.');
-   const name=value.name.trim().replace(/\\s+/g,' '),key=name.toLowerCase();
+   const name=value.name.trim().replace(/\s+/g,' '),key=name.toLowerCase();
    if(seen.has(key))throw Error('Preset pack contains duplicate preset names.');
    seen.add(key);
    // Parse every incoming stadium before changing anything on this device.
@@ -104,16 +104,10 @@
    if(file.size>maxPackBytes||file.size===0)
     throw Error('Preset pack must be between 1 byte and 600 KB.');
    const incoming=parsePack(await file.text());
-   const current=read(),byName=new Map(current.map((p,i)=>[p.name.toLowerCase(),i]));
-   let replacements=0;
-   for(const p of incoming){
-    const key=p.name.toLowerCase();
-    if(byName.has(key)){replacements++;continue;}
-    byName.set(key,current.length+byName.size);
-   }
-   const newCount=new Set([...current.map(x=>x.name.toLowerCase()),
-    ...incoming.map(x=>x.name.toLowerCase())]).size;
-   if(newCount>LIMIT)throw Error('This pack exceeds the eight-preset limit. Delete old presets first.');
+   const current=read(),existingNames=new Set(current.map(p=>p.name.toLowerCase()));
+   const replacements=incoming.filter(p=>existingNames.has(p.name.toLowerCase())).length;
+   const names=new Set([...existingNames,...incoming.map(p=>p.name.toLowerCase())]);
+   if(names.size>LIMIT)throw Error('This pack exceeds the eight-preset limit. Delete old presets first.');
    if(replacements&&!confirm('Replace '+replacements+' same-named presets already saved on this device?'))
     return;
    const next=current.map(item=>({...item}));
