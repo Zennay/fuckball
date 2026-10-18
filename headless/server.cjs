@@ -287,7 +287,7 @@ function createServer(options={}){
    },
    send:(cid,data)=>{if(r.authority!=='server'||data?.type==='chat'&&
     !Number.isSafeInteger(data.from))return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -317,13 +317,17 @@ function createServer(options={}){
  // A per-connection bearer ticket is never placed in the room URL, status, or host snapshots.
  function issueTicket(ws,r,id){const ticket=crypto.randomBytes(32).toString('hex');r.sessionTokens.set(id,ticket);send(ws,{type:'resumeTicket',ticket,windowMs:reconnectMs});}
  function roomControl(r){
+  const now=Date.now();
+  for(const [id,until]of r.chatMutes)if(until<=now||!r.clients.has(id))r.chatMutes.delete(id);
   for(const client of r.sockets.values()){
    const ownerAccount=client.playerId===r.owner&&client.account&&
     accounts.user(client.accountToken)?.toLowerCase()===client.account.toLowerCase()?
     clubs?.membership(client.account):null;
    send(client,{type:'roomControl',locked:r.locked,listed:r.listed===true,
     clubOnly:!!r.clubId,canClubLock:!!ownerAccount,
-    owner:r.owner,banMinutes:10});
+    owner:r.owner,banMinutes:10,
+    chatMuteUntil:r.chatMutes.get(client.playerId)||null,
+    chatMutes:client.playerId===r.owner?[...r.chatMutes]:[]});
   }
  }
  // Temporary account-scoped ban; never block a shared public IP, and never
@@ -366,10 +370,23 @@ function createServer(options={}){
    }else r.clubId=null;
    roomControl(r);return;
   }
-  if(!['kick','ban'].includes(d.action)||!Number.isSafeInteger(d.id)||d.id<1)
+  if(!['kick','ban','muteChat','unmuteChat'].includes(d.action)||!Number.isSafeInteger(d.id)||d.id<1)
    throw Error('Invalid room moderation action.');
   const target=r.sockets.get(d.id);
   if(!target||d.id===r.owner)throw Error('Choose a connected player other than yourself.');
+  if(d.action==='muteChat'||d.action==='unmuteChat'){
+   // Scoped to a room slot, not an IP address or a globally named account.
+   // Reserved-slot reconnects keep the mute; unrelated rooms stay unaffected.
+   const recent=(ws.chatModTimes||[]).filter(t=>Date.now()-t<10000);
+   if(recent.length>=6)throw Error('Too many moderation changes. Try again shortly.');
+   recent.push(Date.now());ws.chatModTimes=recent;
+   if(d.action==='muteChat'){
+    if(r.chatMutes.size>=128&&!r.chatMutes.has(d.id))throw Error('Room chat mute list is full.');
+    r.chatMutes.set(d.id,Date.now()+10*60000);
+   }else r.chatMutes.delete(d.id);
+   send(target,{type:'chatModeration',muted:d.action==='muteChat',until:r.chatMutes.get(d.id)||null});
+   roomControl(r);return;
+  }
   if(d.action==='ban'){
    if(!target.account||accounts.user(target.accountToken)?.toLowerCase()!==target.account.toLowerCase())
     throw Error('Temporary room bans require a signed-in player.');
@@ -393,10 +410,7 @@ function createServer(options={}){
   const c=r.clients.get(id);c.timeline=r.v3&&ws.netcode===3?Netcode.createInputTimeline():null;c.lastInputSeq=0;
   send(ws,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:claim.account,netcode:c.timeline?3:2,resumed:true});
   issueTicket(ws,r,id);r.setConnected(id,true);
-  send(ws,{type:'roomControl',locked:r.locked,listed:r.listed===true,
-   clubOnly:!!r.clubId,canClubLock:!!(ws.playerId===r.owner&&ws.account&&
-    accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase()&&
-    clubs?.membership(ws.account)),owner:r.owner,banMinutes:10});
+  roomControl(r);
   if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);
  }
  // Disconnection is not a voluntary leave: retain the role and match clock, not inputs or offline playing time.
@@ -455,7 +469,7 @@ function createServer(options={}){
  }
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;if(id===r.owner)r.listed=false; // A new host must consent before re-publishing.
-  r.sockets.delete(id);r.reports.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
+  r.sockets.delete(id);r.reports.delete(id);r.chatMutes.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
   if(r.authority===id){if(!r.sockets.size){r.destroy();rooms.delete(r.id);return;}failover(r,'host left');}
   else if(r.authority!=='server'){send(hostSocket(r),{type:'hostLeave',id});if(!r.sockets.size){r.destroy();rooms.delete(r.id);}meshUpdate(r);return;}
   if(r.leave(id)){r.destroy();rooms.delete(r.id);return;}
@@ -541,6 +555,15 @@ function createServer(options={}){
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
    if(r.quickMatch&&!['in','input','chat'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
    if(d.type==='chat'){
+    const mutedUntil=r.chatMutes.get(ws.playerId)||0;
+    if(mutedUntil>now){
+     if(!ws.lastChatMuteNotice||now-ws.lastChatMuteNotice>3000){
+      ws.lastChatMuteNotice=now;
+      send(ws,{type:'chatModeration',muted:true,until:mutedUntil});
+     }
+     return;
+    }
+    if(mutedUntil){r.chatMutes.delete(ws.playerId);roomControl(r);}
     // Room-authoritative chat works with server and peer-hosted simulations;
     // a client cannot impersonate the sender, name, room or player ID.
     if(r.sockets.get(ws.playerId)!==ws||typeof d.text!=='string'||
