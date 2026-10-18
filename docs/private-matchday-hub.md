@@ -8,7 +8,8 @@ The **Matchday Hub** on the Fuckball home page is a single, read-only summary of
 2. Review up to 12 upcoming *manually scheduled* league fixtures across leagues, sorted by local kickoff. Locations appear only if the organiser entered them.
 3. Use **Leagues**, **Cups** or **Tactics** to jump to the corresponding home-page organiser. The target panel expands automatically.
 4. Choose **Overview CSV** for a private snapshot of competitions, progress, leader/winner labels and upcoming fixtures. CSV guards against formula-leading team and venue values. No upload or sharing takes place.
-5. The Hub refreshes after local score/schedule changes, returning Home, opening the panel, cross-tab storage changes or explicit Refresh.
+5. Choose **All fixtures ICS** to export up to 200 future, manually scheduled league games from all private leagues as one offline calendar. Events use UTC times, a 60-minute placeholder duration and explicit unofficial notices; no invites or calendar-server writes occur.
+6. The Hub refreshes after local score/schedule changes, returning Home, opening the panel, cross-tab storage changes or explicit Refresh.
 
 ## Data and safety
 
