@@ -187,15 +187,15 @@
  const totals=dom('div',null,'matchday-totals');
  const competitionList=dom('div',null,'matchday-competitions');
  const control=dom('section',null,'matchday-control');
- control.setAttribute('aria-label','Private league and knockout fixture control center');
+ control.setAttribute('aria-label','Private league, knockout and best-of-series control center');
  const controlHeader=dom('div',null,'matchday-control-header');
  const controlIntro=dom('div');
  controlIntro.append(dom('h3','MATCHDAY CONTROL CENTER'),
-  dom('p','Find private league and knockout fixtures, enter self-reported results in the existing competition editors, or schedule league kickoffs. Nothing here records official server outcomes.'));
+  dom('p','Find league, cup and best-of-series games and open their existing private editors. Only the original editors save scores and kickoffs. Nothing here records official server outcomes.'));
  const controlTools=dom('div',null,'matchday-control-tools');
  const search=dom('input');search.type='search';search.maxLength=90;
  search.placeholder='Search league or team…';
- search.setAttribute('aria-label','Search private league fixtures');
+ search.setAttribute('aria-label','Search all private fixtures and series games');
  const display=dom('select');display.setAttribute('aria-label','Filter private league fixtures');
  for(const [value,label]of [
    ['pending','Still to play'],['ready','Ready for result'],
@@ -261,7 +261,7 @@
        f.homeScore+' – '+f.awayScore+
        (f.tiebreak?' · '+(f.tiebreak==='home'?f.home:f.away)+' won tiebreak':'')+
        ' · self-reported';
-     info.append(dom('small',f.competition+' · '+f.type+' · Round '+f.round),
+     info.append(dom('small',f.competition+' · '+f.type+' · '+(f.type==='Series'?'Game':'Round')+' '+f.round),
        dom('strong',f.home+' vs '+f.away),
        dom('span',when+' · '+result+(f.venue?' · '+f.venue:'')));
      const actions=dom('div',null,'matchday-control-row-actions');
