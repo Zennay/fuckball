@@ -14,7 +14,8 @@
  const kickSelect=document.createElement('select');kickSelect.setAttribute('aria-label','Gamepad kick button mapping');
  for(const [value,name] of [
   ['default','A / X / right trigger'],['face','Any face button (A/B/X/Y)'],
-  ['trigger','Right trigger only'],['shoulder','Right shoulder / trigger']
+  ['trigger','Right trigger only'],['shoulder','Right shoulder / trigger'],
+  ...[0,1,2,3,4,5,6,7,8,10,11].map(n=>['button:'+n,'One button · '+n])
  ])kickSelect.add(new Option(name,value));
  kickLabel.append(kickSelect);
  const deadzoneLabel=document.createElement('label');deadzoneLabel.textContent='Stick deadzone';
@@ -23,23 +24,43 @@
  deadzone.min='.15';deadzone.max='.65';deadzone.step='.05';
  deadzone.setAttribute('aria-label','Controller stick deadzone');
  deadzoneLabel.append(deadzone,deadzoneValue);
- options.append(kickLabel,deadzoneLabel);
+ const stickLabel=document.createElement('label');stickLabel.textContent='Movement stick';
+ const stickSelect=document.createElement('select');stickSelect.setAttribute('aria-label','Movement stick');
+ stickSelect.add(new Option('Left stick','left'));stickSelect.add(new Option('Right stick','right'));
+ stickLabel.append(stickSelect);
+ const axisRow=document.createElement('div');axisRow.className='gamepad-axis-options';
+ const flipXLabel=document.createElement('label');const flipX=document.createElement('input');
+ flipX.type='checkbox';flipXLabel.append(flipX,document.createTextNode('Reverse horizontal stick'));
+ const flipYLabel=document.createElement('label');const flipY=document.createElement('input');
+ flipY.type='checkbox';flipYLabel.append(flipY,document.createTextNode('Reverse vertical stick'));
+ axisRow.append(flipXLabel,flipYLabel);
+ options.append(kickLabel,deadzoneLabel,stickLabel,axisRow);
  info.append(title,label,options);settingsPanel.append(info);
  const KEY='fuckball.gamepad.v1';
- let preferences={kick:'default',deadzone:.30};
+ const kickValid=k=>['default','face','trigger','shoulder'].includes(k)||/^button:(?:[0-8]|10|11)$/.test(k);
+ let preferences={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false};
  try{
   const saved=JSON.parse(localStorage.getItem(KEY)||'{}');
-  if(['default','face','trigger','shoulder'].includes(saved.kick))preferences.kick=saved.kick;
+  if(kickValid(saved.kick))preferences.kick=saved.kick;
+  if(['left','right'].includes(saved.stick))preferences.stick=saved.stick;
+  if(typeof saved.invertX==='boolean')preferences.invertX=saved.invertX;
+  if(typeof saved.invertY==='boolean')preferences.invertY=saved.invertY;
   if(Number.isFinite(saved.deadzone)&&saved.deadzone>=.15&&saved.deadzone<=.65)
    preferences.deadzone=saved.deadzone;
  }catch{}
  kickSelect.value=preferences.kick;
  deadzone.value=String(preferences.deadzone);
  deadzoneValue.textContent=Math.round(preferences.deadzone*100)+'%';
+ stickSelect.value=preferences.stick;flipX.checked=preferences.invertX;flipY.checked=preferences.invertY;
  function save(){
   try{localStorage.setItem(KEY,JSON.stringify(preferences));}catch{}
+  window.dispatchEvent(new CustomEvent('fuckball-gamepad-config',{detail:{...preferences}}));
  }
- kickSelect.onchange=()=>{preferences.kick=kickSelect.value;save();};
+ kickSelect.onchange=()=>{if(!kickValid(kickSelect.value))return;preferences.kick=kickSelect.value;save();};
+ stickSelect.onchange=()=>{if(!['left','right'].includes(stickSelect.value))return;
+  preferences.stick=stickSelect.value;save();lastSignature='';};
+ flipX.onchange=()=>{preferences.invertX=flipX.checked;save();lastSignature='';};
+ flipY.onchange=()=>{preferences.invertY=flipY.checked;save();lastSignature='';};
  deadzone.oninput=()=>{
   preferences.deadzone=Number(deadzone.value);
   deadzoneValue.textContent=Math.round(preferences.deadzone*100)+'%';
@@ -51,6 +72,7 @@
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const magnitude=axis=>Number.isFinite(axis)&&Math.abs(axis)>=preferences.deadzone?Math.sign(axis):0;
  const kicking=pad=>{
+  if(preferences.kick.startsWith('button:'))return isHeld(pad,Number(preferences.kick.slice(7)));
   if(preferences.kick==='face')return [0,1,2,3].some(i=>isHeld(pad,i));
   if(preferences.kick==='trigger')return isHeld(pad,7);
   if(preferences.kick==='shoulder')return isHeld(pad,5)||isHeld(pad,7);
@@ -74,7 +96,10 @@
  }
  function sample(pad){
   if(!pad)return neutral();
-  let x=magnitude(pad.axes?.[0]),y=magnitude(pad.axes?.[1]);
+  const index=preferences.stick==='right'?2:0;
+  let x=magnitude(pad.axes?.[index]),y=magnitude(pad.axes?.[index+1]);
+  if(preferences.invertX)x=-x;
+  if(preferences.invertY)y=-y;
   if(isHeld(pad,14))x=-1;
   if(isHeld(pad,15))x=1;
   if(isHeld(pad,12))y=-1;
@@ -114,11 +139,18 @@
  // immediately; no page reload, alternate movement messages or server changes.
  window.addEventListener('fuckball-gamepad-config',event=>{
   const next=event.detail;
-  if(!next||!['default','face','trigger','shoulder'].includes(next.kick)||
-   !Number.isFinite(next.deadzone)||next.deadzone<.15||next.deadzone>.65)return;
+  if(!next||!kickValid(next.kick)||
+   !Number.isFinite(next.deadzone)||next.deadzone<.15||next.deadzone>.65||
+   (next.stick!==undefined&&!['left','right'].includes(next.stick))||
+   (next.invertX!==undefined&&typeof next.invertX!=='boolean')||
+   (next.invertY!==undefined&&typeof next.invertY!=='boolean'))return;
   preferences.kick=next.kick;
   preferences.deadzone=next.deadzone;
+  preferences.stick=next.stick||'left';
+  preferences.invertX=next.invertX??false;preferences.invertY=next.invertY??false;
   kickSelect.value=next.kick;deadzone.value=String(next.deadzone);
+  stickSelect.value=preferences.stick;flipX.checked=preferences.invertX;
+  flipY.checked=preferences.invertY;
   deadzoneValue.textContent=Math.round(next.deadzone*100)+'%';
   lastSignature=''; // Reapply a held input on the next native animation frame.
  });
