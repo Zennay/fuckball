@@ -42,3 +42,26 @@
 .replay-moment.blue{border-color:#6f94c3;color:#d8e8ff}
 .replay-moment:focus-visible{outline:3px solid #d3ef9f;outline-offset:2px}
 @media(max-width:660px){.my-games-tools{align-items:stretch}.my-games-tools label{flex:1 1 130px}.my-games-tools input,.my-games-tools select{width:100%;min-width:0}.replay-controls{bottom:55px!important}}
+
+
+.game-entry.game-entry-favorite{border-color:#9aaf66;background:#293a36}
+.game-entry-actions .game-star[aria-pressed="true"]{
+ color:#e7f5ab;background:#425038;border-color:#acc779;
+}
+.game-entry-actions .game-star[aria-pressed="false"]{color:#cdd7cc}
+.my-games-tools .games-favorites-toggle[aria-pressed="true"]{
+ background:#d3ef9f;color:#1b2c1c;border-color:#c3e990;font-weight:bold;
+}
+.game-rename-dialog{width:min(450px,94vw);max-width:94vw;padding:0;
+ background:#1b2b32;color:#f0f6f3;border:1px solid #7c9693;border-radius:12px;
+ box-shadow:0 30px 100px #0009}
+.game-rename-dialog::backdrop{background:#071115b8}
+.game-rename-form{padding:28px;display:grid;gap:20px}
+.game-rename-form h2{font-size:23px;margin:0}
+.game-rename-form label{display:grid;gap:10px;font-size:13px;color:#d1dedd}
+.game-rename-form input{background:#0f2027;border:1px solid #799395;border-radius:6px;
+ color:#f0f6f3;padding:12px;font-size:16px;width:100%}
+.game-rename-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.game-rename-actions button{padding:11px 18px;border-radius:6px}
+.game-rename-actions button:focus-visible,.game-rename-form input:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:3px}
