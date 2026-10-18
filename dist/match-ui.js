@@ -63,7 +63,7 @@ function applyMenuPerformance(){
  document.body.classList.toggle('low-menu-transparency',menuPreference('menuLowTransparency','(prefers-reduced-transparency: reduce)'));
  document.body.classList.toggle('low-menu-motion',menuPreference('menuLowMotion','(prefers-reduced-motion: reduce)'));
 }
-const menuPerformance=$('menuVideoPane').querySelector('.rm-form');
+const menuPerformance=$('menuVideoPane');
 for(const [key,label,media] of [
  ['menuLowTransparency','Reduce transparency · remove menu blur','(prefers-reduced-transparency: reduce)'],
  ['menuLowMotion','Reduce motion · disable menu animations','(prefers-reduced-motion: reduce)']
