@@ -163,8 +163,7 @@
  }
  function downloadCalendar(){
   const v=current();if(!v)return;
-  // Once a series is decided, future unplayed games do not exist as fixtures.
-  // Only previously recorded games may remain on the exported calendar.
+  // A decided series must not export unnecessary future fixtures.
   const state=statusFor(v);
   const rows=v.games.filter((x,i)=>x.kickoff!==null&&(!state.winner||i<state.recorded));
   if(!rows.length)return inform('No required games have a saved kickoff. A decided series never exports unnecessary future fixtures.');
@@ -418,6 +417,7 @@
   const grid=text('div',null,'series-fixtures');
   for(const [i,g]of v.games.entries()){
    const card=text('article',null,'series-game');
+   card.dataset.gameId=g.id;card.tabIndex=-1;
    const line=text('div',null,'series-game-heading');
    const state=g.redScore!==null?v.red+' '+g.redScore+' – '+g.blueScore+' '+v.blue:
     data.winner?'Not needed · series decided':i===data.recorded?'Next game':'Waiting for earlier games';
@@ -538,10 +538,27 @@
   }catch(error){respond(false,error.message||'Could not save private series.');}
  });
  window.addEventListener('fuckball:open-private-series',event=>{
-  if(!validId(event.detail?.id))return;
-  if(items.some(v=>v.id===event.detail.id)){
-   selected=event.detail.id;details.open=true;render();
-   section.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth'});
+  const request=event.detail;
+  if(!validId(request?.id))return;
+  const series=items.find(v=>v.id===request.id);
+  if(!series)return;
+  selected=series.id;details.open=true;render();
+  const validGame=typeof request.gameId==='string'&&/^g[1-7]$/.test(request.gameId)&&
+   series.games.some(g=>g.id===request.gameId);
+  const target=validGame?Array.from(board.querySelectorAll('.series-game')).find(card=>
+   card.dataset.gameId===request.gameId):null;
+  if(target){
+   target.classList.add('series-game-target');
+   target.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+    'auto':'smooth',block:'center'});
+   const focus=request.field==='schedule'?target.querySelector('input[type="datetime-local"]'):
+    target.querySelector('.series-score-form input:not(:disabled)');
+   (focus||target).focus({preventScroll:true});
+   inform('Opened '+series.name+' · '+request.gameId.toUpperCase()+
+    '. Existing private score and schedule forms remain authoritative for local entries.');
+  }else{
+   section.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+    'auto':'smooth',block:'start'});
    choose.focus({preventScroll:true});
   }
  });

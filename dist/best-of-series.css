@@ -60,6 +60,11 @@
  .series-batch-body{padding:2px 12px 12px}}
 @media print{.series-batch-schedule{display:none!important}}
 
+/* Matchday deep link: exact previously saved game, no direct score writes. */
+.series-game.series-game-target{border:2px solid #d0f7a8;background:#234b3e;
+ box-shadow:0 0 0 3px rgba(191,252,144,.16);scroll-margin-top:23vh}
+.series-game:focus-visible{outline:3px solid #d0f7a8;outline-offset:4px}
+
 /* Player-triggered offline share actions, never public account or verified scores. */
 .best-of-series .series-share-action{background:#285355;color:#ebffda;border-color:#a6d9bd}
 .best-of-series .series-share-action:hover:not(:disabled){background:#356963}
