@@ -1,0 +1,35 @@
+/* Player-owned private browser records, separate from authenticated career. */
+.local-vault{margin-top:26px;border:1px solid #719487;border-radius:15px;
+ background:#1b3936;padding:clamp(16px,3vw,27px);color:#e8f8e6}
+.local-vault h2{font-size:clamp(21px,3vw,29px);font-style:italic;letter-spacing:-.03em;
+ margin:0 0 12px}
+.local-vault>p{line-height:1.6;color:#c3dacf;font-size:.83rem;max-width:72ch}
+.local-vault-warning{border-left:3px solid #e8d091;padding:9px 12px;
+ background:#29403b;color:#f2e8c8!important}
+.local-vault-actions,.local-vault-extract-actions{display:flex;gap:9px;flex-wrap:wrap;margin:13px 0}
+.local-vault button{min-height:44px;border:1px solid #acd0ae;border-radius:8px;
+ background:#d1ecaf;color:#1b352a;padding:9px 12px;font-size:.82rem;
+ font-weight:770;cursor:pointer}
+.local-vault button:disabled{opacity:.48;cursor:not-allowed}
+.local-vault button:focus-visible,.local-vault input:focus-visible{
+ outline:3px solid #ffdf9d;outline-offset:3px}
+.local-vault-categories{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;margin:18px 0}
+.local-vault-category{display:flex;gap:12px;align-items:center;padding:12px;
+ border:1px solid #597f71;border-radius:10px;background:#264a40}
+.local-vault-category input{width:21px;height:21px;accent-color:#c4e999;flex:0 0 auto}
+.local-vault-category>div{display:grid;gap:6px}
+.local-vault-category strong{font-size:.88rem}
+.local-vault-category span{font-size:.75rem;line-height:1.5;color:#c6dbcd}
+.local-vault-extraction{margin-top:19px;padding-top:17px;border-top:1px solid #648476}
+.local-vault-extraction[hidden]{display:none!important}
+.local-vault-extraction h3{font-size:.9rem;letter-spacing:.05em;color:#d6fab6}
+.local-vault-extraction>p{font-size:.83rem;line-height:1.5;color:#c9dfcd}
+.local-vault-extract-list{display:grid;gap:9px}
+.local-vault-extract-group{padding:12px;border:1px solid #577b70;border-radius:9px;
+ background:#25423c}
+.local-vault-extract-group strong{font-size:.86rem}
+.local-vault-extract-actions button{overflow-wrap:anywhere;text-align:left}
+.local-vault-message{font-size:.79rem;color:#d0e6d1;line-height:1.5;min-height:19px}
+@media(max-width:550px){.local-vault-actions button,.local-vault-extract-actions button{
+ flex:1 1 100%;width:100%}}
+@media print{.local-vault{display:none!important}}
