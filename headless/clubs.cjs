@@ -100,6 +100,8 @@ function createClubs(dir,{areFriends,exists=()=>true,clock=()=>Date.now()}={}){
     throw Error('Club name (3–32) and tag (2–5 letters/digits) required.');
    const tag=d.tag.toUpperCase(),name=d.name.trim();
    if(next.clubs.some(c=>c.tag===tag))throw Error('Club tag is already taken.');
+   // Creating one's own club invalidates invitations to other clubs.
+   next.invites=next.invites.filter(i=>i.user!==user);
    const id=crypto.randomBytes(8).toString('hex');
    next.clubs.push({id,tag,name,description:'',owner:user,members:[user],createdAt:clock()});
   }else if(op==='invite'){
