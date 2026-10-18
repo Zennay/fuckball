@@ -1,0 +1,38 @@
+/* Device-local match screenshots; no ranked or cloud presentation. */
+.moment-capture,.moment-menu-capture{font-weight:850;letter-spacing:.01em}
+.moment-menu-capture{padding:10px 14px;border:1px solid #91a892;border-radius:9px;
+ background:#243f3b;color:#ddf6c3}
+.moment-dialog{background:#13272e;color:#ecf7e8;border:1px solid #648277;
+ border-radius:16px;padding:0;width:min(1100px,95vw);max-width:95vw;max-height:90dvh}
+.moment-dialog::backdrop{background:#060d10d9;backdrop-filter:blur(5px)}
+.moment-shell{display:grid;gap:18px;padding:clamp(15px,3vw,28px)}
+.moment-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.moment-head h2{font-style:italic;font-size:clamp(25px,4vw,40px);
+ letter-spacing:-.045em;margin:0;color:#daf7b9}
+.moment-head button{padding:8px 16px;font-size:22px;border:1px solid #8ba79e;
+ border-radius:8px;color:#e4f6ec}
+.moment-description{font-size:12px;line-height:1.65;margin:0;color:#b5c9bf}
+.moment-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.moment-tools strong{font-size:13px;color:#d8f5ad;margin-right:auto}
+.moment-tools button{min-height:42px;padding:9px 16px;border-radius:8px;
+ border:1px solid #739d84;background:#29453e;color:#e6f7e4}
+.moment-tools button.moment-danger{color:#ffd1cd;border-color:#a57575}
+.moment-tools button:disabled{opacity:.45;cursor:default}
+.moment-status{min-height:18px;color:#d5e9cd;font-size:12px;margin:0}
+.moment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:13px}
+.moment-card{display:grid;gap:10px;align-content:start;padding:12px;
+ border:1px solid #566f69;border-radius:11px;background:#20373b;min-width:0}
+.moment-card img{aspect-ratio:16/9;object-fit:contain;width:100%;background:#10232a;
+ border-radius:7px}
+.moment-card strong{font-size:13px;color:#ebf8e8;overflow-wrap:anywhere}
+.moment-card small{font-size:11px;color:#acc3b7}
+.moment-card-actions{display:flex;gap:6px;flex-wrap:wrap}
+.moment-card-actions button{flex:1 1 65px;min-height:40px;border-radius:7px;padding:8px;
+ border:1px solid #7d9789;background:#34514b;color:#f0f7ed;font-weight:750}
+.moment-card-actions button:last-child{color:#ffc5c2;border-color:#966d75}
+.moment-empty{padding:30px 12px;color:#accbb9;border:1px dashed #769589;
+ border-radius:10px;grid-column:1/-1}
+.moment-dialog button:focus-visible,.moment-capture:focus-visible{
+ outline:3px solid #dcffad;outline-offset:3px}
+@media(max-width:640px){.moment-dialog{width:98vw;max-width:98vw}.moment-tools button{flex:1 1 140px}}
+@media(prefers-reduced-motion:reduce){.moment-dialog *{animation:none!important;transition:none!important}}
