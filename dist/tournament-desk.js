@@ -79,22 +79,30 @@
       createdAt:raw.createdAt,updatedAt:raw.updatedAt,fixtures};
   }
   let tournaments=[],activeId='',filter='pending',message='';
+  // Guard against silently overwriting another tab's tournament edits, or
+  // erasing unreadable stored data. A reload/recovery is required on conflict.
+  let storageSnapshot=null,storageHealthy=true;
   try{
     const stored=localStorage.getItem(KEY);
+    storageSnapshot=stored;
     if(stored&&stored.length<=MAX_STORE){
       const parsed=JSON.parse(stored);
       if(!Array.isArray(parsed)||parsed.length>MAX_TOURNAMENTS)throw Error('Invalid saved collection');
       const seen=new Set();
       tournaments=parsed.map(normalize);
       for(const t of tournaments){if(seen.has(t.id))throw Error('Duplicate tournament');seen.add(t.id);}
-    }else if(stored)message='Saved tournament data exceeds the supported storage limit.';
-  }catch{tournaments=[];message='Stored tournament data could not be verified. Import a trusted backup to restore it.';}
+    }else if(stored)throw Error('Stored tournament data exceeds the supported storage limit.');
+  }catch{tournaments=[];storageHealthy=false;
+    message='Stored tournament data could not be verified. Export or recover it before making changes.';}
   function persist(next){
     if(next.length>MAX_TOURNAMENTS)throw Error('Maximum eight tournaments on this device.');
     const data=JSON.stringify(next);
     if(data.length>MAX_STORE)throw Error('Local tournament storage is full.');
-    localStorage.setItem(KEY,data);  // Write first: a blocked/quota store must not change the UI state.
-    tournaments=next;
+    if(!storageHealthy)throw Error('Stored tournaments are unreadable. Recover or reload before writing.');
+    if(localStorage.getItem(KEY)!==storageSnapshot)
+      throw Error('Tournament data changed in another tab. Reload to keep both sets of edits.');
+    localStorage.setItem(KEY,data);  // Only the canonical local organiser may mutate league results.
+    storageSnapshot=data;tournaments=next;
     window.dispatchEvent(new Event('fuckball:private-competition-change'));
   }
   const panel=make('section',null,'tournament-desk');
@@ -200,6 +208,7 @@
       'All scheduled matches have a recorded score. Congratulations on finishing the fixture list.':'No fixtures in this view.'));
     for(const f of visible){
       const row=make('form',null,'tournament-match');
+      row.dataset.fixtureId=f.id;
       const matchLabel=make('div',null,'tournament-match-name');
       matchLabel.append(make('small','ROUND '+num(f.round)),
         make('strong',t.teams[f.home]+' vs '+t.teams[f.away]));
@@ -367,14 +376,39 @@
       message='Tournament restored as a new device-local copy.';render();
     }catch(err){inform('Import refused: '+(err.message||'Invalid local tournament file.'));}
   };
+  // Matchday Control Center is navigation-only. The actual score and schedule
+  // remain submitted through the existing Tournament Desk forms/validators.
+  window.addEventListener('fuckball:open-private-league-fixture',event=>{
+    const request=event.detail;
+    if(!request||typeof request.tournamentId!=='string'||
+      typeof request.fixtureId!=='string'||!['score','schedule'].includes(request.field))return;
+    const target=tournaments.find(t=>t.id===request.tournamentId);
+    const fixture=target?.fixtures.find(f=>f.id===request.fixtureId);
+    if(!fixture)return inform('This private fixture is no longer available on this device.');
+    activeId=target.id;filter='round'+fixture.round;
+    message='Editing '+target.teams[fixture.home]+' vs '+target.teams[fixture.away]+
+      ' · all details are private and unverified.';
+    details.open=true;render();
+    const row=Array.from(fixtures.querySelectorAll('.tournament-match')).find(el=>
+      el.dataset.fixtureId===fixture.id);
+    if(!row)return inform('The selected fixture could not be opened.');
+    row.classList.add('tournament-match-target');
+    row.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'center'});
+    const input=row.querySelector(request.field==='score'?'input[type="number"]':'input[type="datetime-local"]');
+    input?.focus({preventScroll:true});
+  });
   window.addEventListener('storage',event=>{
     if(event.key!==KEY)return;
     try{
+      if(event.newValue?.length>MAX_STORE)throw Error();
       const candidate=event.newValue?JSON.parse(event.newValue):[];
       if(!Array.isArray(candidate)||candidate.length>MAX_TOURNAMENTS)throw Error();
-      tournaments=candidate.map(normalize);
+      const incoming=candidate.map(normalize);
+      if(new Set(incoming.map(x=>x.id)).size!==incoming.length)throw Error();
+      tournaments=incoming;storageSnapshot=event.newValue;storageHealthy=true;
       message='Tournament data refreshed from another tab.';render();
-    }catch{inform('Another tab changed tournament data; reload to inspect it.');}
+    }catch{storageHealthy=false;inform('Another tab changed tournament data. Reload or recover it before saving.');}
   });
   render();
 })();
