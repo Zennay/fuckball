@@ -70,3 +70,28 @@
 .tournament-recovery p{flex:1 1 100%;margin:0;color:#ffe5c7;line-height:1.5}
 .tournament-recovery button{min-height:43px}
 .tournament-recovery[hidden]{display:none!important}
+
+/* Explicit user-controlled, device-private fixture-calendar bulk scheduling. */
+.tournament-round-scheduler:not([hidden]){
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;
+ padding:17px;margin:15px 0 22px;border:1px solid #8caf83;
+ border-radius:12px;background:#1d3a37
+}
+.tournament-round-scheduler[hidden]{display:none!important}
+.tournament-round-scheduler h4,.tournament-round-scheduler>p{
+ grid-column:1/-1;margin:0
+}
+.tournament-round-scheduler h4{font-size:1rem;color:#dff9b1;letter-spacing:.06em}
+.tournament-round-scheduler>p{color:#d1e5d8;font-size:.86rem;line-height:1.45}
+.tournament-round-scheduler label{display:grid;gap:7px;color:#e0eedc;
+ font-size:.85rem;font-weight:720}
+.tournament-round-scheduler label:has([type="checkbox"]){
+ display:flex;gap:8px;align-items:center
+}
+.tournament-round-scheduler input[type="checkbox"]{width:18px;height:18px;accent-color:#d9f9ad}
+.tournament-round-scheduler .tournament-schedule-preview{
+ padding:12px;border:1px solid #6b8b7c;border-radius:9px;background:#294a42
+}
+.tournament-round-scheduler button[type="submit"]{grid-column:1/-1;min-height:45px}
+@media(max-width:690px){.tournament-round-scheduler:not([hidden]){grid-template-columns:1fr}}
+@media print{.tournament-round-scheduler{display:none!important}}
