@@ -64,6 +64,7 @@
  // Tactical callouts use the EXISTING authenticated room chat submit path.
  // No new message type, server authority, background sending or player automation.
  const corner=document.getElementById('hudCorner'),form=document.getElementById('chatForm');
+ const match=document.getElementById('matchView');
  const input=document.getElementById('chatInput');
  if(corner&&form&&input){
   const KEY='fuckball.tactical-callouts.v1';
@@ -71,7 +72,7 @@
   const fixed=['I am open!', 'Defend!', 'Nice play!', 'Good game!'];
   function clean(value){
    if(typeof value!=='string'||value.length>48||!value.trim()||
-     /^\\//.test(value.trim())||/[\\u0000-\\u001f\\u007f-\\u009f]/.test(value))
+     /^\//.test(value.trim())||/[\u0000-\u001f\u007f-\u009f]/.test(value))
     throw Error('Use 1–48 plain characters, not a slash command.');
    return value.trim();
   }
