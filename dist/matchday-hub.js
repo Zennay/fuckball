@@ -458,12 +458,14 @@
  lineupActions.append(arrange,resetDraft);
  const tools=dom('div',null,'matchday-attendance-actions');
  const csv=button('↓ Attendance CSV',exportAttendanceCSV);
+ const printable=button('↓ Printable HTML team sheet',downloadTeamSheet);
+ const clipboard=button('Copy private team sheet',copyTeamSheet);
  const sheet=button('↓ Private team sheet TXT',exportSquadSheet);
  const backup=button('↓ Backup JSON',exportAttendanceJSON);
  const upload=dom('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
  const restore=button('↑ Restore JSON',()=>upload.click());
  const clear=button('Clear match list',clearAttendance);
- tools.append(csv,sheet,backup,restore,clear,upload);
+ tools.append(csv,sheet,printable,clipboard,backup,restore,clear,upload);
  const info=dom('p',null,'matchday-attendance-message');
  info.setAttribute('role','status');info.setAttribute('aria-live','polite');
  attendanceBody.append(picker,counts,squadReuse,lineupPreview,lineupActions,peopleView,form,tools,info);
@@ -564,7 +566,7 @@
   }
   fixtureChoice.value=chosen;fixtureChoice.disabled=!fixtures.length;
   const active=!!chosen&&rsvpAvailable;
-  for(const el of [friend,response,noteField,add,csv,sheet,clear,arrange,resetDraft])el.disabled=!active;
+  for(const el of [friend,response,noteField,add,csv,sheet,printable,clipboard,clear,arrange,resetDraft])el.disabled=!active;
   // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
   backup.disabled=!rsvpAvailable;
   restore.disabled=!rsvpAvailable;
@@ -674,6 +676,93 @@
   const a=dom('a');a.href=url;a.download=filename;a.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
  }
+ // Export explicitly selected organiser-owned draft only. Deliberately exclude
+ // private notes, accounts, invite URLs and authenticated result claims.
+ function teamSheetModel(){
+  if(!rsvpAvailable||!chosen)throw Error('Select an unsplayed private fixture first');
+  const fixture=eligible().find(f=>f.attendanceId===chosen);
+  if(!fixture)throw Error('Selected fixture is no longer available');
+  const people=roster();
+  const groups=[
+   {title:'RED · PROVISIONAL',members:people.filter(p=>p.status==='going'&&p.side==='red')},
+   {title:'BLUE · PROVISIONAL',members:people.filter(p=>p.status==='going'&&p.side==='blue')},
+   {title:'READY BENCH',members:people.filter(p=>p.status==='going'&&p.side==='bench')},
+   {title:'MAYBE',members:people.filter(p=>p.status==='maybe')},
+   {title:'UNAVAILABLE',members:people.filter(p=>p.status==='out')}
+  ];
+  return {fixture,groups,kickoff:fixture.time===null?'Not scheduled':
+    new Date(fixture.time).toLocaleString(undefined,{dateStyle:'full',timeStyle:'short'}),
+   venue:fixture.venue||'Not set'};
+ }
+ function teamSheetText(model){
+  const {fixture,groups,kickoff,venue}=model;
+  const lines=['FUCKBALL · PRIVATE MATCH TEAM SHEET','UNOFFICIAL / ORGANISER-ENTERED',
+   fixture.competition,'Fixture: '+fixture.home+' vs '+fixture.away,
+   'Kickoff: '+kickoff,'Venue: '+venue,''];
+  for(const group of groups){
+   lines.push(group.title+' ('+group.members.length+')');
+   if(!group.members.length)lines.push('  —');
+   else for(const p of group.members)lines.push('  • '+p.name);
+   lines.push('');
+  }
+  lines.push('Draft teams only. No actual online team assignment, invitations, authenticated attendance or official results.',
+   'Private notes intentionally excluded.');
+  return lines.join('\n');
+ }
+ function teamSheetHTML(model){
+  const escape=s=>String(s).replace(/[&<>"']/g,ch=>({
+   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+  const {fixture,groups,kickoff,venue}=model;
+  const cards=groups.map((group,index)=>
+   '<section class="card '+['red','blue','bench','maybe','out'][index]+'">'+
+   '<div class="card-head"><h2>'+escape(group.title)+'</h2><b>'+group.members.length+'</b></div>'+
+   '<ul>'+(group.members.length?group.members.map(p=>'<li>'+escape(p.name)+'</li>').join(''):
+   '<li class="empty">No players assigned</li>')+'</ul></section>').join('');
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'+
+   '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+   '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;">'+
+   '<title>Private match team sheet</title>'+
+   '<style>'+
+   '*{box-sizing:border-box}body{margin:0;background:#eaf0ee;color:#142e2c;font:16px system-ui,-apple-system,sans-serif}'+
+   'main{max-width:900px;margin:30px auto;background:#fff;border-radius:18px;padding:36px;box-shadow:0 12px 40px #1233}'+
+   '.eyebrow{letter-spacing:.14em;text-transform:uppercase;color:#3d7167;font-size:.76rem;font-weight:900}'+
+   'h1{font-size:clamp(1.6rem,4vw,2.7rem);letter-spacing:-.04em;margin:10px 0 4px}'+
+   '.fixture{font-size:1.1rem;font-weight:750;margin:4px 0 18px}'+
+   '.meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px}.meta span{padding:9px 12px;background:#eff4f0;border-radius:8px}'+
+   '.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.card{border:1px solid #c7d5cc;border-radius:12px;overflow:hidden}'+
+   '.card-head{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:#e6efeb}'+
+   '.red .card-head{border-left:5px solid #c8524f}.blue .card-head{border-left:5px solid #4f86cd}'+
+   '.bench .card-head{border-left:5px solid #9aab43}.maybe .card-head{border-left:5px solid #cf9c51}'+
+   '.out .card-head{border-left:5px solid #8c9b9b}'+
+   '.card-head h2{font-size:.83rem;letter-spacing:.06em;margin:0}.card-head b{font-variant-numeric:tabular-nums}'+
+   'ul{list-style:none;margin:0;padding:12px 16px}li{overflow-wrap:anywhere;padding:7px 0;border-bottom:1px solid #ecf1ee}li:last-child{border:0}'+
+   '.empty{color:#737e79;font-style:italic}.foot{margin-top:24px;color:#596a63;font-size:.8rem;line-height:1.5}'+
+   '@media(max-width:620px){main{margin:0;padding:20px;border-radius:0}.grid{grid-template-columns:1fr}}'+
+   '@media print{body{background:white}main{margin:0;padding:0;box-shadow:none;max-width:none}.card{break-inside:avoid}.grid{gap:9px}}'+
+   '</style></head><body><main><div class="eyebrow">FUCKBALL / PRIVATE GAME NIGHT</div>'+
+   '<h1>'+escape(fixture.competition)+'</h1>'+
+   '<p class="fixture">'+escape(fixture.home)+' vs '+escape(fixture.away)+'</p>'+
+   '<div class="meta"><span>Kickoff: '+escape(kickoff)+'</span><span>Venue: '+escape(venue)+'</span></div>'+
+   '<div class="grid">'+cards+'</div>'+
+   '<p class="foot">UNOFFICIAL ORGANISER-ENTERED TEAM DRAFT. No verified attendance, actual online team assignment, invitations or match results. Private notes excluded. Save or print locally.</p>'+
+   '</main></body></html>';
+ }
+ function downloadTeamSheet(){
+  try{
+   const model=teamSheetModel();
+   saveLocal(teamSheetHTML(model),'fuckball-private-match-team-sheet.html','text/html;charset=utf-8');
+   info.textContent='Printable private match team sheet downloaded. Personal notes were excluded. Opening or sharing this file is your choice.';
+  }catch(e){info.textContent=String(e.message||'Unable to export team sheet');}
+ }
+ async function copyTeamSheet(){
+  try{
+   if(!navigator.clipboard?.writeText)throw Error('Clipboard is unavailable; download the team sheet instead');
+   await navigator.clipboard.writeText(teamSheetText(teamSheetModel()));
+   info.textContent='Private team sheet text copied on your request. Notes excluded; share it only with your intended players.';
+  }catch(e){info.textContent='Not copied: '+String(e.message||'clipboard unavailable');}
+ }
+
  function exportAttendanceCSV(){
   if(!chosen||!rsvpAvailable)return;
   const fixture=eligible().find(f=>f.attendanceId===chosen);if(!fixture)return;
