@@ -2,13 +2,31 @@
 const defaultServer=location.hostname.endsWith('.chatgpt.site')?'':(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';$('serverAddress').value=defaultServer;
 $('preserveGuestSlot').checked=settings.guestReconnect===true;
 $('preserveGuestSlot').onchange=()=>{settings.guestReconnect=$('preserveGuestSlot').checked;savePrefs();};
-const baseDisconnect=disconnect;disconnect=function(){const link=serverLink;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
+const baseDisconnect=disconnect;disconnect=function(){const link=serverLink;clearQuickRematchAlert(link);serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
 const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:started?'stop':'start'});return;}baseStartStop();};$('startButton').onclick=startStop;
 const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serverLink.isOwner||!started)return;paused=!paused;releaseInputs();serverLink.send({type:'pause',value:paused});setButtons();return;}baseTogglePause();};
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
+function clearQuickRematchAlert(link){
+ if(link?.quickRematchNotice){try{link.quickRematchNotice.close();}catch{}link.quickRematchNotice=null;}
+ if(link?.quickRematchTimer){clearTimeout(link.quickRematchTimer);link.quickRematchTimer=null;}
+}
+function showQuickRematchAlert(link){
+ if(!settings.quickMatchAlerts||!document.hidden||!window.isSecureContext||
+    typeof Notification==='undefined'||Notification.permission!=='granted')return;
+ clearQuickRematchAlert(link);
+ try{
+  const notice=new Notification('Fuckball · Human rematch proposed',{
+   body:'Return to the match menu to accept or decline within 45 seconds. No auto-accept.',
+   tag:'fuckball-quick-rematch',silent:false
+  });
+  link.quickRematchNotice=notice;
+  notice.onclick=()=>{window.focus();clearQuickRematchAlert(link);};
+  link.quickRematchTimer=setTimeout(()=>clearQuickRematchAlert(link),45000);
+ }catch{}
+}
 function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||resumeContext?.quickMatchMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  $('inviteBox').hidden=true;ws.onopen=()=>link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
@@ -38,11 +56,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    link.quickRematch=d.status==='pending'&&Number.isSafeInteger(d.id)&&
     Number.isSafeInteger(d.expiresAt)&&d.expiresAt>Date.now()?
     {id:d.id,required,accepted,expiresAt:d.expiresAt}:null;
+   if(d.status!=='pending')clearQuickRematchAlert(link);
    if(d.status==='cancelled')notify(d.reason||'Quick Match rematch cancelled.');
    else if(d.status==='pending'&&!link.quickRematchSeen?.has(d.id)){
     link.quickRematchSeen??=new Set();
     link.quickRematchSeen.add(d.id);
     notify('Human rematch proposal · confirm in Match menu within 45s.');
+    showQuickRematchAlert(link);
     if(!menuOpen)openMatchMenu();
    }
    renderNextMatchPanel();return;
@@ -98,7 +118,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
  else if(d.type==='subApplied'){notify('Substitution: '+d.outId+' → '+d.inId+' ('+(d.team===1?'Red':'Blue')+').');renderSubPanel();}
  else if(d.type==='matchResult'){notify((d.winner===1?'Red':d.winner===2?'Blue':'Neither side')+' wins · '+d.red+' : '+d.blue+'.');openMatchMenu();}
- else if(d.type==='matchRestart'){link.quickRematch=null;notify(d.rematch?'Rematch started · teams swapped':'New game started');if(menuOpen)closeMatchMenu();}
+ else if(d.type==='matchRestart'){link.quickRematch=null;clearQuickRematchAlert(link);notify(d.rematch?'Rematch started · teams swapped':'New game started');if(menuOpen)closeMatchMenu();}
  else if(d.type==='goal'){beep(650,.22);log((d.team===1?'Red':'Blue')+' scores');}
  else if(d.type==='playerReportStatus'){window.onPlayerReportStatus?.(d);}
  else if(d.type==='chat'){window.onNativeRoomChat?.(d);}
