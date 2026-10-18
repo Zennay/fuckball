@@ -8,9 +8,9 @@
  const button=document.createElement('button');button.type='button';
  button.className='career-private-export';button.textContent='↓ All my server data';
  button.setAttribute('aria-label','Download my personal server account data');
- button.title='Personal JSON export: friends, club, party, server career and recent matches';
+ button.title='Personal JSON export: friends, club, party, room presets, server career and recent matches';
  const note=document.createElement('p');note.className='career-private-export-note';
- note.textContent='Personal export includes private friend/Club/party details and server-recorded results. Keep the downloaded file private. Local HBR2 recordings are separately backed up in My Games.';
+ note.textContent='Personal export includes private friend/Club/party details, saved account room presets and server-recorded results. Keep it private. Device-only presets and local HBR2 recordings require their separate exports.';
  const status=document.createElement('p');status.className='career-private-export-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  actions.append(button);
@@ -43,7 +43,8 @@
       payload.account?.username?.toLowerCase()!==before.user.toLowerCase()||
       payload.scope!=='this-native-server'||payload.ranked!==false||
       !payload.social||!payload.club||!payload.party||!payload.career||
-      !Array.isArray(payload.recentMatches))
+      !Array.isArray(payload.recentMatches)||!Array.isArray(payload.roomPresets)||
+      payload.roomPresets.length>8)
     throw Error('Unrecognized account export response.');
    const text=JSON.stringify(payload,null,2);
    if(text.length>1024*1024)throw Error('Export exceeds the browser download limit.');
