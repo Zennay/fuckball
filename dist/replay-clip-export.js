@@ -25,6 +25,26 @@
  const readout=document.createElement('output');readout.className='replay-clip-readout';
  readout.setAttribute('aria-live','polite');
  points.append(markIn,markOut,reset);
+ const goalsSection=document.createElement('section');goalsSection.className='replay-clip-goal-selector';
+ const goalsHeading=document.createElement('strong');goalsHeading.textContent='MAKE A GOAL HIGHLIGHT.';
+ const goalLabel=document.createElement('label');goalLabel.textContent='Actual recorded HBR2 goal marker';
+ const goalSelect=document.createElement('select');goalSelect.setAttribute('aria-label','Choose a recorded goal to trim');
+ goalSelect.disabled=true;goalSelect.add(new Option('Open a saved replay with goal markers',''));
+ goalLabel.append(goalSelect);
+ const offsets=document.createElement('div');offsets.className='replay-clip-offsets';
+ function offsetSelect(text,values,selected){
+  const label=document.createElement('label');label.textContent=text;
+  const control=document.createElement('select');control.setAttribute('aria-label',text);
+  for(const value of values)control.add(new Option(value+' seconds',String(value)));
+  control.value=String(selected);label.append(control);offsets.append(label);return control;
+ }
+ const before=offsetSelect('Before goal',[1,2,3,4,5],3);
+ const after=offsetSelect('After goal',[2,3,4,5],4);
+ const useGoal=document.createElement('button');useGoal.type='button';useGoal.textContent='✂ Trim selected goal';
+ useGoal.disabled=true;
+ const goalStatus=document.createElement('p');goalStatus.setAttribute('role','status');
+ goalStatus.setAttribute('aria-live','polite');goalStatus.className='replay-clip-goal-status';
+ goalsSection.append(goalsHeading,goalLabel,offsets,useGoal,goalStatus);
  const nameLabel=document.createElement('label');nameLabel.textContent='Optional clip title';
  const title=document.createElement('input');title.type='text';title.maxLength=60;
  title.placeholder='My football highlight';title.setAttribute('aria-label','Clip filename title');
@@ -34,10 +54,11 @@
  stopPreview.hidden=true;
  const previewRow=document.createElement('div');previewRow.className='replay-clip-preview';
  previewRow.append(preview,stopPreview);
- body.append(note,points,readout,nameLabel,previewRow);editor.append(heading,body);
+ body.append(note,points,readout,goalsSection,nameLabel,previewRow);editor.append(heading,body);
  row.append(save,frame,cancel,state);controls.append(editor,row);
  const MAX_VIDEO=48*1024*1024,MAX_DURATION=10000,MIN_DURATION=1500;
  let capture=null,previewing=null,range=null,lastReplay=null;
+ let markerToken=0,markerSource=null,markerId='',goalMarkers=[];
  const supported=()=>typeof MediaRecorder!=='undefined'&&
   typeof canvas.captureStream==='function'&&typeof URL.createObjectURL==='function';
  const available=()=>typeof replay!=='undefined'&&replay&&!controls.hidden&&
@@ -51,6 +72,9 @@
    if(capture)abort('Recording stopped because replay changed.');
    stopPreviewing(false);
    lastReplay=replay;range=null;
+   markerSource=null;markerId='';goalMarkers=[];markerToken++;
+   goalSelect.replaceChildren(new Option('Looking up saved replay goals…',''));
+   goalSelect.disabled=useGoal.disabled=true;
   }
   return true;
  }
@@ -106,6 +130,82 @@
   return ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']
    .find(value=>{try{return MediaRecorder.isTypeSupported(value);}catch{return false;}})||'';
  }
+
+ function currentReplayId(){
+  return typeof activeLocalReplayId==='string'&&/^[a-f0-9]{32}$/.test(activeLocalReplayId)?
+   activeLocalReplayId:'';
+ }
+ async function refreshGoals(force=false){
+  if(!available()||typeof ReplayLibrary==='undefined')return;
+  const id=currentReplayId(),source=replay;
+  if(!force&&markerSource===source&&markerId===id)return;
+  markerSource=source;markerId=id;
+  const token=++markerToken;
+  goalMarkers=[];goalSelect.disabled=useGoal.disabled=true;
+  goalSelect.replaceChildren(new Option(id?'Reading saved goal markers…':'Save this HBR2 recording in My Games to use goal markers.',''));
+  if(!id)return;
+  try{
+   const item=(await ReplayLibrary.list()).find(entry=>entry.id===id);
+   if(token!==markerToken||!available()||replay!==source||currentReplayId()!==id)return;
+   goalMarkers=Array.isArray(item?.goals)?
+    item.goals.filter(goal=>Number.isSafeInteger(goal?.frameNo)&&goal.frameNo>=0&&
+     (!item.frames||goal.frameNo<=item.frames)&&[1,2].includes(goal.teamId))
+    .slice(0,128).sort((a,b)=>a.frameNo-b.frameNo):[];
+   goalSelect.replaceChildren();
+   if(!goalMarkers.length){
+    goalSelect.add(new Option('This saved replay has no recorded goal markers',''));
+    goalStatus.textContent='No eligible local goal metadata. You can still select any manual IN/OUT range.';
+   }else{
+    goalMarkers.forEach((goal,index)=>{
+     goalSelect.add(new Option((index+1)+'. '+(goal.teamId===1?'Red':'Blue')+
+      ' goal · '+fmt(goal.frameNo*1000/60),String(index)));
+    });
+    goalStatus.textContent=goalMarkers.length+' genuine HBR2 goal markers available; not authenticated match results.';
+   }
+   goalSelect.disabled=useGoal.disabled=!goalMarkers.length;
+  }catch(error){
+   if(token!==markerToken||replay!==source)return;
+   goalSelect.replaceChildren(new Option('Local goal data unavailable',''));
+   goalStatus.textContent=error?.message||'Could not read saved goals.';
+  }
+ }
+ function selectGoal(goal){
+  if(!goal||capture||!ensure())return false;
+  const total=replay.length(),timestamp=goal.frameNo*1000/60;
+  if(!Number.isFinite(timestamp)||timestamp<0||timestamp>total+1000)return false;
+  stopPreviewing();
+  const from=Math.max(0,timestamp-Number(before.value)*1000);
+  const to=Math.min(total,timestamp+Number(after.value)*1000);
+  if(to-from<MIN_DURATION||to-from>MAX_DURATION){
+   goalStatus.textContent='Selected goal is too close to the recording boundaries.';return false;
+  }
+  setRange(from,to);
+  replay.setTime(from);replay.setSpeed(0);
+  document.getElementById('replayToggle').textContent='▶';
+  editor.open=true;
+  if(!title.value.trim())title.value=(goal.teamId===1?'red':'blue')+'-goal-'+fmt(timestamp).replace(/[:.]/g,'-');
+  goalStatus.textContent='Trimmed '+(goal.teamId===1?'Red':'Blue')+' recorded goal at '+fmt(timestamp)+
+   '. Preview or export; this goal marker is local and unverified.';
+  return true;
+ }
+ useGoal.addEventListener('click',()=>{
+  const index=Number(goalSelect.value);
+  if(!Number.isSafeInteger(index)||index<0||index>=goalMarkers.length)return;
+  selectGoal(goalMarkers[index]);
+ });
+ window.addEventListener('fuckball:replay-clip-goal',async event=>{
+  const detail=event.detail||{};
+  if(!available()||capture||typeof detail.replayId!=='string'||detail.replayId!==currentReplayId()||
+     !Number.isSafeInteger(detail.frameNo)||![1,2].includes(detail.teamId))return;
+  const source=replay,id=detail.replayId;
+  await refreshGoals(true);
+  if(!available()||replay!==source||currentReplayId()!==id)return;
+  const index=goalMarkers.findIndex(g=>g.frameNo===detail.frameNo&&g.teamId===detail.teamId);
+  if(index<0)return;
+  goalSelect.value=String(index);
+  selectGoal(goalMarkers[index]);
+ });
+
  markIn.onclick=()=>{
   if(capture||!ensure())return;
   const r=activeRange();setRange(replay.getTime(),r.end);
@@ -237,6 +337,7 @@
  window.setInterval(()=>{
   if(document.hidden||!available())return;
   if(replay!==lastReplay){ensure();activeRange();render();}
+  if(markerSource!==replay||markerId!==currentReplayId())refreshGoals();
  },650);
  if(!supported()){save.disabled=true;state.textContent='Video export requires MediaRecorder and canvas capture. PNG and HBR2 playback remain available.';}
 })();
