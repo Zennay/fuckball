@@ -231,12 +231,26 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   if(proposed)broadcast(mode);
  }
  function drainAll(){expireReady();for(const mode of Object.keys(SIZES))drain(mode);}
+ // Public, read-only aggregate from genuine authenticated live connections.
+ // No player names, IDs, IP addresses, accounts, parties or invented ETAs.
+ function availability(){
+  const now=clock(),modes=Object.create(null);
+  for(const mode of Object.keys(SIZES)){
+   const waiting=pools[mode].filter(live)
+    .reduce((count,u)=>count+u.players.length,0);
+   const confirming=[...readyChecks.values()].filter(check=>check.mode===mode&&
+     check.expiresAt>now&&all(check.units).every(p=>available(p.ws)))
+    .reduce((count,check)=>count+all(check.units).length,0);
+   modes[mode]={waiting,confirming,needed:2*SIZES[mode]};
+  }
+  return{modes,ranked:false,humanOnly:true,at:now};
+ }
  function close(){
   for(const u of new Set(active.values()))for(const p of u.players)if(p.ws?.readyState===1)
    send(p.ws,{type:'queueStatus',status:'cancelled',mode:u.mode});
   active.clear();readyChecks.clear();readyBySocket.clear();
   for(const pool of Object.values(pools))pool.length=0;
  }
- return{join,joinGroup,remove,respond,drainAll,close,estimate,distribute};
+ return{join,joinGroup,remove,respond,drainAll,availability,close,estimate,distribute};
 }
 module.exports={createQuickMatch,SIZES,estimate,distribute};

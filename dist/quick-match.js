@@ -13,7 +13,10 @@
  const description=document.createElement('p');
  description.textContent='Find real players on this server in 1v1–4v4. Teams are balanced using server career results, with a preference for similarly sized friend parties. No filler bots or ranked ratings.';
  const modes=document.createElement('div');modes.className='quick-queue-modes';
- const modeButtons=[];
+ const modeButtons=[],modeDetails=new Map();
+ const availability=document.createElement('p');availability.className='quick-queue-availability';
+ availability.setAttribute('role','status');availability.setAttribute('aria-live','polite');
+ availability.textContent='Live queue occupancy is loading · this server only; no estimated wait times.';
  const notice=document.createElement('p');notice.className='quick-queue-status';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  notice.textContent='Sign in with a Fuckball account to search for a match.';
@@ -32,7 +35,7 @@
  const declineReady=document.createElement('button');declineReady.type='button';declineReady.textContent='Decline';
  readyActions.append(acceptReady,declineReady);
  readyBox.append(readyTitle,readyText,readyProgress,readyActions);
- panel.append(heading,description,modes,notice,readyBox,actions);
+ panel.append(heading,description,modes,availability,notice,readyBox,actions);
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
@@ -79,8 +82,56 @@
   const sub=document.createElement('small');
   sub.textContent=(Number(mode[0])*2)+' real players · one server';
   b.append(name,sub);b.onclick=()=>start(mode);
-  modes.append(b);modeButtons.push(b);
+  modes.append(b);modeButtons.push(b);modeDetails.set(mode,sub);
  }
+ // Discover honest, current occupancy only on this server, never estimated bots,
+ // global concurrency, matchmaking guarantees or another player's identity.
+ let listingRequest=0;
+ const genericLabels=()=>{
+  for(const [mode,sub]of modeDetails)
+   sub.textContent=(Number(mode[0])*2)+' human players required';
+ };
+ async function loadAvailability(){
+  if(document.hidden||home.hidden)return;
+  const requestId=++listingRequest;
+  if(navigator.onLine===false){
+   genericLabels();availability.textContent='You appear offline · connect to view real player queues.';
+   return;
+  }
+  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000);
+  try{
+   const response=await fetch('/api/quick-match/availability',{
+    cache:'no-store',signal:abort.signal
+   });
+   if(!response.ok)throw Error('Live queue endpoint unavailable.');
+   const data=await response.json();
+   if(requestId!==listingRequest||document.hidden||home.hidden)return;
+   if(data?.humanOnly!==true||data.ranked!==false||!data.modes)
+    throw Error('Queue response does not represent real players.');
+   for(const [mode,sub]of modeDetails){
+    const row=data.modes[mode];
+    if(!row||row.needed!==Number(mode[0])*2||
+       ![row.waiting,row.confirming].every(n=>Number.isSafeInteger(n)&&n>=0&&n<=128))
+     throw Error('Live queue response is invalid.');
+   }
+   for(const [mode,sub]of modeDetails){
+    const row=data.modes[mode];
+    sub.textContent=row.waiting+' waiting · '+row.confirming+
+      ' confirming · '+row.needed+' needed';
+   }
+   availability.textContent='Live server queues refreshed · real signed-in players only. Matches still require everyone to accept.';
+  }catch{
+   if(requestId!==listingRequest)return;
+   genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
+  }finally{clearTimeout(timer);}
+ }
+ setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
+ document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')loadAvailability();
+ });
+ window.addEventListener('online',loadAvailability);
+ window.addEventListener('offline',loadAvailability);
+ loadAvailability();
  acceptReady.onclick=()=>{
   if(!ready||readyAccepted||Date.now()>=ready.expiresAt)return;
   try{
