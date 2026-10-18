@@ -46,12 +46,12 @@
    rounds.push({...x,kickoff:x.kickoff===undefined?null:x.kickoff,venue:x.venue||''});
   }
   // Only compute a self-reported leader for a partially completed league.
-  const table=teams.map((name,i)=>({name,i,pts:0,gd:0,gf:0,p:0}));
+  const table=teams.map((name,i)=>({name,i,pts:0,gd:0,gf:0,ga:0,w:0,d:0,l:0,p:0}));
   for(const f of rounds){
    if(f.homeScore===null)continue;
    const h=table[f.home],a=table[f.away],hg=f.homeScore,ag=f.awayScore;
-   h.p++;a.p++;h.gf+=hg;a.gf+=ag;h.gd+=hg-ag;a.gd+=ag-hg;
-   if(hg>ag)h.pts+=3;else if(ag>hg)a.pts+=3;else{h.pts++;a.pts++;}
+   h.p++;a.p++;h.gf+=hg;a.gf+=ag;h.ga+=ag;a.ga+=hg;h.gd+=hg-ag;a.gd+=ag-hg;
+   if(hg>ag){h.pts+=3;h.w++;a.l++;}else if(ag>hg){a.pts+=3;a.w++;h.l++;}else{h.pts++;a.pts++;h.d++;a.d++;}
   }
   table.sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
   const count=rounds.filter(f=>f.homeScore!==null).length;
@@ -63,6 +63,7 @@
    homeScore:f.homeScore,awayScore:f.awayScore
   }));
   return {type:'League',id:raw.id,name:raw.name,played:count,total:rounds.length,fixtures:allFixtures,
+   standings:table.map(({name,p,w,d,l,gf,ga,gd,pts})=>({name,p,w,d,l,gf,ga,gd,pts})),
    leader:count?table[0]?.name:null,
    upcoming:rounds.filter(f=>f.homeScore===null&&f.kickoff!==null&&f.kickoff>Date.now())
     .map(f=>({name:teams[f.home]+' vs '+teams[f.away],time:f.kickoff,
@@ -345,6 +346,34 @@
    body.append(dom('small',c.type.toUpperCase()),dom('strong',c.name),
     dom('p',c.played+' of '+c.total+' friendly results recorded'+
       (c.leader?' · '+(c.type==='Knockout'||c.winner?'Winner':'Current leader')+': '+c.leader:'')));
+   if(c.type==='League'){
+    const disclosure=dom('details',null,'matchday-league-standings');
+    const headline=dom('summary','League table · '+c.played+' recorded / '+c.total+' scheduled matches');
+    const scroll=dom('div',null,'matchday-standings-scroll');
+    const table=dom('table');table.setAttribute('aria-label','Self-entered standings of '+c.name);
+    const caption=dom('caption',c.name+' · private results only, not a live ranked competition');
+    table.append(caption);
+    const thead=dom('thead'),heading=dom('tr');
+    for(const key of ['#','Team','P','W','D','L','GF','GA','GD','Pts']){
+     const th=dom('th',key);th.scope='col';heading.append(th);
+    }
+    thead.append(heading);table.append(thead);
+    const tbody=dom('tbody');
+    for(const [index,team] of c.standings.entries()){
+     const row=dom('tr');
+     for(const value of [index+1,team.name,team.p,team.w,team.d,team.l,
+       team.gf,team.ga,team.gd>0?'+'+team.gd:team.gd,team.pts]){
+      row.append(dom('td',value));
+     }
+     tbody.append(row);
+    }
+    table.append(tbody);scroll.append(table);
+    const note=dom('p','3 points per manually entered win, 1 for a draw. Ties sorted by points, goal difference, goals for, then team name. No online match verification.');
+    const csv=button('↓ Export this table CSV',()=>exportPrivateStandings(c));
+    csv.className='matchday-standings-export';
+    disclosure.append(headline,scroll,note,csv);
+    body.append(disclosure);
+   }
    const open=button('Open '+c.type,()=>window.dispatchEvent(
      c.type==='Series'?new CustomEvent('fuckball:open-private-series',{detail:{id:c.id}}):
      new CustomEvent('fuckball:open-private-competition',{detail:{type:c.type,id:c.id}})));
@@ -445,6 +474,26 @@
   clashesStatus.textContent=rows.length+' provisional time overlaps downloaded from your local private fixtures. No data was sent.';
  }
  sharedFilter.addEventListener('change',renderClashes);
+
+
+ function exportPrivateStandings(competition){
+  if(competition?.type!=='League'||!Array.isArray(competition.standings))return;
+  // This is purely derived from validated local fixture scores; export never
+  // promotes a private result into verified multiplayer ranking.
+  const cell=item=>{
+   let value=String(item??'');
+   if(/^\s*[=+\-@]/.test(value))value="'"+value;
+   return '"'+value.replace(/"/g,'""')+'"';
+  };
+  const rows=[['Position','Team','Played','Wins','Draws','Losses','Goals for',
+   'Goals against','Goal difference','Points','Private league'],
+   ...competition.standings.map((t,i)=>[i+1,t.name,t.p,t.w,t.d,t.l,t.gf,t.ga,t.gd,t.pts,competition.name])];
+  const data='\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';
+  const url=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));
+  const a=dom('a');a.href=url;a.download='fuckball-private-league-table.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  note.textContent='Private standings CSV exported for '+competition.name+'. All scores are locally entered and unverified.';
+ }
 
  function exportCSV(){
   if(!competitions.length&&!upcomingMatches.length)return;
