@@ -121,3 +121,30 @@ up to four players per provisional Red and Blue lineup, Going teammates on
 the bench, Maybe and Out lists and the organiser's own notes. No data is sent
 to online servers. Share the resulting file only with the participants you
 choose, as it can include their names and private notes.
+
+## League RSVP identity fix and private kickoff-overlap planner
+
+The Matchday Hub now explicitly marks imported, validated league fixtures with
+`type: 'League'` just like Cup and Best-of series fixtures. This fixes the
+existing mismatch that prevented some league games from appearing in the
+selected match attendance roster and produced an undefined competition type in
+the central fixture list/CSV. The original league editor remains the only
+writer for results and kickoff times.
+
+The Matchday Hub additionally lists possible **schedule overlaps** from saved,
+upcoming, unplayed private leagues, cups and active series. Two kickoff dates
+less than **60 minutes** apart are shown as a potential overlap. This 60-minute
+window is only a convenient planning placeholder; the app **does not know match
+durations** or confirm an actual scheduling conflict. An optional checkbox
+reduces the list to matches that share an identical written team name. Matching
+names across competitions can refer to different people and should be reviewed
+before treating this as a double booking. Cup qualifiers not yet known are not
+assumed to be real participants.
+
+The list shows the two stored match names, their actual local kickoffs and the
+time gap. **Review first/second kickoff** opens each original private editor,
+where an organiser can intentionally adjust the date. An optional CSV download
+includes the full selected overlap set (not only the first 24 visible rows),
+neutralises formula-sensitive cells, and leaves local storage unchanged. No
+calendar invite, remote message, match result, real room or server database is
+changed by this view or export.
