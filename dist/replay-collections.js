@@ -55,10 +55,11 @@
  const remove=button('Delete collection',deleteCollection);
  const exportButton=button('↓ Collection JSON',exportCollection);
  const studyButton=button('↓ Study guide',exportStudyGuide);
+ const reviewButton=button('▶ Review collection',sendToReview);
  const importButton=button('↑ Restore collection',()=>fileInput.click());
  const fileInput=make('input');fileInput.type='file';
  fileInput.accept='.json,application/json';fileInput.hidden=true;
- tools.append(picker,create,rename,remove,exportButton,studyButton,importButton,fileInput);
+ tools.append(picker,create,rename,remove,reviewButton,exportButton,studyButton,importButton,fileInput);
  const detail=make('div',undefined,'replay-collections-detail');
  const itemsList=make('ol',undefined,'replay-collections-items');
  const available=make('div',undefined,'replay-collections-add');
@@ -161,6 +162,7 @@
   for(const x of collectionList)picker.add(new Option(x.title,x.id));
   picker.value=c?.id||'';
   for(const b of [rename,remove,exportButton,studyButton])b.disabled=!c;
+  reviewButton.disabled=!c?.replays?.some(id=>library.some(x=>x.id===id));
   detail.replaceChildren();itemsList.replaceChildren();
   if(!c){
    detail.append(make('p','Create a private collection to organise saved HBR2 recordings.'));
@@ -211,6 +213,23 @@
  picker.onchange=()=>{active=picker.value;message='';render();};
  search.oninput=render;
  const filename=c=>'fuckball-collection-'+c.title.toLocaleLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,30)+'.json';
+ function sendToReview(){
+  const c=current();if(!c)return;
+  const playable=c.replays.filter(id=>library.some(x=>x.id===id));
+  if(!playable.length)return notice('No saved HBR2 recordings from this collection are available.');
+  const chosen=playable.slice(0,8);
+  if(!window.confirm('Replace your current temporary Review Queue with '+chosen.length+
+   ' local recordings from "'+c.title+'"?'+(playable.length>8?' (first eight in your chosen order)':'')+
+   ' Your existing HBR2 files and permanent collection remain unchanged.'))return;
+  window.dispatchEvent(new CustomEvent('fuckball:review-collection',{
+   detail:{ids:chosen,collection:c.title}
+  }));
+  document.querySelector('.replay-review-queue')?.scrollIntoView({
+   behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',
+   block:'start'
+  });
+  notice('Sent '+chosen.length+' saved replay shortcuts to the temporary Review Queue.');
+ }
  async function exportStudyGuide(){
   const c=current();if(!c||busy)return;
   busy=true;studyButton.disabled=true;
