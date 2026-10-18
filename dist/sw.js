@@ -2,7 +2,7 @@
 // Offline support is EXCLUSIVELY for local, casual browser practice and user-owned
 // replay playback. Do not cache credentials, account APIs, matchmaking, rooms
 // or any live match state. Every online action still requires the actual server.
-const CACHE='fuckball-offline-practice-v86';
+const CACHE='fuckball-offline-practice-v87';
 const CORE=[
  "./",
  "./style.css",
@@ -142,6 +142,8 @@ const CORE=[
  "./knockout-cup.css",
  "./matchday-hub.js",
  "./matchday-hub.css",
+ "./matchday-ops.js",
+ "./matchday-ops.css",
  "./league-season-report.js",
  "./league-season-report.css",
  "./game-night-pack.js",
