@@ -43,7 +43,7 @@
  ];
  let session=null;
  function localRoom(){
-  if(serverLink?.room||peerConnected||replay||!room||!room.gameState||!started||paused||match.hidden)return null;
+  if(serverLink||peerConnected||replay||!room||!room.gameState||!started||paused||match.hidden)return null;
   const player=room.state?.players?.find?.(p=>p.id===1);
   return player?.disc&&[1,2].includes(player.team?.id)?player:null;
  }
@@ -79,7 +79,7 @@
   session=null;hud.hidden=true;result.textContent=why||'Guide ended. The local game can continue.';
  }
  function unavailable(){
-  if(serverLink?.room||peerConnected)return 'Leave your active online room before starting a solo tutorial.';
+  if(serverLink||peerConnected)return 'Leave or cancel your existing online room or connecting session before starting a solo tutorial.';
   const queue=document.querySelector('.quick-queue-actions button:not([hidden])');
   const ready=document.querySelector('.quick-ready:not([hidden])');
   if(queue||ready)return 'Cancel your human Quick Match search or ready-check before practising.';
@@ -121,7 +121,7 @@
   if(match.hidden){finish('Lesson closed after leaving the pitch. Start again from Home.');return;}
   const p=localRoom();
   if(!p){ // A normal manual pause is not a failed lesson.
-   if(paused&&!peerConnected&&!serverLink?.room){detail.textContent='Match paused. Resume to continue the lesson.';return;}
+   if(paused&&!peerConnected&&!serverLink){detail.textContent='Match paused. Resume to continue the lesson.';return;}
    finish('The local match changed. Start a fresh guided practice from Home.');return;
   }
   if(s.room!==room||p.team.id!==s.side||room.currentFrameNo<s.frame){
