@@ -2,11 +2,12 @@
 // Portable, device-local game night: no account, server, room or verified match state.
 (function(){
  const home=document.getElementById('homeView');if(!home)return;
- const FORMAT='fuckball-private-game-night',VERSION=1,MAX_FILE=320*1024;
+ const FORMAT='fuckball-private-game-night',VERSION=2,MAX_FILE=480*1024;
  const TYPES=[
   {kind:'leagues',key:'fuckball.local-tournaments.v1',max:8,bytes:128*1024},
   {kind:'cups',key:'fuckball.private-knockout-cups.v1',max:8,bytes:96*1024},
-  {kind:'formations',key:'fuckball.private-formation-studio.v1',max:12,bytes:64*1024}
+  {kind:'formations',key:'fuckball.private-formation-studio.v1',max:12,bytes:64*1024},
+  {kind:'posters',key:'fuckball.custom-poster-drafts.v1',max:8,bytes:96*1024}
  ];
  const dom=(tag,text,cls)=>{
   const e=document.createElement(tag);
@@ -135,7 +136,28 @@
    arrows,stadium:st===null?null:{...st,lines:st.lines.map(line=>line.map(p=>p.slice()))},
    updatedAt:x.updatedAt};
  }
- const validators={leagues:league,cups:cup,formations:formation};
+ // Reuse the exact local Poster Designer contract. All text remains optional
+ // except both team names, and user-entered results are never server-verified.
+ const posterLimits={competition:60,home:30,away:30,venue:60,tagline:84};
+ const posterText=(s,max)=>typeof s==='string'&&s.length<=max&&s===s.trim()&&
+  !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+ function poster(x){
+  if(!x||typeof x!=='object'||Array.isArray(x)||!idOk(x.id)||
+   Object.keys(posterLimits).some(key=>!posterText(x[key],posterLimits[key]))||
+   !x.home||!x.away||x.home.toLocaleLowerCase()===x.away.toLocaleLowerCase()||
+   !['lime','ice','ember','mono'].includes(x.theme)||
+   !['fixture','result'].includes(x.format)||
+   typeof x.kickoff!=='string'||x.kickoff.length>16||
+   (x.kickoff!==''&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.kickoff)||
+    !Number.isFinite(new Date(x.kickoff).getTime())))||
+   typeof x.redScore!=='string'||typeof x.blueScore!=='string'||
+   (x.format==='result'&&![x.redScore,x.blueScore].every(n=>/^(0|[1-9]\d?)$/.test(n))))
+   throw Error('Invalid private poster design.');
+  return {id:x.id,competition:x.competition,home:x.home,away:x.away,
+   venue:x.venue,tagline:x.tagline,kickoff:x.kickoff,
+   theme:x.theme,format:x.format,redScore:x.redScore,blueScore:x.blueScore};
+ }
+ const validators={leagues:league,cups:cup,formations:formation,posters:poster};
  function validated(type,items){
   const schema=TYPES.find(x=>x.kind===type);
   if(!schema||!Array.isArray(items)||items.length>schema.max)
@@ -163,7 +185,7 @@
  const summary=dom('summary','🎒 GAME NIGHT PACK · OPEN');
  const inner=dom('div',undefined,'game-night-body');
  inner.append(dom('h2','TAKE YOUR GAME NIGHT WITH YOU.'),
-  dom('p','Backup private league calendars, knockout brackets and tactical diagrams together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
+  dom('p','Backup private league calendars, knockout brackets, tactical diagrams and saved matchday poster designs together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
  const controls=dom('div',undefined,'game-night-controls');
  const exportButton=button('↓ Backup game night',exportPack);
  const importButton=button('↑ Restore game night',()=>file.click());
@@ -182,7 +204,7 @@
   grid.replaceChildren();
   try{
    const {lists}=readAll();
-   for(const [type,title]of [['leagues','Round-robin leagues'],['cups','Knockout cups'],['formations','Tactics plans']]){
+   for(const [type,title]of [['leagues','Round-robin leagues'],['cups','Knockout cups'],['formations','Tactics plans'],['posters','Matchday poster designs']]){
     const card=dom('article',undefined,'game-night-counter');
     card.append(dom('strong',lists[type].length),dom('span',title));grid.append(card);
    }
@@ -215,10 +237,11 @@
   busy=true;importButton.disabled=true;
   try{
    const data=JSON.parse(await candidate.text());
-   if(data?.format!==FORMAT||data.version!==VERSION||!atOk(data.createdAt))
+   if(data?.format!==FORMAT||![1,VERSION].includes(data.version)||!atOk(data.createdAt))
     throw Error('Unsupported Game Night Pack.');
    const imported={};
-   for(const item of TYPES)imported[item.kind]=validated(item.kind,data[item.kind]);
+   for(const item of TYPES)imported[item.kind]=validated(item.kind,
+     data.version===1&&item.kind==='posters'?[]:data[item.kind]);
    const {snapshots,lists}=readAll(),next={},totals={};
    const now=Date.now();
    for(const item of TYPES){
@@ -226,6 +249,7 @@
     if(incoming.length+lists[item.kind].length>item.max)
      throw Error('Not enough room for '+item.kind+'. Export and delete individual old items first.');
     const additions=incoming.map(x=>{
+     if(item.kind==='posters')return {...x,id:uuid()};
      const copy={...x,id:uuid(),updatedAt:now};
      if(item.kind!=='formations')copy.createdAt=now;
      return copy;
@@ -233,10 +257,11 @@
     next[item.key]=JSON.stringify(validated(item.kind,[...lists[item.kind],...additions]));
     totals[item.kind]=additions.length;
    }
-   if(!totals.leagues&&!totals.cups&&!totals.formations)
+   if(!totals.leagues&&!totals.cups&&!totals.formations&&!totals.posters)
     throw Error('This pack has no game night items to restore.');
-   if(!window.confirm('Add '+totals.leagues+' leagues, '+totals.cups+' cups and '+
-      totals.formations+' private tactics plans to this device? Existing items are preserved.'))return;
+   if(!window.confirm('Add '+totals.leagues+' leagues, '+totals.cups+' cups, '+
+      totals.formations+' tactics plans and '+totals.posters+
+      ' poster designs to this device? Existing items are preserved.'))return;
    // localStorage has no multi-key transaction. Snapshot each old value, stage every new
    // value, then do bounded synchronous writes with rollback on a storage exception.
    const written=[];
@@ -257,7 +282,7 @@
     }
     throw Error('Import was interrupted; reload and inspect existing items before retrying. '+(error.message||''));
    }
-   // Notify the three same-tab consumers only after the complete set has been written.
+   // Notify all four same-tab consumers only after the complete set has been written.
    for(const item of TYPES){
     window.dispatchEvent(new StorageEvent('storage',{
      key:item.key,oldValue:snapshots[item.key],newValue:next[item.key],
@@ -266,8 +291,9 @@
    }
    window.dispatchEvent(new Event('fuckball:private-competition-change'));
    inspect();
-   info('Restored '+totals.leagues+' leagues, '+totals.cups+' knockout cups and '+
-    totals.formations+' tactics plans as additional private copies. No server data changed.');
+   info('Restored '+totals.leagues+' leagues, '+totals.cups+' knockout cups, '+
+    totals.formations+' tactics plans and '+totals.posters+
+    ' poster designs as additional private copies. No server data changed.');
   }catch(error){info('Game Night Pack not restored: '+(error.message||'File/storage error'));}
   finally{busy=false;importButton.disabled=false;}
  };
