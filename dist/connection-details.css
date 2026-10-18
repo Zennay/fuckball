@@ -32,3 +32,15 @@
 .connection-details-privacy{margin-bottom:0;font-size:11px}
 @media(max-width:530px){.connection-details-dialog{padding:15px}.connection-details-metrics{grid-template-columns:1fr}.connection-details-tile{grid-template-columns:1fr 1fr;align-items:center;gap:5px}.connection-details-tile small{grid-column:1/-1}.connection-details-header h2{font-size:18px}}
 @media(prefers-reduced-motion:reduce){.connection-details-dialog{scroll-behavior:auto}}
+
+.connection-session-overview{margin-top:16px;border:1px solid #6b8c81;background:#203b3d;
+ border-radius:10px;padding:14px;display:grid;gap:10px}
+.connection-session-overview>strong{font-size:12px;letter-spacing:.07em;color:#e5f9bb}
+.connection-session-summary{font-size:13px;line-height:1.6;color:#e4eee5;margin:0;overflow-wrap:break-word}
+.connection-session-actions{display:flex;gap:10px;flex-wrap:wrap}
+.connection-session-actions button{min-height:44px;border:1px solid #bedcaa;border-radius:8px;
+ background:#38584d;color:#f4ffe6;padding:9px 15px;font-weight:750}
+.connection-session-actions button:disabled{opacity:.5;cursor:not-allowed}
+.connection-session-export-status{font-size:11px;min-height:1.2em;color:#d4e3d5;margin:0}
+@media(max-width:530px){.connection-session-overview{padding:12px}
+ .connection-session-actions button{width:100%}}

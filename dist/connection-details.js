@@ -46,6 +46,15 @@
  const chart=document.createElement('div');chart.className='connection-details-chart';
  chart.setAttribute('role','img');chart.setAttribute('aria-label','No latency samples yet');
  chartBox.append(chartTitle,chart);
+ const overview=document.createElement('section');overview.className='connection-session-overview';
+ const overviewTitle=document.createElement('strong');overviewTitle.textContent='SESSION HEALTH · LAST 5 MINUTES';
+ const overviewDetail=document.createElement('p');overviewDetail.className='connection-session-summary';
+ overviewDetail.textContent='Waiting for measured match updates.';
+ const overviewActions=document.createElement('div');overviewActions.className='connection-session-actions';
+ const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Save private diagnostics';
+ const exportMessage=document.createElement('p');exportMessage.setAttribute('role','status');
+ exportMessage.setAttribute('aria-live','polite');exportMessage.className='connection-session-export-status';
+ overviewActions.append(exportButton);overview.append(overviewTitle,overviewDetail,overviewActions,exportMessage);
  const tips=document.createElement('section');tips.className='connection-details-tips';
  const tipHeading=document.createElement('strong');tipHeading.textContent='WHAT THESE NUMBERS MEAN';
  const tipText=document.createElement('p');
@@ -55,9 +64,40 @@
  tips.append(tipHeading,tipText,tipHint);
  const footer=document.createElement('p');footer.className='connection-details-privacy';
  footer.textContent='Private to this tab · Last 45 measurements in memory only · Cleared on disconnect/room switch';
- dialog.append(header,state,tiles,chartBox,tips,footer);
+ dialog.append(header,state,tiles,chartBox,overview,tips,footer);
  document.body.append(dialog);
- let session=null,history=[];
+ let session=null,history=[],sessionSamples=[],sessionStarted=0;
+ function num(x){return x===null||!Number.isFinite(x)?null:Math.round(x);}
+ function percentile(values,fraction){
+  if(!values.length)return null;
+  const at=(values.length-1)*fraction,low=Math.floor(at),high=Math.ceil(at);
+  return Math.round(values[low]+(values[high]-values[low])*(at-low));
+ }
+ function summary(){
+  const latency=sessionSamples.map(x=>x.rttMs).filter(x=>x!==null).sort((a,b)=>a-b);
+  const stalled=sessionSamples.filter(x=>x.snapshotAgeMs!==null&&x.snapshotAgeMs>=3500).length;
+  const total=sessionSamples.length;
+  overviewDetail.textContent=total?(
+   latency.length+'/'+total+' ticks with real RTT · median '+(latency.length?percentile(latency,.5)+' ms':'unavailable')+
+   ' · P95 '+(latency.length?percentile(latency,.95)+' ms':'unavailable')+
+   ' · '+stalled+' stale-snapshot observations (≥3.5 s). '+
+   'These are sampled observations, NOT packet-loss or gameplay results.'
+  ):'Waiting for measured match updates.';
+  exportButton.disabled=!total;
+ }
+ exportButton.addEventListener('click',()=>{
+  if(!sessionSamples.length){exportMessage.textContent='No observations to export.';return;}
+  // Deliberately excludes room IDs, player names, addresses, tokens and
+  // match results; strictly the transient metrics already displayed here.
+  const payload={format:'fuckball-private-connection-diagnostics',version:1,
+   exportedAt:new Date().toISOString(),sampling:'foreground only, approximately once per second',
+   readings:sessionSamples.map(x=>({...x}))};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='fuckball-private-connection.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  exportMessage.textContent='Private metrics saved locally; no upload or room identifier included.';
+ });
  const valid=x=>Number.isFinite(x)&&x>=1&&x<=10000;
  function online(){return !replay&&!match.hidden&&(!!serverLink?.room||peerConnected);}
  function sample(){
@@ -102,6 +142,7 @@
    }
    bar.setAttribute('aria-hidden','true');chart.append(bar);
   }
+  summary();
   chart.setAttribute('aria-label',good?'Actual RTT ranged from '+Math.round(Math.min(...history.filter(x=>x.ms!==null).map(x=>x.ms)))+
    ' to '+Math.round(Math.max(...history.filter(x=>x.ms!==null).map(x=>x.ms)))+
    ' milliseconds over '+history.length+' recent samples.':'No reliable RTT samples yet.');
@@ -120,13 +161,16 @@
   const active=online()&&!document.hidden;
   button.hidden=!active;
   if(!active){
-   session=null;history=[];
+   session=null;history=[];sessionSamples=[];sessionStarted=0;
    if(dialog.open)dialog.close();
    return;
   }
   const key=serverLink?.room?'server:'+serverLink.room:'direct-peer';
-  if(key!==session){history=[];session=key;}
+  if(key!==session){history=[];sessionSamples=[];sessionStarted=performance.now();session=key;}
   const s=sample();history.push({ms:s.ms});
+  sessionSamples.push({elapsedSeconds:Math.max(0,Math.round((performance.now()-sessionStarted)/1000)),
+   rttMs:num(s.ms),jitterMs:num(s.j),snapshotAgeMs:num(s.ageMs),source:s.source});
+  if(sessionSamples.length>300)sessionSamples.shift();
   if(history.length>45)history.shift();
   if(dialog.open)render(s);
  }
