@@ -27,7 +27,7 @@
  const dialog=make('dialog','controller-setup-dialog');
  dialog.setAttribute('aria-labelledby','controllerSetupTitle');
  const heading=make('h2','', 'CONTROLLER SETUP.');heading.id='controllerSetupTitle';
- const privacy=make('p','controller-setup-privacy','Local controller diagnostics only. Button presses, hardware IDs and settings are never uploaded.');
+ const privacy=make('p','controller-setup-privacy','Local controller diagnostics only. Controller selection is limited to this tab; no button presses, hardware IDs or settings are uploaded.');
  const state=make('p','controller-setup-state','Connect a controller and press a button.');
  state.setAttribute('role','status');state.setAttribute('aria-live','polite');
  const board=make('section','controller-setup-preview');
