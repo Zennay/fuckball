@@ -24,3 +24,7 @@
 .goal-gallery-navigation .goal-gallery-stop:not([hidden]){display:inline-flex;border:1px solid #ca9a91;color:#ffddd5;background:#442e34}
 .goal-gallery-reel:focus-visible,.goal-gallery-stop:focus-visible{outline:3px solid #d6f3a1;outline-offset:3px}
 @media(max-width:680px){.goal-gallery-head .goal-gallery-reel{width:100%}.goal-gallery-navigation{flex-wrap:wrap}}
+
+.goal-gallery-make-clip{background:#d0efa9!important;color:#163027!important;
+ border:1px solid #d4f3a7!important;font-weight:850!important}
+.goal-gallery-make-clip:focus-visible{outline:3px solid #e3ffb6;outline-offset:3px}
