@@ -538,7 +538,10 @@
   }
   fixtureChoice.value=chosen;fixtureChoice.disabled=!fixtures.length;
   const active=!!chosen&&rsvpAvailable;
-  for(const el of [friend,response,noteField,add,csv,backup,restore,clear])el.disabled=!active;
+  for(const el of [friend,response,noteField,add,csv,clear])el.disabled=!active;
+  // Completed private fixtures must not make old, user-owned attendance backups inaccessible.
+  backup.disabled=!rsvpAvailable;
+  restore.disabled=!rsvpAvailable;
   peopleView.replaceChildren();counts.replaceChildren();
   const selected=roster();
   for(const [status,label] of [['going','Going'],['maybe','Maybe'],['out','Out']])
