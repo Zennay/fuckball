@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),{createSocial}=require('./social.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -13,7 +13,65 @@ function createServer(options={}){
  const root=path.resolve(__dirname,'../dist'),bff=fs.readFileSync(path.join(root,'stadiums/bff-big-v4.hbs'),'utf8'),rooms=new Map(),clients=new Set();
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
- const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,authHits=new Map();
+ const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
+  social=dataDir?createSocial(dataDir):null,authHits=new Map();
+ // Room invitations are ephemeral: only a live room participant may share
+ // an existing room with a mutually accepted friend. Never persist room links.
+ const friendInvites=new Map(),socialHits=new Map(),INVITE_TTL=5*60000;
+ function purgeInvites(){
+  const now=Date.now();
+  for(const [user,list]of friendInvites){
+   const keep=list.filter(i=>i.expiresAt>now&&rooms.has(i.room)&&
+    social?.areFriends(i.from,user)&&[...rooms.get(i.room).sockets.values()].some(ws=>ws.account?.toLowerCase()===i.from));
+   if(keep.length)friendInvites.set(user,keep);else friendInvites.delete(user);
+  }
+ }
+ function socialApi(req,res,route){
+  const json=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
+  if(!social)return json(503,{error:'Social features require persistent server storage.'});
+  const token=(req.headers.authorization||'').replace(/^Bearer /,'');
+  const account=accounts.user(token),user=account?.toLowerCase();
+  if(!user)return json(401,{error:'Sign in to use friends and room invitations.'});
+  const status=()=>{
+   purgeInvites();
+   const playing=new Set([...clients].filter(ws=>ws.readyState===1&&ws.room&&ws.account).map(ws=>ws.account.toLowerCase()));
+   return{...social.view(user,playing),invites:(friendInvites.get(user)||[]).map(i=>({from:i.from,room:i.room,expiresAt:i.expiresAt}))};
+  };
+  if(req.method==='GET'&&route==='/api/social')return json(200,status());
+  if(req.method!=='POST')return json(405,{error:'Only GET /api/social or POST is supported.'});
+  const now=Date.now(),ip=req.socket.remoteAddress||'',rateKey=user+':'+ip;
+  const hits=(socialHits.get(rateKey)||[]).filter(t=>now-t<5*60000);
+  if(hits.length>=30)return json(429,{error:'Too many changes. Try again shortly.'});
+  hits.push(now);socialHits.set(rateKey,hits);
+  if(socialHits.size>3000)for(const [key,list]of socialHits)if(list.every(t=>now-t>5*60000))socialHits.delete(key);
+  let body='',exceeded=false;req.setEncoding('utf8');
+  req.on('data',chunk=>{body+=chunk;if(body.length>2048){exceeded=true;req.destroy();}});
+  req.on('end',()=>{
+   if(exceeded)return;
+   try{
+    const data=JSON.parse(body||'{}');
+    if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Invalid request.');
+    if(route==='/api/social/invite'){
+     if(typeof data.to!=='string'||!/^[a-z0-9_-]{3,20}$/i.test(data.to)||
+      typeof data.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(data.room))
+      throw Error('Invalid player or room.');
+     const to=data.to.toLowerCase(),room=rooms.get(data.room);
+     if(!social.areFriends(user,to))throw Error('You can only invite mutual friends.');
+     if(!room||![...room.sockets.values()].some(ws=>ws.readyState===1&&ws.account?.toLowerCase()===user))
+      throw Error('Join a live room before sending invitations.');
+     purgeInvites();
+     if(friendInvites.size>1024&&!friendInvites.has(to))throw Error('Room invitation capacity reached.');
+     const list=(friendInvites.get(to)||[]).filter(i=>i.from!==user||i.room!==data.room);
+     if(list.length>=12)throw Error('Friend has too many pending invites.');
+     list.push({from:user,room:data.room,expiresAt:now+INVITE_TTL});friendInvites.set(to,list);
+    }else if(route==='/api/social'){
+     if(typeof data.action!=='string'||typeof data.user!=='string')throw Error('Invalid friend action.');
+     social.action(user,data.action,data.user,target=>accounts.reserved(target));
+    }else throw Error('Unknown route.');
+    return json(200,status());
+   }catch(e){return json(400,{error:typeof e?.message==='string'?e.message:'Invalid social request.'});}
+  });
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -39,7 +97,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history','/api/player-stats'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.sockets.size,reserved:r.parked.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
