@@ -134,6 +134,68 @@
  qrButton.setAttribute('aria-expanded','false');
  qrButton.setAttribute('aria-controls','roomInviteQr');
  qrPanel.id='roomInviteQr';
+ // Shareable, scannable invite poster; rendered from the *current* local QR.
+ // Never reuses a stale QR, uploads the URL or grants room admission.
+ const downloadQr=document.createElement('button');downloadQr.type='button';
+ downloadQr.className='room-invite-qr-download';
+ downloadQr.textContent='↓ Save scannable QR card (PNG)';
+ qrPanel.append(downloadQr);
+ downloadQr.onclick=async()=>{
+  downloadQr.disabled=true;
+  try{
+   const currentRoomData=currentRoom();
+   if(renderedQrUrl!==currentRoomData.url||qrPanel.hidden)
+    throw Error('Show the live room QR before saving its card.');
+   const qrImage=qrCanvas.querySelector('canvas')||qrCanvas.querySelector('img');
+   if(!qrImage)throw Error('Could not read the QR on this device.');
+   const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=900;
+   const ctx=canvas.getContext('2d');
+   if(!ctx)throw Error('PNG drawing is unavailable on this device.');
+   // Keep the artwork self-contained: no remote images, fonts or APIs.
+   ctx.fillStyle='#0d2629';ctx.fillRect(0,0,1200,900);
+   ctx.fillStyle='#d9f4ac';ctx.fillRect(0,0,1200,16);
+   ctx.font='800 34px system-ui,sans-serif';
+   ctx.fillText('FUCKBALL · CUSTOM ROOM',70,95);
+   ctx.fillStyle='#d0e7dc';ctx.font='600 26px system-ui,sans-serif';
+   ctx.fillText('SCAN TO JOIN',70,175);
+   ctx.fillStyle='#ffffff';ctx.font='800 82px ui-monospace,monospace';
+   ctx.fillText(currentRoomData.room,65,275);
+   ctx.fillStyle='#daf1db';ctx.font='600 24px system-ui,sans-serif';
+   ctx.fillText('This invite is not a pass.',70,340);
+   ctx.fillText('The game server decides access.',70,382);
+   ctx.fillStyle='#244744';ctx.fillRect(65,435,500,138);
+   ctx.fillStyle='#e5f6c4';ctx.font='750 26px system-ui,sans-serif';
+   ctx.fillText('ROOM ACCESS',90,480);
+   const roomStatus=eligibility(currentRoomData);
+   ctx.font='650 20px system-ui,sans-serif';
+   // Access status is server-reported at card creation; it can change.
+   ctx.fillText(roomStatus.slice(0,43),90,531,440);
+   ctx.fillStyle='#fff';ctx.fillRect(685,150,438,438);
+   ctx.drawImage(qrImage,712,177,384,384);
+   ctx.font='600 25px system-ui,sans-serif';ctx.fillStyle='#d7ebdf';
+   ctx.fillText('Current site:',70,661);
+   ctx.font='500 20px ui-monospace,monospace';
+   const address=currentRoomData.url;
+   // Draw at most two visibly bounded lines; QR still encodes the full URL.
+   ctx.fillText(address.slice(0,75),70,701,1050);
+   if(address.length>75)ctx.fillText(address.slice(75,150),70,732,1050);
+   ctx.fillStyle='#afc8bf';ctx.font='500 19px system-ui,sans-serif';
+   ctx.fillText('A live Custom Room may be locked, full, restricted or closed after sharing.',70,818,1070);
+   ctx.fillText('Open via Fuckball. Joining requires a separate deliberate action.',70,851,1070);
+   const blob=await new Promise((resolve,reject)=>
+    canvas.toBlob(value=>value?resolve(value):reject(Error('Cannot export this QR image.')),'image/png'));
+   if(snapshot()?.url!==currentRoomData.url)
+    throw Error('Room changed during QR export. Open the new room and try again.');
+   const url=URL.createObjectURL(blob);
+   const link=document.createElement('a');link.href=url;
+   link.download='fuckball-room-'+currentRoomData.room+'-qr.png';
+   document.body.append(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+   status.textContent='Scannable QR invite PNG saved locally. Share only with intended recipients. '+warning(currentRoomData);
+  }catch(error){
+   status.textContent=error?.message||'Could not create your QR invitation image.';
+  }finally{downloadQr.disabled=false;}
+ };
  function escapeXml(value){
   return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');

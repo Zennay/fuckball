@@ -16,3 +16,9 @@ On Firefox or browsers without native BarcodeDetector, the same user-triggered s
 ## Offline decoder fallback
 
 `dist/vendor/jsQR.js`: [cozmo/jsQR](https://github.com/cozmo/jsQR), Apache License 2.0, pinned source commit `8e6a036beafa7053dd44b1b76ac578d22b1b3311`. Full license text in `dist/vendor/LICENSE-jsQR.txt` and attribution in `dist/vendor/THIRD-PARTY.txt`. This larger decoder is **lazy-loaded only on direct user request** when native QR detection is not present; it is not added to the offline-practice pre-cache or startup network requests. Neither decoder sends raw frames, codes, tokens or image data to an external service.
+
+## Shareable QR poster (PNG)
+
+Inside an active native Custom Room, open the match menu, select **Show room QR**, then **Save scannable QR card (PNG)**. The browser draws a local 1200×900 branded PNG containing the real QR, exact eight-character room code, source website, and a clear notice that this invitation is not permission to enter. The access label is sourced from the room's current server control snapshot; its state may change after sharing.
+
+PNG export reads the locally generated QR bitmap, revalidates the active native room before writing the file, and aborts if the room changed during asynchronous image encoding. No user-submitted URL, remote QR-generation service, CDN, personal token, camera image or account credentials are included. The host may share the PNG by any chosen channel; recipients use the normal same-site QR scanner and explicitly confirm native room admission. No HTTP endpoint, server authority or gameplay logic is changed.
