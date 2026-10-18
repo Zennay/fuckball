@@ -407,6 +407,17 @@
       message='Tournament restored as a new device-local copy.';render();
     }catch(err){inform('Import refused: '+(err.message||'Invalid local tournament file.'));}
   };
+  window.addEventListener('fuckball:open-private-competition',event=>{
+    const ref=event.detail;
+    if(ref?.type!=='League'||typeof ref.id!=='string')return;
+    const selected=tournaments.find(t=>t.id===ref.id);
+    if(!selected)return inform('This local league is no longer available.');
+    activeId=selected.id;filter='pending';message='Opened '+selected.name+' · results are private and unverified.';
+    details.open=true;render();
+    panel.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'start'});
+    select.focus({preventScroll:true});
+  });
   // Matchday Control Center is navigation-only. The actual score and schedule
   // remain submitted through the existing Tournament Desk forms/validators.
   window.addEventListener('fuckball:open-private-league-fixture',event=>{

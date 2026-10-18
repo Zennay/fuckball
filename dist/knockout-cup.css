@@ -58,3 +58,9 @@
  .knockout-disclosure>summary,.knockout-round h3,.knockout-match>small{color:#111}
 }
 .knockout-desk [hidden]{display:none!important}
+
+/* Private matchday action focuses the actual native cup score form. */
+.knockout-match.knockout-match-target{
+ border:2px solid #e0f7a1;box-shadow:0 0 0 3px rgba(206,246,158,.16);
+ scroll-margin-top:25vh;background:#304c44
+}
