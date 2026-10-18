@@ -31,3 +31,37 @@ html.fb-access-team-marks .scoreboard .team-name.blue::before{content:'● ';col
 html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}
 @media(prefers-reduced-motion:reduce){html:not(.fb-access-motion-allow) :is(*,*::before,*::after){animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}}
 @media(max-width:550px){.fb-access-dialog{padding:17px}.fb-access-option{padding:10px}.fb-access-actions button{flex:1}#accessibilityButton{min-width:34px}}
+
+/* Optional local Settings Passport: never exposes accounts, rooms or tokens. */
+.setup-passport-trigger{min-height:40px;padding:8px 12px;border-radius:8px;
+ border:1px solid #98b3a4;background:#244247;color:#f1ffe5;font-size:12px;font-weight:800}
+.setup-passport-entry{grid-column:1/-1;margin:12px 0;padding:15px;
+ border:1px solid #759782;border-radius:11px;background:#193737;display:grid;gap:9px}
+.setup-passport-entry h3{margin:0;font-size:14px;color:#d9f5a9;letter-spacing:.08em}
+.setup-passport-entry p{margin:0;color:#c9dfd1;font-size:12px;line-height:1.55}
+.setup-passport-entry .setup-passport-trigger{justify-self:start}
+.setup-passport-dialog{width:min(620px,calc(100vw - 22px));max-height:min(85vh,860px);
+ overflow:auto;padding:clamp(16px,3vw,26px);border:2px solid #9ab994;
+ border-radius:15px;background:#1c333a;color:#f0f8ed;box-shadow:0 24px 70px #0008}
+.setup-passport-dialog::backdrop{background:#07151ac5}
+.setup-passport-dialog h2{font-size:clamp(21px,3vw,30px);margin:0 0 9px;letter-spacing:-.04em}
+.setup-passport-dialog>p{font-size:12px;line-height:1.6;color:#cadae0}
+.setup-passport-choices{display:grid;gap:8px;margin:12px 0}
+.setup-passport-dialog>strong{font-size:11px;letter-spacing:.08em;color:#dbf9af}
+.setup-passport-choice{display:flex;align-items:center;gap:12px;border:1px solid #567c78;
+ border-radius:8px;background:#274348;padding:11px}
+.setup-passport-choice[hidden]{display:none!important}
+.setup-passport-choice input{width:21px;height:21px;accent-color:#d5f2a3;flex:none}
+.setup-passport-choice span{display:grid;gap:4px}
+.setup-passport-choice strong{font-size:13px}
+.setup-passport-choice small{font-size:11px;color:#c6dbd2}
+.setup-passport-actions{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.setup-passport-actions button{min-height:44px;flex:1 1 150px;border:1px solid #849f92;
+ border-radius:8px;background:#294a48;color:#eaffdf;font-size:12px;font-weight:850;padding:10px}
+.setup-passport-actions button.primary{background:#cfefa3;color:#1b342a}
+.setup-passport-actions button:disabled{opacity:.5;cursor:not-allowed}
+.setup-passport-status{font-size:12px;line-height:1.6;min-height:1.6em;color:#d9edbc}
+.setup-passport-trigger:focus-visible,.setup-passport-dialog :is(button,input):focus-visible{
+ outline:3px solid #ddffae;outline-offset:3px}
+@media(max-width:540px){.setup-passport-dialog{padding:14px}
+ .setup-passport-actions button{flex:1 1 100%}}
