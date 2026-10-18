@@ -50,6 +50,40 @@
   if(!response.ok)throw Error(data.error||'Club service unavailable.');
   return data;
  }
+ async function partyApi(payload){
+  const token=settings.account?.token;
+  if(!token)throw Error('Sign in to organize a Club squad.');
+  const response=await fetch('/api/party',{
+   method:payload?'POST':'GET',cache:'no-store',
+   headers:{Authorization:'Bearer '+token,...(payload?{'Content-Type':'application/json'}:{})},
+   ...(payload?{body:JSON.stringify(payload)}:{})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(data.error||'Could not organize this Club squad.');
+  return data;
+ }
+ async function organizeSquad(){
+  if(busy)return;busy=true;status.textContent='Preparing your Club party…';
+  try{
+   let party=(await partyApi(null)).party;
+   if(!party)party=(await partyApi({action:'create'})).party;
+   if(party.leader!==settings.account.username.toLowerCase())
+    throw Error('Only your party leader can invite teammates. Leave the current party before forming a new one.');
+   status.textContent='Club party ready. Invite teammates from the Club roster, or open Friends → Party.';
+   if(typeof window.openFriendParty==='function'){
+    dialog.close();window.openFriendParty();
+   }
+  }catch(e){status.textContent=e.message||'Could not create Club party.';}
+  finally{busy=false;}
+ }
+ async function inviteToSquad(name){
+  if(busy)return;busy=true;status.textContent='Sending private Club party invitation…';
+  try{
+   await partyApi({action:'invite',user:name});
+   status.textContent='Club party invite sent to '+name+'. They can accept from Friends → Party.';
+  }catch(e){status.textContent=e.message||'Could not invite this teammate.';}
+  finally{busy=false;}
+ }
  async function act(payload){
   if(busy)return;busy=true;status.textContent='Saving club changes…';
   try{const result=await api(payload);render(result);status.textContent='Club changes saved.';}
@@ -89,6 +123,7 @@
    if(role==='owner')buttons.append(button('Disband Club',()=>{
     if(confirm('Permanently disband '+club.name+' and remove every membership?'))act({action:'disband'});
    },true));
+   buttons.append(button('⚽ Form Club squad',organizeSquad));
    summary.append(buttons);
    const rooms=panel('CLUB MATCH ROOMS',
     'Club members can join these live, unlisted rooms. Hosts enable Club-only access from Room Control.');
@@ -111,10 +146,11 @@
      [join,invite]);
    }
    if(!live.length)rooms.append(cell('p','No Club-only rooms are accepting new members. Create an online Custom Room, then choose Restrict to my Club in Room Control.'));
-   const roster=panel('TEAM ROSTER','Roles are server-authorized. Captains can invite or remove regular members.');
+   const roster=panel('TEAM ROSTER','Form a Club squad to invite teammates directly, even if you are not already friends. Four Club members can ready up together for casual Club vs Club 4v4. Blocking still prevents invitations.');
    for(const member of club.members){
     const actions=[];
     if(member.user!==settings.account?.username?.toLowerCase()){
+     actions.push(button('Invite to squad',()=>inviteToSquad(member.user)));
      if(role==='owner'){
       if(member.role==='member')actions.push(button('Make captain',()=>act({action:'promote',user:member.user})));
       if(member.role==='captain')actions.push(button('Remove captain',()=>act({action:'demote',user:member.user})));

@@ -3,6 +3,8 @@
 // friend parties or solo players; each individual still accepts ready-check.
 const SIZES=Object.freeze({'1v1':1,'2v2':2,'3v3':3,'4v4':4});
 const READY_MS=15000;
+// Separate opt-in casual Club playlist. Never becomes a ranked/rating queue.
+const CLUB_MODE='club4v4',MODES=Object.freeze({...SIZES,[CLUB_MODE]:4});
 function estimate(stats){
  if(!stats||!Number.isSafeInteger(stats.matches)||stats.matches<0)return 1200;
  const wins=Math.max(0,Number(stats.wins)||0),losses=Math.max(0,Number(stats.losses)||0);
@@ -49,12 +51,14 @@ function distributeUnits(units,size){
  units.forEach((u,i)=>(best&(1<<i)?red:blue).push(...u.players));
  return{red,blue};
 }
-function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true,canShareMatch=()=>true}){
- const pools=Object.fromEntries(Object.keys(SIZES).map(mode=>[mode,[]]));
+function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true,canShareMatch=()=>true,clubForUser=()=>null}){
+ const pools=Object.fromEntries(Object.keys(MODES).map(mode=>[mode,[]]));
  const active=new Map(),readyBySocket=new Map(),readyChecks=new Map();
  let nextId=0;
  const available=ws=>ws?.readyState===1&&!ws.room&&validAccount(ws);
- const live=u=>u.players.every(p=>available(p.ws));
+ const clubEligible=u=>u.mode!==CLUB_MODE||
+  !!u.clubId&&u.players.length===4&&u.players.every(p=>clubForUser(p.user)===u.clubId);
+ const live=u=>u.players.every(p=>available(p.ws))&&clubEligible(u);
  const all=units=>units.flatMap(u=>u.players);
  const compatible=players=>players.every((p,i)=>players.slice(i+1).every(q=>
   canShareMatch(p.user,q.user)));
@@ -62,7 +66,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   const count=pools[mode].reduce((n,u)=>n+u.players.length,0);
   for(const unit of pools[mode])for(const p of unit.players)if(available(p.ws))
    send(p.ws,{type:'queueStatus',status:'waiting',mode,waiting:count,
-    needed:SIZES[mode]*2,at:unit.at,ranked:false,humanOnly:true,partySize:unit.players.length});
+    needed:MODES[mode]*2,at:unit.at,ranked:false,humanOnly:true,partySize:unit.players.length});
  }
  function abortReady(check,offender,reason='Ready check expired.'){
   if(!readyChecks.delete(check.id))return;
@@ -98,8 +102,8 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   broadcast(unit.mode);return true;
  }
  function joinGroup(players,mode,partyId=null){
-  if(!Object.hasOwn(SIZES,mode))throw Error('Choose 1v1, 2v2, 3v3 or 4v4.');
-  if(!Array.isArray(players)||players.length<1||players.length>SIZES[mode])
+  if(!Object.hasOwn(MODES,mode))throw Error('Choose a supported Quick Match playlist.');
+  if(!Array.isArray(players)||players.length<1||players.length>MODES[mode])
    throw Error('Your party does not fit this playlist.');
   const users=new Set(),sockets=new Set();
   for(const p of players){
@@ -109,6 +113,12 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
    users.add(p.user);sockets.add(p.ws);
   }
   if(!compatible(players))throw Error('This party cannot enter a match after a social change.');
+  // Only a complete, party-launched squad of four genuine accounts from one
+  // current server Club may enter this queue. Browser supplied labels are ignored.
+  const clubIds=mode===CLUB_MODE?players.map(p=>clubForUser(p.user)):[];
+  if(mode===CLUB_MODE&&(players.length!==4||!partyId||!clubIds[0]||
+     clubIds.some(id=>id!==clubIds[0])))
+   throw Error('Club 4v4 requires four online party members from the same Club.');
   for(const unit of new Set(active.values()))
    if(unit.players.some(p=>users.has(p.user)))
     throw Error('A party member is already searching.');
@@ -116,13 +126,15 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   if(list.reduce((n,u)=>n+u.players.length,0)+players.length>128)
    throw Error('This playlist is currently full.');
   const at=clock(),entries=players.map(p=>({ws:p.ws,user:p.user,mode,at,skill:estimate(p.stats)}));
-  const unit={mode,partyId,players:entries,at,skill:Math.round(entries.reduce((s,p)=>s+p.skill,0)/entries.length)};
+  const unit={mode,partyId,clubId:mode===CLUB_MODE?clubIds[0]:null,players:entries,at,skill:Math.round(entries.reduce((s,p)=>s+p.skill,0)/entries.length)};
   list.push(unit);for(const p of entries)active.set(p.ws,unit);
   broadcast(mode);drain(mode);
  }
  function join(ws,user,mode,stats){joinGroup([{ws,user,stats}],mode);}
  function expireReady(){
   for(const check of [...readyChecks.values()]){
+   const invalidClub=check.units.find(u=>!clubEligible(u));
+   if(invalidClub){abortReady(check,invalidClub.players[0].ws,'A Club roster changed. Find a new opponent.');continue;}
    const gone=all(check.units).find(p=>!available(p.ws));
    if(gone)abortReady(check,gone.ws,'A player disconnected before the match.');
    else if(clock()>=check.expiresAt)abortReady(check,null,'Not everyone confirmed in time.');
@@ -136,6 +148,9 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   if(!available(ws)){abortReady(check,ws,'A player disconnected.');return;}
   // Social blocks may change while the 15-second ready check is on screen.
   // Never start a newly blocked human matchup from an old ready proposal.
+  if(check.units.some(u=>!clubEligible(u))){
+   abortReady(check,null,'A Club roster changed. Search again.');return;
+  }
   if(!compatible(all(check.units))){
    abortReady(check,null,'A matchmaking preference changed. Searching for a different lineup.');
    return;
@@ -157,7 +172,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
      reason:'A player disconnected. Start another search.'});
    return;
   }
-  const teams=distributeUnits(check.units,SIZES[check.mode]);
+  const teams=distributeUnits(check.units,MODES[check.mode]);
   if(!teams)throw Error('Unable to place a full party on one team.');
   try{start({mode:check.mode,red:teams.red,blue:teams.blue});}
   catch{
@@ -168,6 +183,14 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   broadcast(check.mode);
  }
  function choose(list,anchor,needed,span,size){
+  if(anchor.mode===CLUB_MODE){
+   if(!clubEligible(anchor))return null;
+   const rival=list.filter(u=>u!==anchor&&live(u)&&u.clubId!==anchor.clubId&&
+    u.players.length===4&&Math.abs(u.skill-anchor.skill)<=span&&
+    compatible([...anchor.players,...u.players]))
+    .sort((a,b)=>Math.abs(a.skill-anchor.skill)-Math.abs(b.skill-anchor.skill)||a.at-b.at)[0];
+   return rival?[anchor,rival]:null;
+  }
   const alternatives=list.filter(u=>u!==anchor&&Math.abs(u.skill-anchor.skill)<=span)
    .sort((a,b)=>Math.abs(a.skill-anchor.skill)-Math.abs(b.skill-anchor.skill)||a.at-b.at)
    .slice(0,21);
@@ -208,9 +231,12 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   return best;
  }
  function drain(mode){
-  const list=pools[mode],needed=SIZES[mode]*2;
+  const list=pools[mode],needed=MODES[mode]*2;
   for(let i=list.length-1;i>=0;i--)if(!live(list[i])){
    for(const p of list[i].players){
+    if(p.ws?.readyState===1&&!clubEligible(list[i]))
+     send(p.ws,{type:'queueStatus',status:'error',
+      reason:'Your Club roster changed. Start a fresh Club search.'});
     if(p.ws?.readyState===1&&!validAccount(p.ws))
      send(p.ws,{type:'queueStatus',status:'error',
       reason:'Your account session expired. Log in before searching again.'});
@@ -224,7 +250,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
    for(const anchor of list){
     const wait=Math.max(0,clock()-anchor.at);
     const span=Math.min(500,160+Math.floor(wait/10000)*25);
-    chosen=choose(list,anchor,needed,span,SIZES[mode]);
+    chosen=choose(list,anchor,needed,span,MODES[mode]);
     if(chosen)break;
    }
    if(!chosen)break;
@@ -241,7 +267,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
   }
   if(proposed)broadcast(mode);
  }
- function drainAll(){expireReady();for(const mode of Object.keys(SIZES))drain(mode);}
+ function drainAll(){expireReady();for(const mode of Object.keys(MODES))drain(mode);}
  // Public, read-only aggregate from genuine authenticated live connections.
  // No player names, IDs, IP addresses, accounts, parties or invented ETAs.
  function availability(){

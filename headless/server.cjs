@@ -15,7 +15,8 @@ function createServer(options={}){
  const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
  const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
-  parties=dataDir?createParties({social,exists:name=>accounts.reserved(name)}):null,
+  parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
+   clubForUser:user=>clubs?.membership(user)?.id||null}):null,
   authHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
  // Room invitations are ephemeral: only a live room participant may share
  // an existing room with a mutually accepted friend. Never persist room links.
@@ -148,6 +149,13 @@ function createServer(options={}){
     if(!data||typeof data!=='object'||Array.isArray(data)||
      typeof data.action!=='string')throw Error('Invalid party action.');
     const prior=parties.snapshot(user).party;
+    if(data.action==='launch'&&data.mode==='club4v4'){
+     if(!prior||prior.members.length!==4)
+      throw Error('Club 4v4 needs a party of four members.');
+     const clubId=clubs?.membership(user)?.id;
+     if(!clubId||prior.members.some(member=>clubs.membership(member.name)?.id!==clubId))
+      throw Error('All four party members must belong to your current Club.');
+    }
     const result=parties.action(user,data);
     if(prior?.launchMode&&['cancel'].includes(data.action))cancelPendingParty(prior.id,'Party search cancelled by leader.');
     return json(200,result);
@@ -253,7 +261,8 @@ function createServer(options={}){
  }
  const RoomCore=require('../dist/room-core.js'),quickMatch=createQuickMatch({send,start:createMatchedRoom,
   validAccount:ws=>!!ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase(),
-  canShareMatch:(a,b)=>!social||social.canShareMatch(a,b)}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
+  canShareMatch:(a,b)=>!social||social.canShareMatch(a,b),
+  clubForUser:user=>clubs?.membership(user)?.id||null}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
  /* Peer hosting (docs/netcode-plan.md): the room can run in a player's browser when that gives everyone a
     better connection. This server stays the coordinator: it measures, elects, hands the room over at an
     exact frame, keeps a standby copy plus every input, and takes the room back instantly when the host
@@ -452,7 +461,7 @@ function createServer(options={}){
     join(ws,r);
    }
    stripQuickBots(r);
-   r.mode=mode;
+   r.mode=mode==='club4v4'?'4v4':mode;
    r.locked=true; // Only existing exact-session reconnects can enter.
    r.reset(true);
    for(const ws of r.sockets.values()){
@@ -511,9 +520,17 @@ function createServer(options={}){
      throw Error('This account is already playing in an online room.');
     ws.account=account;ws.accountToken=d.token;ws.name=account;
     ws.netcode=d.netcode===2?2:3;ws.mesh=false;ws.resumeEnabled=true;
+    if(d.mode==='club4v4'&&d.party!==true)
+     throw Error('Club 4v4 needs a full signed-in Club party.');
     if(d.party===true){
      const party=parties?.queueFor(account,d.mode);
      if(!party)throw Error('Your party launch is not active. Ready up and ask the leader to start.');
+     if(d.mode==='club4v4'){
+      const clubId=clubs?.membership(account)?.id;
+      if(party.users.length!==4||!clubId||
+       party.users.some(user=>clubs.membership(user)?.id!==clubId))
+       throw Error('Club 4v4 needs four members of one Club.');
+     }
      let pending=partyPending.get(party.id);
      if(!pending){
       pending={id:party.id,mode:d.mode,users:party.users,sockets:new Map(),expiresAt:Date.now()+30000};

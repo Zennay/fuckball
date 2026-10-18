@@ -14,6 +14,7 @@
  description.textContent='Find real players on this server in 1v1–4v4. Teams are balanced using server career results, with a preference for similarly sized friend parties. No filler bots or ranked ratings.';
  const modes=document.createElement('div');modes.className='quick-queue-modes';
  const modeButtons=[],modeDetails=new Map();
+ const playlistLabel=mode=>mode==='club4v4'?'Club vs Club 4v4':mode;
  const availability=document.createElement('p');availability.className='quick-queue-availability';
  availability.setAttribute('role','status');availability.setAttribute('aria-live','polite');
  availability.textContent='Live queue occupancy is loading · this server only; no estimated wait times.';
@@ -101,7 +102,7 @@
   readyBox.hidden=!ready;
   if(ready){
    const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
-   readyText.textContent='All '+ready.players+' human players must confirm. Casual '+ready.mode+', no ranked rating.';
+   readyText.textContent='All '+ready.players+' human players must confirm. Casual '+playlistLabel(ready.mode)+', no ranked rating.';
    readyProgress.textContent=ready.ready+' / '+ready.players+' confirmed · '+remain+
     's left'+(readyAccepted?' · You’re ready. Waiting for others.':'');
    acceptReady.disabled=readyAccepted||remain===0;
@@ -109,7 +110,7 @@
    notice.textContent='Your proposed match is waiting for every player to accept.';
   }else if(searching&&queuedAt){
    const duration=Math.max(0,Math.floor((Date.now()-queuedAt)/1000));
-   notice.textContent='Searching for '+matchMode+' · '+waiting+' of '+needed+
+   notice.textContent='Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
     ' human players available · '+duration+'s elapsed. No bots will be added.';
   }
  }
@@ -127,7 +128,7 @@
   if(!$('serverAddress').value.trim()){
    notice.textContent='Connect to a Fuckball multiplayer server to find human opponents.';return;
   }
-  searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=Number(mode[0])*2;
+  searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   connectServer(false,'','',null,mode,party);
  }
@@ -205,7 +206,7 @@
   disconnect();done('Search cancelled. Choose another playlist whenever you want.');
  };
  window.startPartyQuickMatch=mode=>{
-  if(!['2v2','3v3','4v4'].includes(mode))return false;
+  if(!['2v2','3v3','4v4','club4v4'].includes(mode))return false;
   if(searching||serverLink?.room)return false;
   start(mode,true);return searching;
  };
@@ -234,8 +235,8 @@
     done(d.reason||'Ready check ended. Start another search.');
    }
   }else if(d.type==='quickMatchFound'){
-   done('Matched with '+d.players+' real people. Your casual '+d.mode+' game is starting.');
-   notify('Real-player Quick Match '+d.mode+' · no bots, no ranked rating.');
+   done('Matched with '+d.players+' real people. Your casual '+playlistLabel(d.mode)+' game is starting.');
+   notify('Real-player Quick Match '+playlistLabel(d.mode)+' · no bots, no ranked rating.');
   }else if(d.type==='quickMatchCancelled'){
    done(d.reason||'Your match was cancelled.');
   }else if(d.type==='queueStatus'){
