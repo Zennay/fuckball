@@ -46,7 +46,7 @@
   save();
  };
  const neutral=()=>({x:0,y:0,kick:false});
- let active=null,lastSignature='',wasStart=false,connected='';
+ let active=null,chosenIndex=null,lastSignature='',wasStart=false,connected='';
  const isHeld=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const magnitude=axis=>Number.isFinite(axis)&&Math.abs(axis)>=preferences.deadzone?Math.sign(axis):0;
@@ -60,6 +60,11 @@
   if(typeof navigator.getGamepads!=='function')return null;
   try{
    const pads=navigator.getGamepads();
+   // Explicit choices never fall back to another player's controller on disconnect.
+   if(chosenIndex!==null){
+    const chosen=pads[chosenIndex];
+    return chosen?.connected?chosen:null;
+   }
    const current=active===null?null:pads[active];
    if(current?.connected)return current;
    const next=Array.from(pads).find(p=>p?.connected);
@@ -116,6 +121,16 @@
   kickSelect.value=next.kick;deadzone.value=String(next.deadzone);
   deadzoneValue.textContent=Math.round(next.deadzone*100)+'%';
   lastSignature=''; // Reapply a held input on the next native animation frame.
+ });
+ // The Play-screen source selector chooses an ephemeral Gamepad API index.
+ // No hardware ID is saved or sent to a server; a disconnected choice is neutral.
+ window.addEventListener('fuckball:controller-source',event=>{
+  const index=event.detail?.index;
+  if(index!==null&&(!Number.isSafeInteger(index)||index<0||index>15))return;
+  chosenIndex=index;active=null;lastSignature='';connected='';
+  // Require a fresh Start press on the new controller instead of opening
+  // the in-game menu just because Start was held during the switch.
+  wasStart=true;
  });
  window.fuckballGamepad={read};
  // App blur/visibility handlers deliberately release input; reapply the
