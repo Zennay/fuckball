@@ -9,12 +9,17 @@ const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.
 const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serverLink.isOwner||!started)return;paused=!paused;releaseInputs();serverLink.send({type:'pause',value:paused});setButtons();return;}baseTogglePause();};
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
-function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  $('inviteBox').hidden=true;ws.onopen=()=>link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,room:roomId,name:joinName||settings.name,token:settings.account?.token||undefined,
  netcode:settings.netcode==='classic'?2:3,mesh:peerHostingSupported(),
- resumeOptIn:settings.guestReconnect===true,resume:resumeContext?.ticket||undefined});ws.onerror=()=>{$('serverRoomStatus').textContent='Could not connect to server.';};ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room,tries=(link.retries||0),previousId=link.previousId??networkPlayerId,ticket=link.resumeTicket;disconnect();if(link.failed)return;
+ resumeOptIn:settings.guestReconnect===true,resume:resumeContext?.ticket||undefined});ws.onerror=()=>{$('serverRoomStatus').textContent='Could not connect to server.';};ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+    link.failed=true;
+    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
+    disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
+   }
+   if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room,tries=(link.retries||0),previousId=link.previousId??networkPlayerId,ticket=link.resumeTicket;disconnect();if(link.failed)return;
   // Dropped connection (Wi-Fi switch, proxy hiccup): rejoin the same room a few times.
   if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1});},delay);}else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
@@ -24,7 +29,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   window.onQuickMatchEvent?.(d);
   return;
  }
- if(d.type==='roomRemoved'){
+ if(d.type==='sessionRevoked'){
+    link.failed=true;
+    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
+    disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
+   }
+   if(d.type==='roomRemoved'){
   link.failed=true;
   const reason=typeof d.reason==='string'?d.reason.slice(0,160):'You were removed by the room host.';
   disconnect();showView('home');notify(reason);return;
