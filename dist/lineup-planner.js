@@ -65,7 +65,7 @@
   const counts=countTeams(latest);
   const changed=base.humans.filter(p=>(plan.get(p.id)??p.team.id)!==p.team.id).length;
   const valid=counts.red<=4&&counts.blue<=4;
-  const lobby=typeof started!=='undefined'&&!started;
+  const lobby=typeof started!=='undefined'&&!started&&!room?.gameState;
   const online=serverLink?.ws?.readyState===1;
   apply.disabled=!valid||!lobby||!online||changed===0;
   summary.textContent='Red '+counts.red+'/4 · Blue '+counts.blue+'/4 · Bench / spectators '+
@@ -103,7 +103,7 @@
  refresh.onclick=paint;
  apply.onclick=()=>{
   if(!permitted()||!base||!dirty)return;
-  if(typeof started==='undefined'||started){
+  if(typeof started==='undefined'||started||room?.gameState){
    status.textContent='This action is unavailable after match start; use normal authorized substitutions.';
    return;
   }
@@ -120,7 +120,7 @@
   const names=moves.slice(0,6).map(p=>String(p.name||'Player').slice(0,25)).join(', ');
   if(!window.confirm('Request '+moves.length+' pregame team changes for '+names+
      (moves.length>6?' and others':'')+'? The server will authorize each move, and nobody is moved during a running game.'))return;
-  if(!permitted()||started||serverLink.room!==base.room||
+  if(!permitted()||started||room?.gameState||serverLink.room!==base.room||
      current().signature!==base.signature){
    status.textContent='Room state changed before submission. Nothing sent. Refresh the lineup.';apply.disabled=true;return;
   }
