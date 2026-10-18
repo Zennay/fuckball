@@ -180,6 +180,17 @@
    transitioning=true;begin(active+1).finally(()=>{transitioning=false;});
   }
  },500);
+ window.addEventListener('fuckball:review-collection',event=>{
+  const ids=event.detail?.ids;
+  if(!Array.isArray(ids)||ids.length<1||ids.length>MAX||
+   ids.some(id=>!validId(id)||!byId(id))||new Set(ids).size!==ids.length){
+   feedback.textContent='Collection contains missing or invalid local replay shortcuts. Refresh and try again.';
+   return;
+  }
+  if(save(ids)){queue=[...ids];endSession();render();
+   feedback.textContent='Loaded '+ids.length+' HBR2 recordings from a private collection. Choose Start review to begin.';
+  }
+ });
  window.addEventListener('storage',event=>{
   if(event.key===KEY){queue=read();endSession();render();}
  });
