@@ -213,7 +213,7 @@
  }
  function download(filename,value){
   const blob=new Blob([value],{type:'application/json'});
-  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 320 KiB portable limit.');
+  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 480 KiB portable limit.');
   const url=URL.createObjectURL(blob),link=dom('a');
   link.href=url;link.download=filename;link.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -233,7 +233,7 @@
  file.onchange=async()=>{
   const candidate=file.files?.[0];file.value='';if(!candidate||busy)return;
   if(candidate.size<1||candidate.size>MAX_FILE)
-   return info('Select a private Game Night Pack JSON file smaller than 320 KiB.');
+   return info('Select a private Game Night Pack JSON file smaller than 480 KiB.');
   busy=true;importButton.disabled=true;
   try{
    const data=JSON.parse(await candidate.text());
@@ -276,9 +276,11 @@
    }catch(error){
     for(const key of written.reverse()){
      try{
+      // Never overwrite a concurrent tab's changes while rolling back.
+      if(localStorage.getItem(key)!==next[key])continue;
       if(snapshots[key]===null)localStorage.removeItem(key);
       else localStorage.setItem(key,snapshots[key]);
-     }catch{/* Cannot safely recover browser storage: report explicitly below. */}
+     }catch{/* Local storage may be blocked; ask the user to inspect the data. */}
     }
     throw Error('Import was interrupted; reload and inspect existing items before retrying. '+(error.message||''));
    }
