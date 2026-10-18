@@ -19,13 +19,26 @@
  toggle.className='primary';toggle.setAttribute('aria-expanded','false');
  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh';refresh.hidden=true;
  toolbar.append(toggle,refresh);
+ const filters=document.createElement('div');filters.className='room-browser-filters';filters.hidden=true;
+ const search=document.createElement('input');search.type='search';search.maxLength=60;
+ search.placeholder='Room code or stadium';search.setAttribute('aria-label','Find a public room');
+ const statusFilter=document.createElement('select');statusFilter.setAttribute('aria-label','Room activity');
+ for(const [value,label] of [['all','Any activity'],['lobby','Waiting in lobby'],['playing','In progress']])
+  statusFilter.add(new Option(label,value));
+ const modeFilter=document.createElement('select');modeFilter.setAttribute('aria-label','Room format');
+ for(const value of ['all','1v1','2v2','3v3','4v4','custom'])
+  modeFilter.add(new Option(value==='all'?'Any mode':value==='custom'?'Custom / bots':value,value));
+ const order=document.createElement('select');order.setAttribute('aria-label','Sort public rooms');
+ for(const [value,label] of [['default','Server order'],['most','Most players'],['fewest','Fewest players'],['stadium','Stadium A–Z']])
+  order.add(new Option(label,value));
+ for(const control of [search,statusFilter,modeFilter,order])filters.append(control);
  const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
  const status=document.createElement('p');status.className='room-browser-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const list=document.createElement('div');list.className='room-browser-list';
- body.append(status,list);section.append(heading,intro,toolbar,body);
+ body.append(status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
- let sequence=0,busy=false,interval=null,shown=false;
+ let sequence=0,busy=false,interval=null,shown=false,roomsCache=[];
  function button(label,click){
   const item=document.createElement('button');item.type='button';
   item.textContent=label;item.onclick=click;return item;
@@ -58,6 +71,29 @@
   });
   actions.append(join,share);card.append(copy,actions);list.append(card);
  }
+ function renderRooms(){
+  if(!shown)return;
+  const needle=search.value.trim().toLocaleLowerCase();
+  const visible=roomsCache.filter(r=>
+   (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
+   (modeFilter.value==='all'||(modeFilter.value==='custom'?
+    !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value))&&
+   (!needle||r.room.toLocaleLowerCase().includes(needle)||
+    r.map.toLocaleLowerCase().includes(needle)));
+  if(order.value==='most')visible.sort((a,b)=>b.players-a.players||a.room.localeCompare(b.room));
+  else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
+  else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
+  list.replaceChildren();
+  for(const room of visible)putRoom(room);
+  status.textContent=roomsCache.length?
+   visible.length+' of '+roomsCache.length+' public rooms shown · listings refresh every 20s.':
+   'No public rooms right now. You can create a private invite room instead.';
+  if(roomsCache.length&&!visible.length)
+   status.textContent='No public rooms match these filters. Change the search or refresh.';
+ }
+ for(const control of [search,statusFilter,modeFilter,order]){
+  control.addEventListener(control===search?'input':'change',renderRooms);
+ }
  async function load(){
   if(!shown||busy)return;
   busy=true;const current=++sequence;refresh.disabled=true;
@@ -68,22 +104,25 @@
    const result=await response.json();
    if(!shown||current!==sequence)return;
    if(!Array.isArray(result.rooms)||result.rooms.length>16)throw Error('Unexpected directory response.');
-   list.replaceChildren();
-   for(const room of result.rooms)putRoom(room);
-   status.textContent=list.children.length?
-    list.children.length+' discoverable rooms · only host-published listings.':
-    'No public rooms right now. You can create a private invite room instead.';
+   // Only the already public, host-approved directory enters the local
+   // search cache. Never combine it with the broader /api/rooms endpoint.
+   roomsCache=result.rooms.filter(room=>room&&
+    typeof room.room==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(room.room)&&
+    Number.isSafeInteger(room.players)&&room.players>=0&&room.players<=128&&
+    typeof room.started==='boolean'&&typeof room.map==='string'&&
+    room.map.length<=60&&typeof room.mode==='string');
+   renderRooms();
   }catch(e){if(current===sequence&&shown)status.textContent=e.message||'Room directory unavailable.';}
   finally{busy=false;refresh.disabled=false;}
  }
  function close(){
-  shown=false;sequence++;body.hidden=true;refresh.hidden=true;
+  shown=false;sequence++;roomsCache=[];body.hidden=true;refresh.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
  }
  toggle.onclick=()=>{
   if(shown){close();return;}
-  shown=true;body.hidden=false;refresh.hidden=false;
+  shown=true;body.hidden=false;refresh.hidden=false;filters.hidden=false;
   toggle.textContent='Hide rooms';toggle.setAttribute('aria-expanded','true');
   load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
  };
