@@ -10,12 +10,16 @@ Fuckball's home page now includes a collapsible **Friendly Tournament Desk**. It
 4. After a friendly actually takes place, enter its **manual** score (0–99 per side) and choose **Save score**. Use **Update** to correct a mistake or **Clear** to remove an unverified result.
 5. The live local table is calculated from recorded fixtures: 3 points per win, 1 per draw, then goal difference, goals scored and alphabetical team name as deterministic tie-breakers.
 6. **Backup JSON** downloads a complete editable-source snapshot with all fixtures, teams and results. **Restore JSON** verifies team uniqueness, schedule shape, every fixture pairing/round and bounded scores, then asks permission and creates a separate local copy. It does not overwrite an existing tournament.
-7. **Table CSV** exports current standings for a spreadsheet. Name cells starting with formula characters are quoted defensively.
+7. **Table CSV** exports standings. **Fixtures CSV** exports every scheduled and played fixture with score state, dates and venues; formula-like name cells are escaped.
+8. Each fixture has an optional **local kickoff date/time** and venue. Choose **Set kickoff**, or **Remove date** to clear both. The **Upcoming scheduled** view shows future kickoff dates for games without a score.
+9. **Calendar ICS** downloads only fixtures with a kickoff time as an offline calendar. Times are encoded in UTC for reliable import, each event has a one-hour *placeholder* duration, and event descriptions explicitly mark friendlies as unofficial. Exporting does not invite people or create events in their accounts.
 
 ## Boundaries and data
 
+- Existing version 1 JSON backups without kickoff/venue fields remain importable; optional schedule fields are normalized and validated before persistence.
 - Supports up to **eight** local tournaments, up to **12** teams per tournament, at most **132** fixtures in a two-leg 12-team round robin, and a **128 KiB** local storage budget.
 - All tournament state lives in the browser's localStorage under fuckball.local-tournaments.v1. It is not synced across devices, accounts or online servers. Backup/download uses a temporary local Blob URL. Restore accepts JSON up to **96 KiB**.
+- Date/time and venue are user-entered planning notes; Calendar ICS and fixture CSV contain only the selected local friendly schedule. No remote calendar API is contacted.
 - This workflow does not request server fixtures, touch native-room scores, account credentials, Club memberships, ranked outcomes, player IDs or matchmaking. **All results are manually supplied, unverified friendly scores.**
 - Standings and the calendar are rendered with textContent, not injected HTML; imported fixtures must match the deterministic schedule derived from team names and leg count. Imported tournament IDs are replaced to prevent overwriting existing state.
 - Deletion requires confirmation and erases only this selected local tournament. Export before deleting or clearing your browser's site data.
