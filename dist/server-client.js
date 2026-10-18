@@ -30,7 +30,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   disconnect();showView('home');notify(reason);return;
  }
  if(d.type==='roomControl'){
-  if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,owner:d.owner};
+  if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,clubOnly:d.clubOnly===true,canClubLock:d.canClubLock===true,owner:d.owner};
   window.renderCustomRoomAdmin?.();return;
  }
  if(d.type==='resumeTicket'){if(typeof d.ticket==='string'&&/^[0-9a-f]{64}$/.test(d.ticket))link.resumeTicket=d.ticket;return;}
