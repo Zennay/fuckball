@@ -57,3 +57,18 @@
 .room-browser-entry[data-public-room]:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
 .room-browser-entry .room-browser-actions button:disabled{opacity:.6;cursor:not-allowed}
 @media(max-width:600px){.room-browser-tools .room-browser-find{flex:1 1 100%;min-height:48px}}
+
+/* Portable public-room bookmarks: read/write only intentionally pinned room codes. */
+.room-browser-transfer{display:grid;gap:10px;margin:14px 0 18px;padding:16px;
+ background:#16343c;border:1px solid #658d88;border-radius:13px}
+.room-browser-transfer strong{font-size:.93rem;letter-spacing:.065em;color:#d9f9b5}
+.room-browser-transfer p{font-size:.85rem;line-height:1.5;color:#bfded7;margin:0;max-width:72ch}
+.room-browser-transfer-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.room-browser-transfer-actions button{min-height:44px}
+.room-browser-transfer-replace{display:flex;align-items:center;gap:9px;min-height:44px;
+ font-size:.83rem;color:#d4ebe2}
+.room-browser-transfer-replace input{accent-color:#c9efa7;width:19px;height:19px}
+.room-browser-transfer-actions :focus-visible{outline:3px solid #d9f9b5;outline-offset:3px}
+@media(max-width:580px){.room-browser-transfer{padding:12px}
+ .room-browser-transfer-actions button{flex:1 1 100%}
+ .room-browser-transfer-replace{flex:1 1 100%}}
