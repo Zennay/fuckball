@@ -524,6 +524,14 @@
       message='Tournament restored as a new device-local copy.';render();
     }catch(err){inform('Import refused: '+(err.message||'Invalid local tournament file.'));}
   };
+  window.addEventListener('fuckball:open-private-league-planner',()=>{
+    details.open=true;render();
+    if(!current())return inform('Create a private league before planning its kickoff dates.');
+    planner.hidden=false;invalidatePlan();
+    planner.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'start'});
+    firstKickoff.focus({preventScroll:true});
+  });
   window.addEventListener('fuckball:open-private-competition',event=>{
     const ref=event.detail;
     if(ref?.type!=='League'||typeof ref.id!=='string')return;
