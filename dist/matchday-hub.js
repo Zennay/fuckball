@@ -216,6 +216,12 @@
  if(cards)cards.insertAdjacentElement('afterend',section);else home.append(section);
  let competitions=[],upcomingMatches=[],allUpcoming=[],failures=0,fixtureCards=[];
  const openFixture=(f,field)=>{
+   if(f.type==='Series'){
+     window.dispatchEvent(new CustomEvent('fuckball:open-private-series',{detail:{id:f.seriesId}}));
+     controlStatus.textContent='Opened '+f.competition+' · Game '+f.round+
+      ' in its original series editor. Scores are stored only through that editor.';
+     return;
+   }
    if(f.type==='Knockout')
      window.dispatchEvent(new CustomEvent('fuckball:open-private-cup-fixture',{
        detail:{cupId:f.cupId,matchId:f.matchId}
@@ -231,10 +237,10 @@
    const matching=fixtureCards.filter(f=>
      (!term||[f.home,f.away,f.competition].some(x=>x.toLocaleLowerCase().includes(term)))&&
      (mode==='all'||
-      (mode==='pending'&&f.homeScore===null)||
-      (mode==='ready'&&f.homeScore===null&&f.unlocked!==false)||
-      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null)||
-      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now)||
+      (mode==='pending'&&f.homeScore===null&&f.active!==false)||
+      (mode==='ready'&&f.homeScore===null&&f.unlocked!==false&&f.active!==false)||
+      (mode==='undated'&&f.type!=='Knockout'&&f.homeScore===null&&f.time===null&&f.active!==false)||
+      (mode==='scheduled'&&f.type!=='Knockout'&&f.homeScore===null&&f.time!==null&&f.time>=now&&f.active!==false)||
       (mode==='completed'&&f.homeScore!==null))
    );
    const ordered=matching.sort((a,b)=>{
@@ -270,7 +276,7 @@
    }
    if(!visible.length)controlRows.append(dom('p',
      fixtureCards.length?'No private fixtures match your search and filter.':
-     'No local league or cup fixtures yet. Create a tournament or knockout cup first.'));
+     'No local league, cup or series fixtures yet. Create a private competition first.'));
    controlStatus.textContent=matching.length+' of '+fixtureCards.length+
      ' private competition fixtures shown'+(matching.length>limit?' · first '+limit+' displayed; refine your search':'')+
      '. Scores here are never server-verified.';
@@ -309,14 +315,15 @@
    const body=dom('div');
    body.append(dom('small',c.type.toUpperCase()),dom('strong',c.name),
     dom('p',c.played+' of '+c.total+' friendly results recorded'+
-      (c.leader?' · '+(c.type==='Knockout'?'Winner':'Current leader')+': '+c.leader:'')));
+      (c.leader?' · '+(c.type==='Knockout'||c.winner?'Winner':'Current leader')+': '+c.leader:'')));
    const open=button('Open '+c.type,()=>window.dispatchEvent(
+     c.type==='Series'?new CustomEvent('fuckball:open-private-series',{detail:{id:c.id}}):
      new CustomEvent('fuckball:open-private-competition',{detail:{type:c.type,id:c.id}})));
    card.append(body,open);competitionList.append(card);
   }
   upcoming.replaceChildren(dom('h3','UPCOMING PRIVATE FIXTURES'));
   if(!upcomingMatches.length)
-   upcoming.append(dom('p','No future kickoff times set in your local leagues. Add a time in the fixture calendar below.'));
+   upcoming.append(dom('p','No future kickoff times in readable leagues or active series. Schedule a private game first.'));
   for(const f of upcomingMatches){
    const row=dom('article',null,'matchday-upcoming-item');
    const date=new Date(f.time).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
@@ -347,7 +354,7 @@
   note.textContent='Local, unofficial competition overview saved to CSV.';
  }
  function exportCalendar(){
-  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a private league first.');
+  if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league or active series first.');
   const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
   const date=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   const fold=s=>{
