@@ -216,6 +216,47 @@
     }
     table.append(body);const scroll=make('div',null,'tournament-table-scroll');scroll.append(table);
     standings.append(title,scroll);
+    // Explicit seeded playoffs from the actual manually entered local table.
+    // No official promotion, server results, or automatic knockout creation.
+    const possible=[2,4,8].filter(n=>n<=t.teams.length);
+    const playoff=make('section',null,'tournament-playoff');
+    playoff.append(make('h3','QUALIFY TEAMS FOR A PRIVATE PLAYOFF'),
+      make('p','Create a separate knockout bracket from the current self-reported table. Seeds use points, goal difference and goals for; rankings can change if more matches are recorded.'));
+    const playoffActions=make('div',null,'tournament-playoff-actions');
+    const qualify=make('select');
+    qualify.setAttribute('aria-label','Number of league teams to seed into playoffs');
+    for(const n of possible)qualify.add(new Option('Top '+n+' teams',String(n)));
+    const preview=make('p',null,'tournament-playoff-preview');
+    const build=button('Create seeded cup',()=>{
+      const n=Number(qualify.value),standings=tableFor(t);
+      if(!possible.includes(n)||standings.length<n||t.fixtures.every(f=>f.homeScore===null))
+        return inform('Record at least one private league result before generating playoff seeds.');
+      let seeds=[1,2];
+      while(seeds.length<n){
+        const length=seeds.length;
+        seeds=seeds.flatMap(seed=>[seed,2*length+1-seed]);
+      }
+      const teams=seeds.map(rank=>standings[rank-1].name);
+      const known=t.fixtures.filter(f=>f.homeScore!==null).length;
+      if(!window.confirm('Create a NEW private '+n+'-team knockout cup from '+t.name+
+        '? Seeding is based on '+known+'/'+t.fixtures.length+
+        ' manually entered league results. No official promotion or online results will be created.'))return;
+      window.dispatchEvent(new CustomEvent('fuckball:create-private-playoff',{
+        detail:{sourceId:t.id,sourceName:t.name,teams,recorded:known,total:t.fixtures.length}
+      }));
+    });
+    build.disabled=done===0||!possible.length;
+    const updatePreview=()=>{
+      const n=Number(qualify.value),standings=tableFor(t);
+      const leader=standings[0]?.name||'none';
+      preview.textContent=done===0?'Record one actual friendly result to unlock playoff seeding.':
+        'Current leader: '+leader+' · Top '+n+' advance to a new seeded bracket. '+
+        done+'/'+t.fixtures.length+' league results recorded (manual, unverified).';
+    };
+    qualify.addEventListener('change',updatePreview);
+    playoffActions.append(qualify,build);
+    playoff.append(playoffActions,preview);
+    standings.append(playoff);updatePreview();
     const gamesHeader=make('div',null,'tournament-fixtures-head');
     gamesHeader.append(make('h3','FIXTURE CALENDAR'));
     const filterSelect=make('select');
@@ -407,6 +448,10 @@
       message='Tournament restored as a new device-local copy.';render();
     }catch(err){inform('Import refused: '+(err.message||'Invalid local tournament file.'));}
   };
+  window.addEventListener('fuckball:private-playoff-created',event=>{
+    if(event.detail?.ok===true)inform('New seeded private knockout cup created in Cup Builder. League scores are unchanged.');
+    else if(event.detail?.ok===false)inform('Playoff cup was not created: '+(event.detail.reason||'Check your local cup storage.'));
+  });
   window.addEventListener('fuckball:open-private-competition',event=>{
     const ref=event.detail;
     if(ref?.type!=='League'||typeof ref.id!=='string')return;
