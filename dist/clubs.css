@@ -1,0 +1,34 @@
+/* Club identity management. Members are verified by native account sessions. */
+.club-social-dialog{width:min(920px,calc(100vw - 20px));max-width:calc(100vw - 20px);max-height:94dvh;overflow:auto;padding:0;border:1px solid #789282;border-radius:18px;background:#13272d;color:#f0f7e9;z-index:225;box-shadow:0 30px 90px #000b}
+.club-social-dialog::backdrop{background:#061117da}
+.club-social-shell{display:grid;gap:19px;padding:clamp(20px,4vw,38px)}
+.club-social-head{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.club-social-head h2{font-size:clamp(32px,5vw,56px);font-style:italic;letter-spacing:-.07em;margin:0}
+.club-social-head button{width:42px;height:42px;border:1px solid #758e89;background:#273c3a;color:#f5f8ee;font-size:27px;border-radius:9px}
+.club-social-shell>p{font-size:12px;color:#b1c7bc;line-height:1.65;margin:0}
+.club-social-status{min-height:17px;color:#e2f0c8!important}
+.club-social-area{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:15px}
+.club-social-card{display:grid;gap:13px;min-width:0;padding:20px;border:1px solid #546f62;border-radius:13px;background:#203730}
+.club-social-card h3{font-size:15px;color:#ddf7ac;letter-spacing:.035em;margin:0}
+.club-social-card>p{font-size:12px;line-height:1.55;color:#bed2c6;margin:0}
+.club-social-form{display:grid;gap:12px}
+.club-social-form label{display:grid;gap:5px;font-size:11px;color:#d6ebd4}
+.club-social-form input,.club-social-form textarea{width:100%;min-width:0;padding:11px 13px;border-radius:8px;border:1px solid #7e9789;background:#14272c;color:#f1faef;font:inherit;font-size:13px}
+.club-social-form textarea{height:83px;resize:vertical}
+.club-social-form label small{color:#a9c5ae;font-size:10px}
+.club-social-card button{min-height:38px;padding:10px 13px;background:#345047;border:1px solid #799b88;color:#eef8eb;border-radius:8px;cursor:pointer;font-size:12px}
+.club-social-card button.primary{background:#d1f19e;color:#1c3024;border-color:#d1f19e;font-weight:800}
+.club-social-card button.club-destructive{border-color:#ab7578;background:#462a31;color:#ffdad7}
+.club-social-roster{display:grid;gap:8px}
+.club-social-member{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:9px;border-radius:9px;background:#102725;padding:11px 13px}
+.club-social-member strong{font-size:13px;overflow-wrap:anywhere}
+.club-social-member-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.club-social-meta{font-size:11px;color:#a9c5b2;line-height:1.5}
+.club-social-dialog button:focus-visible,.club-social-dialog input:focus-visible,.club-social-dialog textarea:focus-visible,.main-nav button[aria-label^="My club"]:focus-visible{outline:3px solid #dcff9c;outline-offset:3px}
+@media(max-width:720px){.club-social-area{grid-template-columns:1fr}.club-social-dialog{max-height:95dvh}.club-social-card{padding:17px}}
+
+.profile-club-tag{display:inline-flex;align-items:center;justify-content:center;
+ min-height:27px;margin:0 8px;border:1px solid #b9e88a;border-radius:6px;
+ background:#304733;color:#dcffa9;font-size:11px;font-weight:900;letter-spacing:.04em;
+ padding:4px 8px}
+.profile-club-tag[hidden]{display:none!important}
