@@ -9,12 +9,15 @@
  const save=document.createElement('button');save.type='button';
  save.className='replay-clip-export';save.textContent='⬇ Save 10s field clip';
  save.title='Export 10 seconds from the current replay position as a WebM video, without audio';
+ const frame=document.createElement('button');frame.type='button';
+ frame.className='replay-frame-export';frame.textContent='⬇ Save frame · PNG';
+ frame.title='Capture the visible replay field as a PNG; player labels may be included';
  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel clip';
  cancel.hidden=true;
  const state=document.createElement('span');state.setAttribute('role','status');
  state.setAttribute('aria-live','polite');state.className='replay-clip-status';
  state.textContent='Exports visible field pixels, including player-name labels if shown. No audio or upload; review before sharing.';
- row.append(save,cancel,state);
+ row.append(save,frame,cancel,state);
  controls.append(row);
  const MAX_VIDEO=48*1024*1024,CLIP_MS=10000;
  let capture=null;
@@ -92,6 +95,21 @@
    state.textContent='Clip export unavailable: '+(error?.message||'video capture not supported');
   }
  }
+ frame.onclick=()=>{
+  if(!replay||controls.hidden||typeof canvas.toBlob!=='function'){
+   state.textContent='Open a local replay in a browser with canvas capture before saving a frame.';return;
+  }
+  frame.disabled=true;
+  canvas.toBlob(blob=>{
+   frame.disabled=false;
+   if(!blob||!blob.size){state.textContent='Could not capture a replay frame.';return;}
+   const url=URL.createObjectURL(blob),link=document.createElement('a');
+   link.href=url;link.download='fuckball-replay-frame-'+new Date().toISOString().replace(/[:.]/g,'-')+'.png';
+   document.body.append(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   state.textContent='PNG frame saved locally; check visible player labels before sharing.';
+  },'image/png');
+ };
  save.onclick=begin;
  cancel.onclick=()=>abort('Clip cancelled. Replay and existing recordings were not changed.');
  const oldClose=closeReplay;
