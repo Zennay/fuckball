@@ -127,11 +127,13 @@ function createClubs(dir,{areFriends,exists=()=>true,clock=()=>Date.now()}={}){
    if(!club)throw Error('You are not in a club.');
    if(club.owner===user)throw Error('Transfer captaincy or disband the club before leaving.');
    club.members=club.members.filter(n=>n!==user);
+   next.invites=next.invites.filter(i=>i.by!==user);
   }else if(op==='kick'){
    if(!club||club.owner!==user)throw Error('Only the club captain may remove members.');
    const target=normalized(d.user);
    if(target===user||!club.members.includes(target))throw Error('Choose another club member.');
    club.members=club.members.filter(n=>n!==target);
+   next.invites=next.invites.filter(i=>i.by!==target);
   }else if(op==='promote'){
    if(!club||club.owner!==user)throw Error('Only the current captain may transfer ownership.');
    const target=normalized(d.user);
