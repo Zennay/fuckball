@@ -11,7 +11,7 @@
  const badge=document.createElement('span');badge.textContent='REAL PEOPLE · CASUAL';badge.className='quick-queue-badge';
  heading.append(title,badge);
  const description=document.createElement('p');
- description.textContent='Search for people on the same server. Play 1v1–4v4 with real players only. No filler bots, no fake opponents and no ranked rating yet.';
+ description.textContent='Find real players on this server in 1v1–4v4. Teams are balanced using server career results, with a preference for similarly sized friend parties. No filler bots or ranked ratings.';
  const modes=document.createElement('div');modes.className='quick-queue-modes';
  const modeButtons=[];
  const notice=document.createElement('p');notice.className='quick-queue-status';
