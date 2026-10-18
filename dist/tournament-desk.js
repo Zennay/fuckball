@@ -119,10 +119,15 @@
   const csvButton=button('↓ Table CSV',exportCSV);
   const scheduleCsv=button('↓ Fixtures CSV',exportFixturesCSV);
   const calendarButton=button('↓ Calendar ICS',exportCalendar);
+  const plannerButton=button('🗓 Plan all kickoffs',()=>{
+    if(!current())return inform('Create or select a private league first.');
+    planner.hidden=!planner.hidden;invalidatePlan();
+    if(!planner.hidden)firstKickoff.focus();
+  });
   const importButton=button('↑ Restore JSON',()=>upload.click());
   const remove=button('Delete tournament',deleteTournament,'tournament-danger');
   const upload=make('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
-  actions.append(select,add,exportButton,csvButton,scheduleCsv,calendarButton,importButton,remove,upload);
+  actions.append(select,add,plannerButton,exportButton,csvButton,scheduleCsv,calendarButton,importButton,remove,upload);
   const setup=make('form',null,'tournament-setup');setup.hidden=true;
   const nameInput=make('input');nameInput.required=true;nameInput.maxLength=60;nameInput.value='Weekend cup';
   const teamsInput=make('textarea');teamsInput.required=true;teamsInput.maxLength=480;
@@ -132,6 +137,117 @@
   const cancel=button('Cancel',()=>{setup.hidden=true;});
   setup.append(label('Tournament name',nameInput),label('Teams · one name per line · 2–12',teamsInput),
     label('Schedule',legs),create,cancel);
+  // Plan local fixtures as one atomic competition edit; never manufacture scores.
+  const planner=make('section',null,'tournament-batch-planner');planner.hidden=true;
+  planner.setAttribute('aria-label','Plan private league kickoffs');
+  const plannerTitle=make('h3','PLAN THE WHOLE LEAGUE');
+  const plannerLead=make('p','Choose your first local kickoff and spacing. Preview every proposed fixture before saving. Played results are always protected; existing kickoff dates are kept by default.');
+  const plannerForm=make('form',null,'tournament-batch-form');
+  const firstKickoff=make('input');firstKickoff.type='datetime-local';firstKickoff.required=true;
+  firstKickoff.setAttribute('aria-label','First local kickoff');
+  const slotMinutes=make('input');slotMinutes.type='number';slotMinutes.min='15';slotMinutes.max='240';
+  slotMinutes.step='15';slotMinutes.value='60';slotMinutes.required=true;
+  const roundDays=make('input');roundDays.type='number';roundDays.min='1';roundDays.max='30';
+  roundDays.step='1';roundDays.value='7';roundDays.required=true;
+  const sharedVenue=make('input');sharedVenue.type='text';sharedVenue.maxLength=60;
+  sharedVenue.placeholder='Optional, e.g. Main arena';
+  const keepDates=make('input');keepDates.type='checkbox';keepDates.checked=true;
+  const keepLabel=label('Keep existing kickoff dates',keepDates);keepLabel.className='tournament-batch-keep';
+  const showPlan=button('Preview schedule',previewKickoffs);
+  const applyPlan=make('button','Confirm and save kickoffs');applyPlan.type='submit';applyPlan.disabled=true;
+  const cancelPlan=button('Close planner',()=>{planner.hidden=true;invalidatePlan();});
+  const plannerPreview=make('div',null,'tournament-batch-preview');
+  plannerPreview.setAttribute('role','status');plannerPreview.setAttribute('aria-live','polite');
+  plannerForm.append(label('First kickoff · local time',firstKickoff),
+    label('Minutes between games',slotMinutes),label('Days between rounds',roundDays),
+    label('Shared venue · optional',sharedVenue),keepLabel,showPlan,applyPlan,cancelPlan);
+  planner.append(plannerTitle,plannerLead,plannerForm,plannerPreview);
+  for(const input of [firstKickoff,slotMinutes,roundDays,sharedVenue,keepDates]){
+    input.addEventListener('input',invalidatePlan);
+    input.addEventListener('change',invalidatePlan);
+  }
+  let pendingPlan=null;
+  function invalidatePlan(){
+    pendingPlan=null;applyPlan.disabled=true;
+    plannerPreview.replaceChildren();
+  }
+  const planSignature=()=>JSON.stringify([activeId,storageSnapshot,firstKickoff.value,
+    slotMinutes.value,roundDays.value,sharedVenue.value,keepDates.checked]);
+  function calculateKickoffs(){
+    const t=current();
+    if(!t||!storageHealthy)throw Error('Select a readable private league first.');
+    const value=firstKickoff.value;
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
+      throw Error('Choose a valid first kickoff in your local timezone.');
+    const start=new Date(value);
+    if(!Number.isFinite(start.getTime())||localValue(start.getTime())!==value||
+       !scheduleValid(start.getTime()))
+      throw Error('First kickoff is invalid or outside supported dates.');
+    const slot=Number(slotMinutes.value),gap=Number(roundDays.value);
+    if(!Number.isSafeInteger(slot)||slot<15||slot>240||slot%15!==0||
+       !Number.isSafeInteger(gap)||gap<1||gap>30)
+      throw Error('Use a 15–240 minute slot (in steps of 15) and 1–30 days between rounds.');
+    const venue=sharedVenue.value.trim();
+    if(!venueValid(venue))throw Error('Venue must be 60 characters or fewer, without control characters.');
+    const changes=[],replacement=new Map(),roundSlots=new Map();
+    for(const f of t.fixtures){
+      const index=roundSlots.get(f.round)||0;roundSlots.set(f.round,index+1);
+      if(f.homeScore!==null||(keepDates.checked&&f.kickoff!==null))continue;
+      const kickoff=new Date(start.getTime());
+      // setDate preserves local wall-clock kickoff across daylight-saving changes.
+      kickoff.setDate(start.getDate()+(f.round-1)*gap);
+      kickoff.setMinutes(kickoff.getMinutes()+index*slot);
+      const time=kickoff.getTime();
+      if(!scheduleValid(time))throw Error('The proposed dates exceed the supported calendar range.');
+      changes.push({fixture:f,time,venue:venue||f.venue});
+      replacement.set(f.id,{...f,kickoff:time,venue:venue||f.venue});
+    }
+    if(!changes.length)throw Error('No unplayed fixtures need new dates. Uncheck Keep existing dates to reschedule.');
+    const candidate=normalize({...t,updatedAt:Math.max(Date.now(),t.createdAt),
+      fixtures:t.fixtures.map(f=>replacement.get(f.id)||f)});
+    return {candidate,changes,signature:planSignature(),tournamentId:t.id};
+  }
+  function previewKickoffs(){
+    invalidatePlan();
+    try{
+      const plan=calculateKickoffs();
+      pendingPlan=plan;applyPlan.disabled=false;
+      plannerPreview.append(make('strong',plan.changes.length+' proposed kickoff dates · unofficial, stored only on this device.'));
+      const list=make('ol');
+      for(const {fixture,time,venue} of plan.changes.slice(0,10)){
+        list.append(make('li',plan.candidate.teams[fixture.home]+' vs '+
+          plan.candidate.teams[fixture.away]+' · '+new Date(time).toLocaleString(undefined,
+            {dateStyle:'medium',timeStyle:'short'})+(venue?' · '+venue:'')));
+      }
+      plannerPreview.append(list);
+      if(plan.changes.length>10)plannerPreview.append(make('p',
+        '+ '+(plan.changes.length-10)+' more fixtures will be assigned dates.'));
+      plannerPreview.append(make('p','No played scores will change. Existing kickoffs '+
+        (keepDates.checked?'remain untouched.':'for unplayed games will be replaced.')+
+        ' Export the existing JSON backup first if you want a separate copy.'));
+    }catch(error){
+      plannerPreview.append(make('p',error.message||'Could not prepare schedule.'));
+    }
+  }
+  plannerForm.onsubmit=event=>{
+    event.preventDefault();
+    if(!pendingPlan||pendingPlan.signature!==planSignature()||
+       pendingPlan.tournamentId!==current()?.id){
+      invalidatePlan();return inform('The proposed schedule changed. Preview again before saving.');
+    }
+    if(!window.confirm('Save '+pendingPlan.changes.length+
+      ' private kickoff times for "'+pendingPlan.candidate.name+
+      '"? Existing played results will not be changed.'))return;
+    try{
+      persist(tournaments.map(t=>t.id===pendingPlan.tournamentId?pendingPlan.candidate:t));
+      const count=pendingPlan.changes.length;
+      invalidatePlan();planner.hidden=true;
+      message=count+' local kickoff dates saved. Export Calendar ICS to share the proposed schedule.';
+      render();
+    }catch(error){
+      invalidatePlan();inform('Schedule not saved: '+(error.message||'Local storage changed.'));
+    }
+  };
   const overview=make('div',null,'tournament-overview');
   const standings=make('div',null,'tournament-standings');
   const fixtures=make('div',null,'tournament-fixtures');
@@ -165,7 +281,7 @@
     }catch(err){inform('Recovery cancelled: '+(err.message||'Storage unavailable'));}
   },'tournament-danger');
   recovery.append(warning,recoveryDownload,recoveryReset);
-  inner.append(intro,actions,setup,status,recovery,overview,standings,fixtures);
+  inner.append(intro,actions,setup,planner,status,recovery,overview,standings,fixtures);
   details.append(summary,inner);panel.append(details);
   const homeCards=host.querySelector('.mode-cards');
   if(homeCards)homeCards.insertAdjacentElement('afterend',panel);else host.append(panel);
@@ -194,6 +310,7 @@
     select.value=current()?.id||'';
     const t=current(),enabled=!!t;
     exportButton.disabled=csvButton.disabled=scheduleCsv.disabled=calendarButton.disabled=remove.disabled=!enabled;
+    plannerButton.disabled=!enabled;
     inform(message||(t?'Stored on this device only · scores are manual and unverified.':'Create or restore a private tournament to begin.'));
     overview.replaceChildren();standings.replaceChildren();fixtures.replaceChildren();
     if(!t)return;
@@ -371,7 +488,7 @@
       message='Tournament created. Enter scores after each real friendly match.';render();}
     catch(err){inform(err.message||'Cannot save local tournament.');}
   };
-  select.onchange=()=>{activeId=select.value;filter='pending';message='';render();};
+  select.onchange=()=>{activeId=select.value;filter='pending';message='';invalidatePlan();planner.hidden=true;render();};
   function deleteTournament(){
     const t=current();if(!t)return;
     if(!window.confirm('Delete "'+t.name+'" and its local scores? Export a backup first.'))return;
@@ -461,6 +578,14 @@
     if(event.detail?.ok===true)inform('New seeded private knockout cup created in Cup Builder. League scores are unchanged.');
     else if(event.detail?.ok===false)inform('Playoff cup was not created: '+(event.detail.reason||'Check your local cup storage.'));
   });
+  window.addEventListener('fuckball:open-private-league-planner',()=>{
+    details.open=true;render();
+    if(!current())return inform('Create a private league before planning its kickoff dates.');
+    planner.hidden=false;invalidatePlan();
+    planner.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'start'});
+    firstKickoff.focus({preventScroll:true});
+  });
   window.addEventListener('fuckball:open-private-competition',event=>{
     const ref=event.detail;
     if(ref?.type!=='League'||typeof ref.id!=='string')return;
@@ -504,7 +629,7 @@
       if(new Set(incoming.map(x=>x.id)).size!==incoming.length)throw Error();
       tournaments=incoming;storageSnapshot=event.newValue;storageHealthy=true;
       recoveryBackupPrepared=false;
-      message='Tournament data refreshed from another tab.';render();
+      invalidatePlan();message='Tournament data refreshed from another tab.';render();
     }catch{storageSnapshot=event.newValue;storageHealthy=false;
       recoveryBackupPrepared=false;recovery.hidden=false;
       inform('Another tab changed tournament data. Reload or recover it before saving.');}
