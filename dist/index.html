@@ -7,7 +7,10 @@
 <section id="gamesView" class="my-games-view" hidden aria-labelledby="gamesHeading">
  <header class="my-games-head"><div><span class="eyebrow">YOUR MATCHES</span><h1 id="gamesHeading">MY GAMES.</h1>
  <p>Record a match or import an HBR2 replay, then watch it again whenever you like. Your library stays on this device.</p></div>
- <div class="my-games-tools"><span id="gamesCount">0 / 30 saved</span><button id="gamesImport" class="primary" type="button">+ Import replay</button></div></header>
+ <div class="my-games-tools">
+ <label class="games-search">Find replay<input id="gamesSearch" type="search" autocomplete="off" placeholder="Search recordings" aria-label="Find replay by name"></label>
+ <label class="games-sort">Sort by<select id="gamesSort"><option value="latest">Newest</option><option value="oldest">Oldest</option><option value="longest">Longest recording</option></select></label>
+ <span id="gamesCount">0 / 30 saved</span><button id="gamesImport" class="primary" type="button">+ Import replay</button></div></header>
  <p class="games-disclaimer">Local recordings only — not server-verified results, ranked history or cloud backups. Use Export to keep your own copy. Deleting browser data may erase recordings.</p>
  <p id="gamesStatus" role="status" aria-live="polite"></p>
  <div id="gamesList" aria-label="Saved replays"></div>
@@ -18,7 +21,7 @@
 <section class="arena-section" aria-label="Pitch">
 <div class="scoreboard"><span class="team-name red">RED</span><span id="redScore" class="score red-score">0</span><span id="clock">00:00</span><span id="blueScore" class="score blue-score">0</span><span class="team-name blue">BLUE</span><span id="recordIndicator" hidden>● REC</span></div>
 <div class="pitch" id="pitch"><canvas id="gameCanvas" tabindex="0" aria-label="Pitch. Move with arrows or WASD. Kick with Space or X."></canvas><div class="pitch-label" id="stadiumLabel">CLASSIC</div><div id="lobbyCard" class="lobby-card" hidden><span class="eyebrow">LOBBY</span><h2>Game not started</h2><p id="lobbyText">Pick teams, then start the game.</p><button id="lobbyStart" class="primary">▶ Start game</button><button id="lobbyMenu">Teams &amp; settings <kbd>ESC</kbd></button></div></div>
-<div id="replayControls" class="replay-controls" hidden><button id="replayToggle">Ⅱ</button><input id="replaySeek" type="range" min="0" max="1000" value="0" aria-label="Replay position"><span id="replayTime">00:00 / 00:00</span><select id="replaySpeed" aria-label="Playback speed"><option value="0.5">0.5×</option><option selected value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select><button id="replayClose">Close</button></div>
+<div id="replayControls" class="replay-controls" hidden><button id="replayToggle">Ⅱ</button><input id="replaySeek" type="range" min="0" max="1000" value="0" aria-label="Replay position"><span id="replayTime">00:00 / 00:00</span><select id="replaySpeed" aria-label="Playback speed"><option value="0.5">0.5×</option><option selected value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select><button id="replayClose">Close</button><div id="replayMoments" class="replay-moments" hidden aria-label="Recorded goal moments"></div></div>
 <div class="touch-controls"><div id="joystick" aria-label="Joystick"><div id="stick"></div></div><button id="touchKick">KICK</button></div>
 </section>
 </div>

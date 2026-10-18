@@ -4,6 +4,16 @@
 const ReplayLibrary=(()=>{
  const DB_NAME='fuckball-local-replays',MAX_FILE=32*1024*1024,MAX_TOTAL=160*1024*1024,MAX_ITEMS=30;
  let database=null;
+ function parseRecording(bytes){
+  const data=Replay.readAll(bytes);
+  const frames=Number.isSafeInteger(data?.totalFrames)&&data.totalFrames>0?data.totalFrames:0;
+  const markers=Array.isArray(data?.goalMarkers)?data.goalMarkers:[];
+  const goals=markers.filter(m=>m&&Number.isSafeInteger(m.frameNo)&&m.frameNo>=0&&
+   (!frames||m.frameNo<=frames)&&[1,2].includes(m.teamId)).slice(0,128)
+   .map(m=>({frameNo:m.frameNo,teamId:m.teamId}));
+  return{frames,goals};
+ }
+
  function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||Error('Local replay storage failed.'));});}
  async function db(){
   if(!('indexedDB'in window))throw Error('This browser does not support local replay storage.');
@@ -30,12 +40,12 @@ const ReplayLibrary=(()=>{
   if(!(bytes instanceof Uint8Array))bytes=new Uint8Array(bytes);
   if(!bytes.length||bytes.length>MAX_FILE)throw Error('Replay must be between 1 byte and 32 MB.');
   // Validate HBR2 before committing any bytes; never interpret replay metadata as HTML.
-  Replay.readAll(bytes);
+  const recording=parseRecording(bytes);
   const items=await list(),total=items.reduce((sum,item)=>sum+item.size,0);
   if(items.length>=MAX_ITEMS||total+bytes.length>MAX_TOTAL)
    throw Error('My Games is full. Delete an older recording to free space (30 items / 160 MB).');
   const random=crypto.getRandomValues(new Uint8Array(16));const id=Array.from(random,b=>b.toString(16).padStart(2,'0')).join(''),createdAt=Date.now();
-  const item={id,createdAt,size:bytes.length,name:String(name||'Replay.hbr2').slice(0,100)};
+  const item={id,createdAt,size:bytes.length,name:String(name||'Replay.hbr2').slice(0,100),...recording};
   const d=await db();
   await new Promise((resolve,reject)=>{
    const tx=d.transaction(['meta','data'],'readwrite');
@@ -64,9 +74,21 @@ const ReplayLibrary=(()=>{
    tx.objectStore('meta').delete(id);tx.objectStore('data').delete(id);
   });
  }
- return{list,save,get,remove};
+ return{list,save,get,remove,parseRecording};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
+const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
+function recordingLength(frames){
+ if(!Number.isSafeInteger(frames)||frames<=0)return 'Duration unknown';
+ return 'Recording '+fmt(frames/60);
+}
+function goalsLabel(item){
+ if(!Array.isArray(item.goals))return 'Goal markers unavailable';
+ const red=item.goals.filter(x=>x.teamId===1).length;
+ const blue=item.goals.filter(x=>x.teamId===2).length;
+ return 'Recorded goals '+red+' red · '+blue+' blue';
+}
+
 function gamesMessage(message){gamesStatus.textContent=message;}
 function makeGameButton(text,description,handler){
  const button=document.createElement('button');button.type='button';button.textContent=text;
@@ -77,15 +99,18 @@ function makeGameButton(text,description,handler){
 async function renderMyGames(){
  gamesMessage('Loading local replays…');
  try{
-  const items=await ReplayLibrary.list();
-  gamesList.replaceChildren();gamesEmpty.hidden=items.length!==0;
-  $('gamesCount').textContent=items.length+' / 30 saved';
+  const all=await ReplayLibrary.list(),term=gamesSearch.value.trim().toLocaleLowerCase();
+  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term));
+  if(gamesSort.value==='oldest')items.sort((a,b)=>a.createdAt-b.createdAt);
+  if(gamesSort.value==='longest')items.sort((a,b)=>(b.frames||0)-(a.frames||0)||b.createdAt-a.createdAt);
+  gamesList.replaceChildren();gamesEmpty.hidden=all.length!==0;
+  $('gamesCount').textContent=all.length+' / 30 saved';
   for(const item of items){
    const row=document.createElement('article');row.className='game-entry';
    const detail=document.createElement('div');detail.className='game-entry-info';
    const title=document.createElement('strong');title.textContent=item.name;
    const metadata=document.createElement('span');
-   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · LOCAL';
+   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · LOCAL';
    detail.append(title,metadata);
    const controls=document.createElement('div');controls.className='game-entry-actions';
    controls.append(
@@ -104,7 +129,8 @@ async function renderMyGames(){
    );
    row.append(detail,controls);gamesList.append(row);
   }
-  gamesMessage(items.length?'Stored only in this browser. These are not verified match results.':'');
+  gamesMessage(all.length?'Stored only in this browser. Goal markers are from unverified recordings.':(term?'':'Import a recording to get started.'));
+  if(all.length&&!items.length)gamesMessage('No matching replays. Clear the search to see all recordings.');
  }catch(e){
   gamesEmpty.hidden=true;gamesList.replaceChildren();
   gamesMessage('Local replay storage is unavailable: '+(e.message||'Unknown error')+'. Downloads still work.');
@@ -129,4 +155,34 @@ $('gamesImportFile').onchange=async e=>{
   await ReplayLibrary.save(new Uint8Array(await file.arrayBuffer()),file.name);
   await renderMyGames();gamesMessage('Replay added to My Games.');
  }catch(err){gamesMessage('Import failed: '+(err.message||String(err)));}
+};
+
+gamesSearch.addEventListener('input',()=>renderMyGames());
+gamesSort.addEventListener('change',()=>renderMyGames());
+function renderReplayMoments(bytes){
+ const target=$('replayMoments');target.replaceChildren();
+ const recording=ReplayLibrary.parseRecording(bytes),goals=recording.goals;
+ target.hidden=!goals.length;
+ if(!goals.length)return;
+ const legend=document.createElement('strong');legend.textContent='Jump to goal';target.append(legend);
+ goals.forEach((goal,i)=>{
+  const b=document.createElement('button');b.type='button';b.className='replay-moment '+(goal.teamId===1?'red':'blue');
+  b.textContent=(goal.teamId===1?'RED':'BLUE')+' '+(i+1)+' · '+fmt(goal.frameNo/60);
+  b.setAttribute('aria-label','Seek to '+(goal.teamId===1?'red':'blue')+' goal at '+fmt(goal.frameNo/60));
+  b.onclick=()=>{
+   if(!replay)return;
+   replay.setTime(Math.min(replay.length(),goal.frameNo*1000/60));
+   replay.setSpeed(1);$('replayToggle').textContent='Ⅱ';
+  };target.append(b);
+ });
+}
+const replayLoadWithMoments=loadReplay;
+loadReplay=function(bytes,name){
+ replayLoadWithMoments(bytes,name);
+ renderReplayMoments(bytes);
+};
+const replayCloseWithMoments=closeReplay;
+closeReplay=function(){
+ replayCloseWithMoments();
+ $('replayMoments').hidden=true;$('replayMoments').replaceChildren();
 };
