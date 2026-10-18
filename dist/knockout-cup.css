@@ -64,3 +64,14 @@
  border:2px solid #e0f7a1;box-shadow:0 0 0 3px rgba(206,246,158,.16);
  scroll-margin-top:25vh;background:#304c44
 }
+
+/* Manually organised knockout kickoff times; never server-official. */
+.knockout-match-schedule{border-top:1px solid #68877a;margin-top:4px;padding-top:9px}
+.knockout-match-schedule>summary{color:#d7f4bc;cursor:pointer;
+ font-size:.78rem;font-weight:800;line-height:1.5;overflow-wrap:anywhere}
+.knockout-schedule-fields{display:grid;gap:8px;margin-top:10px}
+.knockout-schedule-fields label{display:grid;gap:5px;font-size:.74rem;color:#c7dfd1}
+.knockout-schedule-fields input{width:100%;box-sizing:border-box;min-width:0}
+.knockout-schedule-fields button{min-height:39px}
+.knockout-schedule-fields button:last-child{background:#384646;color:#f9e3d8}
+@media print{.knockout-match-schedule{display:none!important}}

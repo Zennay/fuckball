@@ -6,6 +6,21 @@ Open **My Games → Practice Journal** after completing local AI matches. The jo
 
 All focus tags, reflections and match records remain in **this browser's localStorage** and are included if you deliberately export your private journal JSON. Old entries work unchanged, with no note/focus until you add one. A double-confirmation clears only the practice journal, not online results, accounts or HBR2 replays. Private-mode browsers or disabled storage may prevent saving. Existing online matchmaking and approved physics never depend on these notes.
 
+## Private knockout fixture calendar
+
+Inside **Home → Knockout Cup Builder**, each saved knockout match now has
+a **Set private kickoff** disclosure. You may add a local date, time and
+optional venue **before its entrants have qualified**; undecided team slots
+remain marked as such. Existing scores and bracket advancement do not change.
+The cup's **Calendar ICS** download includes only matches you scheduled, using
+a one-hour placeholder duration, honest qualifier names and no invitations.
+
+The normal **Match CSV** and **Save JSON** contain each saved kickoff and venue,
+including on cups created before this feature (whose older matches simply
+start unscheduled). **Game Night Pack v2** preserves those fields when
+moving a cup to another device. Neither planned cup dates nor user-entered
+results are validated as official online competitive fixtures.
+
 ## Portable Game Night Pack with private posters
 
 Open **Home → Game Night Pack** to download one local JSON archive covering your
