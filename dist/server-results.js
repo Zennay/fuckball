@@ -21,6 +21,11 @@
  for(const [value,label] of [['all','All results'],['win','Wins'],['draw','Draws'],['loss','Losses']])
   filter.add(new Option(label,value));
  filterLabel.append(filter);
+ const periodLabel=document.createElement('label');periodLabel.textContent='When';
+ const period=document.createElement('select');period.className='server-results-period';
+ period.setAttribute('aria-label','Filter result date');
+ for(const [value,label] of [['all','Any time'],['7','Past 7 days'],['30','Past 30 days'],['90','Past 90 days']])period.add(new Option(label,value));
+ periodLabel.append(period);
  const modeLabel=document.createElement('label');modeLabel.textContent='Mode';
  const mode=document.createElement('select');mode.setAttribute('aria-label','Filter online match mode');
  for(const value of ['all','1v1','2v2','3v3','4v4','bot'])
@@ -29,7 +34,7 @@
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export server results';
  const erase=document.createElement('button');erase.type='button';erase.className='server-results-erase';
  erase.textContent='Erase my server history';erase.title='Also removes career totals on this server';
- controls.append(filterLabel,modeLabel,exportButton,erase);
+ controls.append(filterLabel,modeLabel,periodLabel,exportButton,erase);
  const status=document.createElement('p');status.className='server-results-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const summary=document.createElement('p');summary.className='server-results-count';
@@ -68,7 +73,8 @@
   if(!items)return;
   const filtered=items.filter(item=>
    (filter.value==='all'||outcome(item)===filter.value)&&
-   (mode.value==='all'||item.mode===mode.value));
+   (mode.value==='all'||item.mode===mode.value)&&
+   (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
   summary.textContent=filtered.length+' shown · '+items.length+' recent server results · unranked';
   if(!filtered.length){
    const empty=document.createElement('p');empty.className='server-results-empty';
@@ -88,7 +94,21 @@
    const when=document.createElement('small');
    const time=new Date(item.at);
    when.textContent=Number.isFinite(time.getTime())?time.toLocaleString():'Date unavailable';
-   card.append(top,sub,when);list.append(card);
+   const actions=document.createElement('div');actions.className='server-result-actions';
+   const share=document.createElement('button');share.type='button';share.textContent='↗ Share score card';
+   share.title='Share an unranked result as a private, locally generated PNG with no usernames';
+   share.addEventListener('click',async()=>{
+    if(!items?.includes(item)||!currentToken||authenticated()?.token!==currentToken){
+     status.textContent='Sign in again before sharing a server result.';return;
+    }
+    share.disabled=true;
+    try{
+     if(!window.FuckballMatchCards)throw Error('Score card renderer is unavailable.');
+     status.textContent=await window.FuckballMatchCards.download(item);
+    }catch(error){status.textContent=error?.message||'Could not share this result.';}
+    finally{share.disabled=false;}
+   });
+   actions.append(share);card.append(top,sub,when,actions);list.append(card);
   }
  }
  async function load(){
@@ -116,7 +136,7 @@
   finally{if(seq===generation)refresh.disabled=false;}
  }
  refresh.onclick=()=>load();
- filter.onchange=()=>render();mode.onchange=()=>render();
+ filter.onchange=()=>render();mode.onchange=()=>render();period.onchange=()=>render();
  exportButton.onclick=()=>{
   if(!items||!currentToken||authenticated()?.token!==currentToken)return;
   const data={source:'fuckball-native-server',ranked:false,account:currentUser,
