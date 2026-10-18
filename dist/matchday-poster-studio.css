@@ -1,0 +1,79 @@
+/* Device-private Matchday Poster Studio. Never covers the play canvas or online controls. */
+.matchday-poster-studio{
+  margin:24px auto;max-width:1380px;border:1px solid #40504c;border-radius:18px;
+  background:linear-gradient(135deg,#182b30,#101d22);color:#edf7ed;
+  box-shadow:0 18px 44px #04100e66;overflow:hidden;
+}
+.matchday-poster-studio>details>summary{
+  display:block;cursor:pointer;padding:19px 24px;font-weight:900;
+  letter-spacing:.09em;color:#d8ff78;list-style:none
+}
+.matchday-poster-studio>details>summary::-webkit-details-marker{display:none}
+.matchday-poster-studio>details[open]>summary{border-bottom:1px solid #40504c}
+.poster-studio-body{padding:clamp(16px,3vw,26px)}
+.poster-studio-body>p{margin:0 0 20px;color:#c5d5d0;max-width:85ch}
+.poster-studio-grid{display:grid;grid-template-columns:minmax(300px,.83fr) minmax(400px,1.17fr);gap:28px;align-items:start}
+.poster-studio-editor,.poster-studio-preview{min-width:0}
+.poster-studio-editor{display:grid;gap:13px}
+.poster-studio-editor h3,.poster-studio-saved h3{font-size:1rem;margin:0 0 3px;letter-spacing:.07em}
+.poster-studio-editor label{font-weight:700;font-size:.85rem;display:grid;gap:6px;color:#e9f6ec}
+.poster-studio-editor input,.poster-studio-editor select{
+ width:100%;min-width:0;border-radius:9px;padding:10px 11px;min-height:43px;
+ border:1px solid #5a7770;background:#13262b;color:#fff;font:inherit
+}
+.poster-studio-editor input:focus-visible,.poster-studio-editor select:focus-visible,
+.matchday-poster-studio button:focus-visible,.matchday-poster-studio summary:focus-visible{
+ outline:3px solid #d8ff78;outline-offset:3px
+}
+.poster-studio-fixture-row{display:flex;gap:9px;min-width:0}
+.poster-studio-fixture-row select{flex:1;min-width:0}
+.poster-studio-team-row,.poster-studio-scores{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.poster-studio-scores[hidden]{display:none}
+.poster-studio-fixture-row button,.poster-studio-actions button,.poster-studio-draft button{
+ border:1px solid #688377;border-radius:10px;background:#2a4240;color:#f7fff9;
+ padding:10px 13px;cursor:pointer;font-weight:750
+}
+.poster-studio-actions button.primary{background:#d8fb74;color:#142221;border-color:#d8fb74}
+.poster-studio-actions button:disabled{opacity:.45;cursor:not-allowed}
+.poster-studio-preview canvas{width:100%;height:auto;aspect-ratio:16/9;border:1px solid #4c6257;
+ border-radius:12px;background:#111f23;display:block}
+.poster-studio-alternative{font-size:.77rem;color:#d0ded5;line-height:1.5;
+ white-space:pre-line;max-width:65ch;margin:12px 0}
+.poster-studio-actions{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}
+.poster-studio-status{font-size:.83rem;color:#d8fb74;min-height:20px}
+.poster-studio-saved{border-top:1px solid #40504c;margin-top:23px;padding-top:17px}
+.poster-studio-saved>p{color:#c6d8d2}
+.poster-studio-draft{display:flex;flex-wrap:wrap;align-items:center;gap:9px;
+ border-top:1px solid #40504c;padding:12px 0}
+.poster-studio-draft strong{min-width:140px}
+.poster-studio-draft span{color:#baccc4;margin-right:auto;font-size:.85rem}
+@media(max-width:920px){.poster-studio-grid{grid-template-columns:1fr}}
+@media(max-width:530px){
+ .poster-studio-fixture-row{flex-wrap:wrap}
+ .poster-studio-fixture-row button{width:100%}
+ .poster-studio-team-row{grid-template-columns:1fr}
+ .poster-studio-body{padding:13px}
+ .poster-studio-actions button{flex:1 1 44%}
+}
+@media(prefers-reduced-motion:reduce){.matchday-poster-studio *{scroll-behavior:auto!important}}
+@media print{
+ body>:not(.home-view){display:none!important}
+ .home-view>*:not(.matchday-poster-studio){display:none!important}
+ .matchday-poster-studio,.matchday-poster-studio>details,.poster-studio-body{
+  display:block!important;box-shadow:none!important;border:0!important;background:white!important;
+  padding:0!important;margin:0!important;max-width:none!important
+ }
+ .matchday-poster-studio>details>summary,.poster-studio-body>p,
+ .poster-studio-editor,.poster-studio-actions,.poster-studio-status,
+ .poster-studio-saved,.poster-studio-alternative{display:none!important}
+ .poster-studio-grid{display:block!important}
+ .poster-studio-preview canvas{width:100%!important;max-width:100%!important;
+  print-color-adjust:exact;-webkit-print-color-adjust:exact}
+ @page{size:landscape;margin:8mm}
+}
+/* The existing quick-match poster is the parent; print only the selected tool. */
+@media print{
+ body:not(.poster-custom-print) .matchday-poster-studio{display:none!important}
+ body.poster-custom-print .matchday-posters-body>canvas{display:none!important}
+ body.poster-custom-print .matchday-posters-body>.matchday-poster-studio{display:block!important}
+}
