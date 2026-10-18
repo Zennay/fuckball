@@ -181,7 +181,7 @@ body.lobby .scoreboard{opacity:.35}
 .rm-next-heading{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .rm-next-heading strong{font-size:13px}
 .rm-next-heading span,.rm-next-match .rm-small{font-size:11px;color:#b7c9be}
-.rm-next-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.rm-next-players{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:0;padding:0}\n.rm-next-players li{display:flex;justify-content:space-between;gap:8px;background:#ffffff0b;border-radius:6px;padding:5px 8px;font-size:11px;color:#dbebdb}\n.rm-next-players small{color:#adc5b5;white-space:nowrap}\n@media(max-width:520px){.rm-next-players{grid-template-columns:1fr}}\n.rm-next-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .rm-next-actions button{border-radius:8px;padding:9px 13px;color:#f1f6ef;background:#253b36;border:1px solid #ffffff30;font-size:12px;min-height:36px}
 .rm-next-actions button.primary{background:#c6ff42;color:#172117;border-color:#c6ff42;font-weight:800}
 .rm-next-actions button[hidden]{display:none!important}
