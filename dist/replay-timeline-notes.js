@@ -6,8 +6,8 @@
  const node=(tag,text='',cls='')=>{const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;};
  const root=node('details','','replay-timeline-notes'),title=node('summary','✎ Replay notebook · moments and decisions');
  const panel=node('section','','replay-notes-panel'),help=node('p','Write up to 12 frame-specific observations, jump back to decisions, and carry them with your private My Games ZIP backup. This is not an official match review.');
- const toolbar=node('div','','replay-notes-toolbar'),add=node('button','＋ Note at current frame'),prev=node('button','‹ Previous'),next=node('button','Next ›');
- for(const b of [add,prev,next]){b.type='button';toolbar.append(b);}
+ const toolbar=node('div','','replay-notes-toolbar'),add=node('button','＋ Note at current frame'),prev=node('button','‹ Previous'),next=node('button','Next ›'),exportBtn=node('button','↓ Coaching report');
+ for(const b of [add,prev,next,exportBtn]){b.type='button';toolbar.append(b);}
  const status=node('p','','replay-notes-status'),list=node('ol','','replay-notes-list');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  panel.append(help,toolbar,status,list);root.append(title,panel);controls.append(root);
@@ -23,9 +23,25 @@
   if(entry)seek(entry.frameNo);else status.textContent=direction>0?'No later notes.':'No earlier notes.';
  }
  prev.onclick=()=>seekNote(-1);next.onclick=()=>seekNote(1);
+ exportBtn.onclick=()=>{
+  if(!current()||!notes.length)return;
+  const lines=['# Personal replay coaching report','','Generated '+new Date().toLocaleString(),
+   'Private notes from a locally saved HBR2 recording. Not verified match statistics.',''];
+  for(const note of notes){
+   const safe=value=>String(value).replace(/[\\r\\n]+/g,' ').replace(/[<>]/g,'').trim();
+   lines.push('## '+format(note.frameNo)+' — '+safe(note.label),'',
+    '**Focus:** '+safe(note.category),'',safe(note.text),'');
+  }
+  const blob=new Blob([lines.join('\\n')],{type:'text/markdown;charset=utf-8'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='fuckball-replay-coaching-'+new Date().toISOString().slice(0,10)+'.md';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='Private coaching report downloaded. Share only if you choose to.';
+ };
  function render(){
   root.hidden=!current();if(root.hidden)return;
-  add.disabled=busy||notes.length>=12;prev.disabled=next.disabled=busy||!notes.length;
+  add.disabled=busy||notes.length>=12;prev.disabled=next.disabled=exportBtn.disabled=busy||!notes.length;
   list.replaceChildren();status.textContent=notes.length+'/12 private coaching notes';
   if(!notes.length){list.append(node('li','No notes yet. Pause at a decision, then add your first observation.'));return;}
   for(const note of notes){
