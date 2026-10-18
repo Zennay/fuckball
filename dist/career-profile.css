@@ -92,3 +92,9 @@
 .career-form-day b{font-size:12px;color:#def8c4}
 @media(max-width:500px){.career-form-week{gap:5px}.career-form-day-column{height:60px}}
 @media(prefers-reduced-motion:reduce){.career-form *{animation:none!important;transition:none!important}}
+
+/* Server account-data export is private and distinct from ranked/replay files. */
+.career-private-export{background:#294a43;border:1px solid #769988;color:#effce0}
+.career-private-export-note{font-size:11px;color:#c0d3c0;line-height:1.7;margin:8px 0 3px}
+.career-private-export-status{font-size:12px;color:#d4f6b0;line-height:1.6;min-height:18px;margin:5px 0 16px}
+.career-private-export:focus-visible{outline:3px solid #dcffb3;outline-offset:3px}
