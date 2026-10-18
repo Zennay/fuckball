@@ -170,3 +170,22 @@ includes the full selected overlap set (not only the first 24 visible rows),
 neutralises formula-sensitive cells, and leaves local storage unchanged. No
 calendar invite, remote message, match result, real room or server database is
 changed by this view or export.
+
+## Full read-only standings for private leagues
+
+Open **Matchday Hub → Saved competitions → League table** under any private
+league. This computes a complete standings table directly from the league's
+validated locally saved fixtures. Each team shows played (P), wins (W), draws
+(D), losses (L), goals for (GF), goals against (GA), goal difference (GD)
+and points (Pts). Scoring is **3 points for a manually recorded win** and
+**1 for a draw**. Equal points are ordered by goal difference, goals scored,
+and then team name. Teams with zero played games remain visible with zero
+statistics; the app never fabricates missing results.
+
+**Export this table CSV** downloads every current team and the underlying
+competition name. Spreadsheet formula-style prefixes in user-authored names
+are escaped. This view and export are read-only and do **not** update match
+scores, verified ratings, online leaderboards, player identities, game
+physics or native room state. Only the existing private League editor may
+write fixture results. These are self-reported friendly standings, not an
+official competition ranking.
