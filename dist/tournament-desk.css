@@ -48,3 +48,12 @@
  .tournament-inner,.tournament-table-scroll{color:#000}
  .tournament-table-scroll td,.tournament-table-scroll th{color:#000!important;border-color:#999}
 }
+.tournament-scheduling{grid-column:1/-1;display:grid;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) auto auto;gap:10px;align-items:end;padding:10px 12px;margin-bottom:8px;border:1px solid #496a5f;border-radius:10px;background:#1c3c3b}
+.tournament-scheduling label{display:grid;gap:6px;color:#cce7d8;font-size:.84rem}
+.tournament-scheduling input{width:100%;box-sizing:border-box;text-align:left;color:#fff;background:#204746}
+.tournament-scheduling button{white-space:nowrap}
+@media(max-width:700px){
+ .tournament-scheduling{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .tournament-scheduling label{grid-column:1/-1}
+ .tournament-scheduling button{grid-column:auto!important}
+}
