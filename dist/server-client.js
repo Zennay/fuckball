@@ -235,3 +235,105 @@ for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick
  serverLink.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
 };
 renderSubPanel();
+
+
+// My Games: server-backed results are a separate, authenticated feed.
+// Local HBR2 files remain unverified browser recordings, never rankings.
+const accountMatchSection=document.createElement('section');
+accountMatchSection.className='server-match-history';
+const accountMatchHeader=document.createElement('div'),accountMatchIntro=document.createElement('div');
+accountMatchHeader.className='server-history-head';
+const accountMatchEyebrow=document.createElement('span'),accountMatchTitle=document.createElement('h2'),accountMatchDescription=document.createElement('p');
+accountMatchEyebrow.className='eyebrow';accountMatchEyebrow.textContent='SIGNED-IN MATCH HISTORY';
+accountMatchTitle.textContent='SERVER RESULTS.';
+accountMatchDescription.textContent='Completed matches on the native room server only. These are not ranked or anti-cheat verified.';
+accountMatchIntro.append(accountMatchEyebrow,accountMatchTitle,accountMatchDescription);
+const accountMatchActions=document.createElement('div');accountMatchActions.className='server-history-actions';
+const refreshServerHistory=document.createElement('button');refreshServerHistory.type='button';refreshServerHistory.textContent='↻ Refresh';
+const exportServerHistory=document.createElement('button');exportServerHistory.type='button';exportServerHistory.textContent='↓ Export JSON';
+const eraseServerHistory=document.createElement('button');eraseServerHistory.type='button';eraseServerHistory.textContent='Delete my server results';eraseServerHistory.className='danger';
+accountMatchActions.append(refreshServerHistory,exportServerHistory,eraseServerHistory);
+accountMatchHeader.append(accountMatchIntro,accountMatchActions);
+const accountMatchStatus=document.createElement('p');accountMatchStatus.setAttribute('role','status');accountMatchStatus.setAttribute('aria-live','polite');
+const accountMatchSummary=document.createElement('p');accountMatchSummary.className='server-history-summary';
+const accountMatchList=document.createElement('div');accountMatchList.className='server-history-list';
+accountMatchSection.append(accountMatchHeader,accountMatchStatus,accountMatchSummary,accountMatchList);
+$('gamesView').append(accountMatchSection);
+const accountMatchStyle=document.createElement('style');
+accountMatchStyle.textContent=`
+.server-match-history{max-width:1180px;margin:24px auto;padding:20px;border:1px solid #455249;border-radius:12px;background:#15201bee;color:#edf4ed}
+.server-history-head{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.server-history-head h2{margin:5px 0 7px;font-size:clamp(20px,2.3vw,32px);font-weight:900;font-style:italic;letter-spacing:-1px}
+.server-history-head p{font-size:12px;color:#aabdb2;max-width:600px;margin:0 0 8px}
+.server-history-actions{display:flex;flex-wrap:wrap;gap:8px}
+.server-history-actions button{border-radius:8px;padding:10px 14px}
+.server-history-actions button.danger{border-color:#944a4a;color:#ffd7d7;background:#3c2525}
+.server-history-actions button:disabled{opacity:.5;cursor:not-allowed}
+.server-history-summary{font-size:13px;color:#c6ff42;font-weight:700}
+.server-history-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px;margin-top:12px}
+.server-history-item{border:1px solid #53635288;background:#ffffff08;border-radius:9px;padding:13px 15px;display:flex;flex-direction:column;gap:8px}
+.server-history-item strong{font-size:18px;color:#f0f9e9}
+.server-history-item span,.server-history-item small{font-size:12px;color:#afc4b5}
+.server-history-result{color:#c6ff42!important;font-weight:800}
+.server-match-history [role=status]{font-size:12px;color:#c6ddc3}
+`;
+(document.head||document.body).append(accountMatchStyle);
+let accountMatchLoad=0,accountHistoryItems=[];
+async function renderAccountMatchHistory(){
+ const load=++accountMatchLoad,status=accountMatchStatus,list=accountMatchList;
+ list.replaceChildren();accountMatchSummary.textContent='';accountHistoryItems=[];exportServerHistory.disabled=true;eraseServerHistory.disabled=true;
+ const token=settings.account?.token;
+ if(!token){status.textContent='Log in from the online room to see your completed server matches.';return;}
+ status.textContent='Loading server results…';
+ try{
+  const response=await fetch('/api/match-history',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(load!==accountMatchLoad||settings.account?.token!==token)return;
+  if(response.status===401){status.textContent='Your login expired. Sign in again to see server results.';return;}
+  if(!response.ok)throw Error('Server results are currently unavailable.');
+  const data=await response.json();
+  if(!Array.isArray(data.items)||data.source!=='native-server')throw Error('Server returned an invalid result list.');
+  const items=data.items.slice(0,50);
+  accountHistoryItems=items;
+  exportServerHistory.disabled=!items.length;
+  eraseServerHistory.disabled=!data.durable||!items.length;
+  const wins=items.filter(x=>x.winner===x.team).length,draws=items.filter(x=>x.winner===0).length,losses=items.length-wins-draws;
+  const minutes=items.reduce((total,x)=>total+(Number.isSafeInteger(x.playedFrames)?x.playedFrames:0),0)/3600;
+  accountMatchSummary.textContent=items.length?('Last '+items.length+' · '+wins+' wins · '+draws+' draws · '+losses+' losses · '+minutes.toFixed(1)+' min on pitch'):'';
+  for(const item of items){
+   if(!item||!Number.isSafeInteger(item.red)||!Number.isSafeInteger(item.blue)||
+      !Number.isSafeInteger(item.at)||![0,1,2].includes(item.team)||!Number.isSafeInteger(item.playedFrames))continue;
+   const card=document.createElement('article'),title=document.createElement('strong'),result=document.createElement('span'),details=document.createElement('small');
+   card.className='server-history-item';title.textContent='ROUND '+item.round+' · '+item.red+' : '+item.blue;
+   result.className='server-history-result';
+   result.textContent=item.winner===0?'DRAW':item.winner===item.team?'WIN':'LOSS';
+   const side=item.team===1?'Red':'Blue';
+   details.textContent=new Date(item.at).toLocaleString()+' · '+side+' · '+(item.playedFrames/60).toFixed(1)+'s active · '+item.mode+' · server-recorded, unranked';
+   card.append(title,result,details);list.append(card);
+  }
+  status.textContent=items.length?items.length+' recent server-recorded match results · no competitive rating assigned.':
+   'No server-recorded results yet. Play a completed online match while signed in.';
+  if(data.durable===false)status.textContent+=' This server has no persistent history store.';
+ }catch{
+  if(load===accountMatchLoad)status.textContent='Could not load server results. Local replays are still available.';
+ }
+}
+refreshServerHistory.onclick=renderAccountMatchHistory;
+exportServerHistory.onclick=()=>{
+ if(!accountHistoryItems.length||!settings.account?.token)return;
+ const payload={source:'native-server',ranked:false,exportedAt:new Date().toISOString(),items:accountHistoryItems};
+ const bytes=new TextEncoder().encode(JSON.stringify(payload,null,2));
+ saveBlob(bytes,'fuckball-my-server-results-'+new Date().toISOString().slice(0,10)+'.json','application/json');
+};
+eraseServerHistory.onclick=async()=>{
+ const token=settings.account?.token;
+ if(!token||!accountHistoryItems.length)return;
+ if(typeof window.confirm!=='function'||!window.confirm('Permanently delete all your server-recorded match results? This cannot be undone. Local replay files will remain.'))return;
+ eraseServerHistory.disabled=true;accountMatchStatus.textContent='Removing your stored server results…';
+ try{
+  const response=await fetch('/api/match-history',{method:'DELETE',headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(!response.ok)throw Error('Could not delete your results.');
+  if(settings.account?.token===token)await renderAccountMatchHistory();
+ }catch{if(settings.account?.token===token){accountMatchStatus.textContent='Could not delete server results. Please try again.';eraseServerHistory.disabled=false;}}
+};
+const showViewWithServerHistory=showView;
+showView=function(view){showViewWithServerHistory(view);if(view==='games')renderAccountMatchHistory();};
