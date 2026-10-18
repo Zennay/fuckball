@@ -220,6 +220,9 @@
   }
   if(!completed())hud.hidden=match.hidden||online();
  },1800);
+ // A practice snapshot restore in this same tab does not raise StorageEvent;
+ // refresh the completed-circuit list without disturbing a running drill.
+ window.addEventListener('fuckball-practice-circuits-updated',()=>renderHistory());
  window.addEventListener('storage',event=>{
   if([STATE,HISTORY,'fuckball.first-play-guide.v1','fuckball-local-goal-rush-history-v1','fuckball.teamwork-native-drill.v1'].includes(event.key)){
    session=readState();if(!completed())render();
