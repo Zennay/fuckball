@@ -15,7 +15,7 @@ try{
  const open=AI.chooseDelivery(state,p(1));
  assert.equal(open.type,'pass','prefer midfield passing to shooting from distance');
  assert.equal(open.receiverId,3,'choose free advanced receiver');
- assert(open.y>105,'lead moving receiver rather than passing to their old location');
+ assert(open.margin>=10,'the receiver reaches the pass clearly before any opponent');
  assert(open.x>-350,'passing direction must move the ball upfield');
  // Block the obvious central lane. A pass planner must not drill it straight
  // through an opponent just because that teammate is farthest forward.
@@ -43,5 +43,5 @@ try{
  }
  assert.equal(JSON.stringify(r.getDiscProperties(0)),before,'no physics mutation');
  assert.equal(AI.levels.elite.reaction,1,'elite reacts every engine tick');
- console.log('PASS passing priorities, moving receiver lead, blocked lanes, keeper distribution, emergency clearing, fast reactions and engine isolation');
+ console.log('PASS passing priorities, receiver beats opponents to the pass, blocked lanes, keeper distribution, emergency clearing, fast reactions and engine isolation');
 }finally{r.destroy();}

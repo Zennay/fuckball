@@ -53,7 +53,7 @@ function createRoomCore(opts){
  // Bots fill each team up to the mode size. A full refill happens when the
  // host picks a team setup; joins/leaves only top up or trim, so teams the
  // host arranged by dragging survive restarts.
- function addBot(team){let id=100;const used=new Set(hb._room.state.players.map(p=>p.id));while(used.has(id))id++;hb.addPlayer(id,'AI '+(id-99),team);r.botIds.add(id);hb._room.state.players.find(p=>p.id===id).aiControlled=true;}
+ function addBot(team){let id=100;const used=new Set(hb._room.state.players.map(p=>p.id));while(used.has(id))id++;hb.addPlayer(id,AI.botName?AI.botName(hb._room.state.players.map(p=>p.name)):'AI '+(id-99),team);r.botIds.add(id);hb._room.state.players.find(p=>p.id===id).aiControlled=true;}
  function bots(refill=true){const size=r.mode==='4v4'?4:r.mode==='2v2'?2:1;if(refill)for(const p of [...hb._room.state.players])if(r.botIds.has(p.id)){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}for(const team of [1,2]){const list=hb.getPlayerList().filter(p=>p.team===team);for(let i=list.length;i<size;i++)addBot(team);if(!refill)for(const p of list.filter(p=>r.botIds.has(p.id)).slice(0,Math.max(0,list.length-size))){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}}for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);}
  function reset(start=true){r.rematch=null;r.lastResult=null;r.round++;r.pendingSubs.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
  /* id: unique client/player id, chosen by the server and never reused for a bot. */

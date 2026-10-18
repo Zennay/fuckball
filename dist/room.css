@@ -64,6 +64,7 @@ body{background:#0d1113}
 .rm-player.rm-dragging{opacity:.35}
 .rm-player .name{flex:1;min-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rm-player .tag{font-size:8.5px;font-weight:800;letter-spacing:.6px;padding:2px 5px;border-radius:4px;background:#ffffff1a;color:#cbd6d3}
+.rm-player .tag.style{font-weight:600;letter-spacing:.2px;background:#c6ff4214;color:#d7f88b;white-space:nowrap}
 .rm-player .tag.you{background:var(--rm-lime);color:#17250a}
 .rm-player .bot-level{display:block;width:auto;margin:0;padding:2px 4px;font-size:10px;background:#0b1217;border-radius:4px}
 .rm-remove{padding:0 6px;border:0;background:none;color:#ffb0a8;font-size:15px;line-height:1}
