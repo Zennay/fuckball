@@ -124,3 +124,23 @@
  .matchday-attendance-actions,.matchday-attendance-form,.matchday-attendance-row button{display:none}
  .matchday-attendance-row{background:white;color:#111;border-color:#aaa}
 }
+
+
+/* Provisional 4v4 private lineup board; these assignments never reach a server. */
+.matchday-lineup-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.matchday-lineup-card{background:#1b3436;border:1px solid #55796d;border-radius:12px;min-width:0;padding:15px}
+.matchday-lineup-card h4{margin:0 0 11px;font-size:.86rem;letter-spacing:.07em;color:#eaf8ef}
+.matchday-lineup-card ul{margin:0;padding-left:19px;display:grid;gap:7px;line-height:1.45;font-size:.9rem}
+.matchday-lineup-card li{overflow-wrap:anywhere;color:#dfede6}
+.matchday-lineup-red{border-top:4px solid #e78b87}
+.matchday-lineup-blue{border-top:4px solid #89bfe9}
+.matchday-lineup-bench{border-top:4px solid #ced7a4}
+.matchday-attendance-row{grid-template-columns:minmax(110px,1fr) 115px 160px minmax(130px,1.3fr) auto auto}
+@media(max-width:1050px){.matchday-attendance-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.matchday-lineup-preview{grid-template-columns:1fr}}
+@media(max-width:580px){.matchday-attendance-row{grid-template-columns:1fr}}
+@media print{
+ .matchday-lineup-preview{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .matchday-lineup-card{background:white;color:#111;border-color:#666}
+ .matchday-lineup-card h4,.matchday-lineup-card li{color:#111}
+}
