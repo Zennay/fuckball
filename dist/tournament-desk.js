@@ -40,11 +40,21 @@
       })));
     }
     return rounds.flatMap((round,i)=>round.map((g,j)=>({
-      id:'r'+(i+1)+'g'+(j+1),...g,homeScore:null,awayScore:null
+      id:'r'+(i+1)+'g'+(j+1),...g,homeScore:null,awayScore:null,kickoff:null,venue:''
     })));
   };
   const resultValid=(a,b)=>(a===null&&b===null)||
     (Number.isSafeInteger(a)&&Number.isSafeInteger(b)&&a>=0&&b>=0&&a<=MAX_SCORE&&b<=MAX_SCORE);
+  // Optional kickoff is a local organiser note, never a real-server fixture.
+  const scheduleValid=n=>n===null||(Number.isSafeInteger(n)&&n>=1577836800000&&n<=4102444800000);
+  const venueValid=s=>typeof s==='string'&&s.length<=60&&s===s.trim()&&
+    !/[\u0000-\u001f\u007f-\u009f]/.test(s);
+  const localValue=n=>{
+    if(n===null)return '';
+    const d=new Date(n),pad=x=>String(x).padStart(2,'0');
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+
+      pad(d.getHours())+':'+pad(d.getMinutes());
+  };
   function normalize(raw){
     if(!raw||raw.version!==1||!validId(raw.id)||!safeName(raw.name,60)||
       !Array.isArray(raw.teams)||raw.teams.length<2||raw.teams.length>MAX_TEAMS||
@@ -60,7 +70,10 @@
       const f=raw.fixtures[i];
       if(!f||f.id!==t.id||f.round!==t.round||f.home!==t.home||f.away!==t.away||
         !resultValid(f.homeScore,f.awayScore))throw Error('Schedule or score cannot be verified.');
-      return {...t,homeScore:f.homeScore,awayScore:f.awayScore};
+      const kickoff=f.kickoff===undefined?null:f.kickoff;
+      const venue=f.venue===undefined?'':f.venue;
+      if(!scheduleValid(kickoff)||!venueValid(venue))throw Error('Invalid fixture calendar details.');
+      return {...t,homeScore:f.homeScore,awayScore:f.awayScore,kickoff,venue};
     });
     return {version:1,id:raw.id,name:raw.name,teams,legs:raw.legs,
       createdAt:raw.createdAt,updatedAt:raw.updatedAt,fixtures};
@@ -95,10 +108,12 @@
   const add=button('＋ New tournament',()=>{setup.hidden=!setup.hidden;if(!setup.hidden)nameInput.focus();});
   const exportButton=button('↓ Backup JSON',exportJSON);
   const csvButton=button('↓ Table CSV',exportCSV);
+  const scheduleCsv=button('↓ Fixtures CSV',exportFixturesCSV);
+  const calendarButton=button('↓ Calendar ICS',exportCalendar);
   const importButton=button('↑ Restore JSON',()=>upload.click());
   const remove=button('Delete tournament',deleteTournament,'tournament-danger');
   const upload=make('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
-  actions.append(select,add,exportButton,csvButton,importButton,remove,upload);
+  actions.append(select,add,exportButton,csvButton,scheduleCsv,calendarButton,importButton,remove,upload);
   const setup=make('form',null,'tournament-setup');setup.hidden=true;
   const nameInput=make('input');nameInput.required=true;nameInput.maxLength=60;nameInput.value='Weekend cup';
   const teamsInput=make('textarea');teamsInput.required=true;teamsInput.maxLength=480;
@@ -138,7 +153,7 @@
     if(!saved&&tournaments.length){activeId=tournaments[0].id;}
     select.value=current()?.id||'';
     const t=current(),enabled=!!t;
-    exportButton.disabled=csvButton.disabled=remove.disabled=!enabled;
+    exportButton.disabled=csvButton.disabled=scheduleCsv.disabled=calendarButton.disabled=remove.disabled=!enabled;
     inform(message||(t?'Stored on this device only · scores are manual and unverified.':'Create or restore a private tournament to begin.'));
     overview.replaceChildren();standings.replaceChildren();fixtures.replaceChildren();
     if(!t)return;
@@ -167,6 +182,7 @@
     filterSelect.setAttribute('aria-label','Filter tournament fixtures');
     filterSelect.add(new Option('Still to play','pending'));
     filterSelect.add(new Option('All fixtures','all'));
+    filterSelect.add(new Option('Upcoming scheduled','upcoming'));
     const lastRound=Math.max(...t.fixtures.map(f=>f.round));
     for(let n=1;n<=lastRound;n++)filterSelect.add(new Option('Round '+n,'round'+n));
     filterSelect.value=filter;
@@ -176,7 +192,9 @@
     gamesHeader.append(filterSelect);fixtures.append(gamesHeader);
     const visible=t.fixtures.filter(f=>filter==='all'||
       (filter==='pending'&&f.homeScore===null)||
-      (filter.startsWith('round')&&f.round===Number(filter.slice(5))));
+      (filter==='upcoming'&&f.kickoff!==null&&f.kickoff>=Date.now()&&f.homeScore===null)||
+      (filter.startsWith('round')&&f.round===Number(filter.slice(5))))
+      .sort((a,b)=>filter==='upcoming'?a.kickoff-b.kickoff:a.round-b.round);
     if(!visible.length)fixtures.append(make('p',filter==='pending'?
       'All scheduled matches have a recorded score. Congratulations on finishing the fixture list.':'No fixtures in this view.'));
     for(const f of visible){
@@ -196,6 +214,25 @@
         try{updateScore(t.id,f.id,null,null);}catch(err){inform(err.message||'Could not clear score.');}
       });clear.disabled=f.homeScore===null;
       row.append(matchLabel,hs,make('span','–'),as,save,clear);
+      const scheduling=make('div',null,'tournament-scheduling');
+      const when=make('input');when.type='datetime-local';when.value=localValue(f.kickoff);
+      when.setAttribute('aria-label','Local kickoff time for '+t.teams[f.home]+' versus '+t.teams[f.away]);
+      const venue=make('input');venue.type='text';venue.maxLength=60;venue.value=f.venue;
+      venue.placeholder='Venue (optional)';
+      const schedule=button(f.kickoff===null?'Set kickoff':'Update kickoff',()=>{
+        const value=when.value.trim(),place=venue.value.trim();
+        if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
+          return inform('Choose a local kickoff date and time first.');
+        const d=new Date(value),time=d.getTime();
+        if(!Number.isFinite(time)||!scheduleValid(time)||localValue(time)!==value)
+          return inform('Kickoff date/time is outside the supported range or invalid locally.');
+        try{updateSchedule(t.id,f.id,time,place);}catch(err){inform(err.message||'Could not save kickoff.');}
+      });
+      const unschedule=button('Remove date',()=>{
+        try{updateSchedule(t.id,f.id,null,'');}catch(err){inform(err.message||'Could not remove kickoff.');}
+      });unschedule.disabled=f.kickoff===null;
+      scheduling.append(label('Kickoff · your local time',when),label('Venue',venue),schedule,unschedule);
+      row.append(scheduling);
       row.onsubmit=event=>{
         event.preventDefault();
         const values=[hs.value.trim(),as.value.trim()];
@@ -205,6 +242,17 @@
       };
       fixtures.append(row);
     }
+  }
+  function updateSchedule(id,fixtureId,kickoff,venue){
+    if(!scheduleValid(kickoff)||!venueValid(venue))throw Error('Invalid local fixture details.');
+    const original=tournaments.find(t=>t.id===id);
+    if(!original||!original.fixtures.some(f=>f.id===fixtureId))
+      throw Error('Fixture is no longer available.');
+    const updated={...original,updatedAt:Math.max(Date.now(),original.createdAt),
+      fixtures:original.fixtures.map(f=>f.id===fixtureId?{...f,kickoff,venue}:f)};
+    persist(tournaments.map(t=>t.id===id?normalize(updated):t));
+    message=kickoff===null?'Local fixture date removed.':'Local fixture date saved (unverified).';
+    render();
   }
   function updateScore(id,fixtureId,h,a){
     if(!resultValid(h,a))throw Error('Only complete scores from 0 to 99 are allowed.');
@@ -264,6 +312,47 @@
     saveFile(filename(t)+'-table.csv','\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n',
       'text/csv;charset=utf-8');
     inform('Unofficial standings exported as local CSV.');
+  }
+  function exportFixturesCSV(){
+    const t=current();if(!t)return;
+    const rows=[['Round','Home','Away','Kickoff ISO UTC','Venue','Home goals','Away goals','Result status'],
+      ...t.fixtures.map(f=>[f.round,t.teams[f.home],t.teams[f.away],
+        f.kickoff===null?'':new Date(f.kickoff).toISOString(),
+        f.venue,f.homeScore===null?'':f.homeScore,f.awayScore===null?'':f.awayScore,
+        f.homeScore===null?'Unplayed':'Manually recorded · unverified'])];
+    saveFile(filename(t)+'-fixtures.csv','\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n',
+      'text/csv;charset=utf-8');
+    inform('Private fixture schedule exported as CSV.');
+  }
+  function exportCalendar(){
+    const t=current();if(!t)return;
+    const scheduled=t.fixtures.filter(f=>f.kickoff!==null);
+    if(!scheduled.length)return inform('Schedule at least one kickoff before exporting a calendar.');
+    const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+    const stamp=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
+    const fold=s=>{
+      const encoder=new TextEncoder();let out='',width=0;
+      for(const char of s){
+        const bytes=encoder.encode(char).length;
+        if(width+bytes>72){out+='\r\n ';width=1;}
+        out+=char;width+=bytes;
+      }
+      return out;
+    };
+    const lines=['BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
+      'PRODID:-//Fuckball//Private Friendly Calendar//EN',
+      'X-WR-CALNAME:'+escape(t.name+' · private friendlies')];
+    for(const f of scheduled){
+      lines.push('BEGIN:VEVENT','UID:'+f.id+'.'+t.id+'@local.fuckball',
+        'DTSTAMP:'+stamp(Date.now()),'DTSTART:'+stamp(f.kickoff),
+        'DURATION:PT1H',
+        'SUMMARY:'+escape(t.teams[f.home]+' vs '+t.teams[f.away]),
+        'DESCRIPTION:'+escape('Unofficial friendly schedule. Not verified by Fuckball servers.'),
+        ...(f.venue?['LOCATION:'+escape(f.venue)]:[]),'END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    saveFile(filename(t)+'-fixtures.ics',lines.map(fold).join('\r\n')+'\r\n','text/calendar;charset=utf-8');
+    inform('Private calendar downloaded: '+scheduled.length+' scheduled friendlies, 60-minute placeholder duration.');
   }
   upload.onchange=async()=>{
     const file=upload.files?.[0];upload.value='';if(!file)return;
