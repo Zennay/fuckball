@@ -1,0 +1,24 @@
+/* Public Custom Rooms — only explicit host listings appear in the directory. */
+.room-browser{margin:28px 0 38px;padding:clamp(19px,3vw,32px);
+ border:1px solid #60756c;border-radius:15px;background:#1a2b31}
+.room-browser-heading{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.room-browser-heading h2{font-size:clamp(23px,3vw,37px);font-weight:900;
+ font-style:italic;letter-spacing:-.055em;margin:0;color:#e9f4da}
+.room-browser-heading span{font-size:10px;letter-spacing:.11em;font-weight:800;color:#a6d59c}
+.room-browser>p{margin:12px 0 17px;color:#b7c8c7;font-size:13px;line-height:1.55}
+.room-browser-tools{display:flex;gap:9px;flex-wrap:wrap;margin:8px 0}
+.room-browser-tools button,.room-browser-actions button{border-radius:8px;padding:10px 16px;min-height:43px}
+.room-browser-tools button:disabled{opacity:.6}
+.room-browser-body[hidden]{display:none!important}
+.room-browser-status{min-height:22px;font-size:12px;color:#c4d4c4;line-height:1.55}
+.room-browser-list{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.room-browser-entry{border:1px solid #54726c;border-radius:10px;
+ background:#22383a;padding:15px;display:grid;gap:14px}
+.room-browser-info{display:grid;gap:6px;min-width:0}
+.room-browser-info strong{color:#d6fda8;font-size:16px;font-weight:900}
+.room-browser-info small{color:#bfd3c9;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.room-browser-actions{display:flex;flex-wrap:wrap;gap:9px}
+.room-browser-actions button{flex:1 1 118px;font-weight:700}
+.room-listing-toggle[aria-pressed="true"]{background:#314e34!important;border-color:#94d68f!important;color:#d9ffb6!important}
+.room-browser button:focus-visible,.room-listing-toggle:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-actions button,.room-browser-tools button{flex:1 1 130px}}
