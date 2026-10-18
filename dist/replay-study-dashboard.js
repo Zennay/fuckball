@@ -104,8 +104,8 @@
  }
  function exportObservationsCSV(){
   const notes=reportNotes();if(!notes)return;
-  const cell=value=>{
-   let value=cleanLine(value);
+  const cell=input=>{
+   let value=cleanLine(input);
    if(/^\s*[=+\-@]/.test(value))value="'"+value;
    return '"'+value.replace(/"/g,'""')+'"';
   };
