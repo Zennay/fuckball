@@ -1,0 +1,41 @@
+/* Private best-of series. Only player-entered planning data is displayed. */
+.best-of-series{width:min(1160px,calc(100% - 28px));margin:27px auto 35px;color:var(--text,#edf9f0)}
+.best-of-series>details{border:1px solid #668e89;border-radius:18px;background:#132b31;box-shadow:0 14px 35px #0002;overflow:hidden}
+.best-of-series>details>summary{cursor:pointer;padding:17px 23px;font-size:1rem;font-weight:900;letter-spacing:.07em;list-style-position:inside}
+.best-of-series summary:focus-visible,.best-of-series :is(button,select,input):focus-visible{outline:3px solid #d9ffaa;outline-offset:3px}
+.series-inner{padding:5px 23px 24px}
+.series-inner h2{font-size:clamp(1.2rem,2.8vw,1.75rem);margin:8px 0;color:#d8f8ac}
+.series-inner>p{line-height:1.55;color:#bdd7d3;font-size:.91rem;max-width:75ch}
+.best-of-series :is(input,select,button){font:inherit;color:#ebf8ef;background:#214347;border:1px solid #6b9e94;border-radius:9px;padding:9px 11px;min-height:42px;box-sizing:border-box;min-width:0}
+.best-of-series button{cursor:pointer;font-weight:700;background:#d4f2ab;color:#17332d;border-color:#d4f2ab}
+.best-of-series button:hover:not(:disabled){filter:brightness(1.08)}
+.best-of-series button:disabled{opacity:.48;cursor:not-allowed}
+.series-actions{display:flex;flex-wrap:wrap;gap:9px;margin:17px 0}
+.series-actions select{flex:1 1 180px}
+.series-new{border:1px dashed #92b4a4;padding:15px;border-radius:13px;margin:17px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.series-new[hidden]{display:none!important}
+.series-new label{display:grid;gap:6px;font-size:.85rem;color:#c5e2d5;font-weight:700}
+.series-new button{grid-column:1/-1}
+.series-status{min-height:22px;font-size:.88rem}
+.series-recovery:not([hidden]){padding:15px;border:1px solid #e1b277;background:#44382c;border-radius:11px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.series-recovery p{flex:1 1 100%;margin:0;line-height:1.5;color:#ffedca}
+.series-recovery[hidden]{display:none!important}
+.series-scoreboard{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center;background:#20403d;padding:18px;border-radius:15px;border:1px solid #729c81;margin:20px 0}
+.series-tally{display:grid;gap:7px;flex:1 1 280px}
+.series-tally h3{margin:0;color:#cee8d2;font-size:1rem}
+.series-tally strong{font-size:clamp(1.05rem,3.7vw,1.8rem);overflow-wrap:anywhere;color:#e2ffb6}
+.series-tally p{margin:0;color:#cbdfd5;font-size:.9rem}
+.series-tally progress{width:100%;accent-color:#c4f5a3}
+.series-fixtures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.series-game{padding:16px;border-radius:12px;border:1px solid #537f75;background:#19393c;display:grid;gap:12px;min-width:0}
+.series-game-heading{display:flex;justify-content:space-between;gap:9px;align-items:center;flex-wrap:wrap}
+.series-game-heading strong{color:#cfffaf}
+.series-game-heading span{font-size:.85rem;color:#d8e9de}
+.series-score-form,.series-schedule-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:end}
+.series-score-form label,.series-schedule-form label{display:grid;gap:6px;color:#d2e9dd;font-size:.82rem}
+.series-score-form input,.series-schedule-form input{width:100%}
+.series-score-form button{grid-column:1/-1}
+.series-schedule-form button{min-height:41px}
+@media(max-width:740px){.best-of-series{width:calc(100% - 16px);margin:15px auto}.series-inner{padding:7px 13px 18px}.series-fixtures{grid-template-columns:1fr}}
+@media(max-width:440px){.series-new{grid-template-columns:1fr}.series-actions button{flex:1 1 45%}.series-actions select{flex:1 1 100%}.series-game{padding:10px}.series-schedule-form label{grid-column:1/-1}}
+@media print{.best-of-series{color:#000}.series-actions,.series-new,.series-recovery,.series-status,.series-score-form button,.series-schedule-form{display:none!important}.series-game,.series-scoreboard{background:#fff;border-color:#777;color:#000}.series-tally strong,.series-game-heading strong{color:#000}}
