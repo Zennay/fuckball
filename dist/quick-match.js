@@ -29,6 +29,20 @@
  const alertHelp=document.createElement('span');
  alertHelp.textContent='Optional browser alerts while this tab is in the background. No auto-accept, no push service.';
  alertControls.append(alertButton,alertHelp);
+ const recovery=document.createElement('section');
+ recovery.className='quick-queue-recovery';recovery.hidden=true;
+ recovery.setAttribute('aria-label','Human Quick Match recovery');
+ const recoveryHeading=document.createElement('strong');
+ recoveryHeading.textContent='SEARCH INTERRUPTED';
+ const recoveryReason=document.createElement('p');recoveryReason.setAttribute('role','status');
+ const recoveryActions=document.createElement('div');recoveryActions.className='quick-queue-recovery-actions';
+ const retry=document.createElement('button');retry.type='button';retry.className='primary';
+ const changeServer=document.createElement('button');changeServer.type='button';
+ const dismissRecovery=document.createElement('button');dismissRecovery.type='button';
+ retry.textContent='↻ Retry human search';changeServer.textContent='⚙ Check game server';
+ dismissRecovery.textContent='Dismiss';
+ recoveryActions.append(retry,changeServer,dismissRecovery);
+ recovery.append(recoveryHeading,recoveryReason,recoveryActions);
  const readyBox=document.createElement('section');readyBox.className='quick-ready';readyBox.hidden=true;
  readyBox.setAttribute('aria-label','Match ready check');
  const readyTitle=document.createElement('h3');readyTitle.textContent='MATCH FOUND.';
@@ -41,7 +55,7 @@
  const declineReady=document.createElement('button');declineReady.type='button';declineReady.textContent='Decline';
  readyActions.append(acceptReady,declineReady);
  readyBox.append(readyTitle,readyText,readyProgress,readyActions);
- panel.append(heading,description,modes,availability,alertControls,notice,readyBox,actions);
+ panel.append(heading,description,modes,availability,alertControls,notice,recovery,readyBox,actions);
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
  // The chosen format is a private device preference. Queueing always requires
@@ -88,6 +102,32 @@
  quickStart.onclick=()=>start(preferred);
  setPreferred(preferred,false);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
+ let lastAttempt=null;
+ function hideRecovery(){recovery.hidden=true;}
+ function showRecovery(reason){
+  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
+  recoveryReason.textContent=String(reason||'Search interrupted.').slice(0,180)+
+   ' A new search needs another explicit click; no ready check is restored.';
+  retry.textContent='↻ Retry '+lastAttempt.mode+' human search';recovery.hidden=false;
+ }
+ retry.onclick=()=>{
+  if(searching||ready||serverLink?.room||peerConnected){
+   recoveryReason.textContent='Finish your current match, connection or ready check first.';return;
+  }
+  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
+  const mode=lastAttempt.mode;
+  try{if(serverLink?.quickMatchMode)disconnect();}catch{}
+  start(mode,false);
+ };
+ changeServer.onclick=()=>{
+  if(searching||serverLink?.room){
+   recoveryReason.textContent='Cancel the queue or leave the current room first.';return;
+  }
+  if(typeof openDialog==='function'){
+   openDialog('networkDialog');document.getElementById('serverAddress')?.focus();
+  }else recoveryReason.textContent='Open Online Rooms to configure the server.';
+ };
+ dismissRecovery.onclick=hideRecovery;
  let ready=null,readyAccepted=false;
  let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
  function clearReadyAlert(){
@@ -160,8 +200,11 @@
   }
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
- function done(message){
-  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;stopClock();refresh();notice.textContent=message;
+ function done(message,offerRetry=false){
+  const wasSearching=searching;
+  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;
+  stopClock();refresh();notice.textContent=String(message||'Search ended.').slice(0,240);
+  if(offerRetry&&wasSearching)showRecovery(message);else hideRecovery();
  }
  function start(mode,party=false){
   if(searching)return;
@@ -170,10 +213,20 @@
    notice.textContent='Log in or create a free account, then select a playlist.';
    showJoinScreen('');return;
   }
-  if(!$('serverAddress').value.trim()){
-   notice.textContent='Connect to a Fuckball multiplayer server to find human opponents.';return;
+  const address=$('serverAddress')?.value.trim();
+  if(!address){
+   notice.textContent='Configure a game server before searching for human opponents.';return;
+  }
+  try{
+   const url=new URL(address);
+   if(!['ws:','wss:'].includes(url.protocol)||!url.host||url.username||url.password||
+      (location.protocol==='https:'&&url.protocol!=='wss:'))throw Error('invalid');
+  }catch{
+   notice.textContent='Invalid server address. Choose a compatible WebSocket server in Online Rooms.';
+   return;
   }
   if(!party&&standardModes.includes(mode))setPreferred(mode);
+  hideRecovery();lastAttempt={mode,party};
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   connectServer(false,'','',null,mode,party);
@@ -359,21 +412,21 @@
     // Decliners, silent players and expired sessions must explicitly
     // restart searching: never join the next match without a new action.
     try{disconnect();}catch{}
-    done(d.reason||'Ready check ended. Start another search.');
+    done(d.reason||'Ready check ended. Start another search.',true);
    }
   }else if(d.type==='quickMatchFound'){
    done('Matched with '+d.players+' real people. Your casual '+playlistLabel(d.mode)+' game is starting.');
    notify('Real-player Quick Match '+playlistLabel(d.mode)+' · no bots, no ranked rating.');
   }else if(d.type==='quickMatchCancelled'){
-   done(d.reason||'Your match was cancelled.');
+   done(d.reason||'Your match was cancelled.',true);
   }else if(d.type==='queueStatus'){
    if(d.status==='partyGathering'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
    }else if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     waiting=d.waiting;needed=d.needed;refresh();
-   }else if(d.status==='cancelled')done('Search cancelled.');
+   }else if(d.status==='cancelled')done('Search cancelled.',true);
    else if(d.status==='error'||d.status==='disconnected')
-    done(d.reason||'Match search disconnected. You can try again.');
+    done(d.reason||'Match search disconnected. You can try again.',true);
   }
  };
 })();
