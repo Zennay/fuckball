@@ -49,3 +49,34 @@
  .matchday-actions{display:none}
  .matchday-stat,.matchday-competition{background:white;color:#111}
 }
+/* Private Matchday Control Center: navigation to the existing validated score editor. */
+.matchday-control{border-top:1px solid #59796d;margin-top:20px;padding-top:18px}
+.matchday-control-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.matchday-control h3{font-size:1rem;letter-spacing:.065em;margin:0 0 6px}
+.matchday-control-header p{color:#c2d9ce;font-size:.86rem;max-width:63ch;margin:0 0 12px;line-height:1.5}
+.matchday-control-tools{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.matchday-control-tools input,.matchday-control-tools select{
+ font:inherit;background:#10292e;border:1px solid #77968a;border-radius:9px;
+ padding:10px;color:#f3fcf4;min-height:44px;min-width:0
+}
+.matchday-control-tools input{flex:1 1 160px;max-width:270px}
+.matchday-control-tools select{flex:0 1 170px}
+.matchday-control-tools :is(input,select):focus-visible{outline:3px solid #ffe28e;outline-offset:2px}
+.matchday-control-rows{display:grid;gap:9px;margin-top:16px}
+.matchday-control-row{display:flex;justify-content:space-between;gap:14px;align-items:center;
+ padding:14px;border-radius:10px;border:1px solid #5c7c6e;background:#203e3c;min-width:0}
+.matchday-control-fixture{display:grid;gap:4px;min-width:0}
+.matchday-control-fixture small{color:#cff3a5;font-weight:800;letter-spacing:.04em}
+.matchday-control-fixture strong{overflow-wrap:anywhere;font-size:.95rem}
+.matchday-control-fixture span{color:#c4d9ce;font-size:.79rem;line-height:1.45}
+.matchday-control-row-actions{display:flex;gap:7px;flex-wrap:wrap;flex:0 0 auto}
+.matchday-control-row-actions button{padding:9px 12px;font-size:.8rem;min-height:42px}
+.matchday-control-status{font-size:.82rem;color:#c5dfcf;line-height:1.5;margin:11px 0 0}
+@media(max-width:900px){.matchday-control-row{align-items:stretch;flex-direction:column}
+ .matchday-control-row-actions{justify-content:flex-start}}
+@media(max-width:550px){.matchday-control-tools{width:100%}
+ .matchday-control-tools input,.matchday-control-tools select{max-width:none;flex:1 1 100%}
+ .matchday-control-tools button{flex:1 1 auto}
+ .matchday-control-row-actions button{flex:1 1 45%}}
+@media print{.matchday-control-tools,.matchday-control-row-actions{display:none!important}
+ .matchday-control-rows{max-height:none}}
