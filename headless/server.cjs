@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
+const{HBInit}=require('./runtime.cjs'),{WebSocketServer}=require('./websocket.cjs'),{createAccounts}=require('./accounts.cjs'),{createMatchHistory}=require('./match-history.cjs'),AI=require('../dist/ai/policy.js'),Netcode=require('../dist/netcode.js');
 // Netcode v3 (frame-stamped inputs + input buffer, docs/netcode-plan.md). FUCKBALL_NETCODE=classic turns it off.
 const NETCODE_V3=(process.env.FUCKBALL_NETCODE||'v3')!=='classic';
 const ROOM_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -12,14 +12,22 @@ function createServer(options={}){
  let shuttingDown=false;
  const root=path.resolve(__dirname,'../dist'),bff=fs.readFileSync(path.join(root,'stadiums/bff-big-v4.hbs'),'utf8'),rooms=new Map(),clients=new Set();
  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.hbs':'application/json','.txt':'text/plain; charset=utf-8','.zip':'application/zip'};
- const accounts=createAccounts(options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data')),authHits=new Map();
+ const dataDir=options.dataDir!==undefined?options.dataDir:process.env.FUCKBALL_DATA_DIR||process.env.STATE_DIRECTORY||path.resolve(__dirname,'../data');
+ const accounts=createAccounts(dataDir),history=dataDir?createMatchHistory(dataDir):null,authHits=new Map();
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
+  if(route==='/api/match-history'){
+   if(req.method!=='GET'){json(405,{error:'GET required.'});return;}
+   const token=(req.headers.authorization||'').replace(/^Bearer /,'');
+   const username=accounts.user(token);
+   if(!username){json(401,{error:'Log in to see your server match results.'});return;}
+   json(200,{items:history?.list(username)||[],source:'native-server',ranked:false,durable:!!history});return;
+  }
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/register','/api/login','/api/logout','/api/me'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/register','/api/login','/api/logout','/api/me','/api/match-history'].includes(route)){accountApi(req,res,route);return;}if(req.url?.split('?')[0]==='/api/training'){let status={status:'unavailable'};try{const raw=JSON.parse(fs.readFileSync(process.env.FUCKBALL_TRAINING_STATUS||'/opt/fuckball-training/status.json','utf8'));status=Object.fromEntries(['status','cycles','matches','activeCycle','episodesPerCycle','directionAccuracy','kickF1','arenaWins','arenaGames','livePromoted','updatedAt','deadline','reason'].filter(k=>raw[k]!==undefined).map(k=>[k,raw[k]]));}catch{}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(status));return;}if(req.url?.split('?')[0]==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,engine:'node-haxball-2.3.1',release:process.env.FUCKBALL_RELEASE_SHA||'local',physicsHz:60,snapshotHz:30,rooms:rooms.size,netcode:v3Enabled?3:2,peerHosting}));return;}
   if(req.url?.split('?')[0]==='/api/rooms'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify([...rooms.values()].map(r=>({players:r.sockets.size,reserved:r.parked.size,map:r.hb._room.state.stadium.name,started:r.started}))));return;}
   let pathname;try{pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.stat(file,(err,stat)=>{if(err||!stat.isFile()){res.writeHead(404).end('Not found');return;}res.writeHead(200,{'Content-Type':mime[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});fs.createReadStream(file).pipe(res);});
  });
@@ -43,7 +51,24 @@ function createServer(options={}){
  const toWire=data=>data instanceof Uint8Array?Buffer.from(data.buffer,data.byteOffset,data.byteLength):data;
  function createRoom(){if(rooms.size>=16)throw Error('Server is full.');let id;do{id=Array.from(crypto.randomBytes(8),b=>ROOM_ALPHABET[b%ROOM_ALPHABET.length]).join('');}while(rooms.has(id));const hb=HBInit({noPlayer:true,roomName:'Fuckball '+id});hb.setCustomStadium(bff);hb.setScoreLimit(3);hb.setTimeLimit(7);
   // While a browser hosts, this copy is only a standby: it must not talk to the clients.
-  const sockets=new Map(),r=RoomCore.createRoomCore({hb,id,AI,Netcode,v3:v3Enabled,send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
+  const sockets=new Map(),r=RoomCore.createRoomCore({hb,id,AI,Netcode,v3:v3Enabled,
+   onCompleted:(result,room)=>{
+    // Browser-peer simulated matches are deliberately not server-verifiable.
+    if(!history||room.authority!=='server')return;
+    const records=[];
+    for(const p of result.finalPlayers||[]){
+     const ws=sockets.get(p.id);
+     if(!ws?.account||!Array.isArray(p.sideFrames)||p.sideFrames.length!==2)continue;
+     const [red,blue]=p.sideFrames;
+     if(![red,blue].every(v=>Number.isSafeInteger(v)&&v>=0)||red+blue!==p.playedFrames||p.playedFrames<=0)continue;
+     const side=red>=blue?1:2;
+     records.push({id:crypto.randomBytes(12).toString('hex'),user:ws.account.toLowerCase(),
+      room:room.id,round:result.round,at:Date.now(),red:result.red,blue:result.blue,
+      winner:result.winner,team:side,playedFrames:p.playedFrames,mode:room.mode});
+    }
+    try{history.append(records);}catch{console.warn('Match history write unavailable; completed round remains unrecorded.');}
+   },
+   send:(cid,data)=>{if(r.authority!=='server')return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
   Object.assign(r,{sockets,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
