@@ -219,15 +219,20 @@ function bestOfSeries(raw){
    if(!e||typeof e.key!=='string'||!RSVP_KEY_PATTERN.test(e.key)||keys.has(e.key)||
      !Array.isArray(e.people)||e.people.length>24)throw Error('Invalid attendance match.');
    keys.add(e.key);
-   const names=new Set();
-   return {key:e.key,people:e.people.map(p=>{
+   const names=new Set();let red=0,blue=0;
+   const people=e.people.map(p=>{
+    const side=p?.side===undefined?'bench':p.side;
     if(!p||!nameOk(p.name,35)||!['going','maybe','out'].includes(p.status)||
       typeof p.note!=='string'||p.note.length>120||
       /[\u0000-\u001f\u007f-\u009f]/.test(p.note)||
-      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid attendance person.');
+      !['bench','red','blue'].includes(side)||(side!=='bench'&&p.status!=='going')||
+      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid attendance player or lineup.');
     names.add(p.name.toLocaleLowerCase());
-    return {name:p.name,status:p.status,note:p.note};
-   })};
+    if(side==='red')red++;if(side==='blue')blue++;
+    return {name:p.name,status:p.status,note:p.note,side};
+   });
+   if(red>4||blue>4)throw Error('A saved private lineup exceeds four players per side.');
+   return {key:e.key,people};
   });
  }
  function readAttendance(){
