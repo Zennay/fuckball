@@ -1,0 +1,7 @@
+/* Device-generated result cards contain no account or opponent identities. */
+.server-result-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px}
+.server-result-actions button{font:inherit;font-weight:750;font-size:12px;border:1px solid #819c9e;border-radius:8px;padding:9px 12px;background:#314c52;color:#f4f9ed;cursor:pointer}
+.server-result-actions button:hover{background:#416267}
+.server-result-actions button:focus-visible{outline:3px solid #d5f2aa;outline-offset:2px}
+.server-result-actions button:disabled{opacity:.5;cursor:wait}
+.server-results-controls .server-results-period{min-width:128px}
