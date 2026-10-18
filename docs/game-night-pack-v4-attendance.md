@@ -25,3 +25,13 @@ Any forged, missing or invalid roster/fixture aborts the operation.
 A Game Night Pack has no accounts, credentials, personal room links, ranked
 scores, or HBR2 replays. Exporting it is a deliberate download, which the
 organiser may choose to share. It is not an official match result.
+
+## Provisional lineup portability
+
+The v4 private attendance records can also contain an optional
+`side: "red" | "blue" | "bench"` label for each organiser-entered friend.
+Each game can have up to four **Going** friends on Red and four on Blue;
+Maybe/Out entries cannot have a team side. Older v4 attendance without a side
+is imported as Bench. Validation happens before the game night snapshot is
+committed. Imported Red/Blue assignments remain associated with the
+newly copied private fixture; no real online player or room assignment is made.
