@@ -12,7 +12,7 @@
  const state=document.createElement('span');state.className='room-admin-state';
  heading.append(title,state);
  const description=document.createElement('p');
- description.textContent='The host can stop new joins without ending the game, remove disruptive players, and suspend signed-in players from this room for 10 minutes. Current players and valid reconnects keep their slots.';
+ description.textContent='The host can lock entry, remove players, suspend signed-in accounts for 10 minutes, or mute a player’s room chat for 10 minutes without interrupting gameplay. A mute follows their reserved slot during reconnect, not an IP or another room.';
  const controls=document.createElement('div');controls.className='room-admin-actions';
  const lock=document.createElement('button');lock.type='button';lock.className='primary';
  const clubLock=document.createElement('button');clubLock.type='button';
@@ -24,7 +24,8 @@
  targetWrap.append(target);
  const kick=document.createElement('button');kick.type='button';kick.textContent='Remove';
  const ban=document.createElement('button');ban.type='button';ban.className='danger';ban.textContent='Suspend 10 min';
- controls.append(lock,clubLock,listing,targetWrap,kick,ban);
+ const muteChat=document.createElement('button');muteChat.type='button';muteChat.textContent='Mute chat 10 min';
+ controls.append(lock,clubLock,listing,targetWrap,muteChat,kick,ban);
  const notice=document.createElement('p');notice.className='room-admin-notice';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(heading,description,controls,notice);
@@ -62,7 +63,11 @@
    if(eligible.some(p=>String(p.id)===current))target.value=current;
   }
   const available=eligible.length>0;
-  kick.disabled=ban.disabled=!available;
+  kick.disabled=ban.disabled=muteChat.disabled=!available;
+  const selectedId=Number(target.value);
+  const muted=(link.roomControl?.chatMutes||[]).some(m=>m[0]===selectedId&&m[1]>Date.now());
+  muteChat.textContent=muted?'Unmute chat':'Mute chat 10 min';
+  muteChat.setAttribute('aria-pressed',String(muted));
   if(!available)notice.textContent='Nobody else is connected to this room.';
   else if(notice.textContent==='Nobody else is connected to this room.')notice.textContent='';
  }
@@ -86,6 +91,14 @@
  };
  lock.onclick=()=>{if(!serverLink?.isOwner)return;lock.disabled=true;send(serverLink.roomControl?.locked?'unlock':'lock');notice.textContent='Updating room admission…';};
  function selectPlayer(){const id=Number(target.value);return Number.isSafeInteger(id)&&id>0&&id!==networkPlayerId?id:null;}
+ target.addEventListener('change',render);
+ muteChat.onclick=()=>{
+  const id=selectPlayer();if(id===null||!serverLink?.isOwner)return;
+  const muted=(serverLink.roomControl?.chatMutes||[]).some(m=>m[0]===id&&m[1]>Date.now());
+  send(muted?'unmuteChat':'muteChat',id);
+  notice.textContent=muted?'Restoring player chat…':'Muting player chat for 10 minutes…';
+  muteChat.disabled=true;
+ };
  kick.onclick=()=>{
   const id=selectPlayer(),name=target.selectedOptions?.[0]?.textContent||'this player';
   if(id===null||!serverLink?.isOwner)return;
