@@ -18,10 +18,15 @@ function createServer(options={}){
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
   if(route==='/api/match-history'){
-   if(req.method!=='GET'){json(405,{error:'GET required.'});return;}
+   if(!['GET','DELETE'].includes(req.method)){json(405,{error:'GET or DELETE required.'});return;}
    const token=(req.headers.authorization||'').replace(/^Bearer /,'');
    const username=accounts.user(token);
-   if(!username){json(401,{error:'Log in to see your server match results.'});return;}
+   if(!username){json(401,{error:'Log in to manage your server match results.'});return;}
+   if(req.method==='DELETE'){
+    try{json(200,{ok:true,removed:history?.erase(username)||0});}
+    catch{json(503,{error:'Match history could not be erased. Try again later.'});}
+    return;
+   }
    json(200,{items:history?.list(username)||[],source:'native-server',ranked:false,durable:!!history});return;
   }
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
