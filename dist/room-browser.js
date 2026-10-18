@@ -49,8 +49,22 @@
  savedNote.textContent='Only rooms you intentionally pin are saved on this device. A room may later become unavailable or unlisted; opening a saved code still requires server admission.';
  const savedGrid=document.createElement('div');savedGrid.className='room-browser-saved-list';
  savedSection.append(savedHeading,savedNote,savedGrid);
+ const bookmarkBar=document.createElement('section');bookmarkBar.className='room-browser-transfer';
+ bookmarkBar.setAttribute('aria-label','Portable public room bookmarks');
+ const bookmarkTitle=document.createElement('strong');bookmarkTitle.textContent='MY PUBLIC ROOM BOOKMARKS';
+ const bookmarkHelp=document.createElement('p');bookmarkHelp.textContent='Export or import only room codes you deliberately pinned. Rooms may become private or disappear; imported codes do not prove current visibility or grant entry.';
+ const transferActions=document.createElement('div');transferActions.className='room-browser-transfer-actions';
+ const exportPins=document.createElement('button');exportPins.type='button';exportPins.textContent='↓ Export pinned rooms';
+ const importPins=document.createElement('button');importPins.type='button';importPins.textContent='↑ Import pinned rooms';
+ const importFile=document.createElement('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;
+ importFile.setAttribute('aria-label','Private JSON file of pinned public room codes');
+ const replaceLabel=document.createElement('label');replaceLabel.className='room-browser-transfer-replace';
+ const replacePins=document.createElement('input');replacePins.type='checkbox';
+ replaceLabel.append(replacePins,document.createTextNode('Replace my current pins (default: add)'));
+ transferActions.append(exportPins,importPins,replaceLabel,importFile);
+ bookmarkBar.append(bookmarkTitle,bookmarkHelp,transferActions);
  const list=document.createElement('div');list.className='room-browser-list';
- body.append(savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
+ body.append(bookmarkBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
@@ -71,13 +85,69 @@
   try{localStorage.setItem(SAVED_KEY,JSON.stringify(list));}
   catch{throw Error('Could not save room pins to this device.');}
  }
+ function downloadPins(){
+  let pins;
+  try{pins=readPinned();}catch(error){status.textContent=error.message;return;}
+  if(!pins.length)return void(status.textContent='Pin a public room before exporting its code.');
+  if(!confirm('Export '+pins.length+' saved room code(s) to a local JSON file? The codes may still reach rooms later made private. Share this file carefully.'))return;
+  const payload={format:'fuckball-public-room-bookmarks',version:1,
+   exportedAt:new Date().toISOString(),rooms:pins};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{
+   type:'application/json;charset=utf-8'
+  }));
+  const a=document.createElement('a');a.href=url;
+  a.download='fuckball-public-room-bookmarks.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='Pinned room code backup downloaded locally. No server upload or invitation sent.';
+ }
+ exportPins.onclick=downloadPins;
+ importPins.onclick=()=>{importFile.value='';importFile.click();};
+ importFile.onchange=async()=>{
+  const file=importFile.files?.[0];importFile.value='';
+  if(!file)return;
+  if(file.size<1||file.size>4096)
+   return void(status.textContent='Choose a bookmark JSON file between 1 byte and 4 KiB.');
+  try{
+   const parsed=JSON.parse(await file.text());
+   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||
+      Object.keys(parsed).some(k=>!['format','version','exportedAt','rooms'].includes(k))||
+      parsed.format!=='fuckball-public-room-bookmarks'||parsed.version!==1||
+      !Array.isArray(parsed.rooms)||parsed.rooms.length<1||parsed.rooms.length>SAVED_LIMIT||
+      parsed.rooms.some(code=>!validRoom(code))||
+      new Set(parsed.rooms).size!==parsed.rooms.length||
+      (parsed.exportedAt!==undefined&&
+       (typeof parsed.exportedAt!=='string'||parsed.exportedAt.length>35)))
+    throw Error('The file is not a supported public room bookmark export.');
+   const original=localStorage.getItem(SAVED_KEY);
+   const existing=readPinned(),replace=replacePins.checked;
+   const proposal=replace?[...parsed.rooms]:
+    [...existing,...parsed.rooms.filter(code=>!existing.includes(code))];
+   if(proposal.length>SAVED_LIMIT)
+    throw Error('Combined bookmarks exceed twelve rooms. Unpin rooms or choose Replace before importing.');
+   if(!confirm((replace?'Replace '+existing.length+' saved pin(s) with ':
+      'Add '+(proposal.length-existing.length)+' new pin(s) to ')+
+      parsed.rooms.length+' imported public-room code(s)? This does not join rooms or verify current access.'))return;
+   if(localStorage.getItem(SAVED_KEY)!==original)
+    throw Error('Bookmarks changed in another tab during import. Reload the list and try again.');
+   savePinned(proposal);renderRooms();
+   status.textContent='Imported '+proposal.length+' pinned room codes on this device; join still requires server admission.';
+  }catch(error){status.textContent='Import refused: '+(error.message||'Invalid bookmark file.');}
+ };
+ function busyWithMatch(){
+  return !!serverLink?.room||!!peerConnected||
+   !!document.querySelector('.quick-queue-actions button:not([hidden])')||
+   !!document.querySelector('.quick-ready:not([hidden])');
+ }
  function openSavedRoom(code){
-  if(serverLink?.room){status.textContent='Leave your current room first.';return;}
-  // A pinned code is not evidence that a room is still open or public.
-  // The native join API makes the current access and room existence checks.
+  if(busyWithMatch()){
+   status.textContent='Finish your active game or cancel the Quick Match queue/ready-check first.';
+   return;
+  }
+  // A pinned code never proves that access is still allowed.
   showJoinScreen(code);
  }
- function renderPinned(pins){
+  function renderPinned(pins){
   savedSection.hidden=!pins.length;
   savedGrid.replaceChildren();
   for(const code of pins){
@@ -86,9 +156,11 @@
    const info=document.createElement('div');info.className='room-browser-info';
    const label=document.createElement('strong');label.textContent='★ '+code;
    const hint=document.createElement('small');
+   const age=lastLoadedAt?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
    hint.textContent=published?
-    'Currently public · '+published.players+' online · '+published.map:
-    'Availability and access unknown · previously pinned code';
+    (age!==null&&age<=45?'Recently advertised public':'Previously advertised public')+
+    ' · last seen '+(age??'?')+'s ago · '+published.players+' players · '+published.map:
+    'Not in the last public listing · access and availability unknown';
    info.append(label,hint);
    const actions=document.createElement('div');actions.className='room-browser-actions';
    const open=button('Open saved room',()=>openSavedRoom(code));
@@ -116,12 +188,9 @@
   return seats!==null&&seats>0;
  }
  function requestJoin(room){
-  if(serverLink?.room||peerConnected){
-   status.textContent='Leave the current match before joining a different room.';return false;
-  }
-  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
-     document.querySelector('.quick-ready:not([hidden])')){
-   status.textContent='Cancel your human Quick Match search or ready-check before joining a room.';return false;
+  if(busyWithMatch()){
+   status.textContent='Leave your current match or cancel Quick Match before joining a different room.';
+   return false;
   }
   // A public listing never grants permission. The native join screen and
   // authoritative server re-check current account, capacity and visibility.
@@ -280,5 +349,8 @@
  };
  document.addEventListener('visibilitychange',()=>{
   if(shown&&document.visibilityState==='visible')load();
+ });
+ window.addEventListener('storage',event=>{
+  if(shown&&(event.key===SAVED_KEY||event.key===null))renderRooms();
  });
 })();
