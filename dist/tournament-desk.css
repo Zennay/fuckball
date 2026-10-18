@@ -57,3 +57,9 @@
  .tournament-scheduling label{grid-column:1/-1}
  .tournament-scheduling button{grid-column:auto!important}
 }
+
+/* Cross-panel fixture handoff never edits results without the original form. */
+.tournament-match.tournament-match-target{
+ border:2px solid #d8ff9c;background:#2c4b3c;scroll-margin-top:25vh;
+ box-shadow:0 0 0 3px rgba(205,251,153,.22)
+}
