@@ -17,7 +17,7 @@ function createServer(options={}){
   social=dataDir?createSocial(dataDir):null,clubs=dataDir?createClubs(dataDir):null,
   parties=dataDir?createParties({social,exists:name=>accounts.reserved(name),
    clubForUser:user=>clubs?.membership(user)?.id||null}):null,
-  authHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
+  authHits=new Map(),securityHits=new Map(),clubHits=new Map(),partyHits=new Map(),partyPending=new Map();
  // Room invitations are ephemeral: only a live room participant may share
  // an existing room with a mutually accepted friend. Never persist room links.
  const friendInvites=new Map(),socialHits=new Map(),INVITE_TTL=5*60000;
@@ -198,6 +198,55 @@ function createServer(options={}){
    return json(503,{error:'Account data export could not be prepared safely.'});
   }
  }
+ // Account-owned security controls: current password required, bearer identity
+ // derived solely from the validated token. Other sessions become invalid at
+ // the durable password/session update and connected sockets then close.
+ function accountSecurityApi(req,res){
+  const json=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8',
+   'Cache-Control':'no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff'});
+   res.end(JSON.stringify(value));};
+  if(req.method!=='POST')return json(405,{error:'POST required.'});
+  const authorization=req.headers.authorization||'';
+  if(typeof authorization!=='string'||!authorization.startsWith('Bearer '))
+   return json(401,{error:'Sign in to manage account security.'});
+  const token=authorization.slice(7),username=accounts.user(token);
+  if(!username)return json(401,{error:'Session expired. Sign in again.'});
+  const key=username.toLowerCase()+':'+(req.socket.remoteAddress||'');
+  const now=Date.now(),hits=(securityHits.get(key)||[]).filter(at=>now-at<600000);
+  if(hits.length>=12)return json(429,{error:'Too many security requests. Try again later.'});
+  hits.push(now);securityHits.set(key,hits);
+  if(securityHits.size>2000)for(const [id,values]of securityHits)
+   if(values.every(at=>now-at>600000))securityHits.delete(id);
+  let body='',exceeded=false;req.setEncoding('utf8');
+  req.on('data',chunk=>{if(!exceeded){body+=chunk;if(body.length>512){body='';exceeded=true;}}});
+  req.on('end',()=>{
+   if(exceeded)return json(413,{error:'Security request too large.'});
+   try{
+    const data=JSON.parse(body||'{}');
+    if(!data||typeof data!=='object'||Array.isArray(data)||
+       !['changePassword','logoutOthers'].includes(data.action)||
+       typeof data.currentPassword!=='string')throw Error('Invalid security request.');
+    const result=accounts.security(token,data.currentPassword,
+      data.action==='changePassword'?data.newPassword: null);
+    json(200,{ok:true,username:result.username,changed:result.changed,
+     revoked:result.revoked,...(result.token?{token:result.token}:{})});
+    // Keep online identity and match authority consistent with revoked bearer
+    // tokens. Every obsolete live socket is disconnected; the fresh browser
+    // session receives its rotated token from the HTTP response.
+    const timer=setTimeout(()=>{
+     for(const ws of clients){
+      if(ws.readyState!==1||ws.account?.toLowerCase()!==username.toLowerCase()||
+         accounts.user(ws.accountToken))continue;
+      send(ws,{type:'sessionRevoked',reason:'Your account session was revoked. Sign in again.'});
+      ws.close(4004,'Account session revoked');
+     }
+    },200);
+    timer.unref?.();
+   }catch(error){
+    json(400,{error:typeof error?.message==='string'?error.message:'Security update failed.'});
+   }
+  });
+ }
  // Account API: same-origin JSON, small bodies, 20 attempts per IP per 10 minutes.
  function accountApi(req,res,route){const json=(code,body)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body));};
   if(route==='/api/me'){const token=(req.headers.authorization||'').replace(/^Bearer /,'');const name=accounts.user(token);json(name?200:401,name?{username:name}:{error:'Not logged in.'});return;}
@@ -223,7 +272,7 @@ function createServer(options={}){
   if(req.method!=='POST'){json(405,{error:'POST required.'});return;}
   const ip=req.socket.remoteAddress||'',now=Date.now(),hits=(authHits.get(ip)||[]).filter(t=>now-t<600000);if(hits.length>=20){json(429,{error:'Too many attempts. Try again later.'});return;}hits.push(now);authHits.set(ip,hits);
   let body='';req.setEncoding('utf8');req.on('data',c=>{body+=c;if(body.length>4096)req.destroy();});req.on('end',()=>{try{const d=JSON.parse(body||'{}');if(route==='/api/logout'){accounts.logout(d.token);json(200,{ok:true});return;}const out=route==='/api/register'?accounts.register(d.username,d.password):accounts.login(d.username,d.password);json(200,out);}catch(e){json(400,{error:e.message});}});}
- const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/account/export'){accountExportApi(req,res);return;}if(route==='/api/quick-match/availability'){
+ const server=http.createServer((req,res)=>{const route=req.url?.split('?')[0];if(['/api/social','/api/social/invite'].includes(route)){socialApi(req,res,route);return;}if(route==='/api/clubs'){clubApi(req,res);return;}if(route==='/api/party'){partyApi(req,res);return;}if(route==='/api/account/export'){accountExportApi(req,res);return;}if(route==='/api/account/security'){accountSecurityApi(req,res);return;}if(route==='/api/quick-match/availability'){
    if(req.method!=='GET'){res.writeHead(405,{'Cache-Control':'no-store'});res.end();return;}
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(quickMatch.availability()));return;
