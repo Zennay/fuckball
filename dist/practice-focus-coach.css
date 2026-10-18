@@ -1,0 +1,34 @@
+/* Device-private, source-backed training focus rather than ranked claims. */
+.practice-focus-coach{margin:21px 0 33px;padding:clamp(16px,3vw,26px);border:1px solid #71958a;
+ border-radius:16px;background:linear-gradient(125deg,#152f36,#254139 75%);color:#ebf7e7;display:grid;gap:18px}
+.practice-focus-heading{display:grid;gap:6px}
+.practice-focus-kicker{font-size:11px;letter-spacing:.12em;color:#c8f2a4;font-weight:800}
+.practice-focus-heading h2{font-size:clamp(22px,3vw,34px);font-weight:900;letter-spacing:-.04em;margin:0}
+.practice-focus-heading p,.practice-focus-summary{font-size:13px;line-height:1.6;color:#c2dbd0;margin:0}
+.practice-focus-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.practice-focus-card{display:grid;align-content:start;gap:9px;border:1px solid #628a7d;border-radius:13px;
+ background:#18353b;padding:16px;min-width:0}
+.practice-focus-card h3{font-size:15px;color:#e6fcce;margin:0}
+.practice-focus-rate{font-size:clamp(22px,2.5vw,31px);font-variant-numeric:tabular-nums;color:#f5ffe6}
+.practice-focus-card p{font-size:12px;color:#c2dad3;line-height:1.5;margin:0}
+.practice-focus-meter{height:9px;border-radius:99px;background:#375b58;overflow:hidden}
+.practice-focus-meter span{height:100%;display:block;background:#c6f49b;border-radius:99px}
+.practice-focus-comparison{color:#bedbd1;font-size:11px;line-height:1.5}
+.practice-focus-card button,.practice-focus-actions button,.practice-focus-next-actions button{
+ border:1px solid #87a99a;background:#315148;color:#f2ffe8;
+ border-radius:9px;padding:10px 14px;min-height:44px;font:750 13px system-ui,sans-serif;
+ cursor:pointer}
+.practice-focus-card button{margin-top:auto}
+.practice-focus-next{display:grid;gap:11px;padding:16px;background:#315348;border:1px solid #9cc098;border-radius:12px}
+.practice-focus-next-heading{font-size:12px;letter-spacing:.075em;color:#e6ffb7}
+.practice-focus-next-text{font-size:13px;line-height:1.65;margin:0;color:#e4f4e3}
+.practice-focus-next-actions,.practice-focus-actions{display:flex;gap:10px;flex-wrap:wrap}
+.practice-focus-next-actions .primary{background:#d2f7a0;border-color:#d2f7a0;color:#15332b}
+.practice-focus-actions button:disabled{opacity:.5;cursor:not-allowed}
+.practice-focus-status{min-height:18px;color:#e2ffbb;font-size:12px;line-height:1.5;margin:0}
+.practice-focus-coach :is(button):focus-visible{outline:3px solid #dfffac;outline-offset:3px}
+.practice-focus-coach :is(button):hover:not(:disabled){filter:brightness(1.11)}
+@media(max-width:900px){.practice-focus-cards{grid-template-columns:1fr}}
+@media(max-width:550px){.practice-focus-next-actions button,.practice-focus-actions button{flex:1 1 100%}
+ .practice-focus-card{padding:13px}.practice-focus-next{padding:12px}}
+@media print{.practice-focus-actions,.practice-focus-next-actions{display:none!important}}
