@@ -40,7 +40,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   disconnect();showView('home');notify(reason);return;
  }
  if(d.type==='roomControl'){
-  if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,clubOnly:d.clubOnly===true,canClubLock:d.canClubLock===true,owner:d.owner,
+  if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,clubOnly:d.clubOnly===true,canClubLock:d.canClubLock===true,owner:d.owner,accountsOnly:d.accountsOnly===true,
+    maxHumans:[8,12,16,24,64].includes(d.maxHumans)?d.maxHumans:64,
+    connectedHumans:Number.isSafeInteger(d.connectedHumans)?d.connectedHumans:0,
     chatMuteUntil:Number.isSafeInteger(d.chatMuteUntil)&&d.chatMuteUntil>Date.now()?d.chatMuteUntil:null,
     chatMutes:Array.isArray(d.chatMutes)&&d.chatMutes.length<=128?d.chatMutes.filter(m=>Array.isArray(m)&&m.length===2&&Number.isSafeInteger(m[0])&&m[0]>0&&Number.isSafeInteger(m[1])&&m[1]>Date.now()):[]};
   window.renderCustomRoomAdmin?.();window.renderNativeChatMute?.();return;
