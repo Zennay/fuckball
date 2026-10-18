@@ -1,0 +1,32 @@
+/* Private account friends and room invitation panel. No room overlay obstruction. */
+.main-nav button[aria-label^="Friends"]{white-space:nowrap}
+.social-dialog{
+ width:min(860px,calc(100vw - 24px));max-width:calc(100vw - 24px);
+ max-height:min(94dvh,900px);padding:0;border:1px solid #829786;
+ border-radius:18px;background:#13262a;color:#eaf4e7;
+ box-shadow:0 30px 100px #000a;overflow:auto;z-index:220;
+}
+.social-dialog::backdrop{background:#061218d9}
+.social-shell{padding:clamp(17px,4vw,36px);display:grid;gap:17px}
+.social-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.social-head h2{font-size:clamp(32px,5vw,54px);letter-spacing:-.07em;font-style:italic;margin:0}
+.social-head button{width:42px;height:42px;border-radius:10px;border:1px solid #738f86;background:#243b3c;color:#f0f5ea;font-size:27px}
+.social-intro{margin:0;color:#a8bdb9;max-width:700px;line-height:1.6;font-size:13px}
+.social-status{min-height:18px;margin:0;color:#d7edc9;font-size:13px}
+.social-add{display:flex;gap:10px;flex-wrap:wrap}
+.social-add[hidden]{display:none}
+.social-add input{flex:1 1 190px;min-width:0;min-height:43px;background:#0b1d23;color:#eaf5ee;border:1px solid #829789;border-radius:8px;padding:10px 13px;font-size:14px}
+.social-add button{min-height:43px;padding:9px 17px;border-radius:8px}
+.social-grids{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.social-group{border:1px solid #49615d;background:#1c3034;border-radius:12px;padding:17px;min-width:0}
+.social-group h3{font-size:14px;margin:0 0 5px;color:#dcf7bc;letter-spacing:.035em}
+.social-group>p{font-size:11px;line-height:1.55;color:#a6beb8;margin:0 0 16px}
+.social-rows{display:grid;gap:8px}
+.social-row{border-radius:8px;background:#102328;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;min-width:0;flex-wrap:wrap}
+.social-row strong{font-size:12px;font-weight:650;color:#ecf4e9;overflow-wrap:anywhere}
+.social-row-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.social-row-actions button{padding:8px 10px;border:1px solid #91b7a3;background:#2c4941;border-radius:7px;color:#def6dd;font-size:11px;cursor:pointer}
+.social-row-actions button.social-danger{background:#422c32;border-color:#98676c;color:#ffd4d6}
+.social-dialog button:focus-visible,.social-dialog input:focus-visible,.main-nav button[aria-label^="Friends"]:focus-visible{outline:3px solid #cbea92;outline-offset:2px}
+@media(max-width:660px){.social-grids{grid-template-columns:1fr}.social-dialog{max-height:94dvh}.social-row{align-items:flex-start;flex-direction:column}.social-add button{flex:1}}
+@media(prefers-reduced-transparency:reduce){.social-dialog{background:#13262a}}
