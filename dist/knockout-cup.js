@@ -154,15 +154,47 @@
   const deleteButton=btn('Delete cup',deleteCup,'knockout-delete');
   toolbar.append(picker,add,exportButton,csvButton,calendarButton,printButton,importButton,deleteButton,importFile);
   const summary=el('div',null,'knockout-progress');
+  const seriesHandoff=el('section',null,'knockout-series-handoff');
+  const seriesLead=el('div',null,'knockout-series-handoff-copy');
+  seriesLead.append(el('strong','⚔ TURN A CUP FINAL INTO A BEST-OF SERIES'),
+    el('p','When both finalists are known, create a separate private series. Cup results are never copied, replaced or verified.'));
+  const seriesActions=el('div',null,'knockout-series-handoff-actions');
+  const seriesFormat=el('select');
+  seriesFormat.setAttribute('aria-label','Best-of length for a separate cup-final series');
+  for(const n of [3,5,7])seriesFormat.add(new Option('Best of '+n,String(n)));
+  const makeSeries=btn('Create final series',()=>{
+   const selected=current();
+   if(!selected)return info('Select a private knockout cup first.');
+   if(localStorage.getItem(KEY)!==storageSnapshot)
+    return info('Cup data changed in another tab. Refresh before creating its final series.');
+   const teams=resolve(selected,roundsFor(selected.teams.length)-1,0);
+   if(teams.home===null||teams.away===null)
+    return info('Play the previous cup rounds to determine both finalists first.');
+   const bestOf=Number(seriesFormat.value);
+   if(![3,5,7].includes(bestOf))return info('Choose best of 3, 5 or 7.');
+   const homeTeam=selected.teams[teams.home],awayTeam=selected.teams[teams.away];
+   if(!window.confirm('Create a NEW, separate best-of-'+bestOf+' series for '+
+     homeTeam+' vs '+awayTeam+'? No cup result is copied or altered; all new games begin unplayed and unverified.'))return;
+   window.dispatchEvent(new CustomEvent('fuckball:create-private-series',{
+    detail:{sourceId:selected.id,sourceName:selected.name,red:homeTeam,blue:awayTeam,bestOf}
+   }));
+  });
+  seriesActions.append(seriesFormat,makeSeries);
+  seriesHandoff.append(seriesLead,seriesActions);seriesHandoff.hidden=true;
   const bracket=el('div',null,'knockout-bracket');bracket.setAttribute('aria-label','Knockout bracket');
   const notification=el('p',null,'knockout-message');notification.setAttribute('role','status');notification.setAttribute('aria-live','polite');
-  body.append(description,toolbar,setup,summary,bracket,notification);
+  body.append(description,toolbar,setup,summary,seriesHandoff,bracket,notification);
   section.append(title,body);main.append(section);
   const anchor=home.querySelector('.tournament-desk')||home.querySelector('.formation-studio')||
     home.querySelector('.mode-cards');
   if(anchor)anchor.insertAdjacentElement('afterend',main);else home.append(main);
   const info=text=>{message=text;notification.textContent=text;};
   picker.onchange=()=>{active=picker.value;message='';render();};
+  window.addEventListener('fuckball:private-series-created',event=>{
+   if(event.detail?.ok===true)info('Separate private best-of series created. Cup progress stays unchanged.');
+   else if(event.detail?.ok===false)info('Best-of series was not created: '+
+    String(event.detail.reason||'Local storage unavailable.').slice(0,160));
+  });
   function roundName(round,total){
     const entrants=total/(2**round);
     if(entrants===2)return 'FINAL';
@@ -186,6 +218,12 @@
     const meter=el('progress');meter.max=c.matches.length;meter.value=complete;meter.setAttribute('aria-label','Cup progress');
     summary.append(meter);
     if(final!==null)summary.append(el('strong','🏆 '+c.teams[final]+' · manually recorded cup winner','knockout-winner'));
+    const finalists=resolve(c,roundsFor(c.teams.length)-1,0);
+    seriesHandoff.hidden=finalists.home===null||finalists.away===null;
+    if(!seriesHandoff.hidden){
+     seriesLead.querySelector('p').textContent='Finalists: '+c.teams[finalists.home]+' vs '+
+      c.teams[finalists.away]+'. New series games start unplayed; this cup stays unchanged.';
+    }
     const cols=el('div',null,'knockout-rounds');
     for(let round=0;round<roundsFor(c.teams.length);round++){
       const column=el('section',null,'knockout-round');
