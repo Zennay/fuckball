@@ -1,0 +1,9 @@
+/* Optional field-only video capture, separate from HBR2 replay archive. */
+.replay-controls .replay-clip-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;flex-basis:100%;padding:7px 0 0}
+.replay-clip-tools button{background:#243d40;border:1px solid #739a8e;border-radius:8px;padding:10px 14px;min-height:38px;font-size:11px;color:#ecf9e8;font-weight:750}
+.replay-clip-tools button:hover:not(:disabled){background:#365a4e}
+.replay-clip-tools button:nth-child(2){border-color:#bb8b7e;color:#ffcbba}
+.replay-clip-tools button:disabled{opacity:.45;cursor:default}
+.replay-clip-status{font-size:11px;color:#bad3c5;line-height:1.45;flex:1 1 200px}
+.replay-clip-tools button:focus-visible{outline:3px solid #d9f7a6;outline-offset:3px}
+@media(max-width:580px){.replay-clip-tools button{flex:1 1 auto}.replay-clip-status{flex-basis:100%}}
