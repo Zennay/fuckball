@@ -11,6 +11,32 @@
   {id:'matches',name:'Match experience',key:'fuckball.local-practice-journal.v1',limit:30,tab:null,type:'match'}
  ];
  const defaultGoals={goals:3,team:2,matches:2};
+ const FIRST_TOUCH_KEY='fuckball.first-play-guide.v1',GOAL_BEST_KEY='fuckball-local-goal-rush-v1';
+ const GOAL_DURATIONS=['60','120','180'];
+ function readMilestones(){
+  const first=readJson(FIRST_TOUCH_KEY),best=readJson(GOAL_BEST_KEY),goalRushBest={};
+  for(const duration of GOAL_DURATIONS)
+   if(best&&Number.isSafeInteger(best[duration])&&best[duration]>=0&&best[duration]<=999)
+    goalRushBest[duration]=best[duration];
+  return{firstTouchAt:first?.version===1&&Number.isSafeInteger(first.at)&&first.at>0&&
+   first.at<=Date.now()+86400000?first.at:null,goalRushBest};
+ }
+ function snapshotMilestones(value){
+  if(value===undefined)return{firstTouchAt:null,goalRushBest:{}}; // old v1 export
+  if(!value||typeof value!=='object'||Array.isArray(value)||
+   !(value.firstTouchAt===null||(Number.isSafeInteger(value.firstTouchAt)&&
+     value.firstTouchAt>0&&value.firstTouchAt<=Date.now()+86400000))||
+   !value.goalRushBest||typeof value.goalRushBest!=='object'||
+   Array.isArray(value.goalRushBest))throw Error('Invalid private practice milestones.');
+  const goalRushBest={};
+  for(const [duration,result] of Object.entries(value.goalRushBest)){
+   if(!GOAL_DURATIONS.includes(duration)||!Number.isSafeInteger(result)||result<0||result>999)
+    throw Error('Invalid Goal Rush personal best in backup.');
+   goalRushBest[duration]=result;
+  }
+  return{firstTouchAt:value.firstTouchAt,goalRushBest};
+ }
+
  const section=document.createElement('section');section.className='practice-weekly-plan';
  section.setAttribute('aria-label','Your private weekly practice plan');
  const top=document.createElement('div');top.className='practice-plan-top';
@@ -181,7 +207,7 @@
   if(!Object.values(streams).some(a=>a.length))return;
   const pack={format:'fuckball-personal-practice-snapshot',version:1,
    source:'device-local-unverified-practice',exportedAt:new Date().toISOString(),
-   targets:goals(),sessions:streams,
+   targets:goals(),sessions:streams,milestones:readMilestones(),
    note:'Personal backup only. Source records are not signed or online ranked results.'};
   const url=URL.createObjectURL(new Blob([JSON.stringify(pack,null,2)],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;
@@ -228,7 +254,7 @@
   }
   if(Object.keys(data.sessions).some(key=>!SOURCES.some(x=>x.id===key)))
    throw Error('Unknown session type in practice backup.');
-  return{targets,streams};
+  return{targets,streams,milestones:snapshotMilestones(data.milestones)};
  }
  function mergeSnapshot(snapshot){
   const updates=new Map(),changes={};let added=0,skipped=0;
