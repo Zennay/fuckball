@@ -10,7 +10,7 @@ function b64(bytes){if(typeof Buffer!=='undefined')return Buffer.from(bytes).toS
 /* opts: {hb, id, AI, Netcode, v3=true, send(clientId, objectOrUint8Array), canSend(clientId)} */
 function createRoomCore(opts){
  const {hb,AI,Netcode}=opts,send=opts.send,canSend=opts.canSend||(()=>true),API=hb._runtime.API;
- const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map(),subSeq:0,captains:new Map(),activeFrames:new Map(),sideFrames:new Map(),subEvents:[],disconnected:new Set(),round:0,lastResult:null,rematch:null,rematchSeq:0};
+ const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map(),subSeq:0,captains:new Map(),referee:0,activeFrames:new Map(),sideFrames:new Map(),subEvents:[],disconnected:new Set(),round:0,lastResult:null,rematch:null,rematchSeq:0};
  const broadcast=data=>{for(const id of r.clients.keys())send(id,data);};
  // Expired consent requests must never hold a side's substitution slot forever.
  // This cleanup also applies to accepted requests waiting for a later pause.
@@ -25,7 +25,7 @@ function createRoomCore(opts){
   try{opts.onCompleted?.(r.lastResult,r);}catch{}
   broadcast({type:'matchResult',...r.lastResult});status();snapshot();
  };
- function status(){expireSubs();if(r.rematch&&Date.now()>r.rematch.expiresAt)r.rematch=null;broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size-r.disconnected.size,reserved:r.disconnected.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),round:r.round,lastResult:r.lastResult,rematch:r.rematch?{id:r.rematch.id,required:[...r.rematch.required],accepted:[...r.rematch.accepted],expiresAt:r.rematch.expiresAt}:null,disconnectedIds:[...r.disconnected],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
+ function status(){expireSubs();if(r.rematch&&Date.now()>r.rematch.expiresAt)r.rematch=null;broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size-r.disconnected.size,reserved:r.disconnected.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],referee:r.referee,activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),round:r.round,lastResult:r.lastResult,rematch:r.rematch?{id:r.rematch.id,required:[...r.rematch.required],accepted:[...r.rematch.accepted],expiresAt:r.rematch.expiresAt}:null,disconnectedIds:[...r.disconnected],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
  // The same preflight is required for BOTH match configuration and live
  // difficulty changes. Never mutate a running room before reading user data.
  function normalizeProfile(raw){
@@ -67,7 +67,7 @@ function createRoomCore(opts){
   hb.addPlayer(id,c.name,assigned);
   send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
- function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.sideFrames.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.sideFrames.delete(id);if(r.referee===id)r.referee=0;for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
  // A disconnected participant retains their reserved team slot during a short reconnection window.
  // No buffered/previous input or disconnected time may affect the live match.
  function setConnected(id,connected){if(!r.clients.has(id))return false;r.rematch=null;
@@ -81,7 +81,7 @@ function createRoomCore(opts){
   const p=r.pendingSubs.get(team);if(!p||!p.accepted)return false;
   if(r.started&&!r.paused)return false;
   const valid=Date.now()<=p.expiresAt&&r.clients.has(p.inId)&&r.clients.has(p.outId)&&
-   r.clients.has(p.requestedBy)&&!r.disconnected.has(p.outId)&&!r.disconnected.has(p.inId)&&(p.requestedBy===r.owner||r.captains.get(team)===p.requestedBy)&&
+   r.clients.has(p.requestedBy)&&!r.disconnected.has(p.requestedBy)&&!r.disconnected.has(p.outId)&&!r.disconnected.has(p.inId)&&(p.requestedBy===r.owner||r.captains.get(team)===p.requestedBy||r.referee===p.requestedBy)&&
    r.benches.get(p.inId)===team&&hb.getPlayer(p.inId)?.team===0&&hb.getPlayer(p.outId)?.team===team;
   r.pendingSubs.delete(team);
   if(!valid)return false;
@@ -127,14 +127,24 @@ function createRoomCore(opts){
   if(d.type==='subRequest'){
    if(!Number.isSafeInteger(d.outId)||!Number.isSafeInteger(d.inId)||d.outId===d.inId||!r.clients.has(d.outId)||!r.clients.has(d.inId)||r.disconnected.has(d.outId)||r.disconnected.has(d.inId))throw Error('Invalid substitution participants.');
    const team=hb.getPlayer(d.outId)?.team;
-   if(r.owner!==id&&r.captains.get(team)!==id)throw Error('Only host or own-team captain may request a substitution.');
+   if(r.owner!==id&&r.referee!==id&&r.captains.get(team)!==id)throw Error('Only host, referee or own-team captain may request a substitution.');
    if(![1,2].includes(team)||hb.getPlayer(d.inId)?.team!==0||r.benches.get(d.inId)!==team)throw Error('Incoming player must be on the outgoing team bench.');
    expireSubs();if(r.pendingSubs.has(team))throw Error('Substitution already pending for this side.');
    if(!Number.isSafeInteger(r.subSeq+1))throw Error('Substitution request sequence exhausted.');
    r.pendingSubs.set(team,{team,outId:d.outId,inId:d.inId,requestedBy:id,requestId:++r.subSeq,accepted:false,expiresAt:Date.now()+60000});
    status();return;
   }
-  if(r.owner!==id)throw Error('Only the host can change the match.');
+  if(d.type==='appointReferee'){
+   if(id!==r.owner)throw Error('Only the room owner can appoint a referee.');
+   if(!Number.isSafeInteger(d.id)||d.id<0)throw Error('Invalid referee selection.');
+   if(d.id!==0&&(!r.clients.has(d.id)||r.disconnected.has(d.id)||hb.getPlayer(d.id)?.team!==0||r.benches.has(d.id)))
+    throw Error('Referee must be a connected neutral spectator, not an active player or team substitute.');
+   const previous=r.referee;r.referee=d.id;
+   if(previous!==d.id)for(const [team,p]of r.pendingSubs)if(p.requestedBy===previous)r.pendingSubs.delete(team);
+   status();return;
+  }
+  const refereeAction=r.referee===id&&!r.disconnected.has(id)&&['start','stop','pause','newGame','rematchRequest'].includes(d.type);
+  if(r.owner!==id&&!refereeAction)throw Error('Only room owner can change roster or room settings.');
   if(d.type==='rematchRequest'){
    if(r.started||!r.lastResult||r.lastResult.round!==r.round)throw Error('Finish the current game before requesting a rematch.');
    if(r.rematch&&Date.now()<=r.rematch.expiresAt)throw Error('Rematch already pending.');
@@ -162,13 +172,13 @@ function createRoomCore(opts){
   if(d.type==='bench'){
    if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||r.disconnected.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
    for(const [team,p]of r.pendingSubs)if(p.inId===d.id||p.outId===d.id)r.pendingSubs.delete(team);
-   if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
+   if(d.team===0)r.benches.delete(d.id);else{if(r.referee===d.id)r.referee=0;r.benches.set(d.id,d.team);}
    status();return;
   }
   if(d.type==='difficulty'){if(typeof d.difficulty!=='string'||!Object.hasOwn(AI.levels,d.difficulty))throw Error('Invalid difficulty.');const profile=normalizeProfile(d.teamProfile);const levels=normalizeBotLevels(d.botLevels);r.difficulty=d.difficulty;r.botLevels=levels;r.teamProfile=profile;status();return;}
   if(d.type==='team'){const pid=Number(d.id),team=Number(d.team);if(![0,1,2].includes(team)||!hb.getPlayer(pid))throw Error('Invalid player.');
    if(team!==0&&hb.getPlayer(pid).team!==team&&hb.getPlayerList().filter(p=>p.team===team&&p.id!==pid).length>=4)throw Error('Team is full; move an active player to the bench first.');
-   const previous=hb.getPlayer(pid).team;for(const [side,p]of r.pendingSubs)if(p.inId===pid||p.outId===pid)r.pendingSubs.delete(side);
+   const previous=hb.getPlayer(pid).team;if(r.referee===pid&&team!==0)r.referee=0;for(const [side,p]of r.pendingSubs)if(p.inId===pid||p.outId===pid)r.pendingSubs.delete(side);
    if(team!==previous&&r.captains.get(previous)===pid)r.captains.delete(previous);
    hb.setPlayerTeam(pid,team);
    if(team===0&&[1,2].includes(previous)&&r.clients.has(pid))r.benches.set(pid,previous);
@@ -205,10 +215,10 @@ function createRoomCore(opts){
   hb.step(1);r.frame++;if(r.frame%60===0){if(expireSubs())status();if(r.started&&!r.paused)broadcast({type:'playingTime',frame:r.frame,activeFrames:[...r.activeFrames]});}if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
  /* final: the room really moves (a recording cannot move with it); standby copies leave it running. */
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
-  return{v:1,recording:!final&&recording,round:r.round,lastResult:r.lastResult,rematchSeq:r.rematchSeq,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],sideFrames:[...r.sideFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
+  return{v:1,recording:!final&&recording,round:r.round,lastResult:r.lastResult,rematchSeq:r.rematchSeq,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],captains:[...r.captains],referee:r.referee,activeFrames:[...r.activeFrames],sideFrames:[...r.sideFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
  function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
-  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.round=Number.isSafeInteger(s.round)&&s.round>=0?s.round:0;r.lastResult=s.lastResult&&s.lastResult.round===r.round?s.lastResult:null;r.rematchSeq=Number.isSafeInteger(s.rematchSeq)&&s.rematchSeq>=0?s.rematchSeq:0;r.rematch=null;r.clients.clear();r.disconnected.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
+  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.round=Number.isSafeInteger(s.round)&&s.round>=0?s.round:0;r.lastResult=s.lastResult&&s.lastResult.round===r.round?s.lastResult:null;r.rematchSeq=Number.isSafeInteger(s.rematchSeq)&&s.rematchSeq>=0?s.rematchSeq:0;r.rematch=null;r.clients.clear();r.disconnected.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.referee=0;r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
   // Legacy states can omit botIds; their connected client roster still proves
   // which high numeric IDs are people. New exports carry explicit bot IDs.
   r.botIds=new Set(Array.isArray(s.botIds)?s.botIds:hb._room.state.players.filter(p=>p.id>=100&&!humanIds.has(p.id)).map(p=>p.id));
@@ -217,6 +227,7 @@ function createRoomCore(opts){
   // from the exported room, never infer it from an id threshold.
   for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);AI.setMemory?.(hb._room.state,s.ai);
   for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);for(const entry of s.captains||[])if(Array.isArray(entry)&&entry.length===2&&[1,2].includes(entry[0])&&r.clients.has(entry[1])&&hb.getPlayer(entry[1])?.team===entry[0])r.captains.set(entry[0],entry[1]);for(const entry of s.activeFrames||[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&entry[0]>0&&Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<=r.frame)r.activeFrames.set(entry[0],entry[1]);
+  if(Number.isSafeInteger(s.referee)&&r.clients.has(s.referee)&&hb.getPlayer(s.referee)?.team===0&&!r.benches.has(s.referee))r.referee=s.referee;
   for(const [id,sides] of s.sideFrames||[])if(r.clients.has(id)&&Array.isArray(sides)&&sides.length===2&&sides.every(v=>Number.isSafeInteger(v)&&v>=0)&&sides[0]+sides[1]===(r.activeFrames.get(id)||0))r.sideFrames.set(id,sides);
   // Completed swap receipts are bounded match history, not pending authority.
   // Never restore consent grants from another browser's handover payload.
