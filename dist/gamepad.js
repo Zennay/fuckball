@@ -106,5 +106,9 @@
   requestAnimationFrame(frame);
  }
  window.fuckballGamepad={read};
+ // App blur/visibility handlers deliberately release input; reapply the
+ // held controller state after focus even when its axes never changed.
+ window.addEventListener('focus',()=>{lastSignature='';});
+ document.addEventListener('visibilitychange',()=>{lastSignature='';});
  requestAnimationFrame(frame);
 })();
