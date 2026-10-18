@@ -328,6 +328,17 @@
       save([...cups,copy]);active=copy.id;message='Backup restored as a separate local cup.';render();
     }catch(error){info('Import refused: '+(error.message||'Invalid cup backup.'));}
   };
+  window.addEventListener('fuckball:open-private-competition',event=>{
+    const ref=event.detail;
+    if(ref?.type!=='Knockout'||typeof ref.id!=='string')return;
+    const selected=cups.find(c=>c.id===ref.id);
+    if(!selected)return info('This private cup no longer exists.');
+    active=selected.id;message='Opened '+selected.name+' · results are manually entered.';
+    section.open=true;render();
+    main.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+      'auto':'smooth',block:'start'});
+    picker.focus({preventScroll:true});
+  });
   // External Matchday Hub actions only locate the existing private cup form.
   // They cannot write results or bypass qualifying teams/tiebreak validation.
   window.addEventListener('fuckball:open-private-cup-fixture',event=>{
