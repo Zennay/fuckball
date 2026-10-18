@@ -3,7 +3,7 @@
 // not authenticated server results, ranked history, or a cloud synchronization API.
 (function(){
  const MAX_ITEMS=30,MAX_TOTAL=160*1024*1024,MAX_FILE=32*1024*1024;
- const MAX_ZIP=192*1024*1024,MAX_MANIFEST=65536;
+ const MAX_ZIP=192*1024*1024,MAX_MANIFEST=262144;
  const archiveFile=document.createElement('input');
  archiveFile.type='file';archiveFile.accept='.zip,application/zip';archiveFile.hidden=true;
  archiveFile.id='gamesBackupFile';document.body.append(archiveFile);
@@ -12,7 +12,7 @@
  const exportButton=document.createElement('button');
  exportButton.type='button';exportButton.className='games-backup-button';
  exportButton.textContent='↓ Backup all · ZIP';
- exportButton.title='Export local HBR2 recordings, bookmarks, tags and coaching reviews';
+ exportButton.title='Export local HBR2 recordings, bookmarks, tags and time-specific coaching notes';
  const importButton=document.createElement('button');
  importButton.type='button';importButton.className='games-backup-button';
  importButton.textContent='↑ Restore ZIP';
@@ -64,7 +64,8 @@
     size:bytes.length,favorite:item.favorite===true,
     bookmarks:ReplayLibrary.normalizeBookmarks(item.bookmarks,item.frames),
     tags:ReplayLibrary.normalizeTags(item.tags),
-     review:ReplayLibrary.normalizeReview(item.review),sha256:await sha256(bytes)});
+     review:ReplayLibrary.normalizeReview(item.review),
+     notes:ReplayLibrary.normalizeNotes(item.notes,item.frames),sha256:await sha256(bytes)});
    gamesMessage('Preparing backup '+(i+1)+' / '+items.length+'…');
   }
   const manifest=JSON.stringify({format:'fuckball-local-replays',version:1,entries});
@@ -97,6 +98,7 @@
     // The frame count is checked against the actual HBR2 after decompression.
     ReplayLibrary.normalizeBookmarks(entry.bookmarks);
     ReplayLibrary.normalizeTags(entry.tags);ReplayLibrary.normalizeReview(entry.review);
+    ReplayLibrary.normalizeNotes(entry.notes);
     const zipped=zip.file(entry.path);
     if(!zipped||zipSize(zipped)!==entry.size)throw Error('Backup replay is missing or has an invalid size.');
     paths.add(entry.path);
@@ -124,7 +126,8 @@
     throw Error('Replay checksum mismatch: '+normalizedName(entry.name));
    let recording;
    try{recording=ReplayLibrary.parseRecording(bytes);}catch{throw Error('Invalid HBR2 replay: '+normalizedName(entry.name));}
-   try{ReplayLibrary.normalizeBookmarks(entry.bookmarks,recording.frames);ReplayLibrary.normalizeTags(entry.tags);ReplayLibrary.normalizeReview(entry.review);}
+   try{ReplayLibrary.normalizeBookmarks(entry.bookmarks,recording.frames);ReplayLibrary.normalizeTags(entry.tags);ReplayLibrary.normalizeReview(entry.review);
+    ReplayLibrary.normalizeNotes(entry.notes,recording.frames);}
    catch{throw Error('Invalid bookmarks in replay: '+normalizedName(entry.name));}
    const normalized=normalizedName(entry.name);
    let duplicate=false;
@@ -150,7 +153,7 @@
     const item=prepared[i],saved=await ReplayLibrary.save(item.bytes,item.name);
     inserted.push(saved.id);
     await ReplayLibrary.restoreDetails(saved.id,{createdAt:item.entry.createdAt,favorite:item.entry.favorite,
-     bookmarks:item.entry.bookmarks,tags:item.entry.tags,review:item.entry.review});
+     bookmarks:item.entry.bookmarks,tags:item.entry.tags,review:item.entry.review,notes:item.entry.notes});
     gamesMessage('Restoring '+(i+1)+' / '+prepared.length+'…');
    }
   }catch(error){
