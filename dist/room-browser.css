@@ -47,3 +47,13 @@
  border:1px solid #5b8978;border-radius:10px;background:#254038}
 .room-browser-saved-card .room-browser-actions button{min-height:41px}
 .room-browser-actions button[aria-pressed="true"]{background:#365d3a;border-color:#acda8a;color:#e4ffcb}
+
+/* Public-only room discovery; no private links or game-server bypass. */
+.room-browser-tools .room-browser-find{
+ border:1px solid #a9d7a1;background:#d3eeae;color:#193229;
+ font-weight:900;min-height:44px
+}
+.room-browser-tools .room-browser-find:disabled{opacity:.6;cursor:progress}
+.room-browser-entry[data-public-room]:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+.room-browser-entry .room-browser-actions button:disabled{opacity:.6;cursor:not-allowed}
+@media(max-width:600px){.room-browser-tools .room-browser-find{flex:1 1 100%;min-height:48px}}
