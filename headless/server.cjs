@@ -73,6 +73,7 @@ function createServer(options={}){
     }else if(route==='/api/social'){
      if(typeof data.action!=='string'||typeof data.user!=='string')throw Error('Invalid friend action.');
      social.action(user,data.action,data.user,target=>accounts.reserved(target));
+     if(data.action==='block'||data.action==='unblock')quickMatch.drainAll();
     }else throw Error('Unknown route.');
     return json(200,status());
    }catch(e){return json(400,{error:typeof e?.message==='string'?e.message:'Invalid social request.'});}
@@ -251,7 +252,8 @@ function createServer(options={}){
   }
  }
  const RoomCore=require('../dist/room-core.js'),quickMatch=createQuickMatch({send,start:createMatchedRoom,
-  validAccount:ws=>!!ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase()}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
+  validAccount:ws=>!!ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase(),
+  canShareMatch:(a,b)=>!social||social.canShareMatch(a,b)}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
  /* Peer hosting (docs/netcode-plan.md): the room can run in a player's browser when that gives everyone a
     better connection. This server stays the coordinator: it measures, elects, hands the room over at an
     exact frame, keeps a standby copy plus every input, and takes the room back instantly when the host
