@@ -12,3 +12,8 @@
 .gamepad-preferences output{color:#d4f7a7;font-variant-numeric:tabular-nums}
 .gamepad-preferences select:focus-visible,.gamepad-preferences input:focus-visible{
  outline:3px solid #d4f7a7;outline-offset:3px}
+
+/* Haptics are optional player-owned physical feedback; off by default. */
+.gamepad-haptic-options{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px}
+.gamepad-haptic-options label{display:flex;flex:1 1 185px;align-items:center;gap:8px;font-size:11px}
+.gamepad-haptic-options input[type=checkbox]{width:19px;height:19px;accent-color:#c5f3a4}
