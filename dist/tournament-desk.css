@@ -104,3 +104,20 @@
  .tournament-batch-form{grid-template-columns:1fr}
  .tournament-batch-preview ol{max-height:210px}}
 @media print{.tournament-batch-planner{display:none!important}}
+
+/* Per-team view and portable calendars are private, not authoritative fixtures. */
+.tournament-fixtures-head .tournament-team-picker{display:flex;align-items:center;gap:10px;
+ font-size:.78rem;font-weight:850;letter-spacing:.07em;color:#d5eddd;min-width:0}
+.tournament-team-picker select{font-size:.91rem;min-height:43px;max-width:240px;min-width:150px;
+ text-overflow:ellipsis;letter-spacing:normal}
+.tournament-team-summary{display:grid;gap:8px;margin:14px 0;border:1px solid #84a98a;
+ background:#1a3935;border-radius:12px;padding:16px;line-height:1.45}
+.tournament-team-summary strong{font-size:1.08rem;color:#d5f7aa;overflow-wrap:anywhere}
+.tournament-team-summary span{font-size:.92rem;color:#e0f2e7;overflow-wrap:anywhere}
+.tournament-team-summary small{color:#bad8cd;line-height:1.5}
+@media(max-width:620px){
+ .tournament-fixtures-head .tournament-team-picker{width:100%;justify-content:space-between}
+ .tournament-team-picker select{min-width:0;width:100%;max-width:75%}
+ .tournament-team-summary{padding:12px}}
+@media print{.tournament-team-picker{display:none!important}
+ .tournament-team-summary{background:white;color:#111;border-color:#999}}

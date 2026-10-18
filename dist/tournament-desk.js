@@ -78,7 +78,7 @@
     return {version:1,id:raw.id,name:raw.name,teams,legs:raw.legs,
       createdAt:raw.createdAt,updatedAt:raw.updatedAt,fixtures};
   }
-  let tournaments=[],activeId='',filter='pending',message='';
+  let tournaments=[],activeId='',filter='pending',message='',teamIndex=null;
   // Guard against silently overwriting another tab's tournament edits, or
   // erasing unreadable stored data. A reload/recovery is required on conflict.
   let storageSnapshot=null,storageHealthy=true,recoveryBackupPrepared=false;
@@ -117,8 +117,10 @@
   const add=button('＋ New tournament',()=>{setup.hidden=!setup.hidden;if(!setup.hidden)nameInput.focus();});
   const exportButton=button('↓ Backup JSON',exportJSON);
   const csvButton=button('↓ Table CSV',exportCSV);
-  const scheduleCsv=button('↓ Fixtures CSV',exportFixturesCSV);
-  const calendarButton=button('↓ Calendar ICS',exportCalendar);
+  const scheduleCsv=button('↓ Fixtures CSV',()=>exportFixturesCSV(false));
+  const teamCsv=button('↓ Team CSV',()=>exportFixturesCSV(true));
+  const teamCalendar=button('↓ Team ICS',()=>exportCalendar(true));
+  const calendarButton=button('↓ Calendar ICS',()=>exportCalendar(false));
   const plannerButton=button('🗓 Plan all kickoffs',()=>{
     if(!current())return inform('Create or select a private league first.');
     planner.hidden=!planner.hidden;invalidatePlan();
@@ -127,7 +129,8 @@
   const importButton=button('↑ Restore JSON',()=>upload.click());
   const remove=button('Delete tournament',deleteTournament,'tournament-danger');
   const upload=make('input');upload.type='file';upload.accept='.json,application/json';upload.hidden=true;
-  actions.append(select,add,plannerButton,exportButton,csvButton,scheduleCsv,calendarButton,importButton,remove,upload);
+  actions.append(select,add,plannerButton,exportButton,csvButton,scheduleCsv,calendarButton,
+    teamCsv,teamCalendar,importButton,remove,upload);
   const setup=make('form',null,'tournament-setup');setup.hidden=true;
   const nameInput=make('input');nameInput.required=true;nameInput.maxLength=60;nameInput.value='Weekend cup';
   const teamsInput=make('textarea');teamsInput.required=true;teamsInput.maxLength=480;
@@ -286,6 +289,9 @@
   const homeCards=host.querySelector('.mode-cards');
   if(homeCards)homeCards.insertAdjacentElement('afterend',panel);else host.append(panel);
   const current=()=>tournaments.find(t=>t.id===activeId)||null;
+  // Team view belongs to this tab only; no private roster or account data is collected.
+  const chosenTeam=t=>t&&Number.isSafeInteger(teamIndex)&&teamIndex>=0&&
+    teamIndex<t.teams.length?teamIndex:null;
   function inform(text){message=text;status.textContent=text;}
   const num=n=>String(n).padStart(2,'0');
   function tableFor(t){
@@ -311,6 +317,8 @@
     const t=current(),enabled=!!t;
     exportButton.disabled=csvButton.disabled=scheduleCsv.disabled=calendarButton.disabled=remove.disabled=!enabled;
     plannerButton.disabled=!enabled;
+    const teamChosen=chosenTeam(t)!==null;
+    teamCsv.disabled=teamCalendar.disabled=!teamChosen;
     inform(message||(t?'Stored on this device only · scores are manual and unverified.':'Create or restore a private tournament to begin.'));
     overview.replaceChildren();standings.replaceChildren();fixtures.replaceChildren();
     if(!t)return;
@@ -385,6 +393,17 @@
     standings.append(playoff);updatePreview();
     const gamesHeader=make('div',null,'tournament-fixtures-head');
     gamesHeader.append(make('h3','FIXTURE CALENDAR'));
+    const teamChoice=make('select');teamChoice.setAttribute('aria-label','Focus on one league team');
+    teamChoice.add(new Option('All teams · entire league',''));
+    t.teams.forEach((name,index)=>teamChoice.add(new Option(name,String(index))));
+    teamChoice.value=chosenTeam(t)===null?'':String(teamIndex);
+    teamChoice.onchange=()=>{
+      teamIndex=teamChoice.value===''?null:Number(teamChoice.value);
+      render();
+    };
+    const teamPicker=label('TEAM VIEW · OPTIONAL',teamChoice);
+    teamPicker.className='tournament-team-picker';
+    gamesHeader.append(teamPicker);
     const filterSelect=make('select');
     filterSelect.setAttribute('aria-label','Filter tournament fixtures');
     filterSelect.add(new Option('Still to play','pending'));
@@ -397,13 +416,38 @@
     filterSelect.value=filter;
     filterSelect.onchange=()=>{filter=filterSelect.value;render();};
     gamesHeader.append(filterSelect);fixtures.append(gamesHeader);
-    const visible=t.fixtures.filter(f=>filter==='all'||
+    const selected=chosenTeam(t);
+    if(selected!==null){
+      const games=t.fixtures.filter(f=>f.home===selected||f.away===selected);
+      const played=games.filter(f=>f.homeScore!==null);
+      const forGoals=played.reduce((n,f)=>n+(f.home===selected?f.homeScore:f.awayScore),0);
+      const against=played.reduce((n,f)=>n+(f.home===selected?f.awayScore:f.homeScore),0);
+      const next=games.filter(f=>f.homeScore===null&&f.kickoff!==null&&f.kickoff>Date.now())
+        .sort((a,b)=>a.kickoff-b.kickoff)[0];
+      const summary=make('aside',null,'tournament-team-summary');
+      summary.setAttribute('aria-label','Private schedule for '+t.teams[selected]);
+      summary.append(make('strong',t.teams[selected]+' · private team calendar'),
+        make('span',games.length+' fixtures · '+played.length+' manually recorded · '+
+          forGoals+' for / '+against+' against'),
+        make('span',next?'Next scheduled: '+new Date(next.kickoff).toLocaleString(undefined,
+          {dateStyle:'medium',timeStyle:'short'})+' · '+
+          t.teams[next.home===selected?next.away:next.home]:
+          'No upcoming scheduled kickoff. Add local dates in the match cards below.'),
+        make('small','Team CSV and ICS export only this team\'s real stored fixtures. '+
+          'Results and dates are private, self-entered and unverified.'));
+      fixtures.append(summary);
+    }
+    const visible=t.fixtures.filter(f=>(selected===null||f.home===selected||f.away===selected)&&
+      (filter==='all'||
       (filter==='pending'&&f.homeScore===null)||
       (filter==='upcoming'&&f.kickoff!==null&&f.kickoff>=Date.now()&&f.homeScore===null)||
-      (filter.startsWith('round')&&f.round===Number(filter.slice(5))))
+      (filter.startsWith('round')&&f.round===Number(filter.slice(5)))))
       .sort((a,b)=>filter==='upcoming'?a.kickoff-b.kickoff:a.round-b.round);
-    if(!visible.length)fixtures.append(make('p',filter==='pending'?
-      'All scheduled matches have a recorded score. Congratulations on finishing the fixture list.':'No fixtures in this view.'));
+    if(!visible.length)fixtures.append(make('p',selected!==null?
+      'No fixtures for this team match the selected view. Change the filter or choose All teams.':
+      filter==='pending'?
+      'All scheduled matches have a recorded score. Congratulations on finishing the fixture list.':
+      'No fixtures in this view.'));
     for(const f of visible){
       const row=make('form',null,'tournament-match');
       row.dataset.fixtureId=f.id;
@@ -484,15 +528,16 @@
     if(tournaments.length>=MAX_TOURNAMENTS)return inform('Eight saved tournaments is the local limit. Export one before deleting.');
     const now=Date.now(),t=normalize({version:1,id:newId(),name:cleanName,teams,
       legs:Number(legs.value),createdAt:now,updatedAt:now,fixtures:pairings(teams.length,Number(legs.value))});
-    try{persist([...tournaments,t]);activeId=t.id;filter='pending';setup.hidden=true;
+    try{persist([...tournaments,t]);activeId=t.id;filter='pending';teamIndex=null;setup.hidden=true;
       message='Tournament created. Enter scores after each real friendly match.';render();}
     catch(err){inform(err.message||'Cannot save local tournament.');}
   };
-  select.onchange=()=>{activeId=select.value;filter='pending';message='';invalidatePlan();planner.hidden=true;render();};
+  select.onchange=()=>{activeId=select.value;filter='pending';teamIndex=null;message='';
+    invalidatePlan();planner.hidden=true;render();};
   function deleteTournament(){
     const t=current();if(!t)return;
     if(!window.confirm('Delete "'+t.name+'" and its local scores? Export a backup first.'))return;
-    try{persist(tournaments.filter(x=>x.id!==t.id));activeId='';filter='pending';
+    try{persist(tournaments.filter(x=>x.id!==t.id));activeId='';filter='pending';teamIndex=null;
       message='Local tournament deleted.';render();}
     catch(err){inform(err.message||'Could not delete tournament.');}
   }
@@ -521,21 +566,29 @@
       'text/csv;charset=utf-8');
     inform('Unofficial standings exported as local CSV.');
   }
-  function exportFixturesCSV(){
+  function exportFixturesCSV(teamOnly=false){
     const t=current();if(!t)return;
+    const index=chosenTeam(t);
+    if(teamOnly&&index===null)return inform('Select a team in Fixture Calendar first.');
+    const included=teamOnly?t.fixtures.filter(f=>f.home===index||f.away===index):t.fixtures;
     const rows=[['Round','Home','Away','Kickoff ISO UTC','Venue','Home goals','Away goals','Result status'],
-      ...t.fixtures.map(f=>[f.round,t.teams[f.home],t.teams[f.away],
+      ...included.map(f=>[f.round,t.teams[f.home],t.teams[f.away],
         f.kickoff===null?'':new Date(f.kickoff).toISOString(),
         f.venue,f.homeScore===null?'':f.homeScore,f.awayScore===null?'':f.awayScore,
         f.homeScore===null?'Unplayed':'Manually recorded · unverified'])];
-    saveFile(filename(t)+'-fixtures.csv','\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n',
+    const label=teamOnly?'-team-'+t.teams[index].toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,35):'';
+    saveFile(filename(t)+label+'-fixtures.csv','\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n',
       'text/csv;charset=utf-8');
-    inform('Private fixture schedule exported as CSV.');
+    inform(teamOnly?'Only '+t.teams[index]+' fixtures exported as a private CSV.':
+      'Private fixture schedule exported as CSV.');
   }
-  function exportCalendar(){
+  function exportCalendar(teamOnly=false){
     const t=current();if(!t)return;
-    const scheduled=t.fixtures.filter(f=>f.kickoff!==null);
-    if(!scheduled.length)return inform('Schedule at least one kickoff before exporting a calendar.');
+    const index=chosenTeam(t);
+    if(teamOnly&&index===null)return inform('Select a team in Fixture Calendar first.');
+    const scheduled=t.fixtures.filter(f=>f.kickoff!==null&&
+      (!teamOnly||f.home===index||f.away===index));
+    if(!scheduled.length)return inform('No kickoff dates exist for this selection. Plan fixtures first.');
     const escape=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
     const stamp=n=>new Date(n).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
     const fold=s=>{
@@ -549,7 +602,7 @@
     };
     const lines=['BEGIN:VCALENDAR','VERSION:2.0','CALSCALE:GREGORIAN',
       'PRODID:-//Fuckball//Private Friendly Calendar//EN',
-      'X-WR-CALNAME:'+escape(t.name+' · private friendlies')];
+      'X-WR-CALNAME:'+escape(t.name+' · '+(teamOnly?t.teams[index]+' fixtures':'private friendlies'))];
     for(const f of scheduled){
       lines.push('BEGIN:VEVENT','UID:'+f.id+'.'+t.id+'@local.fuckball',
         'DTSTAMP:'+stamp(Date.now()),'DTSTART:'+stamp(f.kickoff),
@@ -559,8 +612,10 @@
         ...(f.venue?['LOCATION:'+escape(f.venue)]:[]),'END:VEVENT');
     }
     lines.push('END:VCALENDAR');
-    saveFile(filename(t)+'-fixtures.ics',lines.map(fold).join('\r\n')+'\r\n','text/calendar;charset=utf-8');
-    inform('Private calendar downloaded: '+scheduled.length+' scheduled friendlies, 60-minute placeholder duration.');
+    const suffix=teamOnly?'-team-'+t.teams[index].toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,35):'';
+    saveFile(filename(t)+suffix+'-fixtures.ics',lines.map(fold).join('\r\n')+'\r\n','text/calendar;charset=utf-8');
+    inform((teamOnly?t.teams[index]+' calendar':'Private calendar')+' downloaded: '+scheduled.length+
+      ' scheduled friendlies, 60-minute placeholder duration. No invitations sent.');
   }
   upload.onchange=async()=>{
     const file=upload.files?.[0];upload.value='';if(!file)return;
@@ -570,7 +625,7 @@
       const raw=JSON.parse(await file.text()),checked=normalize(raw);
       if(!window.confirm('Restore "'+checked.name+'" as a separate local tournament?'))return;
       const now=Date.now(),copy={...checked,id:newId(),createdAt:now,updatedAt:now};
-      persist([...tournaments,normalize(copy)]);activeId=copy.id;filter='pending';
+      persist([...tournaments,normalize(copy)]);activeId=copy.id;filter='pending';teamIndex=null;
       message='Tournament restored as a new device-local copy.';render();
     }catch(err){inform('Import refused: '+(err.message||'Invalid local tournament file.'));}
   };
@@ -591,7 +646,7 @@
     if(ref?.type!=='League'||typeof ref.id!=='string')return;
     const selected=tournaments.find(t=>t.id===ref.id);
     if(!selected)return inform('This local league is no longer available.');
-    activeId=selected.id;filter='pending';message='Opened '+selected.name+' · results are private and unverified.';
+    activeId=selected.id;filter='pending';teamIndex=null;message='Opened '+selected.name+' · results are private and unverified.';
     details.open=true;render();
     panel.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
       'auto':'smooth',block:'start'});
