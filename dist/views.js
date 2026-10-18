@@ -11,7 +11,8 @@ function openHumanQuickMatch(){
  const first=panel.querySelector('.quick-queue-mode:not(:disabled)');
  first?.focus({preventScroll:true});
 }
-$('heroPlay').onclick=$('quickMatch').onclick=openHumanQuickMatch;
+$('heroFindMatch').onclick=$('quickMatch').onclick=openHumanQuickMatch;
+$('heroPlay').onclick=()=>quickPlay('bot');
 $('quickPractice').onclick=()=>quickPlay('bot');$('quickSquad').onclick=()=>quickPlay('4v4');$('quickOnline').onclick=()=>{if(typeof connectServer==='function'&&defaultServer)connectServer(true);else{showView('play');openDialog('networkDialog');}};$('quickReplay').onclick=()=>showView('games');
 showView('home');
 $('botDifficulty').value=settings.difficulty||'hard';$('botDifficulty').onchange=()=>{settings.difficulty=$('botDifficulty').value;settings.botLevels={};savePrefs();if(serverLink?.isOwner)serverLink.send({type:'difficulty',difficulty:settings.difficulty,botLevels:{},teamProfile:settings.teamProfile});rosterKey='';updateRoster();};
