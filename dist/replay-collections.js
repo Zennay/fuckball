@@ -54,10 +54,11 @@
  const rename=button('Edit name / notes',editCollection);
  const remove=button('Delete collection',deleteCollection);
  const exportButton=button('↓ Collection JSON',exportCollection);
+ const studyButton=button('↓ Study guide',exportStudyGuide);
  const importButton=button('↑ Restore collection',()=>fileInput.click());
  const fileInput=make('input');fileInput.type='file';
  fileInput.accept='.json,application/json';fileInput.hidden=true;
- tools.append(picker,create,rename,remove,exportButton,importButton,fileInput);
+ tools.append(picker,create,rename,remove,exportButton,studyButton,importButton,fileInput);
  const detail=make('div',undefined,'replay-collections-detail');
  const itemsList=make('ol',undefined,'replay-collections-items');
  const available=make('div',undefined,'replay-collections-add');
@@ -159,7 +160,7 @@
   picker.replaceChildren(new Option('Choose a collection…',''));
   for(const x of collectionList)picker.add(new Option(x.title,x.id));
   picker.value=c?.id||'';
-  for(const b of [rename,remove,exportButton])b.disabled=!c;
+  for(const b of [rename,remove,exportButton,studyButton])b.disabled=!c;
   detail.replaceChildren();itemsList.replaceChildren();
   if(!c){
    detail.append(make('p','Create a private collection to organise saved HBR2 recordings.'));
@@ -210,6 +211,48 @@
  picker.onchange=()=>{active=picker.value;message='';render();};
  search.oninput=render;
  const filename=c=>'fuckball-collection-'+c.title.toLocaleLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,30)+'.json';
+ async function exportStudyGuide(){
+  const c=current();if(!c||busy)return;
+  busy=true;studyButton.disabled=true;
+  try{
+   const heading=s=>String(s).replace(/[\\`*_{|}\[\]<>#]/g,'\\ function exportCollection(){').replace(/\r?\n/g,' ');
+   const minutes=frames=>{
+    const seconds=Math.floor(frames/60);return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+   };
+   const rows=['# '+heading(c.title),'','Private replay study guide · device-local, user-owned HBR2 metadata, not verified match history.','',
+    c.description?heading(c.description):'','',c.replays.length+' recording shortcuts',''];
+   const libraryIds=new Map(library.map(x=>[x.id,x]));
+   for(const [index,id]of c.replays.entries()){
+    const item=libraryIds.get(id);
+    rows.push('## '+(index+1)+'. '+heading(item?.name||'Unavailable local HBR2'),'');
+    if(!item){rows.push('Recording not available on this device.','');continue;}
+    rows.push('Duration: '+minutes(item.frames)+' · Local recording ID: '+id,'');
+    try{
+     const goals=Array.isArray(item.goals)?item.goals.filter(x=>Number.isSafeInteger(x?.frameNo)&&
+      x.frameNo>=0&&x.frameNo<=item.frames&&[1,2].includes(x.teamId)).slice(0,128):[];
+     if(goals.length){rows.push('### Recorded goal markers','');
+      for(const g of goals)rows.push('- '+minutes(g.frameNo)+' · '+(g.teamId===1?'Red':'Blue')+' goal marker');
+      rows.push('');
+     }
+     const notes=ReplayLibrary.normalizeNotes(item.notes,item.frames);
+     if(notes.length){rows.push('### Personal timeline notes','');
+      for(const n of notes)rows.push('- '+minutes(n.frameNo)+' · '+heading(n.label)+' ['+heading(n.category)+']: '+heading(n.text));
+      rows.push('');
+     }
+     const review=ReplayLibrary.normalizeReview(item.review);
+     if(review){rows.push('### Personal coaching review','',
+      'Focus: '+heading(review.focus)+' · Self-rating: '+review.rating+'/5','',
+      review.note?heading(review.note):'',review.next?'Next action: '+heading(review.next):'','');}
+    }catch{rows.push('Some locally stored notes could not be verified and were omitted.','');}
+   }
+   if(!rows.length||rows.join('\n').length>96*1024)throw Error('Study guide is too large.');
+   const data=rows.join('\n'),url=URL.createObjectURL(new Blob([data],{type:'text/markdown;charset=utf-8'}));
+   const a=make('a');a.href=url;a.download=filename(c).replace(/\.json$/,'.md');a.click();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   notice('Private study guide saved with local goal markers and your own coaching notes.');
+  }catch(err){notice(err.message||'Could not prepare the private study guide.');}
+  finally{busy=false;studyButton.disabled=!current();}
+ }
  function exportCollection(){
   const c=current();if(!c)return;
   const body=JSON.stringify({format:'fuckball-local-replay-collection',version:1,
