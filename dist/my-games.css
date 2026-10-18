@@ -65,3 +65,15 @@
 .game-rename-actions button{padding:11px 18px;border-radius:6px}
 .game-rename-actions button:focus-visible,.game-rename-form input:focus-visible{
  outline:3px solid #d3ef9f;outline-offset:3px}
+
+/* Portable offline replay archives: discoverable, keyboard-friendly controls. */
+.my-games-tools .games-backup-button{
+ padding:11px 16px;border:1px solid #6a8585;border-radius:7px;
+ background:#1d363c;color:#d9ede4;font-size:12px;font-weight:700;
+ transition:background-color .15s ease,border-color .15s ease;
+}
+.my-games-tools .games-backup-button:hover:not(:disabled){background:#345159;border-color:#b0d5bc}
+.my-games-tools .games-backup-button:disabled{opacity:.55;cursor:wait}
+.my-games-tools .games-backup-button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:660px){.my-games-tools .games-backup-button{flex:1 1 145px;min-height:44px}}
+@media(prefers-reduced-motion:reduce){.my-games-tools .games-backup-button{transition:none}}
