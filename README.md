@@ -6,6 +6,22 @@ Open **My Games → Practice Journal** after completing local AI matches. The jo
 
 All focus tags, reflections and match records remain in **this browser's localStorage** and are included if you deliberately export your private journal JSON. Old entries work unchanged, with no note/focus until you add one. A double-confirmation clears only the practice journal, not online results, accounts or HBR2 replays. Private-mode browsers or disabled storage may prevent saving. Existing online matchmaking and approved physics never depend on these notes.
 
+## Portable Game Night Pack with private posters
+
+Open **Home → Game Night Pack** to download one local JSON archive covering your
+private round-robin leagues, knockout cups, formation plans **and up to eight
+Matchday Poster Designer drafts**. Restoring a pack appends new private copies,
+using new local IDs; it never overwrites existing plans. Exported scores and
+poster result text are always user-entered, not official server history.
+Restores are all-or-nothing where browser storage permits, and the importer
+refuses simultaneous-tab conflicts rather than silently replacing newer data.
+
+Game Night Pack **v2** includes posters. The Restore action still accepts older
+**v1** packs, which simply contain no poster drafts. Archives remain on your
+device unless you deliberately share the downloaded file. They do **not**
+contain account sessions, room links, personal tokens, or recorded HBR2 game
+files. Use **My Games → Backup all ZIP** separately for HBR2 recordings.
+
 ## Native online game features in current source
 
 **Play:** human-only casual Quick Match in 1v1–4v4 and an opt-in **Club vs Club 4v4** playlist for two complete authenticated four-player squads, with an explicit individual ready check. No ranked Elo or automatic bot opponents in human queues. Custom Rooms support shared links, four active humans per side, benches, spectators, substitutions, chat and host-only admission/moderation.
