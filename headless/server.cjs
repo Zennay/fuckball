@@ -124,6 +124,17 @@ function createServer(options={}){
    if(d.type==='join'){if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');const r=d.create?createRoom():rooms.get(String(d.room||'').toUpperCase());if(!r)throw Error('Room not found.');ws.name=name;ws.account=account||null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='leave'){ws.intentionalLeave=true;ws.close(1000,'Left room');return;}
+   if(d.type==='latencyReply'){
+    // A reply counts only for a server-issued single-use nonce on this socket.
+    // Client-submitted RTT figures never enter the roster measurements.
+    const pending=ws.pendingLatency;
+    if(pending&&typeof d.nonce==='string'&&d.nonce===pending.nonce){
+     const elapsed=Date.now()-pending.at;
+     ws.pendingLatency=null;
+     if(elapsed>=0&&elapsed<=10000){ws.measuredLatency=elapsed;ws.measuredLatencyAt=Date.now();}
+    }
+    return;
+   }
    if(d.type==='signal'){const to=r.sockets.get(Number(d.to));if(to&&to.mesh&&ws.mesh)send(to,{type:'signal',from:ws.playerId,data:d.data});return;}
    if(d.type==='rtt'){const peers={};for(const [k,v]of Object.entries(d.peers||{}))if(r.sockets.has(Number(k))&&Number.isFinite(v)&&v>=0&&v<5000)peers[k]=v;r.reports.set(ws.playerId,{server:Number.isFinite(d.server)?d.server:null,peers,eligible:d.eligible===true,at:now});return;}
    if(['hostOut','standby','released','hostRelease'].includes(d.type)){fromHost(r,ws,d);return;}
@@ -140,8 +151,31 @@ function createServer(options={}){
   else{const m=r.migration,late=m?Date.now()-m.started>3000+standbyTimeout:Date.now()-r.standbyAt>standbyTimeout;if(late)failover(r,m?'release timeout':'standby timeout');}
   if(r.clock%60===0)election(r);}
  let previous=performance.now(),accumulator=0,frame=0;const timer=setInterval(()=>{const now=performance.now();accumulator+=Math.min(250,now-previous);previous=now;let advanced=false;while(accumulator>=1000/60){for(const r of rooms.values())tickRoom(r);accumulator-=1000/60;frame++;advanced=true;}if(advanced&&frame%600===0)for(const ws of clients)if(Date.now()-ws.lastSeen>45000)ws.close(1001,'Timeout');},4);timer.unref();
+ // Give every admitted human an independently measured WebSocket round-trip
+ // without trusting claimed ping values or revealing cross-room identities.
+ const latencyTimer=setInterval(()=>{
+  const now=Date.now();
+  for(const r of rooms.values()){
+   const samples=[];
+   for(const [id,ws] of r.sockets){
+    if(ws.readyState!==1)continue;
+    if(!ws.pendingLatency||now-ws.pendingLatency.at>10000){
+     const nonce=crypto.randomBytes(12).toString('hex');
+     ws.pendingLatency={nonce,at:now};
+     send(ws,{type:'latencyProbe',nonce});
+    }
+    if(samples.length<256){
+     const age=now-(ws.measuredLatencyAt||0);
+     samples.push([id,Number.isSafeInteger(ws.measuredLatency)&&age>=0&&age<15000?ws.measuredLatency:null]);
+    }
+   }
+   if(!samples.length)continue;
+   const packet={type:'latencyRoster',samples,measuredTo:'server',truncated:r.sockets.size>256};
+   for(const ws of r.sockets.values())send(ws,packet);
+  }
+ },5000);latencyTimer.unref();
  const close=()=>new Promise(resolve=>{
-  shuttingDown=true;clearInterval(timer);
+  shuttingDown=true;clearInterval(timer);clearInterval(latencyTimer);
   // Graceful WebSocket close first; do not strand shutdown forever if a raw
   // upgrade or HTTP keep-alive client ignores the closing handshake.
   for(const ws of clients)ws.close();
