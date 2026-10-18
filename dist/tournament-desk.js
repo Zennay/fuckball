@@ -177,7 +177,7 @@
     const t=current();
     if(!t||!storageHealthy)throw Error('Select a readable private league first.');
     const value=firstKickoff.value;
-    if(!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(value))
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
       throw Error('Choose a valid first kickoff in your local timezone.');
     const start=new Date(value);
     if(!Number.isFinite(start.getTime())||localValue(start.getTime())!==value||
