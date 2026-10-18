@@ -1,0 +1,11 @@
+.keyboard-layouts{margin:18px 0;padding:17px;border:1px solid var(--border,#60727a);background:#1d323a;border-radius:12px;max-width:750px}
+.keyboard-layouts h3{font-size:17px;font-weight:900;letter-spacing:.06em;margin:0 0 6px;color:#d8f6b2}
+.keyboard-layouts p{max-width:660px;line-height:1.5;color:#d0dee0;font-size:13px;margin:7px 0 14px}
+.keyboard-layouts .keyboard-layout-presets,.keyboard-layouts .keyboard-layout-actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+.keyboard-layouts button{min-height:40px;white-space:normal}
+.keyboard-layouts label{font-size:13px;font-weight:600;max-width:290px;color:#e0e9ed}
+.keyboard-layouts select{min-width:180px;min-height:38px;margin-top:8px}
+.keyboard-layouts .keyboard-layout-status{color:#d8f6b2;font-weight:600;min-height:20px}
+.keyboard-layouts .keyboard-layout-status.error{color:#ffb5b5}
+.keyboard-layouts .keyboard-layout-disclaimer{font-size:12px;color:#c7d3d7}
+@media(max-width:560px){.keyboard-layouts{padding:12px}.keyboard-layouts button{min-height:44px;flex-grow:1}.keyboard-layouts label{max-width:none}}
