@@ -146,13 +146,23 @@
   if(!state?.invitations?.length)invites.append(document.createTextNode('No pending invites.'));
  }
  async function refresh(){
-  if(busy||!settings.account?.token||(!dialog.open&&!hasJoined))return;
+  if(busy||(!dialog.open&&!hasJoined))return;
+  if(!settings.account?.token){
+   body.replaceChildren();statusBar.hidden=true;hasJoined=false;
+   notice.textContent='Sign in with a Fuckball account to use parties.';
+   const login=btn('Sign in / create account',()=>{dialog.close();showJoinScreen('');});
+   login.className='primary';body.append(login);return;
+  }
   const seq=++generation,token=settings.account.token;
   try{
    const state=await api(null);
    if(seq!==generation||settings.account?.token!==token)return;
-   render(state);launchIfReady(state);
-   if(dialog.open)notice.textContent=state.party?'Party connected on this server.':'Create a party or accept a friend invitation.';
+   // Polling must not erase a teammate's half-typed invitation.
+   const typing=dialog.open&&dialog.contains(document.activeElement)&&
+    document.activeElement?.tagName==='INPUT';
+   if(!typing)render(state);
+   launchIfReady(state);
+   if(dialog.open&&!typing)notice.textContent=state.party?'Party connected on this server.':'Create a party or accept a friend invitation.';
   }catch(e){if(seq===generation&&dialog.open)notice.textContent=e.message||'Party temporarily unavailable.';}
  }
  function open(){
