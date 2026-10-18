@@ -159,6 +159,67 @@
   const save=document.createElement('button');save.type='button';save.textContent='Save phrases';
   const reset=document.createElement('button');reset.type='button';reset.textContent='Reset phrases';
   const editorStatus=document.createElement('p');editorStatus.setAttribute('role','status');
+
+  // Optional role templates and portable local phrase sets. No automatic chat.
+  const ROLE_CALLS={
+   general:defaults,
+   goalkeeper:['Keeper ready!','Mark the far post!','Clear the ball!','I have goal!'],
+   defender:['Hold our shape!','Cover my position!','Pass back if pressed!','Switch the wing!'],
+   playmaker:['I am open!','One-two pass!','Make the run!','Play to the wing!'],
+   striker:['Pass into space!','Cross to me!','I can shoot!','Follow the rebound!']
+  };
+  const pack=document.createElement('section');pack.className='tactical-callouts-role-packs';
+  const heading=document.createElement('strong');heading.textContent='POSITION CALL PACKS · GK / DM / AM / ST';
+  const message=document.createElement('p');
+  message.textContent='Choose four editable quick-chat phrases. Loading a preset or file never sends a message or changes your actual team role.';
+  const roles=document.createElement('select');roles.setAttribute('aria-label','Position quick chat presets');
+  for(const [id,label] of [['general','General'],['goalkeeper','GK · Goalkeeper'],
+   ['defender','DM · Defensive midfielder'],['playmaker','AM · Playmaker'],
+   ['striker','ST · Striker']])roles.add(new Option(label,id));
+  const apply=document.createElement('button');apply.type='button';apply.textContent='Use this position pack';
+  const portable=document.createElement('div');portable.className='tactical-callouts-portable';
+  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export phrases';
+  const importButton=document.createElement('button');importButton.type='button';importButton.textContent='↑ Restore phrases';
+  const inputFile=document.createElement('input');inputFile.type='file';inputFile.accept='.json,application/json';inputFile.hidden=true;
+  portable.append(exportButton,importButton,inputFile);
+  pack.append(heading,message,roles,apply,portable);
+  function applyValues(values){
+   for(let i=0;i<4;i++)editors[i].value=values[i];
+   save.onclick(); // Route through the existing validated, device-local Save action.
+   chosen.forEach((value,i)=>customButtons[i].setAttribute('aria-label','Send room chat: '+value));
+  }
+  apply.onclick=()=>{
+   const phrases=ROLE_CALLS[roles.value];if(!phrases)return;
+   if(!window.confirm('Replace your four private phrases with '+roles.selectedOptions[0].textContent+
+    '? This sends no message.'))return;
+   applyValues(phrases.map(clean));
+  };
+  exportButton.onclick=()=>{
+   const data=JSON.stringify({format:'fuckball-private-room-callouts',version:1,calls:chosen});
+   const url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+   const link=document.createElement('a');link.href=url;link.download='fuckball-private-team-calls.json';link.click();
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   editorStatus.textContent='Current saved phrases downloaded locally; no chat sent.';
+  };
+  importButton.onclick=()=>inputFile.click();
+  inputFile.onchange=async()=>{
+   const file=inputFile.files?.[0];inputFile.value='';
+   if(!file)return;
+   if(file.size<1||file.size>4096)return void(editorStatus.textContent='Choose a callout JSON backup smaller than 4 KiB.');
+   let before;try{before=localStorage.getItem(KEY);}catch{before=null;}
+   try{
+    const incoming=JSON.parse(await file.text());
+    if(!incoming||incoming.format!=='fuckball-private-room-callouts'||incoming.version!==1||
+      !Array.isArray(incoming.calls)||incoming.calls.length!==4)
+     throw Error('Not a valid private four-callout file');
+    const phrases=incoming.calls.map(clean);
+    let latest;try{latest=localStorage.getItem(KEY);}catch{latest=null;}
+    if(before!==latest)throw Error('Another tab changed saved phrases. Reopen the file to retry');
+    if(!window.confirm('Replace your four saved phrases with this file? No chat will be sent.'))return;
+    applyValues(phrases);
+   }catch(error){editorStatus.textContent='Could not restore your phrases: '+String(error.message||'Invalid backup');}
+  };
+
   buttons.append(save,reset);
   save.onclick=()=>{
    let values;
@@ -175,7 +236,7 @@
    try{localStorage.removeItem(KEY);}catch{}
    editorStatus.textContent='Default phrases restored.';
   };
-  editor.append(editorTitle,editorHelp,fields,buttons,editorStatus);settingsPane.append(editor);
+  editor.append(editorTitle,editorHelp,fields,pack,buttons,editorStatus);settingsPane.append(editor);
   window.setInterval(updateVisibility,800);
   document.addEventListener('visibilitychange',updateVisibility);
   updateVisibility();
