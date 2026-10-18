@@ -35,3 +35,8 @@
 @media(max-width:900px){.practice-plan-cards{grid-template-columns:1fr}.practice-plan-card-footer{grid-template-columns:1fr 1fr}.practice-plan-card{gap:10px}}
 @media(max-width:560px){.practice-weekly-plan{margin:20px 12px;padding:15px}.practice-plan-top{display:grid}.practice-plan-trend{display:grid}.practice-plan-days{justify-content:space-between;width:100%;grid-template-columns:repeat(7,minmax(0,1fr))}.practice-plan-actions button{flex:1}}
 @media(prefers-reduced-motion:reduce){.practice-plan-bar span{transition:none}}
+/* Explicit opt-in for private training-goal restore; never changes server stats. */
+.practice-plan-restore-goals{display:inline-flex;align-items:center;gap:9px;min-height:42px;color:#dcebd9;font-size:12px}
+.practice-plan-restore-goals input{width:17px;height:17px;accent-color:#b9e891}
+.practice-plan-restore-goals:focus-within{outline:2px solid #d1efb8;outline-offset:4px}
+@media(max-width:560px){.practice-plan-restore-goals{flex:1 1 100%}}
