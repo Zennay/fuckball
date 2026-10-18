@@ -167,6 +167,7 @@
  // Auto-next is opt-in and only while the same known local replay is on screen.
  // Never start another recording from a hidden tab or after another UI replaces playback.
  window.setInterval(()=>{
+  if(active>=0&&activeLocalReplayId!==queue[active]){endSession();return;}
   if(active<0||loading||transitioning||!auto.checked||document.hidden||
    controls.hidden||typeof replay==='undefined'||!replay)return;
   if(activeLocalReplayId!==queue[active]){endSession();return;}
@@ -184,6 +185,7 @@
  document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&!games.hidden)refreshLibrary();
  });
+ document.getElementById('replayClose')?.addEventListener('click',endSession);
  document.getElementById('tabReplay')?.addEventListener('click',refreshLibrary);
  refreshLibrary();
 })();
