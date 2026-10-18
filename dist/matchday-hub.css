@@ -167,3 +167,33 @@
  .matchday-squad-reuse button{width:100%}
 }
 @media print{.matchday-squad-reuse{display:none}}
+
+
+/* Upcoming game-night time overlap hints, never automatic fixture rescheduling. */
+.matchday-clashes{margin:16px 0;border:1px solid #718c82;border-radius:14px;padding:18px;
+ background:#193537;color:#eaf4ec}
+.matchday-clashes-header{display:flex;justify-content:space-between;gap:18px;align-items:start}
+.matchday-clashes-header h3{margin:0 0 5px;font-size:.98rem;letter-spacing:.06em;color:#e3f6bb}
+.matchday-clashes-header p{margin:0 0 14px;line-height:1.5;font-size:.84rem;color:#cce0d5;max-width:65ch}
+.matchday-clashes-controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
+.matchday-clashes-filter{display:flex;gap:9px;align-items:center;font-size:.83rem}
+.matchday-clashes-filter input{width:20px;height:20px;accent-color:#cef0a0}
+.matchday-clashes-controls button,.matchday-clash-actions button{border:1px solid #96b6a8;background:#2b524a;
+ border-radius:8px;color:#f0fff0;padding:9px 12px;font:inherit;font-size:.81rem;min-height:44px}
+.matchday-clashes button:disabled{opacity:.55;cursor:default}
+.matchday-clashes :is(button,input):focus-visible{outline:3px solid #ffe18b;outline-offset:2px}
+.matchday-clashes-list{display:grid;gap:10px}
+.matchday-clashes-list>p{margin:8px 0;color:#c7e3d3}
+.matchday-clash-row{display:flex;align-items:center;justify-content:space-between;gap:18px;
+ border:1px solid #5e8171;background:#25483e;border-radius:10px;padding:13px}
+.matchday-clash-detail{display:grid;gap:5px;min-width:0}
+.matchday-clash-detail small{font-size:.75rem;color:#dcf2ac}
+.matchday-clash-detail strong{font-size:.92rem;overflow-wrap:anywhere}
+.matchday-clash-detail span{font-size:.83rem;color:#cde0db;overflow-wrap:anywhere}
+.matchday-clash-actions{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-clashes-status{font-size:.81rem;color:#c6dfd6;line-height:1.5;margin:12px 0 0}
+@media(max-width:850px){.matchday-clashes-header,.matchday-clash-row{flex-direction:column;align-items:stretch}
+ .matchday-clashes-controls{justify-content:flex-start}}
+@media(max-width:500px){.matchday-clashes{padding:12px}
+ .matchday-clash-actions button,.matchday-clashes-controls button{flex:1 1 100%}}
+@media print{.matchday-clashes-controls,.matchday-clash-actions{display:none}}
