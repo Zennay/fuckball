@@ -75,7 +75,8 @@
    if(!canSwitch('create a room'))return;
    const b=document.getElementById('quickOnline');
    if(!b||b.disabled)return announce('Creating a room is unavailable.');
-   b.click();announce('Opening existing room creation controls.');
+   if(!startNativeCustomRoom(true))return announce('Existing room setup was not started.');
+   announce('Opening existing room creation controls.');
   },'play-hub-secondary')
  );
  rooms.append(roomActions);
@@ -134,7 +135,9 @@
   if(!canSwitch('start '+name))return;
   const b=document.getElementById(id);
   if(!b||b.disabled)return announce(name+' is unavailable.');
-  b.click();
+  if(!quickPlay(id==='quickSquad'?'4v4':'bot',true)){
+   announce(name+' could not start; the prior session remains.');return;
+  }
   announce('Opened '+name+' via the original local game controls.');
  }
  function reveal(target){
