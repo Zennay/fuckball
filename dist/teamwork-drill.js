@@ -148,7 +148,9 @@
    status.textContent='Current local game or replay kept. Teamwork did not start.';return;
   }
   quit();
-  squad.click(); // Existing sandbox 4v4 setup; no new engine or modified rules.
+  if(!quickPlay('4v4',true)){
+   status.textContent='Original local 4v4 did not start; your session was preserved.';return;
+  } // Existing sandbox 4v4 setup, no alternate game engine.
   const side=ready();
   if(!side){status.textContent='4v4 local practice could not start. Use 4v4 Practice first.';return;}
   const seconds=Number(duration.value),goal=Number(target.value);

@@ -192,7 +192,7 @@
   }
   if(session)quit();
   try{
-   document.getElementById('quickPractice').click();
+   if(!quickPlay('bot',true))throw Error('Original local 1v1 could not start without preserving your session.');
    if(!localReady()||!started)throw Error('Local 1v1 practice could not start.');
    const side=ownSide();
    if(!side)throw Error('Join Red or Blue to start a scoring drill.');
