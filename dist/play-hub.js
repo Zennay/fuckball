@@ -48,13 +48,15 @@
  const modeButtons=new Map();
  const status=node('p','Choose your format, then open the real Quick Match controls.','play-hub-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- const primary=action('Open human Quick Match →',openQueue,'play-hub-primary');
+ const primary=action('Configure human Quick Match →',openQueue,'play-hub-primary');
+ const queueNow=action('▶ Find 1v1 now',findHumanNow,'play-hub-queue-now');
+ queueNow.title='Start the real human matchmaking queue with one deliberate click. Every player still has to accept the ready check.';
  for(const mode of playlists){
   const b=action(mode,()=>chooseMode(mode),'play-hub-format');
   b.setAttribute('aria-label',mode+' human Quick Match, '+(2*Number(mode[0]))+' total real players');
   modes.append(b);modeButtons.set(mode,b);
  }
- human.append(humanCopy,modes,primary);
+ human.append(humanCopy,modes,queueNow,primary);
  const rooms=node('article',null,'play-hub-card');
  rooms.append(node('span','02 · ONLINE · CUSTOM ROOM','play-hub-label'),
   node('h3','PLAY WITH FRIENDS'),
@@ -154,6 +156,29 @@
   reveal(native);
   announce('Ready to search for '+playlist+'. Choose the native Find Match button to join; no search has started yet.');
  }
+ function findHumanNow(){
+  const state=activeState();
+  if(state.server||state.peer||state.local||state.playingReplay)
+   return announce('Leave your ongoing game or replay before starting a new human Quick Match.');
+  if(state.inQueue||state.ready)
+   return openSection('.quick-queue-panel','The human queue is unavailable.',
+    'An existing search or ready check is active. Finish or cancel it first.');
+  const native=home.querySelector('.quick-queue-panel');
+  const preferred=native?.querySelector('select[aria-label="Preferred human Quick Match format"]');
+  const start=native?.querySelector('.quick-queue-shortcut-actions button.primary');
+  // Never synthesize a network request, bypass the server-owned queue, or accept ready.
+  if(!native||!preferred||!start||start.disabled)
+   return openQueue();
+  if(!settings.account?.token||!document.getElementById('serverAddress')?.value.trim()){
+   openQueue();
+   return announce('Sign in and choose a live multiplayer server before starting. The native Quick Match controls are open.');
+  }
+  preferred.value=playlist;
+  preferred.dispatchEvent(new Event('change',{bubbles:true}));
+  start.click();
+  reveal(native);
+  announce('Requested a real '+playlist+' human search through the native server queue. Every human must still accept the ready check.');
+ }
  function chooseMode(mode){
   if(!playlists.includes(mode))return;
   playlist=mode;
@@ -162,7 +187,8 @@
    b.classList.toggle('selected',active);
    b.setAttribute('aria-pressed',String(active));
   }
-  primary.textContent='Choose '+mode+' human match →';
+  primary.textContent='Configure '+mode+' human match →';
+  queueNow.textContent='▶ Find '+mode+' now';
   const state=activeState();
   if(state.inQueue||state.ready){
    announce('You selected '+mode+' for next time. Your current queue or ready check was not changed.');
