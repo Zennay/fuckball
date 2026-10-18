@@ -25,9 +25,34 @@
  const focusFilter=document.createElement('select');focusFilter.setAttribute('aria-label','Filter by personal practice focus');
  for(const [value,name]of [['all','All focuses'],...Object.entries(focusOptions)])focusFilter.add(new Option(name,value));
  focusFilterLabel.append(focusFilter);
+ const modeLabel=document.createElement('label');modeLabel.textContent='Practice mode';
+ const modeSelect=document.createElement('select');
+ modeSelect.setAttribute('aria-label','Filter by local practice mode');
+ modeSelect.add(new Option('Any mode','all'));
+ for(const [key,name] of Object.entries(modes))modeSelect.add(new Option(name,key));
+ modeLabel.append(modeSelect);
+ const periodLabel=document.createElement('label');periodLabel.textContent='Recorded';
+ const period=document.createElement('select');period.setAttribute('aria-label','Filter local match dates');
+ for(const [value,label] of [['all','Any date'],['7','Past 7 days'],['30','Past 30 days'],['90','Past 90 days']])
+  period.add(new Option(label,value));
+ periodLabel.append(period);
+ const searchLabel=document.createElement('label');searchLabel.textContent='Find field or note';
+ const search=document.createElement('input');search.type='search';search.maxLength=80;
+ search.placeholder='Stadium, coaching note…';search.setAttribute('aria-label','Search private local match notes and stadiums');
+ searchLabel.append(search);
+ const sortLabel=document.createElement('label');sortLabel.textContent='Sort';
+ const sort=document.createElement('select');sort.setAttribute('aria-label','Sort local practice history');
+ for(const [value,label] of [['new','Newest first'],['old','Oldest first']])
+  sort.add(new Option(label,value));
+ sortLabel.append(sort);
+ const resetFilters=document.createElement('button');resetFilters.type='button';
+ resetFilters.textContent='Reset filters';
+ const csvExport=document.createElement('button');csvExport.type='button';
+ csvExport.textContent='↓ Export shown CSV';
+ csvExport.title='Local selection only: no player identities or personal coaching notes';
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export local history';
  const clearButton=document.createElement('button');clearButton.type='button';clearButton.textContent='Clear journal';clearButton.className='danger';
- controls.append(filterLabel,focusFilterLabel,exportButton,clearButton);
+ controls.append(filterLabel,focusFilterLabel,modeLabel,periodLabel,searchLabel,sortLabel,resetFilters,csvExport,exportButton,clearButton);
  const stats=document.createElement('div');stats.className='local-journal-stats';
  const list=document.createElement('div');list.className='local-journal-list';
  list.setAttribute('aria-label','Completed local practice matches');
@@ -62,21 +87,41 @@
   return ours>theirs?'win':ours<theirs?'loss':'draw';
  };
  const duration=e=>Math.floor(e.seconds/60)+'m '+String(e.seconds%60).padStart(2,'0')+'s';
+ function visibleEntries(items){
+  const after=period.value==='all'?0:Date.now()-Number(period.value)*86400000;
+  const needle=search.value.trim().toLocaleLowerCase();
+  const rows=items.map((e,index)=>({e,index})).filter(({e})=>
+   (filter.value==='all'||outcome(e)===filter.value)&&
+   (focusFilter.value==='all'||e.focus===focusFilter.value)&&
+   (modeSelect.value==='all'||e.mode===modeSelect.value)&&
+   e.at>=after&&
+   (!needle||e.stadium.toLocaleLowerCase().includes(needle)||
+    e.note.toLocaleLowerCase().includes(needle)||
+    modes[e.mode].toLocaleLowerCase().includes(needle)));
+  rows.sort((a,b)=>sort.value==='old'?a.e.at-b.e.at:b.e.at-a.e.at);
+  return rows;
+ }
  function render(){
-  const items=read(), wins=items.filter(e=>outcome(e)==='win').length,
-   losses=items.filter(e=>outcome(e)==='loss').length,draws=items.length-wins-losses;
-  count.textContent=items.length+' / '+MAX+' local matches';
+  const items=read(),filtered=visibleEntries(items),scope=filtered.map(x=>x.e);
+  const wins=scope.filter(e=>outcome(e)==='win').length,
+   losses=scope.filter(e=>outcome(e)==='loss').length,draws=scope.length-wins-losses;
+  count.textContent=scope.length+' of '+items.length+' / '+MAX+' saved local matches';
   stats.replaceChildren();
-  const lastFive=items.slice(0,5);
+  const lastFive=scope.slice().sort((a,b)=>b.at-a.at).slice(0,5);
   const recent=lastFive.length?lastFive.map(e=>({win:'W',draw:'D',loss:'L'})[outcome(e)]).join(' · '):'—';
-  for(const [label,value]of [['Completed',items.length],['Wins',wins],['Draws',draws],['Losses',losses],['Last 5 form',recent]]){
+  const differential=scope.reduce((n,e)=>n+(e.side===1?e.red-e.blue:e.blue-e.red),0);
+  const activeMinutes=Math.floor(scope.reduce((n,e)=>n+e.seconds,0)/60);
+  const winPct=scope.length?Math.round(100*wins/scope.length)+'%':'—';
+  for(const [label,value]of [
+   ['Shown matches',scope.length],['Wins',wins],['Draws',draws],['Losses',losses],
+   ['Win rate',winPct],['Goal difference',(differential>=0?'+':'')+differential],
+   ['Active minutes',activeMinutes],['Last 5 shown',recent]
+  ]){
    const tile=document.createElement('div'),num=document.createElement('strong'),caption=document.createElement('span');
    tile.className='local-journal-stat';num.textContent=String(value);caption.textContent=label;
    tile.append(num,caption);stats.append(tile);
   }
-  const filtered=items.map((e,index)=>({e,index})).filter(({e})=>
-   (filter.value==='all'||outcome(e)===filter.value)&&
-   (focusFilter.value==='all'||e.focus===focusFilter.value));
+  csvExport.disabled=!scope.length;
   list.replaceChildren();
   if(!filtered.length){
    const empty=document.createElement('p');empty.className='local-journal-empty';
@@ -123,6 +168,36 @@
  }
  filter.addEventListener('change',render);
  focusFilter.addEventListener('change',render);
+ modeSelect.addEventListener('change',render);
+ period.addEventListener('change',render);
+ sort.addEventListener('change',render);
+ search.addEventListener('input',render);
+ resetFilters.onclick=()=>{
+  filter.value='all';focusFilter.value='all';modeSelect.value='all';
+  period.value='all';sort.value='new';search.value='';
+  render();feedback.textContent='Filters cleared. Your saved journal was not modified.';
+ };
+ csvExport.onclick=()=>{
+  const chosen=visibleEntries(read()).map(row=>row.e);
+  if(!chosen.length){feedback.textContent='No matching practice results to export.';return;}
+  // Notes, accounts and player names stay off this optional CSV.
+  const rows=[['UTC date','Mode','Result','Your team','Your goals','Opponent goals','Played seconds','Stadium','Focus','Verified'],
+   ...chosen.map(e=>[new Date(e.at).toISOString(),modes[e.mode],outcome(e),
+    e.side===1?'Red':'Blue',e.side===1?e.red:e.blue,e.side===1?e.blue:e.red,
+    e.seconds,e.stadium,focusOptions[e.focus],'No - local practice'])];
+  const cell=value=>{
+   let safe=String(value);
+   if(/^[=+\\-@\\t\\r]/.test(safe))safe="'"+safe;
+   return '"'+safe.replace(/"/g,'""')+'"';
+  };
+  const newline=String.fromCharCode(13,10);
+  const data=String.fromCharCode(0xFEFF)+rows.map(row=>row.map(cell).join(',')).join(newline)+newline;
+  const url=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a');a.href=url;
+  a.download='fuckball-local-practice-selection-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  feedback.textContent='Exported '+chosen.length+' filtered local match(es) without coaching notes or account data.';
+ };
  exportButton.addEventListener('click',()=>{
   const items=read();if(!items.length)return;
   const data={format:'fuckball-local-practice-journal',version:1,source:'browser-private-unverified-solo-matches',exportedAt:new Date().toISOString(),matches:items};
