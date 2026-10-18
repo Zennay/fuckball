@@ -71,7 +71,7 @@ for(const [key,label,media] of [
  const row=document.createElement('label');row.className='rm-check rm-performance-option';
  const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=menuPreference(key,media);
  checkbox.onchange=()=>{settings[key]=checkbox.checked;savePrefs();applyMenuPerformance();};
- row.append(checkbox,document.createTextNode(' '+label));menuPerformance.append(row);
+ const caption=document.createElement('span');caption.textContent=label;row.append(checkbox,caption);menuPerformance.append(row);
 }
 applyMenuPerformance();
 showView('home');
