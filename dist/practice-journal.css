@@ -35,3 +35,18 @@
 .local-journal-row .local-journal-match{flex:1}
 @media(max-width:820px){.local-journal-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.local-journal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.local-journal-edit button{width:100%}}
+
+/* Scoped actual-match explorer; filters never mutate the private journal. */
+.local-journal-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.local-journal-controls label{display:grid;gap:6px;flex:1 1 160px;min-width:min(100%,150px)}
+.local-journal-controls label:has(input[type="search"]){flex:2 1 225px}
+.local-journal-controls :is(input[type="search"],select){
+ width:100%;box-sizing:border-box;min-height:44px;padding:9px 10px;
+ border:1px solid #8aabab;border-radius:8px;background:#172e35;color:#f3fbee
+}
+.local-journal-controls button{min-height:44px;flex:0 1 auto;border-radius:8px;padding:9px 13px}
+.local-journal-controls :is(button,input,select):focus-visible{outline:3px solid #d5ffaf;outline-offset:3px}
+.local-journal-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.local-journal-stat strong{font-variant-numeric:tabular-nums;overflow-wrap:anywhere;font-size:clamp(18px,2vw,26px)}
+@media(max-width:850px){.local-journal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.local-journal-controls label,.local-journal-controls button{flex:1 1 100%}}
