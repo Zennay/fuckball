@@ -6,8 +6,7 @@
 }
 .touch-controls #stick{
  width:var(--fb-touch-stick,38px)!important;height:var(--fb-touch-stick,38px)!important;
- left:calc((var(--fb-touch-pad,88px) - var(--fb-touch-stick,38px))/2)!important;
- top:calc((var(--fb-touch-pad,88px) - var(--fb-touch-stick,38px))/2)!important
+ left:50%!important;top:50%!important;translate:-50% -50%!important
 }
 .touch-controls #touchKick{
  width:var(--fb-touch-kick,72px)!important;height:var(--fb-touch-kick,72px)!important;
