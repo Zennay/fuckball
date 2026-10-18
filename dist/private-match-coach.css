@@ -1,0 +1,33 @@
+/* Device-private, verified-receipt coaching studio, independent of live matchmaking. */
+.private-coach{margin-top:20px;padding:18px;border-radius:13px;border:1px solid #638c83;background:#182f34;display:grid;gap:14px}
+.private-coach h3{color:#dbf1a7;font-size:clamp(17px,2.2vw,22px);letter-spacing:.06em;margin:0}
+.private-coach-help,.private-coach-limit{font-size:12px;line-height:1.6;color:#bfd6cc;margin:0}
+.private-coach-goal{display:grid;grid-template-columns:minmax(150px,1fr) minmax(210px,2fr);gap:12px}
+.private-coach-goal>label,.private-coach-filter label{display:grid;gap:7px;font-size:12px;color:#c7dcca}
+.private-coach-goal select,.private-coach-goal textarea,.private-coach-filter select{min-width:0;width:100%;background:#213d43;border:1px solid #75998c;border-radius:8px;color:#f4fff0;padding:10px;font:inherit}
+.private-coach-goal textarea{resize:vertical}
+.private-coach-actions{display:flex;flex-wrap:wrap;gap:9px;grid-column:1/-1}
+.private-coach-actions button{min-height:42px;padding:9px 13px;border:1px solid #81a58c;border-radius:8px;color:#effbe8;background:#284a44;cursor:pointer}
+.private-coach-actions button:disabled{opacity:.45;cursor:default}
+.private-coach-goal>.private-coach-checkbox{display:flex;flex-direction:row;align-items:center;gap:9px;grid-column:1/-1}
+.private-coach-checkbox input{width:18px;height:18px;accent-color:#d2eea8}
+.private-coach-status{min-height:18px;color:#e8ecbd;margin:0;font-size:12px}
+.private-coach-filter{display:flex;align-items:end;flex-wrap:wrap;gap:12px}
+.private-coach-filter label{min-width:160px}
+.private-coach-summary{font-size:12px;color:#cbdfd0;margin:0}
+.private-coach-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.private-coach-tile{display:grid;gap:7px;min-width:0;background:#264943;border:1px solid #678d79;padding:12px;border-radius:9px}
+.private-coach-tile span{font-size:10px;color:#c0d6c1;letter-spacing:.06em}
+.private-coach-tile strong{font-size:clamp(15px,2vw,22px);overflow-wrap:anywhere}
+.private-coach-review-list{display:grid;gap:16px}
+.private-coach-bars{display:grid;gap:6px}
+.private-coach-bar{display:grid;grid-template-columns:minmax(85px,1fr) minmax(65px,2fr) 30px;gap:10px;align-items:center;min-height:35px;padding:5px 8px;text-align:left;color:#ecf7dc;background:#244540;border:1px solid #547b72;border-radius:7px;cursor:pointer}
+.private-coach-bar span,.private-coach-bar b{font-size:12px}
+.private-coach-bar progress{width:100%;height:12px;accent-color:#b7df8e}
+.private-coach-recents{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.private-coach-recent{min-width:0;border:1px solid #50716c;border-radius:9px;padding:11px;background:#203a3f}
+.private-coach-recent strong{font-size:12px;color:#e0f7bd}
+.private-coach-recent p{font-size:12px;color:#e4e9e3;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.5}
+.private-coach :is(button,select,textarea,input):focus-visible{outline:3px solid #d4ef9c;outline-offset:2px}
+@media(max-width:670px){.private-coach{padding:12px}.private-coach-goal{grid-template-columns:1fr}.private-coach-tiles{grid-template-columns:1fr}.private-coach-recents{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.private-coach *{scroll-behavior:auto;animation:none!important;transition:none!important}}

@@ -154,11 +154,13 @@
    }
    return true;
   }
+  const refreshCoach=window.FuckballPrivateMatchCoach?.mount(panel,user,validSession,currentReceipts,()=>records(user))||(()=>{});
   const update=()=>{
    const total=records(user).length;
    detail.textContent=total+' saved device-only coaching review'+(total===1?'':'s')+
     ' for this signed-in handle. Your last 50 genuine server results can be reviewed above. No rankings or shared messages.';
    wipe.disabled=download.disabled=!total;
+   refreshCoach();
   };
   // Add-only restore of private notes for receipts verified by this signed-in server.
   // Never imports results, changes ratings or overwrites an existing local review.
