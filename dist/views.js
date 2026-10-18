@@ -1,5 +1,22 @@
 'use strict';
-function showView(view){releaseInputs();for(const [key,id]of [['home','homeView'],['play','matchView'],['games','gamesView']])$(id).hidden=key!==view;for(const [key,id]of [['home','tabHome'],['play','tabPlay'],['games','tabReplay']])$(id).classList.toggle('active',key===view);if(view==='play'){$('gameCanvas').focus();renderer.render();}else{if(view==='games'&&typeof renderMyGames==='function')renderMyGames();if(started&&!paused&&!peerConnected&&!replay)togglePause();}}
+function showView(view){
+ const leavingOnline=view!=='play'&&!$('matchView').hidden&&!!serverLink?.room;
+ releaseInputs();
+ for(const [key,id]of [['home','homeView'],['play','matchView'],['games','gamesView']])
+  $(id).hidden=key!==view;
+ for(const [key,id]of [['home','tabHome'],['play','tabPlay'],['games','tabReplay']])
+  $(id).classList.toggle('active',key===view);
+ if(view==='play'){
+  $('gameCanvas').focus();renderer.render();
+ }else{
+  if(view==='games'&&typeof renderMyGames==='function')renderMyGames();
+  // Only solo sandbox matches are automatically paused on navigation.
+  // Never send a host-authorized PAUSE message merely because the owner
+  // opens Home or My Games. Server matches stay live until explicitly paused.
+  if(started&&!paused&&!serverLink&&!peerConnected&&!replay)togglePause();
+ }
+ if(leavingOnline)notify('Your online room is still running. Return via Kick off to continue playing; pause or leave explicitly.');
+}
 $('tabHome').onclick=()=>showView('home');$('tabPlay').onclick=()=>showView('play');$('tabReplay').onclick=()=>showView('games');
 // Central safety boundary for ALL original Home and practice entry points.
 // Native WebSocket host/match authority cannot be replaced by a local-mode click.
