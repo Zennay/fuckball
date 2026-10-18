@@ -133,6 +133,33 @@
   const open=make('button','','▶ Watch full replay');open.type='button';open.onclick=()=>watch(item);
   card.append(top,rows,open);return card;
  }
+ function drawMomentum(item){
+  const wrap=make('div','replay-compare-momentum');
+  const heading=make('h3','','SCORING ACTIVITY · RECORDING QUARTERS');
+  const hint=make('p','','Each column is a quarter of recorded frames, not an official match period. Counts are replay goal markers by side.');
+  wrap.append(heading,hint);
+  if(!item.frames){wrap.append(make('p','replay-compare-empty','Recording length unavailable.'));return wrap;}
+  const bins=Array.from({length:4},()=>({red:0,blue:0}));
+  for(const marker of goals(item)){
+   const bin=bins[Math.min(3,Math.floor(marker.frameNo/item.frames*4))];
+   if(marker.teamId===1)bin.red++;else bin.blue++;
+  }
+  const max=Math.max(1,...bins.map(b=>b.red+b.blue));
+  const graph=make('div','replay-compare-quarters');
+  bins.forEach((bin,i)=>{
+   const col=make('div','replay-compare-quarter');
+   const bars=make('div','replay-compare-quarter-bars');
+   const red=make('span','red'),blue=make('span','blue');
+   red.style.height=(bin.red/max*100)+'%';blue.style.height=(bin.blue/max*100)+'%';
+   red.title=bin.red+' red marker(s)';blue.title=bin.blue+' blue marker(s)';
+   bars.append(red,blue);
+   const label=make('small','',(i*25)+'–'+((i+1)*25)+'%');
+   const amount=make('strong','',bin.red+' R · '+bin.blue+' B');
+   col.setAttribute('aria-label','Quarter '+(i+1)+': '+bin.red+' red and '+bin.blue+' blue goal markers');
+   col.append(bars,label,amount);graph.append(col);
+  });
+  wrap.append(graph);return wrap;
+ }
  function drawTimeline(item,index){
   const lane=make('section','replay-compare-timeline');
   const title=make('div','replay-compare-timeline-head');
@@ -158,7 +185,7 @@
   }
   const ticks=make('div','replay-compare-ticks');
   ticks.append(make('small','','0:00'),make('small','',format(Math.floor(item.frames/2))),make('small','',format(item.frames)));
-  lane.append(title,track,ticks);return lane;
+  lane.append(title,track,ticks,drawMomentum(item));return lane;
  }
  function paint(){
   const [a,b]=selected();
