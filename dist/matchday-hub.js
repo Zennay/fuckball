@@ -190,7 +190,7 @@
   button('⚔ Best-of series',()=>go('.best-of-series')),
   button('⚽ Tactics',()=>go('.formation-studio')),
   button('✓ Attendance',()=>{attendancePanel.open=true;renderAttendance();attendancePanel.scrollIntoView({block:'start'});}),
-  button('↻ Refresh',()=>render()),button('↓ Overview CSV',exportCSV),
+  button('↻ Refresh',()=>render()),button('↓ Complete fixture CSV',exportCSV),
   button('↓ All fixtures ICS',exportCalendar));
  header.append(lead,buttons);
  const totals=dom('div',null,'matchday-totals');
@@ -361,13 +361,27 @@
   };
   const rows=[['Competition type','Name','Recorded fixtures','Total fixtures','Leader or winner (manual)'],
    ...competitions.map(c=>[c.type,c.name,c.played,c.total,c.leader||''])];
-  rows.push([],['Upcoming fixture','Competition','Local kickoff','Venue']);
-  for(const f of upcomingMatches)rows.push([f.name,f.competition,new Date(f.time).toLocaleString(),f.venue]);
+  rows.push([],['Private fixture ID','Type','Competition','Round or game','Home / provisional qualifier',
+   'Away / provisional qualifier','Local kickoff','UTC kickoff','Venue','Score status',
+   'Self-entered home goals','Self-entered away goals','Self-entered tiebreak','Qualifiers']);
+  const exported=fixtureCards.filter(f=>f.homeScore!==null||f.active!==false)
+   .sort((a,b)=>(a.time??Number.MAX_SAFE_INTEGER)-(b.time??Number.MAX_SAFE_INTEGER)||
+    a.competition.localeCompare(b.competition)||a.round-b.round);
+  for(const f of exported){
+   const id=f.fixtureId||f.matchId||f.gameId;
+   rows.push([id,f.type,f.competition,f.round,f.home,f.away,
+    f.time===null?'':new Date(f.time).toLocaleString(),
+    f.time===null?'':new Date(f.time).toISOString(),f.venue,
+    f.homeScore===null?'Not played':'Manually recorded — unverified',
+    f.homeScore===null?'':f.homeScore,f.awayScore===null?'':f.awayScore,
+    f.tiebreak||'',f.type==='Knockout'?(f.unlocked?'Known':'Pending'):'']);
+  }
   const data='\uFEFF'+rows.map(row=>row.map(sanitize).join(',')).join('\r\n')+'\r\n';
   const url=URL.createObjectURL(new Blob([data],{type:'text/csv;charset=utf-8'}));
-  const a=dom('a');a.href=url;a.download='fuckball-private-matchday-overview.csv';a.click();
+  const a=dom('a');a.href=url;a.download='fuckball-private-matchday-complete-fixtures.csv';a.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
-  note.textContent='Local, unofficial competition overview saved to CSV.';
+  note.textContent='Local CSV exported with '+exported.length+
+   ' actual private fixture rows, including provisional cup pairings and self-entered scores. No server verification implied.';
  }
  function exportCalendar(){
   if(!allUpcoming.length)return void(note.textContent='Set a kickoff in a league, cup or active series first.');
