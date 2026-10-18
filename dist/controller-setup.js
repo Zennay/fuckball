@@ -8,7 +8,8 @@
   ['default','A / X / right trigger'],
   ['face','Any face button (A / B / X / Y)'],
   ['trigger','Right trigger only'],
-  ['shoulder','Right shoulder or right trigger']
+  ['shoulder','Right shoulder or right trigger'],
+  ...[0,1,2,3,4,5,6,7,8,10,11].map(n=>['button:'+n,'One button · '+n])
  ];
  const make=(tag,className,text)=>{
   const el=document.createElement(tag);if(className)el.className=className;
@@ -19,7 +20,7 @@
  setup.setAttribute('aria-label','Controller setup');
  const intro=make('div','controller-setup-copy');
  intro.append(make('span','eyebrow','PLAY YOUR WAY'),make('h2','','CONTROLLER READY.'),
-  make('p','','Check a connected controller, tune stick drift and choose a kick mapping before playing. Keyboard controls remain available.'));
+  make('p','','Use left or right stick, reverse stick axes and choose your kick button. Tune drift while you watch live input before playing. Keyboard controls stay available.'));
  const launch=make('button','primary','🎮 Configure controller');launch.type='button';
  setup.append(intro,launch);
  const anchor=home.querySelector('.mode-cards');
@@ -48,12 +49,23 @@
  const mapping=make('select');mapping.setAttribute('aria-label','Gamepad kick mapping');
  for(const [v,label] of MODES)mapping.add(new Option(label,v));
  mappingLabel.append(mapping);
+ const stickLabel=make('label','','Move with');
+ const stick=make('select');stick.setAttribute('aria-label','Controller movement stick');
+ stick.add(new Option('Left stick','left'));stick.add(new Option('Right stick','right'));
+ stickLabel.append(stick);
+ const invertLabel=make('fieldset','controller-setup-invert');
+ const invertLegend=make('legend','','Direction accessibility');
+ const invertX=make('input');invertX.type='checkbox';
+ const invertXLabel=make('label','','Reverse horizontal stick');invertXLabel.prepend(invertX);
+ const invertY=make('input');invertY.type='checkbox';
+ const invertYLabel=make('label','','Reverse vertical stick');invertYLabel.prepend(invertY);
+ invertLabel.append(invertLegend,invertXLabel,invertYLabel);
  const deadLabel=make('label','','Stick deadzone');
  const slider=make('input');slider.type='range';slider.min='.15';slider.max='.65';slider.step='.05';
  slider.setAttribute('aria-label','Gamepad stick deadzone');
  const deadValue=make('output','','30%');
  const sliderRow=make('div','controller-setup-slider');sliderRow.append(slider,deadValue);deadLabel.append(sliderRow);
- fields.append(deviceLabel,mappingLabel,deadLabel);
+ fields.append(deviceLabel,mappingLabel,stickLabel,deadLabel,invertLabel);
  const calibrate=make('button','','◎ Measure resting stick (2s)');calibrate.type='button';
  const hint=make('p','controller-setup-hint','Rest the stick and release every button before calibrating. This only recommends a deadzone; you choose whether to apply it.');
  const actions=make('div','controller-setup-actions');
@@ -63,13 +75,18 @@
  actions.append(apply,reset,done);
  dialog.append(heading,privacy,state,board,fields,calibrate,hint,actions);
  document.body.append(dialog);
- let config={kick:'default',deadzone:.30},suggestion=null,sampling=null,lastMessage='',active=false;
+ const kickValid=k=>MODES.some(([key])=>key===k);
+ let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false},
+  suggestion=null,sampling=null,lastMessage='',active=false;
  let selectedSource=null,deviceSignature='';
  function read(){
   try{
    const saved=JSON.parse(localStorage.getItem(KEY)||'null');
    if(!saved||typeof saved!=='object'||Array.isArray(saved))return;
-   if(MODES.some(([k])=>k===saved.kick))config.kick=saved.kick;
+   if(kickValid(saved.kick))config.kick=saved.kick;
+   if(['left','right'].includes(saved.stick))config.stick=saved.stick;
+   if(typeof saved.invertX==='boolean')config.invertX=saved.invertX;
+   if(typeof saved.invertY==='boolean')config.invertY=saved.invertY;
    if(Number.isFinite(saved.deadzone)&&saved.deadzone>=.15&&saved.deadzone<=.65)
     config.deadzone=saved.deadzone;
   }catch{/* Keep safe defaults. */}
@@ -77,6 +94,7 @@
  read();
  function fill(){
   mapping.value=config.kick;slider.value=String(config.deadzone);
+  stick.value=config.stick;invertX.checked=config.invertX;invertY.checked=config.invertY;
   deadValue.textContent=Math.round(config.deadzone*100)+'%';
  }
  fill();
@@ -90,22 +108,30 @@
    'Settings apply in this tab, but browser storage blocked saving across visits.';
  }
  mapping.onchange=()=>{
-  if(!MODES.some(([key])=>key===mapping.value))return;
+  if(!kickValid(mapping.value))return;
   config.kick=mapping.value;persist();
  };
+ stick.onchange=()=>{
+  if(!['left','right'].includes(stick.value))return;
+  config.stick=stick.value;sampling=null;calibrate.disabled=false;suggestion=null;
+  apply.disabled=true;persist();
+ };
+ invertX.onchange=()=>{config.invertX=invertX.checked;persist();};
+ invertY.onchange=()=>{config.invertY=invertY.checked;persist();};
  slider.oninput=()=>{
   const value=Number(slider.value);
   if(!Number.isFinite(value)||value<.15||value>.65)return;
   config.deadzone=value;fill();persist();
  };
  reset.onclick=()=>{
-  config={kick:'default',deadzone:.30};suggestion=null;
+  config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false};suggestion=null;
   apply.disabled=true;fill();persist();
   hint.textContent='Standard kick mapping and 30% deadzone restored.';
  };
  const held=(pad,i)=>pad.buttons?.[i]?.pressed===true||
   (Number(pad.buttons?.[i]?.value)||0)>.6;
  function isKick(pad){
+  if(config.kick.startsWith('button:'))return held(pad,Number(config.kick.slice(7)));
   if(config.kick==='face')return [0,1,2,3].some(i=>held(pad,i));
   if(config.kick==='trigger')return held(pad,7);
   if(config.kick==='shoulder')return held(pad,5)||held(pad,7);
@@ -165,10 +191,14 @@
   const msg='Connected · '+String(pad.id||'Gamepad').slice(0,72)+
    ' · '+pad.buttons.length+' buttons · '+pad.axes.length+' axes.';
   if(msg!==lastMessage){state.textContent=msg;lastMessage=msg;}
-  const rawX=Number.isFinite(pad.axes?.[0])?pad.axes[0]:0;
-  const rawY=Number.isFinite(pad.axes?.[1])?pad.axes[1]:0;
-  const x=held(pad,14)?-1:held(pad,15)?1:Math.abs(rawX)>=config.deadzone?rawX:0;
-  const y=held(pad,12)?-1:held(pad,13)?1:Math.abs(rawY)>=config.deadzone?rawY:0;
+  const index=config.stick==='right'?2:0;
+  const rawX=Number.isFinite(pad.axes?.[index])?pad.axes[index]:0;
+  const rawY=Number.isFinite(pad.axes?.[index+1])?pad.axes[index+1]:0;
+  let x=Math.abs(rawX)>=config.deadzone?rawX:0;
+  let y=Math.abs(rawY)>=config.deadzone?rawY:0;
+  if(config.invertX)x=-x;if(config.invertY)y=-y;
+  if(held(pad,14))x=-1;if(held(pad,15))x=1;
+  if(held(pad,12))y=-1;if(held(pad,13))y=1;
   dot.style.left=(50+Math.max(-1,Math.min(1,x))*42)+'%';
   dot.style.top=(50+Math.max(-1,Math.min(1,y))*42)+'%';
   visual.setAttribute('aria-label','Controller movement: '+Math.round(x*100)+'% horizontal, '+Math.round(y*100)+'% vertical');
@@ -222,7 +252,7 @@
    state.textContent='Your browser does not support the controller setup dialog.';return;
   }
   fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
-  hint.textContent='This input preview does not move players or join a room. Leave the stick centered to measure resting drift.';
+  hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
   dialog.showModal();mapping.focus();
  };
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
