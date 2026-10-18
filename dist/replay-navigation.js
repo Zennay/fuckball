@@ -79,7 +79,50 @@
  const faster=document.createElement('button');faster.type='button';faster.textContent='+ Speed';
  slower.onclick=()=>speedChange(-1);faster.onclick=()=>speedChange(1);
  rates.append(slower,faster);
- help.append(description,actions,rates,status);pane.append(heading,help);controls.append(pane);
+ const cameraRow=document.createElement('div');cameraRow.className='replay-navigation-camera';
+ const cameraLabel=document.createElement('label');cameraLabel.textContent='Replay camera';
+ const cameraSelect=document.createElement('select');cameraSelect.setAttribute('aria-label','Follow recorded player or show full pitch');
+ cameraSelect.add(new Option('Full pitch','-1'));cameraLabel.append(cameraSelect);
+ const cameraHint=document.createElement('small');
+ cameraHint.textContent='Follow a real player visible in the recorded HBR2 frames. Does not affect gameplay or recorded data.';
+ cameraRow.append(cameraLabel,cameraHint);
+ let lastReplay=null,lastRoster='',follow=-1;
+ function refreshCamera(){
+  if(!available()||typeof renderer==='undefined')return;
+  if(replay!==lastReplay){
+   lastReplay=replay;lastRoster='';follow=-1;renderer.followPlayerId=-1;
+  }
+  const players=Array.isArray(replay.state?.players)?
+   replay.state.players.filter(p=>Number.isSafeInteger(p?.id)&&p.id>=0&&
+    [1,2].includes(p.team?.id)&&p.disc):[];
+  const signature=players.map(p=>p.id+':'+p.team.id+':'+p.name).join('|');
+  if(signature===lastRoster)return;
+  lastRoster=signature;
+  const previous=follow;
+  cameraSelect.replaceChildren(new Option('Full pitch','-1'));
+  for(const p of players){
+   const side=p.team.id===1?'Red':'Blue';
+   cameraSelect.add(new Option(side+' · '+String(p.name||'Player').slice(0,30),String(p.id)));
+  }
+  if(previous>=0&&!players.some(p=>p.id===previous)){
+   follow=-1;renderer.followPlayerId=-1;
+   show('Selected recorded player is no longer on the pitch. Switched to full pitch.');
+  }
+  cameraSelect.value=String(follow);
+ }
+ cameraSelect.onchange=()=>{
+  if(!available()||typeof renderer==='undefined')return;
+  const candidate=Number(cameraSelect.value);
+  if(!Number.isSafeInteger(candidate)||candidate < -1)return;
+  const present=candidate===-1||Array.isArray(replay.state?.players)&&
+   replay.state.players.some(p=>p.id===candidate&&[1,2].includes(p.team?.id)&&p.disc);
+  if(!present){cameraSelect.value='-1';renderer.followPlayerId=-1;follow=-1;
+   show('Recorded player is not active in this frame.');return;}
+  follow=candidate;renderer.followPlayerId=candidate;
+  show(candidate===-1?'Camera: full recorded pitch.':'Camera: following recorded player '+cameraSelect.selectedOptions[0].textContent+'.');
+ };
+ help.append(description,actions,rates,cameraRow,status);pane.append(heading,help);controls.append(pane);
+ window.setInterval(()=>{if(!document.hidden&&available())refreshCamera();},700);
  window.addEventListener('keydown',event=>{
   if(!available()||event.defaultPrevented||document.hidden||event.altKey||
    event.ctrlKey||event.metaKey||document.querySelector('dialog[open]')||
