@@ -192,10 +192,11 @@ function createServer(options={}){
      blocked:friends.blocked
     },
     club:clubs.view(user),
-    party:parties.snapshot(user)};
+    party:parties.snapshot(user),
+    roomPresets:presetLocker?.get(user)||[]};
    // The export is deliberately a bounded snapshot, not a streaming backup
    // of other players, server databases, authentication material or all rooms.
-   if(Buffer.byteLength(JSON.stringify(payload))>512*1024)
+   if(Buffer.byteLength(JSON.stringify(payload))>1024*1024)
     throw Error('Snapshot exceeds limit.');
    return json(200,payload);
   }catch{
