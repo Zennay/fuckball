@@ -134,7 +134,7 @@
   try{previousRaw=localStorage.getItem(key);}catch{}
   updateLabel();
  }
- function renderToolbar(host,user,authorized){
+ function renderToolbar(host,user,authorized,currentReceipts){
   if(!host||!identity(user))return;
   const panel=document.createElement('section');panel.className='native-review-vault';
   const heading=document.createElement('strong');heading.textContent='PRIVATE ONLINE MATCH REVIEWS';
@@ -143,7 +143,7 @@
   const download=document.createElement('button');download.type='button';
   download.textContent='↓ Export my review notes';
   const wipe=document.createElement('button');wipe.type='button';
-  wipe.textContent='Clear device reviews';
+  wipe.textContent='Clear device reviews';wipe.className='native-review-vault-wipe';
   const status=document.createElement('p');status.setAttribute('role','status');
   status.setAttribute('aria-live','polite');
   actions.append(download,wipe);panel.append(heading,detail,actions,status);host.replaceChildren(panel);
@@ -159,6 +159,78 @@
    detail.textContent=total+' saved device-only coaching review'+(total===1?'':'s')+
     ' for this signed-in handle. Your last 50 genuine server results can be reviewed above. No rankings or shared messages.';
    wipe.disabled=download.disabled=!total;
+  };
+  // Add-only restore of private notes for receipts verified by this signed-in server.
+  // Never imports results, changes ratings or overwrites an existing local review.
+  const importButton=document.createElement('button');importButton.type='button';
+  importButton.textContent='↑ Restore recent notes';
+  const importFile=document.createElement('input');importFile.type='file';importFile.hidden=true;
+  importFile.accept='.json,application/json';
+  actions.append(importButton,importFile);
+  importButton.onclick=()=>{
+   if(!validSession())return;
+   importFile.click();
+  };
+  importFile.onchange=async()=>{
+   const file=importFile.files?.[0];importFile.value='';
+   if(!file)return;
+   if(!validSession())return;
+   if(file.size>128*1024){
+    status.textContent='Review import exceeds 128 KB. Select a smaller exported JSON file.';
+    return;
+   }
+   importButton.disabled=true;
+   try{
+    const payload=JSON.parse(await file.text());
+    if(!validSession())return;
+    if(payload?.version!==1||payload.source!=='fuckball-local-review'||
+      payload.ranked!==false||typeof payload.account!=='string'||
+      payload.account.toLowerCase()!==user.toLowerCase()||
+      !Array.isArray(payload.items)||payload.items.length>100)
+      throw Error('Choose a private review export for this signed-in account.');
+    const distinct=new Set();
+    for(const item of payload.items){
+     if(!receipt(item?.id)||distinct.has(item.id)||!FOCUSES.includes(item.focus)||
+       typeof item.note!=='string'||item.note.length>280||
+       !Number.isSafeInteger(item.updatedAt)||item.updatedAt<=0)
+      throw Error('Review file contains an invalid or duplicate entry.');
+     distinct.add(item.id);
+    }
+    // Can only link notes to currently authenticated, native-server receipts.
+    const serverIds=new Set((currentReceipts||[]).filter(row=>receipt(row?.id)).map(row=>row.id));
+    const eligible=payload.items.filter(item=>serverIds.has(item.id));
+    const missing=payload.items.length-eligible.length;
+    const prefix=identity(user);
+    const fresh=eligible.filter(item=>localStorage.getItem(prefix+item.id)===null);
+    const existing=eligible.length-fresh.length;
+    if(!fresh.length){
+     status.textContent='Nothing to restore: '+missing+' older receipts unavailable in current server history; '+existing+' reviews already exist.';
+     return;
+    }
+    if(records(user).length+fresh.length>100)
+     throw Error('This device would exceed 100 reviews. Export and clear old reviews before restoring.');
+    if(!confirm('Restore '+fresh.length+' device-only review(s) for genuine recent matches? Existing notes will not be overwritten.'))return;
+    if(!validSession())return;
+    // Re-check absence after user confirmation; never overwrite a concurrent edit.
+    if(fresh.some(item=>localStorage.getItem(prefix+item.id)!==null))
+     throw Error('Reviews changed in another tab. Reopen the import to avoid overwriting them.');
+    const written=[];
+    try{
+     for(const item of fresh){
+      const key=prefix+item.id;
+      localStorage.setItem(key,JSON.stringify({version:1,focus:item.focus,note:item.note,updatedAt:item.updatedAt}));
+      written.push(key);
+     }
+    }catch(error){
+     for(const key of written){try{localStorage.removeItem(key);}catch{}}
+     throw Error('Browser storage rejected the import. Newly added notes were rolled back where possible.');
+    }
+    status.textContent=fresh.length+' private review(s) restored, '+existing+' existing kept; '+
+      missing+' older receipts skipped because their original server data is not in the recent authenticated history.';
+    update();window.dispatchEvent(new Event('fuckball:online-review-imported'));
+   }catch(error){
+    status.textContent=error?.message||'Could not import private review notes.';
+   }finally{importButton.disabled=false;}
   };
   download.onclick=()=>{
    if(!validSession())return;

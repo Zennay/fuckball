@@ -163,7 +163,7 @@
   if(window.FuckballOnlineMatchReviews&&currentToken&&currentUser){
    window.FuckballOnlineMatchReviews.renderToolbar(reviewVault,currentUser,()=>
     !!items&&!!currentToken&&authenticated()?.token===currentToken&&
-    authenticated()?.username===currentUser);
+    authenticated()?.username===currentUser,items);
   }else reviewVault.replaceChildren();
   if(scope.length){
    const count=type=>scope.reduce((n,x)=>n+Number(outcome(x)===type),0);
@@ -305,6 +305,11 @@
   if(next==='games')load();
   else{generation++;currentToken=null;items=null;reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
+ window.addEventListener('fuckball:online-review-imported',()=>{
+  if(items&&currentToken&&!games.hidden&&authenticated()?.token===currentToken){
+   render();status.textContent='Your own private notes were restored on this device; genuine server receipts are unchanged.';
+  }
+ });
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&!games.hidden&&authenticated()?.token!==currentToken)load();
  });

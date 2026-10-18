@@ -25,7 +25,7 @@
 .native-review-vault-actions{display:flex;flex-wrap:wrap;gap:9px}
 .native-review-vault button{min-height:44px;padding:9px 13px;border-radius:7px;
  border:1px solid #90a896;background:#28564a;color:#f2ffe2;font:750 12px system-ui,sans-serif;cursor:pointer}
-.native-review-vault button:last-child{border-color:#b28785;color:#ffe3df}
+.native-review-vault button.native-review-vault-wipe{border-color:#b28785;color:#ffe3df}
 .native-review-vault button:disabled{opacity:.48;cursor:not-allowed}
 @media(max-width:550px){.native-review-vault{padding:12px}
  .native-review-vault button{flex:1 1 100%}}
