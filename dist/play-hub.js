@@ -64,6 +64,13 @@
  const roomActions=node('div',null,'play-hub-actions');
  roomActions.append(
   action('Browse rooms',()=>openSection('.room-browser','No public room browser is available here.','Public room browser opened.'),'play-hub-secondary'),
+  action('Join by invite',()=>{
+   const state=activeState();
+   if(state.server||state.peer||state.inQueue||state.ready)
+    return announce('Leave your active room or cancel your human matchmaking queue before joining another room.');
+   openSection('.direct-invite-join','The invitation form is unavailable.',
+    'Paste an invite URL or room code, then confirm the join. Only the server can admit you.');
+  },'play-hub-secondary'),
   action('Create a room',()=>{
    if(!canSwitch('create a room'))return;
    const b=document.getElementById('quickOnline');
