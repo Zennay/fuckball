@@ -70,3 +70,26 @@
 .tournament-recovery p{flex:1 1 100%;margin:0;color:#ffe5c7;line-height:1.5}
 .tournament-recovery button{min-height:43px}
 .tournament-recovery[hidden]{display:none!important}
+
+/* Transactional local league batch scheduler. Never implies an official match time. */
+.tournament-batch-planner:not([hidden]){display:grid;gap:12px;margin:16px 0;padding:18px;
+ border:1px solid #87b0a2;border-radius:14px;background:#193838}
+.tournament-batch-planner[hidden]{display:none!important}
+.tournament-batch-planner h3{margin:0;letter-spacing:.065em;font-size:1.04rem}
+.tournament-batch-planner>p{color:#c3dfd1;line-height:1.5;margin:0;max-width:75ch}
+.tournament-batch-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.tournament-batch-form label{display:grid;gap:6px;font-size:.88rem;color:#d3e8de;font-weight:700;min-width:0}
+.tournament-batch-form input{box-sizing:border-box;width:100%;min-width:0}
+.tournament-batch-form .tournament-batch-keep{display:flex;align-items:center;gap:9px;justify-content:flex-start;min-height:44px}
+.tournament-batch-keep input{width:19px;height:19px;accent-color:#b9f48f}
+.tournament-batch-form button{min-height:44px;min-width:0}
+.tournament-batch-preview{padding:12px;border:1px dashed #6f9787;border-radius:10px;background:#112e32;color:#e5f4eb}
+.tournament-batch-preview:empty{display:none}
+.tournament-batch-preview strong{color:#d2f9a4}
+.tournament-batch-preview ol{display:grid;gap:8px;max-height:270px;overflow:auto;padding-left:25px;margin:14px 0}
+.tournament-batch-preview li{line-height:1.4;overflow-wrap:anywhere}
+.tournament-batch-preview p{color:#c2d8cf;font-size:.88rem;line-height:1.5;margin:8px 0 0}
+@media(max-width:660px){.tournament-batch-planner:not([hidden]){padding:12px}
+ .tournament-batch-form{grid-template-columns:1fr}
+ .tournament-batch-preview ol{max-height:210px}}
+@media print{.tournament-batch-planner{display:none!important}}
