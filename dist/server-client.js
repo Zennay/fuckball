@@ -9,7 +9,7 @@ const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.
 const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serverLink.isOwner||!started)return;paused=!paused;releaseInputs();serverLink.send({type:'pause',value:paused});setButtons();return;}baseTogglePause();};
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
-function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||resumeContext?.quickMatchMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  $('inviteBox').hidden=true;ws.onopen=()=>link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,room:roomId,name:joinName||settings.name,token:settings.account?.token||undefined,
@@ -21,7 +21,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    }
    if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room,tries=(link.retries||0),previousId=link.previousId??networkPlayerId,ticket=link.resumeTicket;disconnect();if(link.failed)return;
   // Dropped connection (Wi-Fi switch, proxy hiccup): rejoin the same room a few times.
-  if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1});},delay);}else notify('Disconnected.');};
+  if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1,quickMatchMode:link.quickMatchMode});},delay);}else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
   if(d.type==='quickMatchFound'){link.quickMatchMode=d.mode;link.roomControl={locked:true};}
@@ -205,6 +205,7 @@ $('rematchDecline').onclick=()=>{
  const request=serverLink?.roomState?.rematch;
  if(request)serverLink.send({type:serverLink?.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:false});
 };
+setInterval(()=>{if(serverLink?.quickMatchMode&&menuOpen&&serverLink.quickRematch)renderNextMatchPanel();},1000);
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
