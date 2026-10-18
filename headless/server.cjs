@@ -100,7 +100,7 @@ function createServer(options={}){
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
   if(ws.pendingResumeToken){const ticket=ws.pendingResumeToken;ws.pendingResumeToken=null;rejoin(ws,r,ticket);return;}
   while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
-  if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.meshsend(ws,{type:'peering',enabled:true});meshUpdate(r);}
+  if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);}
  function leave(ws){const r=ws.room;if(!r)return;ws.room=null;const queued=r.pendingJoins.indexOf(ws);if(queued>=0){r.pendingJoins.splice(queued,1);return;}
   const id=ws.playerId;r.sockets.delete(id);r.reports.delete(id);r.sessionTokens.delete(id);const claim=r.parked.get(id);if(claim){clearTimeout(claim.timer);r.parked.delete(id);}
   if(r.authority===id){if(!r.sockets.size){r.destroy();rooms.delete(r.id);return;}failover(r,'host left');}
