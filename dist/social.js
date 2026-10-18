@@ -29,7 +29,7 @@
  addForm.append(input,add);
  const grids=document.createElement('div');grids.className='social-grids';
  shell.append(top,intro,status,addForm,grids);dialog.append(shell);document.body.append(dialog);
- let timer=null,generation=0,busy=false,accountToken=null;
+ let timer=null,generation=0,busy=false,accountToken=null,activeParty=null;
  const api=async(body,invite=false)=>{
   const token=settings.account?.token;
   if(!token)throw Error('Log in to use friends.');
@@ -78,6 +78,10 @@
     button('Block',()=>{if(confirm('Block '+f.name+'? This also removes the friendship.'))act({action:'block',user:f.name});},true)
    ];
    if(serverLink?.room&&f.online)actions.unshift(button('Invite to room',()=>act({to:f.name,room:serverLink.room},true)));
+   if(activeParty?.leader===settings.account?.username?.toLowerCase()&&
+      activeParty.members?.length<4&&!activeParty.launchMode&&
+      !activeParty.members.some(m=>m.name===f.name.toLowerCase()))
+    actions.unshift(button('Invite to party',()=>inviteParty(f.name)));
    row(friends,f.name+(f.online?' · PLAYING':' · offline'),actions);
   }
   if(!data.friends.length)row(friends,'No friends yet. Search for an exact account name above.');
@@ -106,6 +110,21 @@
   for(const name of data.blocked||[])row(blocked,name,[button('Unblock',()=>act({action:'unblock',user:name}))]);
   if(!data.blocked?.length)row(blocked,'Nobody blocked');
  }
+ async function inviteParty(name){
+  if(busy)return;
+  busy=true;status.textContent='Sending party invitation…';
+  try{
+   const token=settings.account?.token;
+   if(!token)throw Error('Sign in before inviting a teammate.');
+   const response=await fetch('/api/party',{method:'POST',cache:'no-store',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action:'invite',user:name})});
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.error||'Could not invite this friend.');
+   status.textContent='Party invitation sent to '+name+'. They can accept under Friends → Party.';
+  }catch(e){status.textContent=e.message||'Party invitation failed.';}
+  finally{busy=false;}
+ }
  async function refresh(){
   if(!dialog.open)return;
   const load=++generation,token=settings.account?.token;
@@ -117,8 +136,13 @@
   }
   addForm.hidden=false;
   try{
-   const data=await api(null);
+   const [data,party]=await Promise.all([
+    api(null),
+    fetch('/api/party',{cache:'no-store',headers:{Authorization:'Bearer '+token}})
+     .then(async response=>response.ok?response.json():null).catch(()=>null)
+   ]);
    if(load!==generation||!dialog.open||settings.account?.token!==token)return;
+   activeParty=party?.party||null;
    render(data);status.textContent='Signed in as '+settings.account.username+'.';
   }catch(e){if(load===generation)status.textContent=e.message||'Friends unavailable.';}
  }
