@@ -1,0 +1,27 @@
+/* Saved Custom Room setups, local-only and strictly host-controlled. */
+.room-presets{display:grid;gap:12px;margin-top:20px;padding:20px;
+ border:1px solid #648076;border-radius:12px;background:#203537}
+.room-presets-heading{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.room-presets-heading strong{font-size:18px;font-style:italic;font-weight:900;color:#d9ffb0}
+.room-presets-heading span{color:#bad0c5;font-size:10px;letter-spacing:.09em;font-weight:800}
+.room-presets>p{margin:0;font-size:12px;color:#bdcfc5;line-height:1.5}
+.room-presets-status{min-height:19px!important;color:#dbf9b4!important}
+.room-presets-save{display:flex;gap:9px;flex-wrap:wrap}
+.room-presets-save[hidden]{display:none}
+.room-presets-save input{flex:1 1 160px;min-width:0;min-height:42px;
+ padding:10px 12px;border:1px solid #819c8e;border-radius:7px;
+ background:#102a2e;color:#f4fff1;font-size:13px}
+.room-presets-save button{min-height:42px;border-radius:8px;padding:10px 15px;font-weight:850}
+.room-presets-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:9px}
+.room-presets-entry{padding:14px;border:1px solid #58786c;border-radius:9px;background:#2a4340;
+ display:flex;flex-direction:column;gap:12px}
+.room-presets-details{display:grid;gap:6px;min-width:0}
+.room-presets-details strong{font-size:13px;color:#e8ffcb;overflow-wrap:anywhere}
+.room-presets-details small{font-size:11px;color:#b6d3c3}
+.room-presets-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.room-presets-buttons button{flex:1 1 95px;padding:10px 14px;min-height:41px;border-radius:7px;font-weight:750}
+.room-presets-buttons button:disabled{opacity:.5;cursor:not-allowed}
+.room-presets-delete{background:#352d31!important;color:#ffd2d2!important;border:1px solid #98686e!important}
+.room-presets-empty{font-size:12px;color:#aac4b5;margin:5px 0!important}
+.room-presets button:focus-visible,.room-presets input:focus-visible{outline:3px solid #e1ffb1;outline-offset:3px}
+@media(max-width:550px){.room-presets{padding:15px}.room-presets-save button{flex:1 1 125px}}
