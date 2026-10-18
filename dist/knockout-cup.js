@@ -107,6 +107,7 @@
       throw Error('Another tab changed cup data. Reload the page before editing.');
     localStorage.setItem(KEY,text);
     storageSnapshot=text;cups=updated;
+    window.dispatchEvent(new Event('fuckball:private-competition-change'));
   }
   const current=()=>cups.find(c=>c.id===active)||null;
   const main=el('section',null,'knockout-desk');

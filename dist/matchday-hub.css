@@ -1,0 +1,51 @@
+/* Read-only browser-private Matchday Hub: never renders authoritative server scores. */
+.matchday-hub{width:min(1180px,calc(100% - 32px));margin:24px auto 42px;color:#eaf8ef}
+.matchday-disclosure{border:1px solid #668780;background:#162f31;border-radius:18px;overflow:hidden;box-shadow:0 15px 36px #0002}
+.matchday-disclosure>summary{padding:19px 22px;font-size:1rem;font-weight:800;letter-spacing:.065em;cursor:pointer;list-style-position:inside}
+.matchday-body{padding:0 20px 24px}
+.matchday-header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.matchday-header h2{font-size:clamp(1.25rem,2.2vw,1.8rem);letter-spacing:.05em;margin:0}
+.matchday-header p,.matchday-competitions>p,.matchday-upcoming>p{max-width:70ch;color:#bdd4cb;line-height:1.5}
+.matchday-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.matchday-hub button{font:inherit;font-weight:700;background:#d0f2ac;border:1px solid #b1d59f;border-radius:8px;color:#1d3431;padding:9px 12px;cursor:pointer}
+.matchday-hub button:disabled{opacity:.5;cursor:not-allowed}
+.matchday-hub button:hover:not(:disabled){filter:brightness(1.09)}
+.matchday-hub button:focus-visible,.matchday-disclosure>summary:focus-visible{outline:3px solid #ffe28e;outline-offset:3px}
+.matchday-totals{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:20px 0}
+.matchday-stat{padding:13px;background:#23403f;border:1px solid #496a5d;border-radius:12px;display:grid;gap:4px}
+.matchday-stat strong{font-size:1.55rem;font-variant-numeric:tabular-nums;color:#d5faa8}
+.matchday-stat span{color:#c1dbce;font-size:.85rem}
+.matchday-competitions h3,.matchday-upcoming h3{font-size:.93rem;letter-spacing:.06em;margin:20px 0 12px}
+.matchday-competitions{display:grid;gap:10px}
+.matchday-competition{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #58786b;border-radius:11px;padding:12px;background:#204042}
+.matchday-competition div{min-width:0;display:grid;gap:5px}
+.matchday-competition small{color:#c0e994;font-weight:750;letter-spacing:.06em}
+.matchday-competition strong{overflow-wrap:anywhere}
+.matchday-competition p{margin:0;color:#c1d9cc;font-size:.87rem}
+.matchday-competition button{flex-shrink:0}
+.matchday-upcoming{display:grid;gap:8px}
+.matchday-upcoming-item{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center;padding:12px;border-bottom:1px solid #46655c}
+.matchday-upcoming-item time{color:#d8f3b7;font-variant-numeric:tabular-nums}
+.matchday-upcoming-item span{color:#c2d9cb;overflow-wrap:anywhere}
+.matchday-upcoming-item strong{overflow-wrap:anywhere}
+.matchday-status{color:#b7d5c7;font-size:.88rem;line-height:1.5;margin-top:20px}
+@media(max-width:860px){
+ .matchday-totals{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .matchday-upcoming-item{grid-template-columns:130px minmax(0,1fr)}
+ .matchday-upcoming-item span{grid-column:2}
+}
+@media(max-width:550px){
+ .matchday-hub{width:calc(100% - 20px);margin:20px auto}
+ .matchday-body{padding:0 12px 16px}
+ .matchday-actions{justify-content:flex-start}
+ .matchday-totals{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .matchday-competition{display:grid}
+ .matchday-competition button{justify-self:start}
+ .matchday-upcoming-item{grid-template-columns:1fr;gap:4px}
+ .matchday-upcoming-item span{grid-column:1}
+}
+@media print{
+ .matchday-disclosure{color:#111;background:white;box-shadow:none}
+ .matchday-actions{display:none}
+ .matchday-stat,.matchday-competition{background:white;color:#111}
+}

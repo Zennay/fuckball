@@ -95,6 +95,7 @@
     if(data.length>MAX_STORE)throw Error('Local tournament storage is full.');
     localStorage.setItem(KEY,data);  // Write first: a blocked/quota store must not change the UI state.
     tournaments=next;
+    window.dispatchEvent(new Event('fuckball:private-competition-change'));
   }
   const panel=make('section',null,'tournament-desk');
   panel.setAttribute('aria-label','Private friendly tournament desk');
