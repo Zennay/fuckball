@@ -16,6 +16,14 @@ When a compatible full roster is found, **each player gets a 15-second ready pro
 
 This does not implement friends parties, regional matchmaking, rated rankings, or a persistent match server. The separate persistent match receipts remain server-local and are not anti-cheat-ranked history.
 
+## Club-only Custom Rooms
+
+A signed-in Club member who owns a Custom Room can open **Esc → Room Control → Restrict to my Club**. The server checks that the owner has a valid Club membership, and refuses to enable Club-only admission if any connected player belongs to another Club or is a guest. Existing game and physics settings stay intact. Room invitations and reconnects are then accepted only for accounts whose current membership matches that Club. The host can choose **Allow other invited players** again; the room stays unlisted until explicitly published.
+
+Eligible Club-only rooms appear privately under **Friends → Clubs → Club match rooms** for members of that Club, with join and share actions. They never appear in the public room directory. Room locking still applies. Revoked or departed Club members lose access immediately after Club roster changes, including reconnection; disbanding a Club revokes all its private rooms. No one is silently promoted or added to a Club by opening a room link.
+
+Club-only rooms are casual Custom Rooms and do not change ranked or Club Elo. A permanent Club-owned room, ranked Club-vs-Club matchmaking and verified fixtures are separate future capabilities.
+
 ## Clubs — persistent social teams
 
 Open **Friends → Clubs** to create a named Club with a unique 2–6 character tag, invite registered accounts, accept or decline invitations and view the private team roster. Each player belongs to at most one Club on this server. Clubs support up to 24 members, one owner and optional captains. Owners can appoint or remove captains, transfer ownership, remove members and disband the Club; captains can invite teammates and remove ordinary members. Members can leave at any time; owners must transfer ownership or disband first.
