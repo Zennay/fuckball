@@ -61,7 +61,7 @@
    time:f.kickoff,venue:f.venue,competition:raw.name,
    homeScore:f.homeScore,awayScore:f.awayScore
   }));
-  return {type:'League',name:raw.name,played:count,total:rounds.length,fixtures:allFixtures,
+  return {type:'League',id:raw.id,name:raw.name,played:count,total:rounds.length,fixtures:allFixtures,
    leader:count?table[0]?.name:null,
    upcoming:rounds.filter(f=>f.homeScore===null&&f.kickoff!==null&&f.kickoff>Date.now())
     .map(f=>({name:teams[f.home]+' vs '+teams[f.away],time:f.kickoff,
@@ -120,7 +120,7 @@
   }
   const count=cupFixtures.filter(x=>x.homeScore!==null).length;
   const winner=resolve(rounds-1,0);
-  return {type:'Knockout',name:raw.name,played:count,total:matches.size,
+  return {type:'Knockout',id:raw.id,name:raw.name,played:count,total:matches.size,
    fixtures:cupFixtures,
    leader:winner===null?null:raw.teams[winner],upcoming:[]};
  }
@@ -269,7 +269,8 @@
    body.append(dom('small',c.type.toUpperCase()),dom('strong',c.name),
     dom('p',c.played+' of '+c.total+' friendly results recorded'+
       (c.leader?' · '+(c.type==='Knockout'?'Winner':'Current leader')+': '+c.leader:'')));
-   const open=button('Open '+c.type,()=>go(c.type==='Knockout'?'.knockout-desk':'.tournament-desk'));
+   const open=button('Open '+c.type,()=>window.dispatchEvent(
+     new CustomEvent('fuckball:open-private-competition',{detail:{type:c.type,id:c.id}})));
    card.append(body,open);competitionList.append(card);
   }
   upcoming.replaceChildren(dom('h3','UPCOMING PRIVATE FIXTURES'));
