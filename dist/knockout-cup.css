@@ -1,0 +1,59 @@
+/* Private knockout cups: only manually recorded friendly data, never server authority. */
+.knockout-desk{width:min(1180px,calc(100% - 32px));margin:28px auto 45px;color:#e9f7ec}
+.knockout-disclosure{background:#152d31;border:1px solid #537771;border-radius:18px;overflow:hidden;box-shadow:0 14px 35px #0002}
+.knockout-disclosure>summary{font-size:1rem;font-weight:800;letter-spacing:.06em;padding:18px 22px;cursor:pointer;list-style-position:inside}
+.knockout-body{padding:0 20px 24px}
+.knockout-body>p{max-width:75ch;line-height:1.55;color:#c7dbd1}
+.knockout-desk select,.knockout-desk input,.knockout-desk textarea,.knockout-desk button{
+ font:inherit;border-radius:8px;border:1px solid #70948a;padding:9px 12px}
+.knockout-desk input,.knockout-desk textarea,.knockout-desk select{color:#f2f9f1;background:#1d393b}
+.knockout-desk button{background:#cbefac;color:#16302f;font-weight:750;cursor:pointer}
+.knockout-desk button:disabled{opacity:.45;cursor:not-allowed}
+.knockout-desk button:hover:not(:disabled){filter:brightness(1.08)}
+.knockout-desk :is(button,input,select,textarea,summary):focus-visible{outline:3px solid #ffea8e;outline-offset:3px}
+.knockout-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.knockout-toolbar select{flex:1 1 160px;min-width:0}
+.knockout-toolbar .knockout-delete{background:#57312f;color:#ffdfd5;border-color:#ad726c}
+.knockout-setup{padding:15px;background:#1e3b3e;border:1px solid #49695e;border-radius:12px;margin-bottom:16px;
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:12px;align-items:end}
+.knockout-setup label{display:grid;gap:8px;align-self:stretch;color:#d3eadd;font-weight:650}
+.knockout-setup label:nth-child(2){grid-row:span 2}
+.knockout-setup textarea{min-height:135px;resize:vertical}
+.knockout-setup label:has([type=checkbox]){display:flex;align-items:center;gap:12px}
+.knockout-setup input[type=checkbox]{width:20px;height:20px;accent-color:#c1efae}
+.knockout-progress{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;margin:20px 0}
+.knockout-progress progress{grid-column:1/-1;width:100%;height:10px;accent-color:#bcec8f}
+.knockout-progress strong:first-child{font-size:1.1rem}
+.knockout-progress .knockout-winner{grid-column:1/-1;color:#fff0b0;font-size:1.2rem}
+.knockout-bracket{overflow-x:auto;scrollbar-gutter:stable}
+.knockout-rounds{display:flex;align-items:stretch;gap:14px;padding:10px 0 18px;min-width:max-content}
+.knockout-round{width:225px;display:flex;flex-direction:column;gap:12px;justify-content:space-around}
+.knockout-round h3{font-size:.84rem;letter-spacing:.08em;color:#def4bb;margin:0 0 5px}
+.knockout-match{border:1px solid #587770;background:#213e40;border-radius:12px;padding:12px;display:grid;gap:8px}
+.knockout-match.pending{opacity:.7}
+.knockout-match>small{font-size:.73rem;color:#c3d9d1}
+.knockout-team{display:flex;gap:8px;align-items:center;justify-content:space-between;min-height:38px}
+.knockout-team span{min-width:0;overflow-wrap:anywhere;line-height:1.3}
+.knockout-team input{width:62px;min-width:62px;box-sizing:border-box;text-align:center;font-variant-numeric:tabular-nums}
+.knockout-match select{max-width:100%;font-size:.84rem}
+.knockout-match-actions{display:grid;grid-template-columns:1fr auto;gap:8px}
+.knockout-match .knockout-advances{color:#dfefa0;font-weight:700}
+.knockout-message{min-height:24px}
+@media(max-width:650px){
+ .knockout-desk{width:calc(100% - 20px);margin:20px auto}
+ .knockout-body{padding:0 12px 16px}
+ .knockout-setup{grid-template-columns:1fr}
+ .knockout-setup label:nth-child(2){grid-row:auto}
+ .knockout-progress{grid-template-columns:1fr}
+ .knockout-round{width:205px}
+}
+@media print{
+ .knockout-desk{color:#000;background:white}
+ .knockout-disclosure{border:0;box-shadow:none;background:white}
+ .knockout-toolbar,.knockout-setup,.knockout-message,.knockout-match-actions{display:none!important}
+ .knockout-rounds{min-width:0;gap:9px}
+ .knockout-round{width:23%;flex:1}
+ .knockout-match{background:#fff;color:#111;border-color:#aaa}
+ .knockout-match input,.knockout-match select{color:#111;background:#fff}
+ .knockout-disclosure>summary,.knockout-round h3,.knockout-match>small{color:#111}
+}
