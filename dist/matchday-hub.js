@@ -166,7 +166,7 @@
  const content=dom('div',null,'matchday-body');
  const header=dom('div',null,'matchday-header');
  const lead=dom('div');
- lead.append(dom('h2','YOUR MATCHDAY.'),dom('p','One private overview of your local leagues, knockouts and planned friendlies. All results are self-entered and not verified by game servers.'));
+ lead.append(dom('h2','YOUR MATCHDAY.'),dom('p','One private overview of your local leagues, knockouts, best-of series and planned friendlies. All results are self-entered and not verified by game servers.'));
  const buttons=dom('div',null,'matchday-actions');
  const go=(selector)=>{
   const target=home.querySelector(selector);if(!target)return;
@@ -278,13 +278,14 @@
  search.addEventListener('input',renderControl);
  display.addEventListener('change',renderControl);
  function render(){
-  let leagueData=[],cupData=[];failures=0;
+  let leagueData=[],cupData=[],seriesData=[];failures=0;
   try{leagueData=read(LEAGUES,128*1024,8).map(league);}catch{failures++;}
   try{cupData=read(CUPS,96*1024,8).map(cup);}catch{failures++;}
-  competitions=[...leagueData,...cupData].sort((a,b)=>a.name.localeCompare(b.name));
-  fixtureCards=[...leagueData,...cupData].flatMap(c=>c.fixtures);
+   try{seriesData=read(SERIES,128*1024,12).map(series);}catch{failures++;}
+  competitions=[...leagueData,...cupData,...seriesData].sort((a,b)=>a.name.localeCompare(b.name));
+  fixtureCards=[...leagueData,...cupData,...seriesData].flatMap(c=>c.fixtures);
   renderControl();
-  allUpcoming=leagueData.flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
+  allUpcoming=[...leagueData,...seriesData].flatMap(c=>c.upcoming).sort((a,b)=>a.time-b.time);
   upcomingMatches=allUpcoming.slice(0,12);
   totals.replaceChildren();
   const finished=competitions.reduce((n,c)=>n+c.played,0);
@@ -292,6 +293,7 @@
    ['Competitions',competitions.length],
    ['Leagues',leagueData.length],
    ['Knockouts',cupData.length],
+    ['Best-of series',seriesData.length],
    ['Manual results',finished],
    ['Future kickoffs',allUpcoming.length]
   ];
@@ -301,7 +303,7 @@
   }
   competitionList.replaceChildren(dom('h3','SAVED COMPETITIONS'));
   if(!competitions.length)
-   competitionList.append(dom('p','No readable private competitions yet. Create a league or knockout cup below.'));
+   competitionList.append(dom('p','No readable private competitions yet. Create a league, cup or best-of series below.'));
   for(const c of competitions){
    const card=dom('article',null,'matchday-competition');
    const body=dom('div');
@@ -378,7 +380,7 @@
  details.addEventListener('toggle',()=>{if(details.open)render();});
  document.getElementById('tabHome')?.addEventListener('click',render);
  window.addEventListener('fuckball:private-competition-change',render);
- window.addEventListener('storage',event=>{if(event.key===LEAGUES||event.key===CUPS)render();});
+ window.addEventListener('storage',event=>{if([LEAGUES,CUPS,SERIES].includes(event.key))render();});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&details.open)render();});
  render();
 })();
