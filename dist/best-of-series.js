@@ -337,6 +337,37 @@
    message='Another tab changed stored series into unreadable data. Original bytes protected.';}
   render();
  });
+ window.addEventListener('fuckball:create-private-series',event=>{
+  const request=event.detail;
+  const respond=(ok,detail)=>window.dispatchEvent(new CustomEvent('fuckball:private-series-created',{
+   detail:ok?{ok:true,id:detail}:{ok:false,reason:detail}
+  }));
+  try{
+   if(!request||!validId(request.sourceId)||!validName(request.sourceName,60)||
+    !validName(request.red,35)||!validName(request.blue,35)||
+    request.red.toLocaleLowerCase()===request.blue.toLocaleLowerCase()||
+    ![3,5,7].includes(request.bestOf))
+    throw Error('Invalid private cup finalists or series format.');
+   if(!healthy)throw Error('Saved series data is unreadable. Export the original bytes before making changes.');
+   if(items.length>=MAX)throw Error('Twelve series already exist. Export and delete an older series first.');
+   // The UI handoff only ever creates an empty independent organiser.
+   // No cup score is copied, and no server identity/authorization is inferred.
+   const now=Date.now(),title=request.sourceName.slice(0,43).trim()+' · Final series';
+   const created=inspect({version:1,id:uid(),name:title,red:request.red,blue:request.blue,
+    bestOf:request.bestOf,createdAt:now,updatedAt:now,
+    games:Array.from({length:request.bestOf},(_,i)=>({
+     id:'g'+(i+1),redScore:null,blueScore:null,kickoff:null,venue:''
+    }))}).series;
+   persist([...items,created]);selected=created.id;
+   message='New best-of-'+created.bestOf+' series created for '+created.red+' vs '+created.blue+
+    '. All games are unplayed and unofficial.';
+   details.open=true;render();
+   section.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?
+    'auto':'smooth',block:'start'});
+   choose.focus({preventScroll:true});
+   respond(true,created.id);
+  }catch(error){respond(false,error.message||'Could not save private series.');}
+ });
  window.addEventListener('fuckball:open-private-series',event=>{
   if(!validId(event.detail?.id))return;
   if(items.some(v=>v.id===event.detail.id)){
