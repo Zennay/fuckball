@@ -8,6 +8,12 @@ Use the **Free** Render web-service plan for the complete multiplayer game (HTTP
 
 A full-viewport football game, using the same unmodified node-haxball 2.3.1 physics engine in the browser, headless training and the authoritative multiplayer server. The original BFF Big v4 stadium is preserved byte-for-byte.
 
+## Custom Room rule presets
+
+Under **Esc → Room → Room Presets**, the room host can save and reapply up to eight named configurations containing a stadium, 1v1-vs-AI/2v2/4v4 room mode, score limit and time limit. Saved configurations are stored **only in this browser**, not in server accounts, Club history or public room URLs. Hosts can overwrite an existing named preset and delete presets; other participants can see the choices but cannot apply room mutations.
+
+Applying a preset uses the existing native stadium and configuration pathway; server permissions and configuration validation remain authoritative. Applying it to an ongoing online match requires confirmation because it restarts the game. This does not alter the approved physics, create a ranked room, or persist match state. Very large imported custom stadiums (over 64 KB serialized) are intentionally not eligible for a local preset.
+
 ## Friends parties — human-only team matchmaking
 
 Open **Friends → Party** to create an ephemeral social party (up to four authenticated players), invite mutually accepted friends by account name, or accept/decline private invitations. Each player explicitly selects **Ready**; the leader can then choose an appropriate casual 2v2, 3v3 or 4v4 playlist. The party launches only if all members are ready and its size fits the selected team. Party formation and launch are server-owned, with a 30-second group-connection deadline and expiring invitations.
