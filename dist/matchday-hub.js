@@ -4,6 +4,7 @@
  const home=document.getElementById('homeView');if(!home)return;
  const LEAGUES='fuckball.local-tournaments.v1';
  const CUPS='fuckball.private-knockout-cups.v1';
+ const SERIES='fuckball.private-series.v1';
  const dom=(tag,value,cls)=>{
   const e=document.createElement(tag);if(value!==undefined&&value!==null)e.textContent=String(value);
   if(cls)e.className=cls;return e;
@@ -123,6 +124,40 @@
   return {type:'Knockout',id:raw.id,name:raw.name,played:count,total:matches.size,
    fixtures:cupFixtures,
    leader:winner===null?null:raw.teams[winner],upcoming:[]};
+ }
+ function series(raw){
+  if(!raw||raw.version!==1||typeof raw.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(raw.id)||
+   !cleanName(raw.name)||!cleanName(raw.red)||!cleanName(raw.blue)||
+   raw.red.length>35||raw.blue.length>35||raw.red.toLowerCase()===raw.blue.toLowerCase()||
+   ![3,5,7].includes(raw.bestOf)||!Array.isArray(raw.games)||raw.games.length!==raw.bestOf)
+   throw Error('Invalid private best-of series.');
+  const needed=Math.floor(raw.bestOf/2)+1;
+  let red=0,blue=0,recorded=0,seenEmpty=false,decided=false;
+  const fixtures=[];
+  for(let i=0;i<raw.bestOf;i++){
+   const g=raw.games[i],time=g?.kickoff===undefined?null:g.kickoff,venue=g?.venue??'';
+   if(!g||g.id!=='g'+(i+1)||!safeScore(g.redScore)||!safeScore(g.blueScore)||
+     (g.redScore===null)!==(g.blueScore===null)||
+     (g.redScore!==null&&g.redScore===g.blueScore)||!safeTime(time)||
+     typeof venue!=='string'||venue.length>60||/[\u0000-\u001f\u007f-\u009f]/.test(venue))
+    throw Error('Invalid private best-of game.');
+   if(g.redScore===null)seenEmpty=true;
+   else{
+    if(seenEmpty||decided)throw Error('Private best-of result order is invalid.');
+    recorded++;if(g.redScore>g.blueScore)red++;else blue++;
+    if(red>=needed||blue>=needed)decided=true;
+   }
+   fixtures.push({type:'Series',seriesId:raw.id,gameId:g.id,round:i+1,
+    competition:raw.name,home:raw.red,away:raw.blue,
+    homeScore:g.redScore,awayScore:g.blueScore,time,venue,unlocked:!decided&&i===recorded,
+    active:!decided,uid:raw.id+'-'+g.id});
+  }
+  const winner=red>=needed?raw.red:blue>=needed?raw.blue:null;
+  const upcoming=winner?[]:fixtures.filter(f=>f.homeScore===null&&f.time!==null&&f.time>Date.now())
+   .map(f=>({name:f.home+' vs '+f.away+' · Game '+f.round,time:f.time,
+    venue:f.venue,competition:raw.name,uid:f.uid,type:'Series',seriesId:raw.id}));
+  return {type:'Series',id:raw.id,name:raw.name,total:raw.bestOf,played:recorded,
+   leader:winner||(red>blue?raw.red:blue>red?raw.blue:null),winner,fixtures,upcoming};
  }
  const section=dom('section',null,'matchday-hub');
  section.setAttribute('aria-label','Private Matchday Hub');
