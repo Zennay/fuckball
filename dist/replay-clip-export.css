@@ -25,3 +25,14 @@
  .replay-clip-studio-body{padding:8px 9px 12px}
  .replay-clip-points button{flex:1 1 100%}
 }
+
+.replay-clip-goal-selector{display:grid;gap:9px;padding:12px;border-radius:10px;
+ border:1px solid #688a7e;background:#18353a}
+.replay-clip-goal-selector>strong{font-size:12px;letter-spacing:.07em;color:#ddf7b1}
+.replay-clip-goal-selector label{display:grid;gap:6px}
+.replay-clip-goal-selector select{width:100%;min-height:42px;background:#112b33;color:#f3fde9;
+ border:1px solid #789b8a;border-radius:7px;padding:8px}
+.replay-clip-offsets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.replay-clip-goal-status{margin:0;color:#d8eac5;font-size:11px;line-height:1.5}
+.replay-clip-goal-selector :is(select,button):focus-visible{outline:3px solid #d7ffb3;outline-offset:3px}
+@media(max-width:440px){.replay-clip-offsets{grid-template-columns:1fr}}

@@ -88,7 +88,11 @@
   const button=document.createElement('button');button.type='button';button.textContent='▶ Watch goal';
   button.setAttribute('aria-label','Watch '+(g.teamId===1?'red':'blue')+' goal at '+clock(g.frameNo)+' in '+item.name);
   button.onclick=()=>{stopReel();openMoment(moments.indexOf(g));};
-  card.append(score,name,details,button);return card;
+  const makeClip=document.createElement('button');makeClip.type='button';
+  makeClip.className='goal-gallery-make-clip';makeClip.textContent='✂ Make clip';
+  makeClip.setAttribute('aria-label','Create a WebM clip around this recorded goal at '+clock(g.frameNo));
+  makeClip.onclick=()=>{stopReel();openMoment(moments.indexOf(g),null,true);};
+  card.append(score,name,details,button,makeClip);return card;
  }
  function render(items){
   const sideValue=side.value,tagValue=tag.value,favoriteOnly=check.checked;
@@ -111,7 +115,7 @@
   // Previous/next controls remain tied to the filtered list only.
   if(selection>=moments.length){selection=-1;navigation.hidden=true;}
  }
- async function openMoment(index,reelRequestToken=null){
+ async function openMoment(index,reelRequestToken=null,clipAfterOpen=false){
   if(opening||index<0||index>=moments.length)return;
   const moment=moments[index],stamp=generation;
   opening=true;
@@ -128,6 +132,9 @@
    selection=index;navigation.hidden=false;
    position.textContent='Goal '+(index+1)+' / '+moments.length;
    prev.disabled=index===0;next.disabled=index===moments.length-1;
+   if(clipAfterOpen)window.dispatchEvent(new CustomEvent('fuckball:replay-clip-goal',{
+    detail:{replayId:moment.item.id,frameNo:moment.frameNo,teamId:moment.teamId}
+   }));
   }catch(error){
    summary.textContent='Could not open recorded goal: '+(error?.message||'local file unavailable');
   }finally{opening=false;}
