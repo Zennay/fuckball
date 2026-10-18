@@ -81,7 +81,7 @@
   let tournaments=[],activeId='',filter='pending',message='';
   // Guard against silently overwriting another tab's tournament edits, or
   // erasing unreadable stored data. A reload/recovery is required on conflict.
-  let storageSnapshot=null,storageHealthy=true;
+  let storageSnapshot=null,storageHealthy=true,recoveryBackupPrepared=false;
   try{
     const stored=localStorage.getItem(KEY);
     storageSnapshot=stored;
@@ -135,7 +135,37 @@
   const overview=make('div',null,'tournament-overview');
   const standings=make('div',null,'tournament-standings');
   const fixtures=make('div',null,'tournament-fixtures');
-  inner.append(intro,actions,setup,status,overview,standings,fixtures);
+  const recovery=make('section',null,'tournament-recovery');recovery.hidden=true;
+  const warning=make('p','Stored tournaments cannot be read safely. New results are blocked to protect the original browser data. Export the original bytes before deliberately resetting this one local collection.');
+  const recoveryDownload=button('↓ Download untouched stored data',()=>{
+    try{
+      const saved=localStorage.getItem(KEY);
+      if(!saved||saved!==storageSnapshot)throw Error('Data changed in another tab; reload first.');
+      const blob=new Blob([saved],{type:'application/json;charset=utf-8'});
+      const url=URL.createObjectURL(blob),link=make('a');
+      link.href=url;link.download='fuckball-unreadable-tournaments-backup.json';
+      document.body.append(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      recoveryBackupPrepared=true;
+      inform('Backup download initiated. Check that you have the file before resetting anything.');
+    }catch(err){inform('Unable to prepare recovery backup: '+(err.message||'Storage unavailable'));}
+  });
+  const recoveryReset=button('Reset only unreadable league storage',()=>{
+    if(!recoveryBackupPrepared)return inform('Download your original league data before resetting.');
+    if(!window.confirm('Have you verified that the original tournament backup was downloaded?'))return;
+    if(!window.confirm('Permanently clear ONLY unreadable private tournament data in this browser? Your other Fuckball data will not be touched.'))return;
+    try{
+      if(localStorage.getItem(KEY)!==storageSnapshot)throw Error('Data changed in another tab; reload first.');
+      localStorage.removeItem(KEY);
+      storageSnapshot=null;storageHealthy=true;recoveryBackupPrepared=false;
+      tournaments=[];activeId='';filter='pending';
+      message='Unreadable local tournament collection reset by your request. Your backup remains on your device.';
+      render();
+      window.dispatchEvent(new Event('fuckball:private-competition-change'));
+    }catch(err){inform('Recovery cancelled: '+(err.message||'Storage unavailable'));}
+  },'tournament-danger');
+  recovery.append(warning,recoveryDownload,recoveryReset);
+  inner.append(intro,actions,setup,status,recovery,overview,standings,fixtures);
   details.append(summary,inner);panel.append(details);
   const homeCards=host.querySelector('.mode-cards');
   if(homeCards)homeCards.insertAdjacentElement('afterend',panel);else host.append(panel);
@@ -156,6 +186,7 @@
     return rows.sort((a,b)=>b.Pts-a.Pts||b.GD-a.GD||b.GF-a.GF||a.name.localeCompare(b.name));
   }
   function render(){
+    recovery.hidden=storageHealthy;
     const saved=current();
     select.replaceChildren(new Option('Select a tournament…',''));
     for(const t of tournaments)select.add(new Option(t.name,t.id));
@@ -407,8 +438,10 @@
       const incoming=candidate.map(normalize);
       if(new Set(incoming.map(x=>x.id)).size!==incoming.length)throw Error();
       tournaments=incoming;storageSnapshot=event.newValue;storageHealthy=true;
+      recoveryBackupPrepared=false;
       message='Tournament data refreshed from another tab.';render();
-    }catch{storageHealthy=false;inform('Another tab changed tournament data. Reload or recover it before saving.');}
+    }catch{storageHealthy=false;recoveryBackupPrepared=false;recovery.hidden=false;
+      inform('Another tab changed tournament data. Reload or recover it before saving.');}
   });
   render();
 })();
