@@ -103,6 +103,141 @@
   if(ladderWins)parts.push(ladderWins+' completed local AI ladder'+(ladderWins===1?'':'s'));
   progress.textContent=parts.length?parts.join(' · '):'No practice history yet';
  }
+ function setupInsights(){
+  const metrics=[
+   {key:'goals',name:'Goal Rush',store:'fuckball-local-goal-rush-history-v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[1,3,5].includes(x.target)&&
+    Number.isSafeInteger(x.goals)&&x.goals>=0&&x.goals<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=180&&
+    typeof x.completed==='boolean'&&x.completed===(x.goals>=x.target)},
+   {key:'team',name:'Teamwork',store:'fuckball.teamwork-native-drill.v1',valid:x=>
+    [120,180,300].includes(x.seconds)&&[2,4,6].includes(x.target)&&
+    Number.isSafeInteger(x.links)&&x.links>=0&&x.links<=99&&
+    Number.isSafeInteger(x.attempts)&&x.attempts>=0&&x.attempts<=9999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=300&&
+    typeof x.completed==='boolean'&&x.completed===(x.links>=x.target)},
+   {key:'defense',name:'Clean Sheet',store:'fuckball.clean-sheet-history.v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[0,1,2].includes(x.allowance)&&
+    Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
+    Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    typeof x.completed==='boolean'&&x.completed===(x.conceded<=x.allowance)},
+   {key:'rockets',name:'Rocket Kick',store:'fuckball.native-ball-burst-history.v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[3,5,7].includes(x.threshold)&&
+    [1,3,5].includes(x.target)&&Number.isSafeInteger(x.hits)&&x.hits>=0&&x.hits<=999&&
+    Number.isSafeInteger(x.kicks)&&x.kicks>=x.hits&&x.kicks<=9999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=x.duration+1&&
+    Number.isFinite(x.peak)&&x.peak>=0&&x.peak<=1000&&
+    typeof x.completed==='boolean'&&x.completed===(x.hits>=x.target)}
+  ];
+  const part=document.createElement('details');part.className='practice-insights';
+  const sum=document.createElement('summary');sum.textContent='PRACTICE INSIGHTS · MY NATIVE RESULTS';
+  const lead=document.createElement('p');
+  lead.textContent='Only the most recent saved attempts on this browser. Goals met are personal drill objectives, NOT win rate, Elo, verified skill or full lifetime activity. Interrupted games and other devices are not counted.';
+  const controls=document.createElement('div');controls.className='practice-insights-controls';
+  const periodLabel=document.createElement('label');periodLabel.textContent='Lookback';
+  const period=document.createElement('select');period.setAttribute('aria-label','Local drill history period');
+  for(const [id,label] of [['7','Past 7 days'],['30','Past 30 days'],['all','All retained attempts']])
+   period.add(new Option(label,id));
+  period.value='30';periodLabel.append(period);
+  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Update';
+  const exportSummary=document.createElement('button');exportSummary.type='button';
+  exportSummary.textContent='↓ Export private summary';
+  controls.append(periodLabel,refresh,exportSummary);
+  const board=document.createElement('div');board.className='practice-insights-board';
+  const advice=document.createElement('p');advice.className='practice-insights-advice';
+  const explore=document.createElement('button');explore.type='button';explore.textContent='Explore a drill ↗';
+  const message=document.createElement('p');message.className='practice-insights-message';
+  message.setAttribute('role','status');
+  part.append(sum,lead,controls,board,advice,explore,message);
+  content.insertBefore(part,tabs);
+  const DAY=86400000;
+  let snapshot=[];
+  function savedRows(metric,now){
+   const rows=getLocal(metric.store);
+   if(!Array.isArray(rows)||rows.length>20)return[];
+   return rows.filter(x=>x&&typeof x==='object'&&
+    Number.isSafeInteger(x.at)&&x.at>0&&x.at<=now+DAY&&
+    metric.valid(x));
+  }
+  function aggregate(rows){return{
+   attempts:rows.length,met:rows.filter(x=>x.completed===true).length
+  };}
+  function renderInsights(){
+   const now=Date.now(),days=period.value==='all'?null:Number(period.value);
+   const cutoff=days===null?0:now-days*DAY;
+   board.replaceChildren();snapshot=[];
+   for(const metric of metrics){
+    const rows=savedRows(metric,now).filter(x=>x.at>=cutoff);
+    const counts=aggregate(rows);
+    const card=document.createElement('article');card.className='practice-insights-card';
+    const title=document.createElement('strong');title.textContent=metric.name;
+    const outcome=document.createElement('p');
+    outcome.textContent=counts.attempts?
+     counts.met+' of '+counts.attempts+' saved goals met':
+     'No saved attempt in this period';
+    const bar=document.createElement('progress');
+    bar.max=counts.attempts||1;bar.value=counts.met;
+    bar.setAttribute('aria-label',metric.name+' goals met out of saved attempts');
+    const detail=document.createElement('small');
+    if(days===null||days<7||!rows.length)detail.textContent='Personal objective only · actual native records';
+    else{
+     const recent=aggregate(rows.filter(x=>x.at>=now-7*DAY));
+     const older=aggregate(rows.filter(x=>x.at<now-7*DAY&&x.at>=now-14*DAY));
+     detail.textContent=recent.attempts&&older.attempts?
+      'Latest 7d '+recent.met+'/'+recent.attempts+' · prior 7d '+older.met+'/'+older.attempts:
+      'Two 7-day periods with saved attempts needed for comparison';
+    }
+    card.append(title,outcome,bar,detail);board.append(card);
+    snapshot.push({key:metric.key,name:metric.name,attempts:counts.attempts,goalsMet:counts.met});
+   }
+   const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
+   const completed=Array.isArray(ladders)&&ladders.length<=12?ladders.filter(x=>x&&x.version===1&&
+    ['standard','elite'].includes(x.route)&&[60,120].includes(x.duration)&&
+    Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&
+    x.finishedAt>0&&x.finishedAt<=now+DAY&&x.finishedAt>=cutoff).length:0;
+   const note=document.createElement('p');note.className='practice-insights-gauntlet';
+   note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
+   board.append(note);
+   snapshot.push({key:'ladder',name:'AI Gauntlet',completedLadders:completed});
+   const target=[...snapshot.slice(0,4)].sort((a,b)=>a.attempts-b.attempts)[0];
+   advice.textContent=target?
+    'Explore '+target.name+': '+target.attempts+' recorded attempts in this lookback. This is a coverage suggestion, not a diagnosis of your skill.':
+    'Play a native drill to build your own private history.';
+   explore.onclick=()=>{
+    if(!target)return;activate(target.key,true);
+    document.getElementById('practice-lab-pane-'+target.key)?.scrollIntoView({block:'start',behavior:'auto'});
+   };
+   exportSummary.disabled=!snapshot.some(x=>x.attempts>0||x.completedLadders>0);
+   message.textContent='Showing only validated saved native drill records; no account data or server requests.';
+  }
+
+  refresh.onclick=renderInsights;
+  period.onchange=renderInsights;
+  part.addEventListener('toggle',()=>{if(part.open)renderInsights();});
+  window.addEventListener('storage',event=>{
+   if(event.key===null||metrics.some(x=>x.store===event.key)||
+    event.key==='fuckball.ai-gauntlet-history.v1'){
+    if(part.open)renderInsights();
+   }
+  });
+  exportSummary.onclick=()=>{
+   if(!snapshot.some(x=>x.attempts>0||x.completedLadders>0))return;
+   const packet={format:'fuckball-local-native-practice-insights',version:1,
+    window:period.value,exportedAt:new Date().toISOString(),
+    source:'validated saved device-only native offline results',
+    disclaimer:'Not ranked performance, Elo, official game stats or a complete lifetime record.',
+    results:snapshot};
+   const blob=new Blob([JSON.stringify(packet,null,2)],{type:'application/json'});
+   const url=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=url;a.download='fuckball-private-practice-insights.json';
+   document.body.append(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+   message.textContent='Private native drill summary downloaded. No server upload.';
+  };
+  renderInsights();
+ }
+ setupInsights();
  window.addEventListener('storage',renderProgress);
  root.addEventListener('focusin',renderProgress);
  renderProgress();
