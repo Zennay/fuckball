@@ -51,10 +51,13 @@
   const save=document.createElement('button');save.type='button';save.textContent='Save next-game plan';
   const clear=document.createElement('button');clear.type='button';clear.textContent='Clear plan';
   const exportBtn=document.createElement('button');exportBtn.type='button';exportBtn.textContent='↓ Export offline coaching sheet';
+  const backup=document.createElement('button');backup.type='button';backup.textContent='↓ Backup personal goal';
+  const restore=document.createElement('button');restore.type='button';restore.textContent='↑ Restore personal goal';
+  const input=document.createElement('input');input.type='file';input.hidden=true;input.accept='.json,application/json';
   const notesLabel=document.createElement('label');notesLabel.className='private-coach-checkbox';
   const includeNotes=document.createElement('input');includeNotes.type='checkbox';includeNotes.checked=false;
   notesLabel.append(includeNotes,document.createTextNode('Include private review note text in export'));
-  buttons.append(save,clear,exportBtn);form.append(focusLabel,actionLabel,buttons,notesLabel);
+  buttons.append(save,clear,exportBtn,backup,restore,input);form.append(focusLabel,actionLabel,buttons,notesLabel);
   const status=document.createElement('p');status.className='private-coach-status';
   status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const filters=document.createElement('div');filters.className='private-coach-filter';
@@ -115,6 +118,43 @@
     status.textContent='Private next-match plan cleared.';refresh();
    }catch{status.textContent='Could not clear your local plan.';}
   };
+  // Account-bound backup of a user-written goal only. No receipt, score or ranking import.
+  backup.onclick=()=>{
+   if(!validSession()||!unchanged())return;
+   const goal=readPlan(savedRaw);
+   if(!goal){status.textContent='Save your personal goal before exporting it.';return;}
+   try{
+    download('fuckball-next-match-goal-'+new Date().toISOString().slice(0,10)+'.json',
+     'application/json',JSON.stringify({format:'fuckball-device-goal',version:1,account:user,
+      notice:'Private self-written intention, not a verified result or rating.',goal},null,2));
+    status.textContent='Goal backup exported locally. It contains your account name and goal; keep it private.';
+   }catch{status.textContent='Could not export your private goal.';}
+  };
+  restore.onclick=()=>{if(validSession())input.click();};
+  input.onchange=async()=>{
+   const file=input.files?.[0];input.value='';
+   if(!file||!validSession())return;
+   if(file.size>8192){status.textContent='A goal backup must be at most 8 KB.';return;}
+   restore.disabled=true;
+   try{
+    const payload=JSON.parse(await file.text());
+    if(!validSession()||!unchanged())return;
+    if(payload?.format!=='fuckball-device-goal'||payload.version!==1||
+     typeof payload.account!=='string'||payload.account.toLowerCase()!==user.toLowerCase())
+     throw Error('This goal backup is not from your signed-in account.');
+    const goal=readPlan(JSON.stringify(payload.goal));
+    if(!goal||goal.updatedAt>Date.now()+86400000)
+     throw Error('The selected file has no valid goal.');
+    if(readPlan(savedRaw)&&!confirm('Replace your saved goal with this backup? Match reviews and original server results remain unchanged.'))return;
+    if(!validSession()||!unchanged())return;
+    const value=JSON.stringify({version:1,focus:goal.focus,action:goal.action,updatedAt:goal.updatedAt});
+    localStorage.setItem(key,value);savedRaw=value;
+    focus.value=goal.focus;action.value=goal.action;
+    refresh();
+    status.textContent='Private goal restored on this device. No match results or rankings were imported.';
+   }catch(error){status.textContent=error?.message||'Could not restore the private goal.';}
+   finally{restore.disabled=false;}
+  };
   function coachSheet(notes){
    const plan=readPlan(savedRaw);
    // A standalone offline report: no script, server URL, account identity, receipt IDs,
@@ -157,7 +197,7 @@
    const visible=reviewFilter.value==='all'?notes:notes.filter(x=>x.focus===reviewFilter.value);
    const plan=readPlan(savedRaw);
    summary.textContent=visible.length+' shown of '+notes.length+' privately reviewed genuine recent matches.';
-   clear.disabled=!plan;tiles.replaceChildren();reviewsList.replaceChildren();
+   clear.disabled=backup.disabled=!plan;tiles.replaceChildren();reviewsList.replaceChildren();
    const cards=[['VERIFIED REVIEWS',String(notes.length)],['FOCUS CATEGORIES',String(new Set(notes.filter(x=>x.focus!=='none').map(x=>x.focus)).size)],
     ['NEXT MATCH GOAL',plan?FOCI[plan.focus]:'Not set']];
    cards.forEach(([label,value])=>{
