@@ -212,7 +212,7 @@
   // the in-game menu just because Start was held during the switch.
   wasStart=true;
  });
- window.fuckballGamepad={read};
+ window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null};
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
  window.addEventListener('focus',()=>{lastSignature='';});
