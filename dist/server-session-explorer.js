@@ -3,7 +3,7 @@
 // gap between completion timestamps. Not a server session ID or ranked record.
 (function(){
  const GAPS=[30,45,60,120];
- let gapMinutes=45,limit=6;
+ let gapMinutes=45,limit=6,compareKey=null;
  const text=(tag,value,klass)=>{
   const el=document.createElement(tag);el.textContent=value;
   if(klass)el.className=klass;return el;
@@ -93,7 +93,7 @@
   gap.value=String(gapMinutes);label.append(gap);
   gap.onchange=()=>{
    const next=Number(gap.value);if(!GAPS.includes(next)||!authorized())return;
-   gapMinutes=next;limit=6;onSelect(null);
+   gapMinutes=next;limit=6;compareKey=null;onSelect(null);
   };
   const hint=text('p',clusters.length+' estimated play group'+(clusters.length===1?'':'s')+
    ' within your '+receipts.length+' most recent native server receipts. Not lifetime data.','native-session-count');
@@ -119,19 +119,55 @@
    show.onclick=()=>{if(authorized())onSelect(cluster.key);};
    const csv=text('button','↓ CSV');csv.type='button';csv.title='Local download without account or receipt IDs';
    const html=text('button','↓ Print sheet');html.type='button';html.title='Offline printable summary without account or receipt IDs';
+   const compare=text('button',active?.key===cluster.key?'Clear comparison':compareKey===cluster.key?'Comparing ✓':'Compare');
+   compare.type='button';
+   compare.title='Compare two user-selected groups of genuine unranked receipts';
+   compare.onclick=()=>{
+    if(!authorized())return;
+    if(!active){compareKey=null;onSelect(cluster.key);return;}
+    if(active.key===cluster.key||compareKey===cluster.key)compareKey=null;
+    else compareKey=cluster.key;
+    onSelect(active.key);
+   };
    const safeAction=action=>()=>{
     if(!authorized()){message.textContent='Session changed. Reload your own results before exporting.';return;}
     try{action(rows);message.textContent='Private session report generated locally, not uploaded.';}
     catch{message.textContent='Could not export the chosen play grouping.';}
    };
    csv.onclick=safeAction(exportCsv);html.onclick=safeAction(exportHtml);
-   actions.append(show,csv,html);box.append(heading,range,detail,scoped,actions);grid.append(box);
+   actions.append(show,compare,csv,html);box.append(heading,range,detail,scoped,actions);grid.append(box);
   });
+  // Explicit two-group comparison is local and descriptive, never a claim
+  // of causal improvement, global skill, official session or ranked rating.
+  const other=clusters.find(c=>c.key===compareKey&&c.key!==active?.key);
+  const comparison=document.createElement('section');comparison.className='native-session-comparison';
+  comparison.hidden=!active||!other;
+  if(active&&other){
+   comparison.append(text('h4','TWO RECENT GROUPS · SIDE BY SIDE'));
+   comparison.append(text('p','Descriptive comparison of these two groups of native unranked results only. Different game formats and opponents can affect the scores; this is not a skill estimate.'));
+   const grid2=document.createElement('div');grid2.className='native-session-compare-grid';
+   for(const [label,c]of [['Selected group',active],['Compared group',other]]){
+    const t=totals(c.rows),card=document.createElement('article');
+    card.append(text('strong',label),text('small',fmt(c.rows[c.rows.length-1].at)+' → '+fmt(c.rows[0].at)));
+    for(const [name,value]of [['Matches',String(c.rows.length)],
+     ['Wins / draws / losses',t.wins+' / '+t.draws+' / '+t.losses],
+     ['Goals for / against',t.goalsFor+' / '+t.goalsAgainst],
+     ['Recorded active play',Math.floor(t.frames/60)+'s']]){
+     const line=document.createElement('div');line.className='native-session-compare-line';
+     line.append(text('span',name),text('b',value));card.append(line);
+    }
+    grid2.append(card);
+   }
+   comparison.append(grid2);
+   const reset=text('button','End comparison');reset.type='button';
+   reset.onclick=()=>{if(authorized()){compareKey=null;onSelect(active.key);}};
+   comparison.append(reset);
+  }
   const more=text('button','Show more play groups','native-session-more');more.type='button';
   more.hidden=clusters.length<=limit;more.onclick=()=>{
    if(!authorized())return;limit+=6;onSelect(selected||null);
   };
-  section.append(title,desc,top,message,clear,grid,more);
+  section.append(title,desc,top,message,clear,grid,comparison,more);
   host.append(section);
   return ids;
  }
