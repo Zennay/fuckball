@@ -604,6 +604,25 @@ function createServer(options={}){
   // A browser host cannot add players; take the room back first (a seamless handover), then join.
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
   if(ws.pendingResumeToken){const ticket=ws.pendingResumeToken;ws.pendingResumeToken=null;rejoin(ws,r,ticket);return;}
+  // The browser host may have held this join while the trusted server
+  // reclaimed simulation authority. Authorization must be CURRENT at native
+  // allocation time, not just when the first WebSocket packet arrived.
+  if(!r.quickMatch){
+   if(r.locked)throw Error('This room was locked before you could join.');
+   if(r.clients.size>=r.maxHumans)
+    throw Error('This room filled while the connection was being prepared.');
+   if(!admitted(r,ws.account))throw Error('You are temporarily blocked from this room.');
+   if(r.accountsOnly&&(!ws.account||
+      accounts.user(ws.accountToken)?.toLowerCase()!==ws.account.toLowerCase()))
+    throw Error('This room now requires a signed-in account.');
+   if(r.clubId&&(!ws.account||
+      accounts.user(ws.accountToken)?.toLowerCase()!==ws.account.toLowerCase()||
+      clubs?.membership(ws.account)?.id!==r.clubId))
+    throw Error('Only current Club members can join this room.');
+   if(ws.pendingAccessKeyRevision!==r.accessKeyRevision)
+    throw Error('Room access changed before admission. Rejoin with the current room access key.');
+  }
+
   while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account,
    spectate:!r.quickMatch&&ws.spectateOnJoin===true});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
   if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);roomControl(r);}
@@ -784,6 +803,7 @@ function createServer(options={}){
      throw Error('Private room access key required or incorrect.');
    }
 
+   ws.pendingAccessKeyRevision=r.accessKeyRevision;
    ws.spectateOnJoin=d.spectate===true&&!d.create&&!d.resume;ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
