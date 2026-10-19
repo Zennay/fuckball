@@ -62,7 +62,10 @@ async function train(makeRoom,{generations=6,seed=20261014,frames=2400,initial,v
  // lost over 200 independent matches. Validate on several seeds per map/side.
  validationSeeds=Math.max(1,Math.min(16,Math.floor(validationSeeds)));
  generations=Math.max(1,Math.min(20,Math.floor(generations)));frames=Math.max(600,Math.min(7200,frames));const random=rng(seed),baseline=AI.profile(initial);let champion={...baseline},accepted=0;const history=[];const pause=()=>new Promise(r=>setTimeout(r,0));
- for(let gen=0;gen<generations;gen++){const candidate=AI.profile(Object.fromEntries(Object.entries(champion).map(([k,v])=>[k,v+(random()-.5)*(k==='screen'?20:50)]))),games=[];
+ for(let gen=0;gen<generations;gen++){const candidate=AI.profile(Object.fromEntries(Object.entries(champion).map(([k,v])=>{
+  const delta={screen:20,passSafety:9,overloadReward:.14,keeperRiskTime:16,bankRisk:.14,shotAggression:.12}[k]??50;
+  return[k,v+(random()-.5)*delta];
+ }))),games=[];
  for(const side of [1,2]){games.push(match(makeRoom,candidate,champion,side,seed+gen,'BFF',frames));progress({generation:gen+1,generations,percent:(gen*2+side)/(generations*2+4)*100,text:'Generation '+(gen+1)+' / '+generations});await pause();}
  // One rotating training scene per generation, always mirrored by the next
  // generation. This is training evidence, never frozen release validation.
