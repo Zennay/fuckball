@@ -91,7 +91,18 @@
     ' ('+record.draws+' drawn)'),
     node('span',record.rounds.length+' genuine rounds · '+record.duration+
      's clock · '+new Date(record.at).toLocaleDateString()));
-   rows.append(entry);
+   const card=node('button','↓ Save private PNG scorecard');card.type='button';
+   card.onclick=async()=>{
+    card.disabled=true;
+    try{
+     if(!window.SuddenDeathCard?.download)throw Error('Scorecard renderer unavailable.');
+     await window.SuddenDeathCard.download(record);
+     status.textContent='Private native series scorecard saved as a PNG on this device.';
+    }catch(error){
+     status.textContent=error?.message||'Could not download the series scorecard.';
+    }finally{card.disabled=false;}
+   };
+   entry.append(card);rows.append(entry);
   }
  }
  function save(s){

@@ -20,3 +20,5 @@
 .sudden-death-actions{display:flex;flex-wrap:wrap;gap:8px}
 .sudden-death-setup button:focus-visible,.sudden-death-hud button:focus-visible,.sudden-death-setup select:focus-visible{outline:3px solid #def89e;outline-offset:3px}
 @media(max-width:680px){.sudden-death-hud{top:80px;right:8px}.sudden-death-fields>*{flex:1 1 140px}}
+
+.sudden-death-history-row button{justify-self:start;margin-top:5px}

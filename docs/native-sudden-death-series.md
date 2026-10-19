@@ -19,3 +19,7 @@ PWA assets for the mode are static-only; the service worker does not cache live 
 ## Release boundary
 
 Source and static assets are available in GitHub after merge. They do **not** prove a VPS live release. Existing required CI, review, access and authorized immutable release/drain/rollback controls apply. No QA suites are added or invoked as part of this feature.
+
+## Share a private local result card
+
+Every completed saved series now has a **Save private PNG scorecard** action. The result card draws the actual local round wins/draws and time configuration on a self-contained browser canvas and downloads the PNG to the device. It contains **no usernames, tokens or account identifiers**, and deliberately labels the result as unranked and not server-verified. Incomplete series cannot be exported as results.
