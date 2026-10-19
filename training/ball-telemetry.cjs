@@ -98,6 +98,11 @@ class BallTelemetry {
   this.touching=contacts;
   this.prevBall={x:b.speed.x,y:b.speed.y};
  }
+ finish(){
+  // An unreceived pass at full-time is a miss, never quietly omitted from
+  // the denominator because its 180-tick window did not expire yet.
+  if(this.pending)this.finalizePass('missed');
+ }
  summary(team){
   const m={...this.teams[team]};
   return{...m,passCompletionRate:m.passAttempts?Number((m.passCompleted/m.passAttempts).toFixed(4)):0,
