@@ -68,7 +68,7 @@ quickPlay=function(...args){
  return launched;
 };
 let offlineRoomLimits=null;
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();const link=serverLink;const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll('option[data-online-limit]').forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();const link=serverLink;const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
 const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:started?'stop':'start'});return;}baseStartStop();};$('startButton').onclick=startStop;
@@ -145,8 +145,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   // online. Restore the original local controls only on disconnect.
   if(Number.isSafeInteger(d.scoreLimit)&&d.scoreLimit>=0&&d.scoreLimit<=99){
    const select=$('scoreLimit');
-   select.querySelectorAll('option[data-online-limit]').forEach(option=>option.remove());
-   if(![...select.options].some(option=>Number(option.value)===d.scoreLimit)){
+   select.querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());
+   if(typeof select.add==='function'&&typeof Option==='function'&&
+    ![...(select.options||[])].some(option=>Number(option.value)===d.scoreLimit)){
     const option=new Option(String(d.scoreLimit),String(d.scoreLimit));
     option.dataset.onlineLimit='true';select.add(option);
    }
