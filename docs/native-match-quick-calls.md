@@ -1,0 +1,9 @@
+# Native multiplayer Quick Calls
+
+During a real connected online match, open **⋯ QUICK → ✦ QUICK CALLS**. Choose one of six short tactical lines, or expand **Customize** to edit and save six personal phrases (2–80 printable characters each) in local browser storage.
+
+**Message delivery:** Clicking a call submits one plain room-chat message through the game's existing connected authenticated/guest native WebSocket. All room members — including opponents and spectators — may see it. This is not secret team-only communication. The user's incoming Chat Focus filter cannot make an outgoing message private. No calls are sent on opening the picker, editing, saving or restoring messages.
+
+**Fair play:** A local 3-second spacing and maximum of three attempts per ten seconds discourage spam, in addition to the original server rate limits, chat mute, moderation and room admission. If the real server has muted the sender, the picker is disabled; the original server retains final authority and may still reject or filter a submitted message. Status reports submission, not delivery, acceptance or being read by teammates. This module has no direct websocket connection, client-supplied ID, admin flag, account access or extra network API.
+
+**Privacy:** Only the optional six edited text templates are saved locally; no account, invite, result, chat history or replay is persisted by Quick Calls. It is hidden in offline practice, during matchmaking before joining a room, and when the session is disconnected. The native physics tick, bots, room roles, ranked match rules and input keybindings are unchanged.
