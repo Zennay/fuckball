@@ -415,7 +415,7 @@ function createServer(options={}){
    },
    send:(cid,data)=>{if(r.authority!=='server'||data?.type==='chat'&&
     !Number.isSafeInteger(data.from))return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),accountsOnly:false,maxHumans:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),notice:null,accountsOnly:false,maxHumans:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -447,6 +447,7 @@ function createServer(options={}){
  function roomControl(r){
   const now=Date.now();
   for(const [id,until]of r.chatMutes)if(until<=now||!r.clients.has(id))r.chatMutes.delete(id);
+  if(r.notice&&r.notice.owner!==r.owner)r.notice=null;
   for(const client of r.sockets.values()){
    const ownerAccount=client.playerId===r.owner&&client.account&&
     accounts.user(client.accountToken)?.toLowerCase()===client.account.toLowerCase()?
@@ -457,7 +458,9 @@ function createServer(options={}){
     chatMuteUntil:r.chatMutes.get(client.playerId)||null,
     chatMutes:client.playerId===r.owner?[...r.chatMutes]:[],
     teamChatSupported:!r.quickMatch,
-    spectatorCheerSupported:!r.quickMatch});
+    spectatorCheerSupported:!r.quickMatch,
+    roomNoticeSupported:!r.quickMatch,
+    notice:r.notice?{text:r.notice.text,by:r.notice.by,at:r.notice.at}:null});
   }
  }
  // Temporary account-scoped ban; never block a shared public IP, and never
@@ -744,6 +747,31 @@ function createServer(options={}){
      send(ws,{type:'playerReportStatus',ok:false,
       message:String(error?.message||'Report unavailable.').slice(0,160)});
     }
+    return;
+   }
+   if(d.type==='roomNoticeSet'||d.type==='roomNoticeClear'){
+    // This banner is room-control state, never peer-host or chat state.
+    // Only the currently connected owner may edit; Quick Match remains closed.
+    if(r.quickMatch||r.owner!==ws.playerId||r.sockets.get(ws.playerId)!==ws||
+       r.disconnected.has(ws.playerId))
+     throw Error('Only the connected Custom Room host can edit its notice.');
+    if(d.type==='roomNoticeSet'){
+     if(typeof d.text!=='string'||d.text.trim().length<1||
+        d.text.length>120||/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/.test(d.text)||
+        Object.keys(d).some(k=>!['type','text'].includes(k)))
+      throw Error('Host notice must be 1–120 printable characters.');
+    }else if(Object.keys(d).some(k=>k!=='type'))
+     throw Error('Invalid notice removal.');
+    const previous=(ws.noticeEditTimes||[]).filter(t=>now-t<60000);
+    if(previous.length>=6)throw Error('Host notice changes are limited to six a minute.');
+    previous.push(now);ws.noticeEditTimes=previous;
+    if(d.type==='roomNoticeSet'){
+     const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Host')
+      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25)||'Host';
+     r.notice={text:d.text.trim(),by:name,owner:ws.playerId,at:now};
+    }else r.notice=null;
+    // Native roomControl is also delivered to late joins and reconnected users.
+    roomControl(r);
     return;
    }
    if(d.type==='spectatorCheer'){
