@@ -192,7 +192,11 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   }
   link.recoveryAttempt=false;window.FuckballRoomRecovery?.hide();if(link.quickMatchMode)showView('play');link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id&&!link.quickMatchMode;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=!!link.quickMatchMode;$('inviteButton').hidden=!!link.quickMatchMode;if(!link.quickMatchMode)setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else if(!link.quickMatchMode)openMatchMenu();else if(menuOpen)closeMatchMenu();if(create)copyInvite(true);else if(!link.reconnect&&!link.quickMatchMode)notify(d.spectatorAdmission?
  'Joined as spectator. Ask the host for a team or bench slot.':'Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
- else if(d.type==='room'){link.roomState=d;link.isOwner=d.owner===networkPlayerId&&!link.quickMatchMode;botIds=new Set(d.botIds||[]);$('mode').value=link.quickMatchMode?(d.mode==='1v1'?'bot':d.mode==='3v3'||d.mode==='club4v4'?'4v4':d.mode):d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;
+ else if(d.type==='room'){link.roomState=d;
+  if(link.roomControl?.spectatorLimitSupported===true&&
+     Number.isSafeInteger(d.spectatorCount)&&d.spectatorCount>=0&&d.spectatorCount<=64)
+   link.roomControl.spectatorCount=d.spectatorCount;
+  link.isOwner=d.owner===networkPlayerId&&!link.quickMatchMode;botIds=new Set(d.botIds||[]);$('mode').value=link.quickMatchMode?(d.mode==='1v1'?'bot':d.mode==='3v3'||d.mode==='club4v4'?'4v4':d.mode):d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;
   // Server-verified native limits supersede stale offline presets while
   // online. Restore the original local controls only on disconnect.
   if(Number.isSafeInteger(d.scoreLimit)&&d.scoreLimit>=0&&d.scoreLimit<=99){
@@ -209,6 +213,17 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    $('timeLimit').value=String(d.timeLimit);
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
+ else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
+    (d.message.startsWith('This room is not accepting new spectators or bench participants.')||
+     d.message.startsWith('This room is full.')||
+     d.message.startsWith('Room capacity is below the number of current'))){
+   // Keep the guest on the same invitation rather than redirecting them to
+   // connection settings when the host reduces capacity during their join.
+   link.failed=true;ws.close();showJoinScreen(roomId,d.message);
+   if(document.getElementById('joinSpectator'))
+    $('joinSpectator').checked=link.requestedSpectate;
+   return;
+  }
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     /^(Private room access key required or incorrect\.|Too many room access attempts\.)/.test(d.message)){
    link.failed=true;ws.close();
