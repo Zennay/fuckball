@@ -13,10 +13,11 @@ const SCHEMA = 'fuckball-tactical-checkpoint-v1';
 function checkedProfile(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
       JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(PROFILE_KEYS)) {
-    throw Error('Tactical profile must contain exactly the five known parameters');
+    throw Error('Tactical profile must contain exactly the current tactical parameters');
   }
   for (const k of PROFILE_KEYS) {
-    const v = value[k], min = k === 'screen' ? 30 : 60, max = k === 'screen' ? 90 : 220;
+    const v=value[k], bounds=AI.profileBounds?.[k]||(k==='screen'?[30,90]:[60,220]);
+    const [min,max]=bounds;
     if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max)
       throw Error('Invalid tactical parameter ' + k);
   }
