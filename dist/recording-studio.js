@@ -115,7 +115,7 @@
     const item=await ReplayLibrary.save(bytes,name);
     status.textContent='Saved '+item.name+' in My Games ('+
      (item.size/1048576).toFixed(1)+' MB) · original HBR2 downloaded.';
-    window.dispatchEvent(new Event('fuckball:local-replay-library-change'));
+    if(typeof window.Event==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new window.Event('fuckball:local-replay-library-change'));
     if(typeof renderMyGames==='function'&&
      document.getElementById('gamesView')?.hidden===false)await renderMyGames();
    }catch(error){
