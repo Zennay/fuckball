@@ -38,9 +38,17 @@
   if(focus==='quiet')return false;
   if(focus==='all')return true;
   const people=room?.state?.players;
-  const from=people?.find?.(p=>p?.id===sender);
-  const me=people?.find?.(p=>p?.id===networkPlayerId);
-  const theirs=from?.team?.id,ours=me?.team?.id;
+  const benches=serverLink?.roomState?.benches;
+  const teamFor=id=>{
+   const player=people?.find?.(p=>p?.id===id);
+   const native=typeof player?.team==='number'?player.team:player?.team?.id;
+   if(native===1||native===2)return native;
+   if(native!==0)return null;
+   const bench=Array.isArray(benches)?benches.find(x=>
+    Array.isArray(x)&&x[0]===id&&[1,2].includes(x[1])):null;
+   return bench?.[1]||0;
+  };
+  const theirs=teamFor(sender),ours=teamFor(networkPlayerId);
   if(![0,1,2].includes(theirs))return false;
   if(focus==='spectators')return theirs===0;
   if(![1,2].includes(ours)||![1,2].includes(theirs))return false;
@@ -119,6 +127,7 @@
   if(message.channel==='team'){
    if(![1,2].includes(message.team))return;
    log('[TEAM · '+(message.team===1?'RED':'BLUE')+'] '+message.name+': '+message.text,false);
+   document.querySelector('#chatLog .chat-line:last-child')?.classList.add('native-team-message');
   }else if(message.channel===undefined||message.channel==='room'){
    log(message.name+': '+message.text,false);
   }

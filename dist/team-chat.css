@@ -27,3 +27,6 @@
  .team-chat-quick{max-width:calc(100vw - 16px)}
  .team-chat-quick button{flex:1 1 110px}
 }
+
+/* Visually separate server-acknowledged private team packets from public chat. */
+.hud-chat .chat-line.native-team-message{background:#234e3999;border-left:3px solid #c3ee93;padding:4px 7px;border-radius:3px;color:#e6ffcf}
