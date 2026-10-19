@@ -115,8 +115,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     chatMuteUntil:Number.isSafeInteger(d.chatMuteUntil)&&d.chatMuteUntil>Date.now()?d.chatMuteUntil:null,
     chatMutes:Array.isArray(d.chatMutes)&&d.chatMutes.length<=128?d.chatMutes.filter(m=>Array.isArray(m)&&m.length===2&&Number.isSafeInteger(m[0])&&m[0]>0&&Number.isSafeInteger(m[1])&&m[1]>Date.now()):[],
     teamChatSupported:d.teamChatSupported===true&&!link.quickMatchMode,
-    spectatorCheerSupported:d.spectatorCheerSupported===true&&!link.quickMatchMode};
-  window.renderCustomRoomAdmin?.();window.renderNativeChatMute?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();return;
+    spectatorCheerSupported:d.spectatorCheerSupported===true&&!link.quickMatchMode,
+    roomNoticeSupported:d.roomNoticeSupported===true&&!link.quickMatchMode,
+    notice:d.notice&&typeof d.notice.text==='string'&&d.notice.text.length<=120&&
+      typeof d.notice.by==='string'&&d.notice.by.length<=25&&
+      Number.isSafeInteger(d.notice.at)?d.notice:null};
+  window.renderCustomRoomAdmin?.();window.renderNativeChatMute?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();return;
  }
  if(d.type==='chatModeration'){
    const until=Number.isSafeInteger(d.until)&&d.until>Date.now()?d.until:null;
@@ -157,7 +161,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   }
   if(Number.isSafeInteger(d.timeLimit)&&d.timeLimit>=0&&d.timeLimit<=99)
    $('timeLimit').value=String(d.timeLimit);
-  updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();}
+  updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
  else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
