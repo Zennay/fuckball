@@ -45,6 +45,7 @@ function match(makeRoom,candidate,opponent,side,seed,map,frames=2400,collect,act
  for(let t=0;t<frames;t++){frame=t;if(t%4===0)for(const p of r.state.players){const selected=p.team.id===side?candidate:opponent;const input=AI.tactical(r.state,p.id,t,{difficulty:'hard',profile:selected});
  if(telemetry){const plan=AI.teamPlan(r.state,p.team.id,t,selected);planned.set(p.id,plan[p.id]);}if(collect&&t%sampleStride===0){const f=AI.features(r.state,p.id),a=env.reverse(input),sign=p.team.id===1?1:-1;collect({frame:t,id:p.id,team:p.team.id,x:AI.columns.map(c=>f[c]),dir:(a.dirY+1)*3+sign*a.dirX+1,kick:+a.kick});}let action=input;if(actor&&p.team.id===side){const predicted=AI.infer(actor,r.state,p.id);if(predicted.confidence>.58&&(predicted.input&15))action=(predicted.input&15)|(input&16);}r.playerInput(action,p.id);}env.step(1);telemetry?.frame(r.state,t);const b=r.gameState?.physicsState.discs[0];if(b)territory+=(side===1?1:-1)*Math.max(-1,Math.min(1,b.pos.x/(r.state.stadium.bgWidth||700)));}
  const g=r.gameState,goals=side===1?g.redScore:g.blueScore,conceded=side===1?g.blueScore:g.redScore;
+ telemetry?.finish();
  const ours=telemetry?.summary(side),theirs=telemetry?.summary(3-side);
  // Actual score remains overwhelmingly important. Only verified first-touch
  // completions and modeled on-target attempts can adjust a tied game.
