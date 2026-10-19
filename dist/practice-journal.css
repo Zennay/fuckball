@@ -1,0 +1,37 @@
+.local-practice-journal{margin:24px 0 40px;padding:24px;background:#1f3038;border:1px solid #5f777d;border-radius:14px;color:#f1f6f3}
+.local-journal-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.local-journal-heading h2{font-size:24px;color:#dff2be;margin:0}
+.local-journal-heading p{max-width:650px;font-size:13px;line-height:1.5;color:#c5d9d9;margin:6px 0 0}
+.local-journal-count{font-size:12px;color:#e3f4d6}
+.local-journal-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:19px 0}
+.local-journal-controls label{font-size:12px;color:#e3efed;min-width:155px}
+.local-journal-controls select{min-height:40px}
+.local-journal-controls button{min-height:40px}
+.local-journal-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
+.local-journal-stat{display:grid;padding:12px;background:#2b4149;border:1px solid #536b71;border-radius:8px;gap:6px}
+.local-journal-stat strong{font-size:24px;color:#d1efa5}
+.local-journal-stat span{color:#cadad6;font-size:12px}
+.local-journal-list{display:grid;gap:7px}
+.local-journal-row{display:flex;align-items:center;gap:12px;padding:12px;background:#263b44;border-radius:8px;border:1px solid #52646c}
+.local-journal-outcome{min-width:53px;border-radius:5px;text-align:center;padding:6px 8px;font-size:11px;border:1px solid #b6d49b;color:#d4f5ad}
+.local-journal-outcome.loss{color:#ffc4bf;border-color:#e6a6a4}
+.local-journal-outcome.draw{color:#dfecf0;border-color:#96b4bd}
+.local-journal-match{display:grid;gap:5px;min-width:0}
+.local-journal-match strong{font-size:14px;color:#f5faf5}
+.local-journal-match span{font-size:12px;color:#bcd0d1;overflow-wrap:anywhere}
+.local-journal-empty{font-size:13px;color:#c6d7d7;line-height:1.5}
+.local-journal-feedback{font-size:12px;color:#d2efb4;min-height:18px}
+@media(max-width:620px){.local-practice-journal{padding:15px}.local-journal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.local-journal-controls button{flex:1}.local-journal-row{align-items:start}.local-journal-heading h2{font-size:20px}}
+
+/* Private match coaching, immediately after a completed real local match. */
+.local-journal-coaching{margin-top:11px;padding:11px;border:1px solid #637b7f;background:#1c333b;border-radius:8px;width:100%}
+.local-journal-coaching summary{color:#ddf5bc;font-size:12px;font-weight:700;cursor:pointer}
+.local-journal-coaching summary:focus-visible{outline:2px solid #d9f5b0;outline-offset:3px}
+.local-journal-edit{display:grid;gap:13px;padding-top:14px;max-width:460px}
+.local-journal-edit label{display:grid;gap:7px;color:#d5e8e7;font-size:12px}
+.local-journal-edit :is(select,textarea){min-height:40px;font-size:14px;background:#16282f;color:#f1f8f5;border:1px solid #81979d;border-radius:6px;padding:9px;width:100%;box-sizing:border-box}
+.local-journal-edit textarea{resize:vertical;min-height:78px;line-height:1.5}
+.local-journal-edit button{min-height:43px;justify-self:start;white-space:normal}
+.local-journal-row .local-journal-match{flex:1}
+@media(max-width:820px){.local-journal-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.local-journal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.local-journal-edit button{width:100%}}

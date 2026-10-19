@@ -1,0 +1,50 @@
+/* Formation Studio is an optional private home-page tool; not an online room control. */
+.formation-studio{width:min(1130px,calc(100% - 32px));margin:30px auto 48px;color:#eaf8ee}
+.formation-disclosure{border:1px solid #597875;background:#152e30;border-radius:18px;overflow:hidden;box-shadow:0 15px 36px #0002}
+.formation-disclosure>summary{font-weight:800;cursor:pointer;letter-spacing:.065em;padding:19px 23px;list-style-position:inside}
+.formation-body{padding:0 20px 22px}
+.formation-body>p{max-width:78ch;line-height:1.55;color:#c5d8d0}
+.formation-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.formation-studio button,.formation-studio select{font:inherit;border:1px solid #8cafa5;background:#d4f6b8;color:#16332c;border-radius:8px;padding:9px 12px;font-weight:700;cursor:pointer}
+.formation-studio select{background:#223f41;color:#f1faed;min-width:160px;flex:1 1 175px}
+.formation-studio button:hover:not(:disabled){filter:brightness(1.1)}
+.formation-studio button:disabled{opacity:.45;cursor:not-allowed}
+.formation-studio button:focus-visible,.formation-studio select:focus-visible,.formation-studio canvas:focus-visible,.formation-disclosure>summary:focus-visible{outline:3px solid #fcec9a;outline-offset:3px}
+.formation-workspace{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px;align-items:start}
+.formation-workspace canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;border:2px solid #6f9784;border-radius:12px;touch-action:none;background:#11463a}
+.formation-controls{border:1px solid #45645c;border-radius:12px;padding:14px;display:grid;gap:10px;background:#1d3b3d}
+.formation-controls h3{margin:0;font-size:.85rem;letter-spacing:.07em}
+.formation-controls>button{width:100%}
+.formation-controls>button.active{background:#ffe58e;border-color:#ffe58e}
+.formation-disc-chooser{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.formation-disc-chooser button{padding:9px 4px;font-size:.75rem;white-space:nowrap}
+.formation-disc-chooser button.red{background:#e6585a;color:#fff;border-color:#ff9190}
+.formation-disc-chooser button.blue{background:#5a9ede;color:#fff;border-color:#92caff}
+.formation-disc-chooser button.ball{background:#f5f3dc;color:#102c2e}
+.formation-disc-chooser button.selected{outline:3px solid #f7dd7d;outline-offset:1px}
+.formation-readout{font-weight:700;color:#e6f5e6}
+.formation-controls p{line-height:1.4;font-size:.83rem;margin:0;color:#cee2d6}
+.formation-status{min-height:24px;font-size:.9rem;color:#bde5ce}
+@media(max-width:790px){
+ .formation-workspace{grid-template-columns:1fr}
+ .formation-controls{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+ .formation-controls h3,.formation-disc-chooser,.formation-controls p{grid-column:1/-1}
+}
+@media(max-width:520px){
+ .formation-studio{width:calc(100% - 20px);margin:20px auto}
+ .formation-body{padding:0 12px 14px}
+ .formation-toolbar>button{flex:1 1 auto}
+ .formation-disc-chooser button{font-size:.76rem}
+}
+@media print{
+ .formation-disclosure,.formation-workspace canvas{background:#fff;box-shadow:none}
+ .formation-toolbar,.formation-controls{display:none}
+}
+/* Stadium-aware formation plans: controls stay optional and entirely local. */
+.formation-toolbar select[aria-label="4v4 tactical formation preset"]{flex:0 1 190px}
+.formation-toolbar button{white-space:normal}
+.formation-studio [hidden]{display:none!important}
+@media(max-width:680px){
+ .formation-toolbar select[aria-label="4v4 tactical formation preset"]{flex:1 1 100%}
+ .formation-toolbar button{flex:1 1 145px}
+}

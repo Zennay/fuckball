@@ -1,0 +1,32 @@
+/* Optional, account-scoped coaching journal for genuine native server receipts. */
+.native-match-review{min-width:0;border-top:1px solid #597b74;padding-top:8px}
+.native-match-review-toggle{width:100%;text-align:left;min-height:44px;border-radius:7px;
+ border:1px solid #809f96;background:#1b4542;color:#ecfad7;font:750 12px system-ui,sans-serif;
+ padding:9px 12px;cursor:pointer}
+.native-match-review-editor{display:grid;gap:9px;padding:12px;background:#162e34;
+ border:1px solid #6c9183;border-radius:10px;margin-top:10px}
+.native-match-review-editor[hidden]{display:none!important}
+.native-match-review-editor p{margin:0;font-size:11px;line-height:1.55;color:#c9e1d6}
+.native-match-review-editor label{display:grid;gap:7px;color:#e1f3e3;font-size:11px}
+.native-match-review-editor select,.native-match-review-editor textarea{width:100%;box-sizing:border-box;
+ min-height:41px;border-radius:8px;padding:9px 10px;border:1px solid #809d9e;
+ background:#10272e;color:#f2fff3;font:13px system-ui,sans-serif}
+.native-match-review-editor textarea{min-height:88px;resize:vertical;line-height:1.45}
+.native-match-review-actions{display:flex;flex-wrap:wrap;gap:8px}
+.native-match-review-actions button{min-height:41px;flex:1 1 120px;border-radius:7px;
+ border:1px solid #91af95;background:#284e44;color:#effde1;padding:9px;font:750 11px system-ui,sans-serif;cursor:pointer}
+.native-match-review-actions button:disabled{opacity:.5;cursor:not-allowed}
+.native-match-review :is(button,select,textarea):focus-visible,
+.native-review-vault button:focus-visible{outline:3px solid #e4ffad;outline-offset:3px}
+.native-review-vault{display:grid;gap:9px;border:1px solid #729b87;border-radius:12px;
+ background:#193b38;padding:15px;margin:14px 0;color:#e6f3e3}
+.native-review-vault>strong{font-size:13px;letter-spacing:.08em;color:#e8ffbd}
+.native-review-vault p{margin:0;line-height:1.6;font-size:12px;color:#d0e5d2}
+.native-review-vault-actions{display:flex;flex-wrap:wrap;gap:9px}
+.native-review-vault button{min-height:44px;padding:9px 13px;border-radius:7px;
+ border:1px solid #90a896;background:#28564a;color:#f2ffe2;font:750 12px system-ui,sans-serif;cursor:pointer}
+.native-review-vault button.native-review-vault-wipe{border-color:#b28785;color:#ffe3df}
+.native-review-vault button:disabled{opacity:.48;cursor:not-allowed}
+@media(max-width:550px){.native-review-vault{padding:12px}
+ .native-review-vault button{flex:1 1 100%}}
+@media(prefers-reduced-motion:reduce){.native-review-vault *, .native-match-review *{animation:none!important;transition:none!important}}

@@ -104,6 +104,25 @@ const ReplayLibrary=(()=>{
    seen.add(key);return tag;
   });
  }
+ // Browser-private coaching notes, not rated match statistics.
+ function normalizeReview(raw){
+  if(raw===undefined||raw===null)return null;
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||
+   !['none','finishing','passing','defense','positioning','decision'].includes(raw.focus)||
+   !Number.isSafeInteger(raw.rating)||raw.rating<0||raw.rating>5||
+   typeof raw.note!=='string'||raw.note.length>400||
+   typeof raw.next!=='string'||raw.next.length>240||
+   !Number.isSafeInteger(raw.updatedAt)||raw.updatedAt<=0||raw.updatedAt>Date.now()+86400000)
+   throw Error('Invalid local replay coaching note.');
+  if(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(raw.note+raw.next))
+   throw Error('Coaching text contains control characters.');
+  return{focus:raw.focus,rating:raw.rating,note:raw.note.trim(),
+   next:raw.next.trim(),updatedAt:raw.updatedAt};
+ }
+ function setReview(id,review){
+  const normalized=normalizeReview(review);
+  return updateMeta(id,item=>({...item,review:normalized}));
+ }
  function setTags(id,tags){
   const normalized=normalizeTags(tags);
   return updateMeta(id,item=>({...item,tags:normalized}));
@@ -138,6 +157,28 @@ const ReplayLibrary=(()=>{
   return updateMeta(id,item=>({...item,bookmarks:normalizeBookmarks(
    (item.bookmarks||[]).filter(b=>b.frameNo!==frameNo),item.frames)}));
  }
+ // Notes are personal coaching annotations, never authoritative match events.
+ function normalizeNotes(raw,frames){
+  if(raw===undefined)return[];
+  if(!Array.isArray(raw)||raw.length>12)throw Error('A replay can have at most 12 coaching notes.');
+  const max=Number.isSafeInteger(frames)&&frames>0?frames:86400000;
+  const seen=new Set(),categories=['decision','positioning','passing','defense','finishing','other'];
+  const cleaned=raw.map(value=>{
+   if(!value||typeof value!=='object'||Array.isArray(value)||
+    !Number.isSafeInteger(value.frameNo)||value.frameNo<0||value.frameNo>max||
+    seen.has(value.frameNo)||typeof value.label!=='string'||!value.label.trim()||
+    value.label.trim().length>60||typeof value.text!=='string'||!value.text.trim()||
+    value.text.trim().length>360||!categories.includes(value.category)||
+    /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value.label+value.text))
+    throw Error('Invalid time-specific replay coaching note.');
+   seen.add(value.frameNo);
+   return{frameNo:value.frameNo,label:value.label.trim(),category:value.category,text:value.text.trim()};
+  });
+  return cleaned.sort((a,b)=>a.frameNo-b.frameNo);
+ }
+ function setNotes(id,notes){
+  return updateMeta(id,item=>({...item,notes:normalizeNotes(notes,item.frames)}));
+ }
  // Only portable user-owned archives may restore local display metadata.
  // Never import account IDs, server results or any claim of verified rankings.
  function restoreDetails(id,details){
@@ -145,10 +186,12 @@ const ReplayLibrary=(()=>{
    details.createdAt<=0||details.createdAt>Date.now()+86400000)throw Error('Invalid replay metadata.');
   return updateMeta(id,item=>({...item,createdAt:details.createdAt,favorite:details.favorite,
    bookmarks:normalizeBookmarks(details.bookmarks,item.frames),
-   tags:normalizeTags(details.tags)}));
+   tags:normalizeTags(details.tags),review:normalizeReview(details.review),
+   notes:normalizeNotes(details.notes,item.frames)}));
  }
  return{list,save,get,remove,parseRecording,rename,setFavorite,restoreDetails,
-  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags};
+  normalizeBookmarks,addBookmark,removeBookmark,normalizeTags,setTags,normalizeReview,setReview,
+  normalizeNotes,setNotes};
 })();
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
@@ -169,6 +212,16 @@ favoritesToggle.onclick=()=>{
  renderMyGames();
 };
 document.querySelector('.my-games-tools').insertBefore(favoritesToggle,$('gamesImport'));
+const reviewFilter=document.createElement('select');
+reviewFilter.setAttribute('aria-label','Filter recordings by personal coaching review');
+for(const [value,label] of [['all','All reviews'],['reviewed','Reviewed'],['unreviewed','Needs review']])
+ reviewFilter.add(new Option(label,value));
+const reviewFilterLabel=document.createElement('label');reviewFilterLabel.textContent='Coaching';
+reviewFilterLabel.append(reviewFilter);
+document.querySelector('.my-games-tools').insertBefore(reviewFilterLabel,$('gamesImport'));
+reviewFilter.onchange=renderMyGames;
+gamesSearch.placeholder='Search replay names, reviews and moment notes';
+gamesSearch.setAttribute('aria-label','Find saved replays by name or private coaching notes');
 
 function recordingLength(frames){
  if(!Number.isSafeInteger(frames)||frames<=0)return 'Duration unknown';
@@ -226,6 +279,56 @@ function editGameTags(item){
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
  document.body.append(dialog);dialog.showModal();input.focus();
 }
+function editGameReview(item){
+ const current=ReplayLibrary.normalizeReview(item.review);
+ const dlg=document.createElement('dialog');dlg.className='game-review-dialog';
+ const form=document.createElement('form');form.className='game-review-form';
+ const head=document.createElement('h2');head.textContent='REPLAY REVIEW.';
+ const explanation=document.createElement('p');
+ explanation.textContent='Your personal analysis of a local recording, not an official result. Included in your private My Games ZIP backups.';
+ const names={none:'No focus',finishing:'Finishing',passing:'Passing',defense:'Defending',
+  positioning:'Positioning',decision:'Decision-making'};
+ const focusLabel=document.createElement('label');focusLabel.textContent='Training focus';
+ const focus=document.createElement('select');
+ for(const [value,label] of Object.entries(names))focus.add(new Option(label,value));
+ focus.value=current?.focus||'none';focusLabel.append(focus);
+ const ratingLabel=document.createElement('label');ratingLabel.textContent='Self-assessment';
+ const rating=document.createElement('select');
+ for(const [value,label] of [['0','Not rated'],['1','1 · Needs work'],['2','2 · Progressing'],
+  ['3','3 · Solid'],['4','4 · Strong'],['5','5 · Great effort']])rating.add(new Option(label,value));
+ rating.value=String(current?.rating||0);ratingLabel.append(rating);
+ const noteLabel=document.createElement('label');noteLabel.textContent='What did you notice? (400 characters)';
+ const note=document.createElement('textarea');note.maxLength=400;note.rows=4;note.value=current?.note||'';
+ note.placeholder='What worked? What positional or passing decisions should change?';noteLabel.append(note);
+ const nextLabel=document.createElement('label');nextLabel.textContent='Goal for your next practice (240 characters)';
+ const next=document.createElement('textarea');next.maxLength=240;next.rows=3;next.value=current?.next||'';
+ next.placeholder='Name one concrete drill or decision to improve.';nextLabel.append(next);
+ const buttons=document.createElement('div');buttons.className='game-review-actions';
+ const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';
+ const erase=document.createElement('button');erase.type='button';erase.className='danger';
+ erase.textContent='Remove review';erase.disabled=!current;
+ const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Save private review';
+ cancel.onclick=()=>dlg.close();
+ erase.onclick=async()=>{
+  if(!confirm('Delete only your personal review? The HBR2 recording stays saved.'))return;
+  erase.disabled=true;
+  try{await ReplayLibrary.setReview(item.id,null);dlg.close();await renderMyGames();}
+  catch(err){explanation.textContent=err.message||'Unable to remove review.';erase.disabled=false;}
+ };
+ buttons.append(cancel,erase,save);
+ form.append(head,explanation,focusLabel,ratingLabel,noteLabel,nextLabel,buttons);
+ dlg.append(form);document.body.append(dlg);
+ dlg.addEventListener('close',()=>dlg.remove(),{once:true});
+ form.onsubmit=async event=>{
+  event.preventDefault();save.disabled=true;
+  try{
+   await ReplayLibrary.setReview(item.id,{focus:focus.value,rating:Number(rating.value),
+    note:note.value,next:next.value,updatedAt:Date.now()});
+   dlg.close();await renderMyGames();
+  }catch(err){explanation.textContent=err.message||'Unable to save review.';save.disabled=false;}
+ };
+ dlg.showModal();focus.focus();
+}
 function makeGameButton(text,description,handler){
  const button=document.createElement('button');button.type='button';button.textContent=text;
  button.setAttribute('aria-label',description);
@@ -245,7 +348,12 @@ async function renderMyGames(){
   for(const [key,name] of [...availableTags].sort((a,b)=>a[1].localeCompare(b[1])))
    tagsFilter.add(new Option(name,key));
   tagsFilter.value=selectedTag;
-  const items=all.filter(item=>item.name.toLocaleLowerCase().includes(term)&&
+  const items=all.filter(item=>(
+    item.name.toLocaleLowerCase().includes(term)||
+    (item.review?.note||'').toLocaleLowerCase().includes(term)||
+    (item.review?.next||'').toLocaleLowerCase().includes(term)||
+    (item.notes||[]).some(n=>(n.label+' '+n.text+' '+n.category).toLocaleLowerCase().includes(term)))&&
+    (reviewFilter.value==='all'||(reviewFilter.value==='reviewed')===Boolean(item.review))&&
    (!favoritesOnly||item.favorite===true)&&
    (selectedTag==='all'||(item.tags||[]).some(tag=>tag.toLocaleLowerCase()===selectedTag)));
   const favoriteCount=all.filter(item=>item.favorite===true).length;
@@ -260,7 +368,7 @@ async function renderMyGames(){
    const detail=document.createElement('div');detail.className='game-entry-info';
    const title=document.createElement('strong');title.textContent=item.name;
    const metadata=document.createElement('span');
-   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · LOCAL';
+   metadata.textContent=new Date(item.createdAt).toLocaleString()+' · '+(item.size/1048576).toFixed(1)+' MB · '+recordingLength(item.frames)+' · '+goalsLabel(item)+' · '+(item.bookmarks?.length||0)+' saved moments · '+(item.notes?.length||0)+' coaching notes · LOCAL';
    detail.append(title,metadata);
    if(item.tags?.length){
     const chips=document.createElement('div');chips.className='games-tag-chips';
@@ -269,6 +377,16 @@ async function renderMyGames(){
      chip.textContent=tag;chips.append(chip);
     }
     detail.append(chips);
+   }
+   if(item.review){
+    const reviewed=ReplayLibrary.normalizeReview(item.review);
+    const detailLine=document.createElement('div');detailLine.className='game-review-summary';
+    const headline=document.createElement('strong');
+    headline.textContent=(reviewed.focus==='none'?'Review':reviewed.focus.replace(/^./,x=>x.toUpperCase()))+
+     ' · '+(reviewed.rating?reviewed.rating+'/5 self-rating':'No self-rating');
+    const excerpt=document.createElement('span');
+    excerpt.textContent=reviewed.next?'Next: '+reviewed.next:(reviewed.note||'Private reflection saved.');
+    detailLine.append(headline,excerpt);detail.append(detailLine);
    }
    const controls=document.createElement('div');controls.className='game-entry-actions';
    const star=makeGameButton(item.favorite===true?'★ Saved':'☆ Favorite',
@@ -280,11 +398,13 @@ async function renderMyGames(){
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      loadReplay(bytes,item.name);activeLocalReplayId=item.id;
-     if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();gamesMessage('');
+     if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
+     if(typeof refreshReplayNotes==='function')await refreshReplayNotes();gamesMessage('');
     }),
     star,
     makeGameButton('Rename','Rename '+item.name,()=>editGameName(item)),
     makeGameButton('Tags','Organize '+item.name+' into collections',()=>editGameTags(item)),
+     makeGameButton(item.review?'✎ Review':'＋ Review','Personal coaching notes for '+item.name,()=>editGameReview(item)),
     makeGameButton('↓ Export','Download '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      saveReplayDownload(bytes,item.name);

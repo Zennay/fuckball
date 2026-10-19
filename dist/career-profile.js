@@ -31,6 +31,7 @@
  login.textContent='Sign in / create account';
  identity.append(avatar,who,login);
  const metrics=document.createElement('div');metrics.className='career-metrics';
+ const milestonesHost=document.createElement('div');milestonesHost.className='native-career-milestones-anchor';
  metrics.setAttribute('aria-label','Career match statistics');
  const formSection=document.createElement('section');formSection.className='career-form';
  formSection.setAttribute('aria-label','Recent match form and activity');formSection.hidden=true;
@@ -53,14 +54,14 @@
  recent.append(rh,recentNote,recentRows);
  const footer=document.createElement('p');footer.className='career-profile-footnote';
  footer.textContent='Career totals may outlive the limited list of recent match receipts. Statistics depend on this server retaining its data directory; they are not global, ranked or cross-server.';
- view.append(top,status,identity,metrics,formSection,modes,recent,footer);
+ view.append(top,status,identity,metrics,milestonesHost,formSection,modes,recent,footer);
  const main=document.querySelector('#matchView');
  (main?.parentElement||document.body).insertBefore(view,main||null);
  const open=document.createElement('button');open.type='button';open.className='career-profile-open';
  open.textContent='Profile';open.setAttribute('aria-label','Open my player profile');
  header.insertBefore(open,header.querySelector('#helpButton')||null);
  const originalShowView=showView;
- let generation=0,current=null;
+ let generation=0,current=null,loadedToken=null,observedToken=settings.account?.token||null,observedUsername=settings.account?.username||null;
  showView=function(next){
   originalShowView(next);
   const visible=next==='profile';
@@ -78,9 +79,9 @@
  const ratio=(a,b)=>b?Math.round(a*100/b)+'%':'—';
  const outcomes={1:'RED',2:'BLUE'};
  function clear(){
-  metrics.replaceChildren();modeRows.replaceChildren();recentRows.replaceChildren();
+  metrics.replaceChildren();milestonesHost.replaceChildren();modeRows.replaceChildren();recentRows.replaceChildren();
   formCards.replaceChildren();formModes.replaceChildren();formActivity.replaceChildren();
-  formSection.hidden=true;download.disabled=true;current=null;
+  formSection.hidden=true;download.disabled=true;current=null;loadedToken=null;
  }
  function metric(label,value,detail=''){
   const card=document.createElement('article');card.className='career-metric';
@@ -255,26 +256,63 @@
     fetch('/api/player-stats',{headers,cache:'no-store'}),
     fetch('/api/match-history',{headers,cache:'no-store'})
    ]);
-   if(loadId!==generation||settings.account?.token!==token)return;
+   if(loadId!==generation||settings.account?.token!==token||settings.account?.username!==account.username)return;
    if(a.status===401||b.status===401)throw Error('Session expired. Sign in again to view your stats.');
    if(!a.ok||!b.ok)throw Error('The server could not load your statistics.');
    const [statsResponse,matchesResponse]=await Promise.all([a.json(),b.json()]);
-   if(loadId!==generation||settings.account?.token!==token)return;
+   if(loadId!==generation||settings.account?.token!==token||settings.account?.username!==account.username)return;
    if(!statsResponse?.durable||!statsResponse.stats||!matchesResponse?.durable)
     throw Error('Persistent server storage is unavailable. Local replays remain in My Games.');
    const stats=statsResponse.stats;
    if(!Number.isSafeInteger(stats.matches)||stats.matches<0||!Array.isArray(matchesResponse.items))
     throw Error('Unexpected statistics response.');
-   current={stats,items:matchesResponse.items.slice(0,50),account:account.username};
-   renderStats(stats);renderForm(current.items);renderRecent(current.items);
+   current={stats,items:matchesResponse.items.slice(0,50),account:account.username};loadedToken=token;
+   renderStats(stats);
+   window.FuckballNativeCareerMilestones?.mount(milestonesHost,stats,account.username,()=>
+    !!current&&current.account===account.username&&loadedToken===token&&
+    settings.account?.token===token&&settings.account?.username===account.username&&!view.hidden);renderForm(current.items);renderRecent(current.items);
    download.disabled=false;
    status.textContent='Account data loaded for '+account.username+' · '+fmt(stats.matches)+
     ' server-recorded matches. Not ranked; no fabricated ratings.';
   }catch(e){if(loadId===generation){clear();status.textContent=e.message||'Career data unavailable.';}}
   finally{if(loadId===generation)refresh.disabled=false;}
  }
+ // Both the menu and the export button must follow the current signed-in
+ // account, even if logout happens while the Profile tab stays open.
+ function accountChanged(){
+  const token=settings.account?.token||null;
+  const username=settings.account?.username||null;
+  if(observedToken===token&&observedUsername===username)return;
+  observedToken=token;observedUsername=username;
+  generation++;clear();
+  if(!view.hidden)load();
+  else{
+   avatar.textContent=(username||'?').slice(0,1).toUpperCase();
+   name.textContent=username||'Guest player';
+   identitySub.textContent='Open Profile to load your signed-in server history.';
+  }
+ }
+ const accountLabel=document.getElementById('joinAccount');
+ if(accountLabel)new MutationObserver(accountChanged).observe(accountLabel,
+  {childList:true,subtree:true,characterData:true});
+ window.addEventListener('storage',event=>{
+  if(event.key!==null&&event.key!=='fuckball.settings')return;
+  try{
+   const stored=JSON.parse(localStorage.getItem('fuckball.settings')||'null')?.account;
+   if(stored?.token!==settings.account?.token||stored?.username!==settings.account?.username){
+    generation++;clear();
+    status.textContent='Account changed in another tab. Reload before viewing private career data.';
+    if(!view.hidden)name.textContent='Private career hidden';
+   }
+  }catch{
+   generation++;clear();status.textContent='Account storage changed. Reload before accessing private career data.';
+  }
+ });
  download.onclick=()=>{
-  if(!current)return;
+  if(!current||!loadedToken||loadedToken!==settings.account?.token||
+   current.account!==settings.account?.username){
+   status.textContent='Sign in and reload your own account stats before exporting.';return;
+  }
   const bytes=new Blob([JSON.stringify({source:'fuckball-native-server',
    ranked:false,exportedAt:new Date().toISOString(),...current},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(bytes),link=document.createElement('a');

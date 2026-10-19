@@ -1,0 +1,61 @@
+/* Play Hub: primary navigation without changing game physics or queue authority. */
+.play-hub{
+ max-width:1340px;margin:0 auto 28px;padding:22px clamp(15px,2.5vw,30px);
+ border-radius:20px;color:#f0f8ef;
+ border:1px solid rgba(193,232,206,.25);
+ background:linear-gradient(130deg,#112a31 10%,#173535 50%,#142830 100%);
+ box-shadow:0 18px 45px rgba(0,16,20,.27);
+}
+.play-hub-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px}
+.play-hub-kicker,.play-hub-label{font-size:.73rem;letter-spacing:.095em;font-weight:800;color:#c5ef8f}
+.play-hub-heading h2{font-size:clamp(1.5rem,3vw,2.55rem);line-height:1.1;margin:6px 0}
+.play-hub-heading p{color:#d3e3dd;font-size:.92rem;margin:7px 0 0;max-width:66ch}
+.play-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.play-hub-card{
+ border:1px solid rgba(211,241,229,.25);border-radius:15px;
+ padding:clamp(16px,2vw,23px);min-width:0;
+ background:rgba(9,23,29,.46);display:flex;flex-direction:column;align-items:flex-start
+}
+.play-hub-human{background:linear-gradient(140deg,rgba(56,81,56,.56),rgba(9,33,31,.63))}
+.play-hub-card h3{font-size:clamp(1.05rem,1.8vw,1.4rem);line-height:1.2;margin:7px 0}
+.play-hub-card p{font-size:.9rem;line-height:1.52;color:#d4e4de;margin:0 0 15px;max-width:61ch}
+.play-hub-formats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.play-hub button{
+ font:inherit;border:1px solid #698a80;background:#26413f;color:#f7fffa;
+ border-radius:10px;cursor:pointer;min-height:44px;padding:9px 14px;font-weight:800
+}
+.play-hub button:hover:not(:disabled){filter:brightness(1.14)}
+.play-hub button:focus-visible{outline:3px solid #deff85;outline-offset:3px}
+.play-hub .play-hub-format{min-width:63px;padding:8px 10px}
+.play-hub .play-hub-format.selected{background:#d4f779;color:#122820;border-color:#d4f779}
+.play-hub .play-hub-primary{background:#d6f879;color:#152a1f;border-color:#d6f879;margin-top:auto}
+.play-hub .play-hub-resume{background:transparent;color:#defab9;white-space:normal}
+.play-hub .play-hub-resume[hidden]{display:none}
+.play-hub-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:auto}
+.play-hub .play-hub-secondary{background:#28403d}
+.play-hub-status{min-height:24px;margin:14px 0 0;color:#dcf5c0;font-size:.85rem}
+.play-hub-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;
+ border-top:1px solid rgba(225,252,229,.2);padding-top:12px;margin-top:5px}
+.play-hub-hint,.play-hub-network{font-size:.78rem;line-height:1.4;color:#c6d9d2}
+.play-hub-network{font-weight:800;color:#d9fbaa;text-align:right;white-space:normal}
+@media(max-width:940px){.play-hub-grid{grid-template-columns:1fr}}
+@media(max-width:600px){
+ .play-hub{margin:0 10px 22px;border-radius:12px;padding:13px}
+ .play-hub-header,.play-hub-footer{flex-direction:column;align-items:stretch}
+ .play-hub-network{text-align:left}
+ .play-hub-card{padding:15px}
+ .play-hub-card h3{font-size:1.13rem}
+ .play-hub .play-hub-primary{width:100%}
+ .play-hub-formats{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+ .play-hub .play-hub-format{min-width:0}
+ .play-hub-actions{width:100%}
+ .play-hub-actions button{flex:1 1 45%}
+}
+@media(prefers-reduced-motion:reduce){.play-hub *{scroll-behavior:auto!important}}
+@media print{.play-hub{display:none!important}}
+
+/* A direct, deliberate human-queue action; configure/view remains separate. */
+.play-hub .play-hub-queue-now{background:#d6f879;color:#153122;border-color:#d6f879;
+ width:100%;font-size:1.04rem;min-height:50px;margin-top:auto}
+.play-hub-human .play-hub-primary{width:100%;margin-top:9px;background:#244b47;color:#dff6dc;border-color:#78a397}
+@media(max-width:600px){.play-hub .play-hub-queue-now{min-height:52px}}

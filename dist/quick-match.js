@@ -29,6 +29,20 @@
  const alertHelp=document.createElement('span');
  alertHelp.textContent='Optional browser alerts while this tab is in the background. No auto-accept, no push service.';
  alertControls.append(alertButton,alertHelp);
+ const recovery=document.createElement('section');
+ recovery.className='quick-queue-recovery';recovery.hidden=true;
+ recovery.setAttribute('aria-label','Human Quick Match recovery');
+ const recoveryHeading=document.createElement('strong');
+ recoveryHeading.textContent='SEARCH INTERRUPTED';
+ const recoveryReason=document.createElement('p');recoveryReason.setAttribute('role','status');
+ const recoveryActions=document.createElement('div');recoveryActions.className='quick-queue-recovery-actions';
+ const retry=document.createElement('button');retry.type='button';retry.className='primary';
+ const changeServer=document.createElement('button');changeServer.type='button';
+ const dismissRecovery=document.createElement('button');dismissRecovery.type='button';
+ retry.textContent='↻ Retry human search';changeServer.textContent='⚙ Check game server';
+ dismissRecovery.textContent='Dismiss';
+ recoveryActions.append(retry,changeServer,dismissRecovery);
+ recovery.append(recoveryHeading,recoveryReason,recoveryActions);
  const readyBox=document.createElement('section');readyBox.className='quick-ready';readyBox.hidden=true;
  readyBox.setAttribute('aria-label','Match ready check');
  const readyTitle=document.createElement('h3');readyTitle.textContent='MATCH FOUND.';
@@ -41,10 +55,79 @@
  const declineReady=document.createElement('button');declineReady.type='button';declineReady.textContent='Decline';
  readyActions.append(acceptReady,declineReady);
  readyBox.append(readyTitle,readyText,readyProgress,readyActions);
- panel.append(heading,description,modes,availability,alertControls,notice,readyBox,actions);
+ panel.append(heading,description,modes,availability,alertControls,notice,recovery,readyBox,actions);
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
+ // The chosen format is a private device preference. Queueing always requires
+ // a deliberate user click and goes through the existing server authority.
+ const PREF_KEY='fuckball.quick-match-preferred-mode.v1';
+ const standardModes=['1v1','2v2','3v3','4v4'];
+ function loadPreferred(){
+  try{
+   const saved=JSON.parse(localStorage.getItem(PREF_KEY)||'null');
+   return saved?.version===1&&standardModes.includes(saved.mode)?saved.mode:'1v1';
+  }catch{return'1v1';}
+ }
+ let preferred=loadPreferred();
+ const shortcut=document.createElement('div');shortcut.className='quick-queue-shortcut';
+ const shortcutCopy=document.createElement('div');shortcutCopy.className='quick-queue-shortcut-copy';
+ const shortcutHead=document.createElement('strong');shortcutHead.textContent='YOUR QUICK START';
+ const shortcutDesc=document.createElement('p');
+ shortcutDesc.textContent='Choose your default format to join the real human queue with one deliberate click. No auto-join, ranked claims or filler bots.';
+ shortcutCopy.append(shortcutHead,shortcutDesc);
+ const shortcutActions=document.createElement('div');shortcutActions.className='quick-queue-shortcut-actions';
+ const preferredLabel=document.createElement('label');preferredLabel.textContent='Preferred format';
+ const preferredSelect=document.createElement('select');
+ preferredSelect.setAttribute('aria-label','Preferred human Quick Match format');
+ for(const mode of standardModes)preferredSelect.add(new Option(mode+' · '+(Number(mode[0])*2)+' humans',mode));
+ preferredLabel.append(preferredSelect);
+ const quickStart=document.createElement('button');quickStart.type='button';quickStart.className='primary';
+ shortcutActions.append(preferredLabel,quickStart);shortcut.append(shortcutCopy,shortcutActions);
+ panel.insertBefore(shortcut,modes);
+ function setPreferred(mode,store=true){
+  if(!standardModes.includes(mode))return;
+  preferred=mode;preferredSelect.value=mode;
+  quickStart.textContent='▶ Find '+mode+' match';
+  quickStart.setAttribute('aria-label','Search for a real-player '+mode+' Quick Match');
+  for(const b of modeButtons){
+   b.classList.toggle('is-preferred',b.dataset.playlist===mode);
+   b.title=b.dataset.playlist===mode?'Your preferred format':'Find real players for '+b.dataset.playlist;
+  }
+  if(store){
+   try{localStorage.setItem(PREF_KEY,JSON.stringify({version:1,mode}));}
+   catch{shortcutDesc.textContent='Preference is active for this visit; browser storage is unavailable.';}
+  }
+ }
+ preferredSelect.onchange=()=>setPreferred(preferredSelect.value);
+ quickStart.onclick=()=>start(preferred);
+ setPreferred(preferred,false);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
+ let lastAttempt=null;
+ function hideRecovery(){recovery.hidden=true;}
+ function showRecovery(reason){
+  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
+  recoveryReason.textContent=String(reason||'Search interrupted.').slice(0,180)+
+   ' A new search needs another explicit click; no ready check is restored.';
+  retry.textContent='↻ Retry '+lastAttempt.mode+' human search';recovery.hidden=false;
+ }
+ retry.onclick=()=>{
+  if(searching||ready||serverLink?.room||peerConnected){
+   recoveryReason.textContent='Finish your current match, connection or ready check first.';return;
+  }
+  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
+  const mode=lastAttempt.mode;
+  try{if(serverLink?.quickMatchMode)disconnect();}catch{}
+  start(mode,false);
+ };
+ changeServer.onclick=()=>{
+  if(searching||serverLink?.room){
+   recoveryReason.textContent='Cancel the queue or leave the current room first.';return;
+  }
+  if(typeof openDialog==='function'){
+   openDialog('networkDialog');document.getElementById('serverAddress')?.focus();
+  }else recoveryReason.textContent='Open Online Rooms to configure the server.';
+ };
+ dismissRecovery.onclick=hideRecovery;
  let ready=null,readyAccepted=false;
  let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
  function clearReadyAlert(){
@@ -98,6 +181,8 @@
  window.addEventListener('focus',clearReadyAlert);
  function refresh(){
   modeButtons.forEach(b=>b.disabled=searching);
+  preferredSelect.disabled=quickStart.disabled=searching;
+  if(typeof pulseAction!=='undefined')pulseAction.disabled=searching||!pulseMode;
   cancel.hidden=!searching;
   readyBox.hidden=!ready;
   if(ready){
@@ -115,8 +200,11 @@
   }
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
- function done(message){
-  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;stopClock();refresh();notice.textContent=message;
+ function done(message,offerRetry=false){
+  const wasSearching=searching;
+  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;
+  stopClock();refresh();notice.textContent=String(message||'Search ended.').slice(0,240);
+  if(offerRetry&&wasSearching)showRecovery(message);else hideRecovery();
  }
  function start(mode,party=false){
   if(searching)return;
@@ -125,35 +213,118 @@
    notice.textContent='Log in or create a free account, then select a playlist.';
    showJoinScreen('');return;
   }
-  if(!$('serverAddress').value.trim()){
-   notice.textContent='Connect to a Fuckball multiplayer server to find human opponents.';return;
+  const address=$('serverAddress')?.value.trim();
+  if(!address){
+   notice.textContent='Configure a game server before searching for human opponents.';return;
   }
+  try{
+   const url=new URL(address);
+   if(!['ws:','wss:'].includes(url.protocol)||!url.host||url.username||url.password||
+      (location.protocol==='https:'&&url.protocol!=='wss:'))throw Error('invalid');
+  }catch{
+   notice.textContent='Invalid server address. Choose a compatible WebSocket server in Online Rooms.';
+   return;
+  }
+  if(!party&&standardModes.includes(mode))setPreferred(mode);
+  hideRecovery();lastAttempt={mode,party};
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   connectServer(false,'','',null,mode,party);
  }
  for(const mode of ['1v1','2v2','3v3','4v4']){
-  const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';
+  const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';b.dataset.playlist=mode;
   const name=document.createElement('strong');name.textContent=mode;
   const sub=document.createElement('small');
   sub.textContent=(Number(mode[0])*2)+' real players · one server';
   b.append(name,sub);b.onclick=()=>start(mode);
   modes.append(b);modeButtons.push(b);modeDetails.set(mode,sub);
  }
+ setPreferred(preferred,false);
  // Discover honest, current occupancy only on this server, never estimated bots,
  // global concurrency, matchmaking guarantees or another player's identity.
- let listingRequest=0;
+ let listingRequest=0,addressTimer=null;
+ const availabilityActions=document.createElement('div');
+ availabilityActions.className='quick-queue-availability-actions';
+ const manualRefresh=document.createElement('button');
+ manualRefresh.type='button';manualRefresh.textContent='↻ Refresh queue counts';
+ manualRefresh.setAttribute('aria-label','Refresh live occupancy of the selected game server');
+ availabilityActions.append(manualRefresh);
+ availability.insertAdjacentElement('afterend',availabilityActions);
+ // Uses the same validated human-only queue snapshot as the four mode tiles.
+ // Observed occupancy is NOT an ETA, matchmaking guarantee or ranking metric.
+ const pulse=document.createElement('section');pulse.className='quick-queue-pulse';pulse.hidden=true;
+ pulse.setAttribute('aria-label','Human queue snapshot suggestion');
+ const pulseHead=document.createElement('strong');pulseHead.textContent='LIVE HUMAN QUEUE PULSE';
+ const pulseDetail=document.createElement('p');pulseDetail.setAttribute('role','status');
+ pulseDetail.setAttribute('aria-live','polite');
+ const pulseAction=document.createElement('button');pulseAction.type='button';
+ pulseAction.className='primary';
+ const pulseWarning=document.createElement('small');
+ pulseWarning.textContent='Occupancy on your selected server only. Not a wait estimate, ranked result, or promise of an opponent. Matchmaking and ready checks remain server-controlled.';
+ pulse.append(pulseHead,pulseDetail,pulseAction,pulseWarning);
+ availabilityActions.insertAdjacentElement('afterend',pulse);
+ let pulseMode=null,pulseAt=0,previousPulse=null;
+ const clearPulse=()=>{pulse.hidden=true;pulseMode=null;pulseAt=0;previousPulse=null;};
+ pulseAction.addEventListener('click',()=>{
+  if(!pulseMode||searching||document.hidden||home.hidden||
+     !sameOriginGameServer().valid||Date.now()-pulseAt>25000){
+   clearPulse();notice.textContent='Current queue snapshot expired. Refresh queue counts before choosing an observed playlist.';
+   return;
+  }
+  // Every entry requires a fresh user click; never automatically changes queue.
+  start(pulseMode);
+ });
+ function updatePulse(data){
+  const candidates=standardModes.map(mode=>({mode,...data.modes[mode]}));
+  candidates.sort((a,b)=>(b.waiting+b.confirming)-(a.waiting+a.confirming)||
+    b.waiting-a.waiting||standardModes.indexOf(a.mode)-standardModes.indexOf(b.mode));
+  const best=candidates[0],total=best.waiting+best.confirming;
+  const delta=previousPulse&&previousPulse.mode===best.mode?
+    total-previousPulse.total:null;
+  previousPulse={mode:best.mode,total};pulseAt=Date.now();pulse.hidden=false;
+  pulseMode=total>0?best.mode:null;
+  pulseDetail.textContent=total?
+   'Most occupied right now: '+best.mode+' · '+best.waiting+' waiting, '+best.confirming+
+    ' confirming'+(delta===null?'':delta>0?' · '+delta+' more than last refresh':
+      delta<0?' · '+Math.abs(delta)+' fewer than last refresh':' · unchanged since last refresh')+'.':
+   'No human players waiting or confirming in these queues right now. Any playlist can still be started manually.';
+  pulseAction.hidden=!pulseMode;pulseAction.disabled=searching||!pulseMode;
+  pulseAction.textContent=pulseMode?'▶ Search '+pulseMode+' with real people':'';
+ }
+
  const genericLabels=()=>{
   for(const [mode,sub]of modeDetails)
    sub.textContent=(Number(mode[0])*2)+' human players required';
  };
+ // The selectable WS server and same-origin HTTP API may NOT point to the
+ // same backend. Never present website occupancy as another server's queue.
+ function sameOriginGameServer(){
+  const address=document.getElementById('serverAddress')?.value.trim();
+  if(!address)return{valid:false,label:'Choose a multiplayer server before checking its live queues.'};
+  let selected;
+  try{selected=new URL(address);}catch{
+   return{valid:false,label:'Enter a valid ws:// or wss:// game server address.'};
+  }
+  if(!['ws:','wss:'].includes(selected.protocol))
+   return{valid:false,label:'Queue status requires a websocket game server address.'};
+  const scheme=location.protocol==='https:'?'wss:':'ws:';
+  if(selected.host!==location.host||selected.protocol!==scheme||selected.pathname!=='/ws')
+   return{valid:false,label:'Selected server: '+selected.host+'. Queue counts from this website may refer to another server, so they are hidden. You can still connect and search normally.'};
+  return{valid:true};
+ }
  async function loadAvailability(){
-  if(document.hidden||home.hidden)return;
+  if(document.hidden||home.hidden){clearPulse();return;}
   const requestId=++listingRequest;
-  if(navigator.onLine===false){
-   genericLabels();availability.textContent='You appear offline · connect to view real player queues.';
+  const selected=sameOriginGameServer();
+  if(!selected.valid){
+   clearPulse();genericLabels();availability.textContent=selected.label;manualRefresh.disabled=false;
    return;
   }
+  if(navigator.onLine===false){
+   clearPulse();genericLabels();availability.textContent='You appear offline · real-player queues require a connection.';
+   manualRefresh.disabled=false;return;
+  }
+  manualRefresh.disabled=true;
   const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000);
   try{
    const response=await fetch('/api/quick-match/availability',{
@@ -175,15 +346,28 @@
     sub.textContent=row.waiting+' waiting · '+row.confirming+
       ' confirming · '+row.needed+' needed';
    }
-   availability.textContent='Live server queues refreshed · real signed-in players only. Matches still require everyone to accept.';
+   updatePulse(data);
+   window.dispatchEvent(new CustomEvent('fuckball:queue-availability',{detail:{
+    modes:data.modes,humanOnly:data.humanOnly,ranked:data.ranked,server:location.host,at:Date.now()
+   }}));
+   availability.textContent='Real-player queues on your selected server ('+location.host+') · refreshed just now. Ready-check acceptance is still required.';
   }catch{
    if(requestId!==listingRequest)return;
-   genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
-  }finally{clearTimeout(timer);}
+   window.dispatchEvent(new Event('fuckball:queue-unavailable'));
+   clearPulse();genericLabels();availability.textContent='Live queue counts unavailable. Local games remain playable.';
+  }finally{clearTimeout(timer);if(requestId===listingRequest)manualRefresh.disabled=false;}
  }
+ manualRefresh.onclick=loadAvailability;
+ document.getElementById('serverAddress')?.addEventListener('input',()=>{
+  // Abandon any obsolete response before displaying counts from a new target.
+  clearPulse();++listingRequest;clearTimeout(addressTimer);genericLabels();
+  availability.textContent='Checking whether live counts belong to your selected game server…';
+  addressTimer=setTimeout(loadAvailability,450);
+ });
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){clearReadyAlert();loadAvailability();}
+  else clearPulse();
  });
  window.addEventListener('online',loadAvailability);
  window.addEventListener('offline',loadAvailability);
@@ -232,21 +416,21 @@
     // Decliners, silent players and expired sessions must explicitly
     // restart searching: never join the next match without a new action.
     try{disconnect();}catch{}
-    done(d.reason||'Ready check ended. Start another search.');
+    done(d.reason||'Ready check ended. Start another search.',true);
    }
   }else if(d.type==='quickMatchFound'){
    done('Matched with '+d.players+' real people. Your casual '+playlistLabel(d.mode)+' game is starting.');
    notify('Real-player Quick Match '+playlistLabel(d.mode)+' · no bots, no ranked rating.');
   }else if(d.type==='quickMatchCancelled'){
-   done(d.reason||'Your match was cancelled.');
+   done(d.reason||'Your match was cancelled.',true);
   }else if(d.type==='queueStatus'){
    if(d.status==='partyGathering'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
    }else if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     waiting=d.waiting;needed=d.needed;refresh();
-   }else if(d.status==='cancelled')done('Search cancelled.');
+   }else if(d.status==='cancelled')done('Search cancelled.',true);
    else if(d.status==='error'||d.status==='disconnected')
-    done(d.reason||'Match search disconnected. You can try again.');
+    done(d.reason||'Match search disconnected. You can try again.',true);
   }
  };
 })();

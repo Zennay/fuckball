@@ -1,0 +1,27 @@
+.teamwork-panel{margin:16px 0 28px;max-width:760px;padding:20px 22px;border-radius:15px;background:#23373b;border:1px solid #6b9682;color:#e8f2ee;display:grid;gap:14px}
+.teamwork-panel-head h2{font-size:23px;color:#d5f4a4;margin:0 0 7px;font-weight:900}
+.teamwork-panel-head p{font-size:13px;line-height:1.55;color:#d4e1dc;margin:0;max-width:650px}
+.teamwork-fields{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
+.teamwork-fields label{font-size:12px;color:#e3eee8;display:grid;gap:6px;flex:1 1 125px}
+.teamwork-fields select{min-height:43px;background:#142b31;color:#fff;border:1px solid #799b91;padding:8px;border-radius:8px}
+.teamwork-fields button{min-height:43px;flex:1 1 160px}
+.teamwork-home-status{font-size:12px;color:#d1f5a9;min-height:18px;margin:0}
+.teamwork-records{display:grid;gap:8px;padding:14px;background:#192f35;border-radius:10px}
+.teamwork-record-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.teamwork-record-head strong{color:#cdeea5;font-size:12px;margin-right:auto}
+.teamwork-record-head button{min-height:35px;font-size:11px}
+.teamwork-record-rows{display:grid;gap:7px}
+.teamwork-record-rows>p{font-size:12px;color:#b9cfcb}
+.teamwork-record-row{display:grid;gap:4px;padding:9px 11px;background:#2c4547;border-radius:7px}
+.teamwork-record-row b{font-size:12px;color:#eaffd0}
+.teamwork-record-row span{font-size:11px;color:#c4d7d1}
+.teamwork-hud{position:fixed;z-index:34;right:clamp(10px,3vw,38px);bottom:20px;width:min(385px,calc(100vw - 22px));padding:17px 18px;border:2px solid #b8dd8f;border-radius:14px;color:#f4fff2;background:#172f39f5;box-shadow:0 12px 36px #101b1ec1}
+.teamwork-hud[hidden]{display:none!important}
+.teamwork-hud strong{display:block;font-size:11px;letter-spacing:.13em;color:#cdeaac}
+.teamwork-score{display:block;margin:9px 0;font-size:20px;font-weight:900}
+.teamwork-feedback{font-size:12px;line-height:1.5;min-height:36px;color:#d6ebe0}
+.teamwork-progress{height:8px;border-radius:99px;overflow:hidden;background:#617b77;margin:14px 0}
+.teamwork-progress>span{display:block;width:0;height:100%;background:#d2f4a7}
+.teamwork-hud-actions{display:flex;flex-wrap:wrap;gap:8px}
+.teamwork-hud-actions button{min-height:42px;flex:1}
+@media(max-width:720px){.teamwork-panel{padding:15px}.teamwork-hud{bottom:120px;padding:12px 14px}.teamwork-score{font-size:17px}}

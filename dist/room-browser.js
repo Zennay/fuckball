@@ -18,7 +18,9 @@
  const toggle=document.createElement('button');toggle.type='button';toggle.textContent='Browse rooms';
  toggle.className='primary';toggle.setAttribute('aria-expanded','false');
  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh';refresh.hidden=true;
- toolbar.append(toggle,refresh);
+ const find=document.createElement('button');find.type='button';find.textContent='⚽ Find an open room';find.hidden=true;
+ find.className='room-browser-find';find.title='Find a fresh, public room using your visible filters';
+ toolbar.append(toggle,refresh,find);
  const filters=document.createElement('div');filters.className='room-browser-filters';filters.hidden=true;
  const search=document.createElement('input');search.type='search';search.maxLength=60;
  search.placeholder='Room code or stadium';search.setAttribute('aria-label','Find a public room');
@@ -29,9 +31,17 @@
  for(const value of ['all','1v1','2v2','3v3','4v4','custom'])
   modeFilter.add(new Option(value==='all'?'Any mode':value==='custom'?'Custom / bots':value,value));
  const order=document.createElement('select');order.setAttribute('aria-label','Sort public rooms');
- for(const [value,label] of [['default','Server order'],['pinned','Pinned first'],['most','Most players'],['fewest','Fewest players'],['stadium','Stadium A–Z']])
+ for(const [value,label] of [['default','Server order'],['pinned','Pinned first'],['most','Most players'],['fewest','Fewest players'],['seats','Most available seats'],['stadium','Stadium A–Z']])
   order.add(new Option(label,value));
- for(const control of [search,statusFilter,modeFilter,order])filters.append(control);
+ const accessFilter=document.createElement('select');accessFilter.setAttribute('aria-label','Available room seats');
+ for(const [value,label] of [['all','All rooms'],['space','Rooms with open seats'],['eligible','Rooms I can join'],['guest','Guest-accessible with seats'],['lobby','Open lobbies']])
+  accessFilter.add(new Option(label,value));
+ for(const control of [search,statusFilter,modeFilter,order,accessFilter])filters.append(control);
+ const resetFilters=document.createElement('button');
+ resetFilters.type='button';resetFilters.className='room-browser-reset';
+ resetFilters.textContent='Clear filters';
+ resetFilters.title='Show every currently advertised public room again';
+ filters.append(resetFilters);
  const body=document.createElement('div');body.className='room-browser-body';body.hidden=true;
  const status=document.createElement('p');status.className='room-browser-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -44,10 +54,35 @@
  savedNote.textContent='Only rooms you intentionally pin are saved on this device. A room may later become unavailable or unlisted; opening a saved code still requires server admission.';
  const savedGrid=document.createElement('div');savedGrid.className='room-browser-saved-list';
  savedSection.append(savedHeading,savedNote,savedGrid);
+ const bookmarkBar=document.createElement('section');bookmarkBar.className='room-browser-transfer';
+ bookmarkBar.setAttribute('aria-label','Portable public room bookmarks');
+ const bookmarkTitle=document.createElement('strong');bookmarkTitle.textContent='MY PUBLIC ROOM BOOKMARKS';
+ const bookmarkHelp=document.createElement('p');bookmarkHelp.textContent='Export or import only room codes you deliberately pinned. Rooms may become private or disappear; imported codes do not prove current visibility or grant entry.';
+ const transferActions=document.createElement('div');transferActions.className='room-browser-transfer-actions';
+ const exportPins=document.createElement('button');exportPins.type='button';exportPins.textContent='↓ Export pinned rooms';
+ const importPins=document.createElement('button');importPins.type='button';importPins.textContent='↑ Import pinned rooms';
+ const importFile=document.createElement('input');importFile.type='file';importFile.accept='.json,application/json';importFile.hidden=true;
+ importFile.setAttribute('aria-label','Private JSON file of pinned public room codes');
+ const replaceLabel=document.createElement('label');replaceLabel.className='room-browser-transfer-replace';
+ const replacePins=document.createElement('input');replacePins.type='checkbox';
+ replaceLabel.append(replacePins,document.createTextNode('Replace my current pins (default: add)'));
+ transferActions.append(exportPins,importPins,replaceLabel,importFile);
+ bookmarkBar.append(bookmarkTitle,bookmarkHelp,transferActions);
  const list=document.createElement('div');list.className='room-browser-list';
- body.append(savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
+ const watchBar=document.createElement('section');watchBar.className='room-browser-watch';
+ watchBar.setAttribute('aria-label','Pinned public room live availability');
+ const watchButton=document.createElement('button');watchButton.type='button';
+ watchButton.textContent='◎ Watch pinned availability';watchButton.setAttribute('aria-pressed','false');
+ const watchText=document.createElement('p');watchText.setAttribute('role','status');
+ watchText.setAttribute('aria-live','polite');
+ watchText.textContent='Optional, tab-visible only. Uses the existing public-room refresh; no background tracking or automatic joins.';
+ watchBar.append(watchButton,watchText);
+ body.append(bookmarkBar,watchBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
- let sequence=0,busy=false,interval=null,shown=false,roomsCache=[];
+ let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ let watching=false,sawSnapshot=false,previousAvailable=new Set();
+ const PUBLIC_LISTING_MAX_AGE=45000;
+ const listingFresh=()=>lastLoadedAt>0&&Date.now()-lastLoadedAt<=PUBLIC_LISTING_MAX_AGE;
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
  const validRoom=code=>typeof code==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(code);
  function readPinned(){
@@ -65,14 +100,71 @@
      list.some(code=>!validRoom(code)))throw Error('Invalid pinned room list.');
   try{localStorage.setItem(SAVED_KEY,JSON.stringify(list));}
   catch{throw Error('Could not save room pins to this device.');}
+  catchupWatchBaseline();
+ }
+ function downloadPins(){
+  let pins;
+  try{pins=readPinned();}catch(error){status.textContent=error.message;return;}
+  if(!pins.length)return void(status.textContent='Pin a public room before exporting its code.');
+  if(!confirm('Export '+pins.length+' saved room code(s) to a local JSON file? The codes may still reach rooms later made private. Share this file carefully.'))return;
+  const payload={format:'fuckball-public-room-bookmarks',version:1,
+   exportedAt:new Date().toISOString(),rooms:pins};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{
+   type:'application/json;charset=utf-8'
+  }));
+  const a=document.createElement('a');a.href=url;
+  a.download='fuckball-public-room-bookmarks.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='Pinned room code backup downloaded locally. No server upload or invitation sent.';
+ }
+ exportPins.onclick=downloadPins;
+ importPins.onclick=()=>{importFile.value='';importFile.click();};
+ importFile.onchange=async()=>{
+  const file=importFile.files?.[0];importFile.value='';
+  if(!file)return;
+  if(file.size<1||file.size>4096)
+   return void(status.textContent='Choose a bookmark JSON file between 1 byte and 4 KiB.');
+  try{
+   const parsed=JSON.parse(await file.text());
+   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||
+      Object.keys(parsed).some(k=>!['format','version','exportedAt','rooms'].includes(k))||
+      parsed.format!=='fuckball-public-room-bookmarks'||parsed.version!==1||
+      !Array.isArray(parsed.rooms)||parsed.rooms.length<1||parsed.rooms.length>SAVED_LIMIT||
+      parsed.rooms.some(code=>!validRoom(code))||
+      new Set(parsed.rooms).size!==parsed.rooms.length||
+      (parsed.exportedAt!==undefined&&
+       (typeof parsed.exportedAt!=='string'||parsed.exportedAt.length>35)))
+    throw Error('The file is not a supported public room bookmark export.');
+   const original=localStorage.getItem(SAVED_KEY);
+   const existing=readPinned(),replace=replacePins.checked;
+   const proposal=replace?[...parsed.rooms]:
+    [...existing,...parsed.rooms.filter(code=>!existing.includes(code))];
+   if(proposal.length>SAVED_LIMIT)
+    throw Error('Combined bookmarks exceed twelve rooms. Unpin rooms or choose Replace before importing.');
+   if(!confirm((replace?'Replace '+existing.length+' saved pin(s) with ':
+      'Add '+(proposal.length-existing.length)+' new pin(s) to ')+
+      parsed.rooms.length+' imported public-room code(s)? This does not join rooms or verify current access.'))return;
+   if(localStorage.getItem(SAVED_KEY)!==original)
+    throw Error('Bookmarks changed in another tab during import. Reload the list and try again.');
+   savePinned(proposal);renderRooms();
+   status.textContent='Imported '+proposal.length+' pinned room codes on this device; join still requires server admission.';
+  }catch(error){status.textContent='Import refused: '+(error.message||'Invalid bookmark file.');}
+ };
+ function busyWithMatch(){
+  return !!serverLink?.room||!!peerConnected||
+   !!document.querySelector('.quick-queue-actions button:not([hidden])')||
+   !!document.querySelector('.quick-ready:not([hidden])');
  }
  function openSavedRoom(code){
-  if(serverLink?.room){status.textContent='Leave your current room first.';return;}
-  // A pinned code is not evidence that a room is still open or public.
-  // The native join API makes the current access and room existence checks.
+  if(busyWithMatch()){
+   status.textContent='Finish your active game or cancel the Quick Match queue/ready-check first.';
+   return;
+  }
+  // A pinned code never proves that access is still allowed.
   showJoinScreen(code);
  }
- function renderPinned(pins){
+  function renderPinned(pins){
   savedSection.hidden=!pins.length;
   savedGrid.replaceChildren();
   for(const code of pins){
@@ -81,18 +173,28 @@
    const info=document.createElement('div');info.className='room-browser-info';
    const label=document.createElement('strong');label.textContent='★ '+code;
    const hint=document.createElement('small');
+   const age=lastLoadedAt?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
    hint.textContent=published?
-    'Currently public · '+published.players+' online · '+published.map:
-    'Availability and access unknown · previously pinned code';
-   info.append(label,hint);
+    (age!==null&&age<=45?'Recently advertised public':'Previously advertised public')+
+    ' · last seen '+(age??'?')+'s ago · '+published.players+' players · '+published.map:
+    'Not in the last public listing · access and availability unknown';
+   const current=!!published&&canBrowseJoin(published);
+   const badge=document.createElement('span');badge.className='room-browser-availability';
+   badge.dataset.open=current?'yes':'no';
+   badge.textContent=current?'PUBLIC · OPEN SEATS':
+    (published&&listingFresh()?'PUBLIC · NO FREE SEATS':'CURRENT STATUS UNKNOWN');
+   info.append(label,badge,hint);
    const actions=document.createElement('div');actions.className='room-browser-actions';
+   const joinOpen=button(published?.requiresAccount?'Sign in / join public':'Join public room',
+     ()=>{if(published)requestJoin(published);});
+   joinOpen.disabled=!current;joinOpen.className='room-browser-live-join';
    const open=button('Open saved room',()=>openSavedRoom(code));
    const remove=button('Unpin',()=>{
     try{savePinned(readPinned().filter(value=>value!==code));renderRooms();
      status.textContent='Unpinned '+code+' from this device.';}
     catch(e){status.textContent=e.message;}
    });
-   actions.append(open,remove);card.append(info,actions);savedGrid.append(card);
+   actions.append(joinOpen,open,remove);card.append(info,actions);savedGrid.append(card);
   }
  }
  clearSaved.onclick=()=>{
@@ -104,27 +206,90 @@
   const item=document.createElement('button');item.type='button';
   item.textContent=label;item.onclick=click;return item;
  }
+ function capacity(room){return Number.isSafeInteger(room.capacity)&&room.capacity>=1&&room.capacity<=128?room.capacity:null;}
+ function freeSeats(room){const cap=capacity(room);return cap===null?null:Math.max(0,cap-room.occupied);}
+ function canBrowseJoin(room){
+  const seats=freeSeats(room);
+  // A once-public room might have been unpublished, ended or moved private.
+  // Old directory results are only historical display data, not admission hints.
+  return listingFresh()&&roomsCache.some(x=>x.room===room.room)&&seats!==null&&seats>0;
+ }
+ function availablePins(){
+  let pins=[];try{pins=readPinned();}catch{return new Set();}
+  return new Set(pins.filter(code=>{
+   const room=roomsCache.find(r=>r.room===code);
+   return !!room&&canBrowseJoin(room);
+  }));
+ }
+ // Fresh public-listing data only. Pin and visibility changes are baselined
+ // rather than mistaken for a server transition; an old code is never trusted.
+ function catchupWatchBaseline(){
+  sawSnapshot=false;previousAvailable=new Set();
+  if(watching&&listingFresh()){
+   previousAvailable=availablePins();sawSnapshot=true;
+  }
+ }
+ function watchFreshListing(){
+  if(!watching)return;
+  const open=availablePins();
+  if(!sawSnapshot){previousAvailable=open;sawSnapshot=true;}
+  else{
+   const arrivals=[...open].filter(code=>!previousAvailable.has(code));
+   if(arrivals.length){
+    watchText.textContent='New since the previous public listing: '+arrivals.join(', ')+
+     '. These pinned rooms advertise a free seat now. Server entry is still checked when you join.';
+   }
+   previousAvailable=open;
+   if(arrivals.length)return;
+  }
+  watchText.textContent=
+   open.size+' pinned public room'+(open.size===1?'':'s')+
+   ' currently advertise open seats. Availability can change at any moment.';
+ }
+ watchButton.addEventListener('click',()=>{
+  watching=!watching;
+  watchButton.setAttribute('aria-pressed',String(watching));
+  watchButton.textContent=watching?'● Stop watching':'◎ Watch pinned availability';
+  watchText.textContent=watching?
+   'Watching only while this room directory is open and this tab is visible. Waiting for refreshed public listings.':
+   'Watch stopped. Nothing runs in the background.';
+  catchupWatchBaseline();
+  if(watching&&listingFresh())watchFreshListing();
+ });
+ function requestJoin(room){
+  if(!canBrowseJoin(room)){
+   status.textContent='Room directory is stale, unavailable or full. Refresh before attempting to join. Server admission is always required.';
+   return false;
+  }
+  if(busyWithMatch()){
+   status.textContent='Leave your current match or cancel Quick Match before joining a different room.';
+   return false;
+  }
+  // A public listing never grants permission. The native join screen and
+  // authoritative server re-check current account, capacity and visibility.
+  showJoinScreen(room.room);
+  if(room.requiresAccount&&!settings.account?.token){
+   $('joinPlay').hidden=true;$('joinAuth').hidden=false;
+  }
+  return true;
+ }
  function putRoom(room,pins){
   if(!room||typeof room.room!=='string'||!/^[A-HJ-NP-Z2-9]{8}$/.test(room.room)||
     !Number.isSafeInteger(room.players)||room.players<0||room.players>128)return;
   const card=document.createElement('article');card.className='room-browser-entry';
+  card.dataset.publicRoom=room.room;card.tabIndex=-1;
   const copy=document.createElement('div');copy.className='room-browser-info';
   const title=document.createElement('strong');title.textContent='ROOM '+room.room;
   const details=document.createElement('small');
   details.textContent=room.players+' online · '+(Number.isSafeInteger(room.occupied)?room.occupied:room.players)+'/'+([8,12,16,24,64].includes(room.capacity)?room.capacity:'?')+' seats occupied · '+(room.requiresAccount?'Account required':'Guests allowed')+' · '+(room.started?'In progress':'Lobby')+
    ' · '+(['1v1','2v2','3v3','4v4'].includes(room.mode)?room.mode.toUpperCase():'Custom')+
-   ' · '+String(room.map||'Stadium').slice(0,60);
+   ' · '+String(room.map||'Stadium').slice(0,60)+
+   ' · '+(freeSeats(room)===null?'Capacity not reported':freeSeats(room)+' open seats');
   copy.append(title,details);
   const actions=document.createElement('div');actions.className='room-browser-actions';
-  const join=button('Join room',()=>{
-   if(serverLink?.room){
-    status.textContent='Leave your current room before joining another.';return;
-   }
-   if(room.requiresAccount&&!settings.account?.token){showJoinScreen(room.room);$('joinPlay').hidden=true;$('joinAuth').hidden=false;return;}
-   showJoinScreen(room.room);
-  });
+  const join=button('Join room',()=>requestJoin(room));
   join.className='primary';
-  if((Number.isSafeInteger(room.occupied)?room.occupied:room.players)>=room.capacity){join.disabled=true;join.textContent='Room full';}
+  if(!canBrowseJoin(room)){join.disabled=true;join.textContent=freeSeats(room)===0?'Room full':'Availability unknown';}
   else if(room.requiresAccount&&!settings.account?.token){join.textContent='Sign in to join';}
   const share=button('Copy invite',async()=>{
    const url=location.origin+location.pathname+'?room='+encodeURIComponent(room.room);
@@ -151,9 +316,15 @@
   let pins=[];
   try{pins=readPinned();}catch(e){status.textContent=e.message;return;}
   renderPinned(pins);
+  watchBar.hidden=!pins.length;
   const needle=search.value.trim().toLocaleLowerCase();
   const visible=roomsCache.filter(r=>
    (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
+   (accessFilter.value==='all'||
+    accessFilter.value==='space'&&canBrowseJoin(r)||
+    accessFilter.value==='eligible'&&canBrowseJoin(r)&&(!r.requiresAccount||!!settings.account?.token)||
+    accessFilter.value==='guest'&&canBrowseJoin(r)&&!r.requiresAccount||
+    accessFilter.value==='lobby'&&canBrowseJoin(r)&&!r.started)&&
    (modeFilter.value==='all'||(modeFilter.value==='custom'?
     !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value))&&
    (!needle||r.room.toLocaleLowerCase().includes(needle)||
@@ -161,20 +332,27 @@
   if(order.value==='pinned')visible.sort((a,b)=>Number(pins.includes(b.room))-Number(pins.includes(a.room))||a.room.localeCompare(b.room));
   else if(order.value==='most')visible.sort((a,b)=>b.players-a.players||a.room.localeCompare(b.room));
   else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
+  else if(order.value==='seats')visible.sort((a,b)=>(freeSeats(b)??-1)-(freeSeats(a)??-1)||a.room.localeCompare(b.room));
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
   list.replaceChildren();
   for(const room of visible)putRoom(room,pins);
+  const age=lastLoadedAt>0?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
+  const freshness=age===null?'No current server snapshot':age<45?'Updated '+age+'s ago':'Old snapshot ('+age+'s); refresh before joining';
   status.textContent=roomsCache.length?
-   visible.length+' of '+roomsCache.length+' public rooms shown · listings refresh every 20s.':
+   visible.length+' of '+roomsCache.length+' public rooms shown · '+freshness+' · refresh every 20s.':
    'No public rooms right now. You can create a private invite room instead.';
   if(roomsCache.length&&!visible.length)
    status.textContent='No public rooms match these filters. Change the search or refresh.';
  }
- for(const control of [search,statusFilter,modeFilter,order]){
+ for(const control of [search,statusFilter,modeFilter,order,accessFilter]){
   control.addEventListener(control===search?'input':'change',renderRooms);
  }
+ resetFilters.onclick=()=>{
+  search.value='';statusFilter.value='all';modeFilter.value='all';
+  order.value='default';accessFilter.value='all';renderRooms();
+ };
  async function load(){
-  if(!shown||busy)return;
+  if(!shown||busy)return false;
   busy=true;const current=++sequence;refresh.disabled=true;
   status.textContent='Loading public rooms…';
   try{
@@ -191,23 +369,79 @@
     Number.isSafeInteger(room.occupied)&&room.occupied>=room.players&&room.occupied<=128&&
     typeof room.started==='boolean'&&typeof room.map==='string'&&
     room.map.length<=60&&typeof room.mode==='string');
+   lastLoadedAt=Date.now();
+   watchFreshListing();
    renderRooms();
-  }catch(e){if(current===sequence&&shown)status.textContent=e.message||'Room directory unavailable.';}
+   return true;
+  }catch(e){
+   if(current===sequence&&shown){
+    // Network failure invalidates the directory, but never touches saved pins.
+    // A stale published code must not remain as an actionable public listing.
+    roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();renderRooms();
+    if(watching)watchText.textContent='Public directory is unavailable; no pinned room is confirmed open.';
+    status.textContent=(e.message||'Room directory unavailable.')+' Pinned room codes are kept, but current public availability is unknown.';
+   }
+   return false;
+  }
   finally{busy=false;refresh.disabled=false;}
  }
  function close(){
-  shown=false;sequence++;roomsCache=[];body.hidden=true;refresh.hidden=true;filters.hidden=true;
+  shown=false;sequence++;roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
  }
  toggle.onclick=()=>{
   if(shown){close();return;}
-  shown=true;body.hidden=false;refresh.hidden=false;filters.hidden=false;
+  shown=true;body.hidden=false;refresh.hidden=false;find.hidden=false;filters.hidden=false;
   toggle.textContent='Hide rooms';toggle.setAttribute('aria-expanded','true');
   renderRooms();load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
  };
  refresh.onclick=load;
+ find.onclick=async()=>{
+  if(!shown||busy)return;
+  if(serverLink?.room||peerConnected||
+     document.querySelector('.quick-queue-actions button:not([hidden])')||
+     document.querySelector('.quick-ready:not([hidden])')){
+   status.textContent='Leave your active match or cancel Quick Match before choosing a public room.';return;
+  }
+  find.disabled=true;
+  status.textContent='Checking fresh public room listings…';
+  try{
+   // Never recommend a previously cached / possibly now private room if
+   // fresh public-host approval cannot be retrieved.
+   if(!await load())return;
+   const loggedIn=!!settings.account?.token;
+   const candidates=roomsCache.filter(r=>canBrowseJoin(r)&&
+    (loggedIn||!r.requiresAccount)&&
+    (statusFilter.value==='all'||(statusFilter.value==='playing'?r.started:!r.started))&&
+    (accessFilter.value==='all'||accessFilter.value==='space'||
+     accessFilter.value==='eligible'&&(loggedIn||!r.requiresAccount)||
+     accessFilter.value==='guest'&&!r.requiresAccount||
+     accessFilter.value==='lobby'&&!r.started)&&
+    (modeFilter.value==='all'||modeFilter.value==='custom'?
+      !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value)&&
+    (!search.value.trim()||r.room.toLowerCase().includes(search.value.trim().toLowerCase())||
+     r.map.toLowerCase().includes(search.value.trim().toLowerCase())));
+   if(!candidates.length){
+    status.textContent='No currently advertised room matches your filters and account access. Try another format or refresh.';
+    return;
+   }
+   let pins=[];try{pins=readPinned();}catch{}
+   // Prefer a lobby with actual human occupancy, then explicitly pinned
+   // hosts; never infer skill, server ping or room quality.
+   candidates.sort((a,b)=>Number(!a.started)-Number(!b.started)||
+    Number(pins.includes(a.room))-Number(pins.includes(b.room))||
+    Math.min(a.players,8)-Math.min(b.players,8)||
+    a.room.localeCompare(b.room));
+   const chosen=candidates[candidates.length-1];
+   if(!requestJoin(chosen))return;
+   status.textContent='Selected public room '+chosen.room+'. The server will check its current access and capacity.';
+  }finally{find.disabled=false;}
+ };
  document.addEventListener('visibilitychange',()=>{
   if(shown&&document.visibilityState==='visible')load();
+ });
+ window.addEventListener('storage',event=>{
+  if(shown&&(event.key===SAVED_KEY||event.key===null))renderRooms();
  });
 })();

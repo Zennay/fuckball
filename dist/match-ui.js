@@ -183,3 +183,93 @@ for(const [key,label,media] of [
 }
 applyMenuPerformance();
 showView('home');
+
+// Native match presentation profiles: client-only. Never touch the canvas
+// simulation, team colors/identity, network packets or input bindings.
+(function setupMatchFocus(){
+ const host=document.querySelector('#menuVideoPane .rm-form');
+ const match=document.getElementById('matchView');
+ if(!host||!match)return;
+ const MODES={standard:'Standard HUD',focus:'Focused HUD',contrast:'High-visibility HUD'};
+ const validMode=mode=>Object.hasOwn(MODES,mode);
+ const saved=settings.matchPresentation;
+ let mode=validMode(saved?.mode)?saved.mode:'standard';
+ let chatHidden=saved?.chatHidden===true;
+ let restoreMode=mode==='focus'?'standard':mode;
+ const make=(tag,content,klass)=>{
+  const item=document.createElement(tag);
+  if(content!==undefined&&content!==null)item.textContent=content;
+  if(klass)item.className=klass;
+  return item;
+ };
+ const pane=make('section',null,'rm-match-focus-settings');
+ pane.setAttribute('aria-label','Match presentation');
+ const title=make('h3','MATCH FOCUS.');
+ const help=make('p','Choose a calmer or more readable match interface. Only local browser presentation changes. The real pitch, physics, controls, other players and server messages are not changed.');
+ const label=make('label','Pitch and scoreboard presentation');
+ const select=make('select');select.setAttribute('aria-label','Match focus appearance');
+ for(const [value,name] of Object.entries(MODES))select.add(new Option(name,value));
+ select.value=mode;label.append(select);
+ const chatLabel=make('label',null,'rm-match-focus-check');
+ const chatCheck=make('input');chatCheck.type='checkbox';chatCheck.checked=chatHidden;
+ const chatText=make('span','Hide room chat text over the pitch until you switch it back on. This does not mute other players, delete messages or prevent sending.');
+ chatLabel.append(chatCheck,chatText);
+ const actions=make('div',null,'rm-match-focus-actions');
+ const reset=make('button','Reset visual defaults');reset.type='button';
+ const status=make('p',null,'rm-match-focus-status');
+ status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ actions.append(reset);
+ pane.append(title,help,label,chatLabel,actions,status);
+ host.append(pane);
+ const quick=make('button',null,'match-focus-quick');
+ quick.type='button';
+ quick.setAttribute('aria-label','Toggle focused match HUD');
+ match.append(quick);
+ function apply(){
+  document.body.classList.toggle('match-hud-focus',mode==='focus');
+  document.body.classList.toggle('match-hud-contrast',mode==='contrast');
+  document.body.classList.toggle('match-hud-hide-chat',chatHidden);
+  select.value=mode;
+  chatCheck.checked=chatHidden;
+  quick.textContent=mode==='focus'?'◌ SHOW FULL HUD':'◌ FOCUS HUD';
+  quick.setAttribute('aria-pressed',String(mode==='focus'));
+  status.textContent=mode==='standard'?'Standard match appearance':
+   mode==='focus'?'Focused match appearance: decorative pitch labels hidden, all game controls and scoreboard retained':
+   'High-visibility: stronger scoreboard and menu contrast, original pitch simulation retained';
+  if(chatHidden)status.textContent+=' · incoming pitch chat hidden on this device only.';
+ }
+ function persist(){
+  settings.matchPresentation={version:1,mode,chatHidden};
+  savePrefs();
+  apply();
+ }
+ select.onchange=()=>{
+  if(!validMode(select.value)){select.value=mode;return;}
+  mode=select.value;
+  if(mode!=='focus')restoreMode=mode;
+  persist();
+ };
+ chatCheck.onchange=()=>{chatHidden=chatCheck.checked;persist();};
+ quick.onclick=()=>{
+  if(mode==='focus')mode=restoreMode;
+  else{restoreMode=mode;mode='focus';}
+  persist();
+  $('gameCanvas')?.focus();
+ };
+ reset.onclick=()=>{
+  mode='standard';restoreMode='standard';chatHidden=false;
+  persist();
+  status.textContent='Standard match appearance and incoming pitch chat restored.';
+ };
+ window.addEventListener('storage',event=>{
+  if(event.key!=='fuckball.settings'&&event.key!==null)return;
+  let next;
+  try{next=JSON.parse(event.newValue||'{}')?.matchPresentation;}catch{return;}
+  mode=validMode(next?.mode)?next.mode:'standard';
+  chatHidden=next?.chatHidden===true;
+  if(mode!=='focus')restoreMode=mode;
+  settings.matchPresentation={version:1,mode,chatHidden};
+  apply();
+ });
+ apply();
+})();

@@ -56,3 +56,51 @@
 .quick-queue-alerts button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
 .quick-queue-alerts span{flex:1 1 250px;font-size:11px;line-height:1.55;color:#bdd3bd}
 @media(max-width:550px){.quick-queue-alerts button{width:100%}}
+
+/* Explicit, saved quick-start choice: human matchmaking remains authoritative. */
+.quick-queue-shortcut{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid #8daf7d;border-radius:12px;background:#12322c;padding:15px 17px;margin:19px 0 7px}
+.quick-queue-shortcut-copy{flex:2 1 250px}.quick-queue-shortcut-copy>strong{color:#d2faa0;letter-spacing:.08em;font-size:12px}
+.quick-queue-shortcut-copy p{font-size:12px;line-height:1.5;color:#ceded5;margin:7px 0 0}
+.quick-queue-shortcut-actions{flex:1 1 280px;display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.quick-queue-shortcut-actions label{display:grid;gap:5px;flex:1 1 135px;color:#eff8eb;font-size:12px}
+.quick-queue-shortcut-actions select{box-sizing:border-box;width:100%;min-height:43px;padding:8px;border-radius:7px;background:#0c2824;border:1px solid #95b6a2;color:white}
+.quick-queue-shortcut-actions .primary{flex:1 1 145px;min-height:43px;padding:10px 13px;background:#d1f78b;border:1px solid #d1f78b;border-radius:7px;color:#173122;font-weight:850;cursor:pointer}
+.quick-queue-shortcut-actions :is(select,button):focus-visible{outline:3px solid #f3ffa9;outline-offset:3px}
+.quick-queue-shortcut-actions :is(select,button):disabled{opacity:.52;cursor:default}
+.quick-queue-mode.is-preferred{border-color:#bde892;box-shadow:inset 0 0 0 1px #bde892}
+.quick-queue-mode.is-preferred strong::after{content:'★';font-size:13px;color:#cfff91;margin-left:7px;vertical-align:middle}
+@media(max-width:580px){.quick-queue-shortcut{padding:13px}.quick-queue-shortcut-actions{flex-basis:100%}}
+
+/* Never imply website queue occupancy describes a different selected server. */
+.quick-queue-availability-actions{display:flex;justify-content:flex-end;gap:8px;margin:3px 0 12px}
+.quick-queue-availability-actions button{background:#1a3835;color:#d2f2cf;border:1px solid #72978b;border-radius:7px;padding:8px 13px;min-height:36px;font-size:12px;cursor:pointer}
+.quick-queue-availability-actions button:disabled{opacity:.5;cursor:default}
+.quick-queue-availability-actions button:focus-visible{outline:3px solid #d3ff91;outline-offset:3px}
+
+/* Honest selected-server human queue occupancy, never a wait-time prediction. */
+.quick-queue-pulse{margin:7px 0 17px;border:1px solid #a0c5ac;border-radius:12px;
+ background:#173936;padding:15px;display:grid;gap:9px}
+.quick-queue-pulse[hidden]{display:none!important}
+.quick-queue-pulse strong{color:#e1f8af;font-size:.82rem;letter-spacing:.065em}
+.quick-queue-pulse p{margin:0;color:#f0f8e9;font-weight:650;font-size:.87rem;line-height:1.6}
+.quick-queue-pulse small{font-size:.73rem;color:#c5ded2;line-height:1.55;max-width:67ch}
+.quick-queue-pulse button{justify-self:start;min-height:44px;border-radius:8px;
+ padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+.quick-queue-pulse button:focus-visible{outline:3px solid #e4ffb5;outline-offset:3px}
+.quick-queue-pulse button:disabled{opacity:.55;cursor:default}
+@media(max-width:580px){.quick-queue-pulse{padding:12px}
+ .quick-queue-pulse button{width:100%}}
+
+
+/* Explicit human queue recovery after an interrupted or expired ready check. */
+.quick-queue-recovery{margin:13px 0;padding:15px;border:1px solid #b5caa2;
+ border-radius:11px;background:#263e37;display:grid;gap:9px}
+.quick-queue-recovery[hidden]{display:none!important}
+.quick-queue-recovery strong{font-size:.82rem;letter-spacing:.07em;color:#f0efbd}
+.quick-queue-recovery p{line-height:1.6;color:#e0ebdf;font-size:.82rem;margin:0}
+.quick-queue-recovery-actions{display:flex;flex-wrap:wrap;gap:9px}
+.quick-queue-recovery-actions button{min-height:44px;padding:9px 13px;border-radius:8px;
+ border:1px solid #acc7aa;background:#325647;color:#edf9df;font:inherit;font-weight:760;cursor:pointer}
+.quick-queue-recovery-actions button.primary{background:#cff1ae;color:#18392b}
+.quick-queue-recovery-actions button:focus-visible{outline:3px solid #ffe5a2;outline-offset:3px}
+@media(max-width:550px){.quick-queue-recovery-actions button{flex:1 1 100%}}

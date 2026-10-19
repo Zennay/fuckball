@@ -1,0 +1,47 @@
+/* Explicit local replay subset export. No online match or account effects. */
+.replay-selective-archive{
+ background:linear-gradient(135deg,#1b2e38,#18322f);
+ color:#edf8f1;border:1px solid #54776a;border-radius:13px;
+ margin:0 0 25px;overflow:hidden
+}
+.replay-selective-archive>details>summary{
+ padding:18px 20px;font-weight:850;letter-spacing:.07em;
+ color:#dcf5b0;cursor:pointer
+}
+.replay-selective-archive>details[open]>summary{border-bottom:1px solid #607d74}
+.replay-selective-body{padding:20px}
+.replay-selective-body>p{font-size:.89rem;color:#c2d9d0;line-height:1.55;margin:0 0 14px}
+.replay-selective-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.replay-selective-tools input{
+ font:inherit;flex:1 1 175px;min-width:0;min-height:42px;
+ border:1px solid #718e85;color:#f4faf1;background:#10272c;
+ border-radius:8px;padding:9px 12px
+}
+.replay-selective-archive button{
+ font:inherit;padding:10px 13px;min-height:42px;border-radius:8px;
+ background:#294640;color:#e7f8eb;border:1px solid #779487;
+ font-weight:800;cursor:pointer
+}
+.replay-selective-archive button:hover:not(:disabled){filter:brightness(1.13)}
+.replay-selective-archive button:disabled{opacity:.48;cursor:not-allowed}
+.replay-selective-archive :is(button,input,summary):focus-visible{
+ outline:3px solid #d8ff9b;outline-offset:3px
+}
+.replay-selective-records{display:grid;gap:7px;max-height:320px;
+ overflow:auto;margin:15px 0 10px}
+.replay-selective-row{display:flex;align-items:center;gap:12px;
+ padding:11px;background:#253f42;border:1px solid #53746c;border-radius:8px;
+ cursor:pointer;min-width:0
+}
+.replay-selective-row input{width:18px;height:18px;flex:none;accent-color:#d6f79c}
+.replay-selective-file{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.replay-selective-file strong{font-size:.88rem}
+.replay-selective-file small{font-size:.74rem;color:#b9d4c9}
+.replay-selective-selection{font-weight:750;color:#d7efc4;margin:13px 0}
+.replay-selective-controls button{background:#d6f79d;color:#163326;border-color:#d6f79d}
+.replay-selective-status{font-size:.83rem;color:#dfefc8;margin-top:13px!important}
+@media(max-width:650px){
+ .replay-selective-tools button{flex:1 1 43%}
+ .replay-selective-body{padding:14px}
+}
+@media print{.replay-selective-archive{display:none!important}}

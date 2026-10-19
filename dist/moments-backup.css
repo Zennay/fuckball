@@ -1,0 +1,4 @@
+/* Player-controlled private screenshot backups. */
+.moment-backup-note{margin:0;padding:11px 15px;border-left:3px solid #b6e691;background:#1a3438;color:#c9dfd0;font-size:12px;line-height:1.55;border-radius:4px}
+.moment-tools button:has(+ input[type="file"]){white-space:normal}
+@media(max-width:650px){.moment-backup-note{padding:10px;font-size:11px}}

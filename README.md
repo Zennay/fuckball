@@ -1,5 +1,61 @@
 # Fuckball 26
 
+## Your private practice coaching journal
+
+Open **My Games → Practice Journal** after completing local AI matches. The journal records actual local scoreboard results and time; it is not ranked or server-verified. Set a personal focus (finishing, passing, defending, positioning or decision-making), write up to 240 characters of reflection per match and filter your history by outcome or focus. The dashboard shows your five most recent outcomes, without inventing a rating.
+
+All focus tags, reflections and match records remain in **this browser's localStorage** and are included if you deliberately export your private journal JSON. Old entries work unchanged, with no note/focus until you add one. A double-confirmation clears only the practice journal, not online results, accounts or HBR2 replays. Private-mode browsers or disabled storage may prevent saving. Existing online matchmaking and approved physics never depend on these notes.
+
+## Private knockout fixture calendar
+
+Inside **Home → Knockout Cup Builder**, each saved knockout match now has
+a **Set private kickoff** disclosure. You may add a local date, time and
+optional venue **before its entrants have qualified**; undecided team slots
+remain marked as such. Existing scores and bracket advancement do not change.
+The cup's **Calendar ICS** download includes only matches you scheduled, using
+a one-hour placeholder duration, honest qualifier names and no invitations.
+
+The normal **Match CSV** and **Save JSON** contain each saved kickoff and venue,
+including on cups created before this feature (whose older matches simply
+start unscheduled). **Game Night Pack v3** preserves those fields when
+moving a cup to another device. Neither planned cup dates nor user-entered
+results are validated as official online competitive fixtures.
+
+## Private best-of series and Game Night Pack v3
+
+Open **Home → Matchday Hub → Best-of Series** to create a private best-of-three,
+best-of-five or best-of-seven event between two named teams. Enter only actual,
+decisive scores in game order; the organiser counts wins, stops at a clinched
+series and supports undoing the latest result. You can assign **provisional**
+kickoffs and venues to individual games and download a local CSV or ICS file
+(60-minute placeholder). Earlier planned games after a series is decided are
+not proof those games took place. The organiser also supports a dedicated JSON
+backup of your series collection and add-only restoration as fresh local copies.
+
+Each saved, still-relevant series game also has **Design match poster**. It opens
+the existing **Home → Custom Poster Designer** with that game's real team names,
+locally saved kickoff, venue and — only when actually recorded — its manual
+result. The Matchday Hub offers the same poster handoff. Posters remain fully
+editable before saving or exporting a PNG or accessible text; they are
+**unofficial, player-made artwork**, not authenticated match announcements or
+results. Full 35-character best-of team names remain intact in v3 Game Night
+Pack poster drafts.
+
+Open **Home → Game Night Pack** to download a single **v3** local JSON archive
+covering round-robin leagues, knockout cups, up to twelve best-of series,
+formation plans and up to eight Matchday Poster Designer drafts. Restoring a
+pack appends copies with new private IDs; it never overwrites existing plans.
+Game Night Pack **v3** can restore older **v1** and **v2** files: v1 has no
+posters or series, and v2 has posters but no series. Import validates every
+collection and available capacity before writes, rejects simultaneous-tab
+changes and rolls back partial localStorage writes where possible.
+
+These are **user-organised and self-reported** schedules, scores and designs,
+not official server results. Downloaded exports remain on your device unless
+you deliberately share them. The packs do not contain account sessions, room
+links, personal tokens or recorded HBR2 game files. Use **My Games → Backup all
+ZIP** separately for HBR2 recordings.
+
 ## Native online game features in current source
 
 **Play:** human-only casual Quick Match in 1v1–4v4 and an opt-in **Club vs Club 4v4** playlist for two complete authenticated four-player squads, with an explicit individual ready check. No ranked Elo or automatic bot opponents in human queues. Custom Rooms support shared links, four active humans per side, benches, spectators, substitutions, chat and host-only admission/moderation.

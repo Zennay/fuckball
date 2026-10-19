@@ -13,3 +13,62 @@
  background:#29443d;color:#edffec}
 .native-chat-player button[aria-pressed="true"]{background:#4b2f35;border-color:#ce8e9c;color:#ffdfdf}
 .native-chat-player button:focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+
+/* In-match room chat quick calls: deliberate user gesture, native chat path. */
+.tactical-callouts[hidden],.tactical-callouts-tray[hidden]{display:none!important}
+.tactical-callouts{position:relative;pointer-events:auto;max-width:min(460px,calc(100vw - 24px));z-index:7}
+.tactical-callouts-toggle{background:#243b42;color:#ecf9df;border:1px solid #afcba3;
+ border-radius:7px;font-size:11px;font-weight:800;letter-spacing:.06em;
+ padding:7px 12px;min-height:40px}
+.tactical-callouts-tray{margin:7px 0 0;display:grid;gap:9px;padding:12px;
+ background:#1a323bea;border:1px solid #a6c3a0;border-radius:10px;
+ box-shadow:0 8px 23px #061014bd;max-height:40vh;overflow:auto}
+.tactical-callouts-favorites,.tactical-callouts-defaults{display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tactical-callouts-favorites button,.tactical-callouts-defaults button{
+ min-height:42px;padding:8px;background:#38524c;color:#eff9ea;
+ border:1px solid #879b8a;border-radius:8px;font-weight:700;font-size:12px;
+ white-space:normal;overflow-wrap:anywhere}
+.tactical-callouts-defaults button{background:#27434e}
+.tactical-callouts-notice{font-size:11px;line-height:1.5;color:#dcefd3;margin:0}
+.tactical-callouts-editor{grid-column:1/-1;display:grid;gap:11px;margin-top:10px;
+ border:1px solid #628578;border-radius:10px;background:#1c3537;padding:15px 16px}
+.tactical-callouts-editor h3{font-size:15px;letter-spacing:.08em;color:#d7f6ae;margin:0}
+.tactical-callouts-editor p{font-size:12px;line-height:1.5;color:#c1d1c7;margin:0}
+.tactical-callouts-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tactical-callouts-fields label{display:grid;gap:5px;font-size:12px;color:#e8f1e3}
+.tactical-callouts-fields input{min-width:0;min-height:41px;padding:9px;
+ border-radius:7px;border:1px solid #819b91;background:#18303a;color:#f4faf0}
+.tactical-callouts-editor-actions{display:flex;gap:8px;flex-wrap:wrap}
+.tactical-callouts-editor-actions button{min-height:42px;border-radius:7px;padding:8px 12px;
+ border:1px solid #91ad91;color:#f0ffe3;background:#2e4c41}
+.tactical-callouts :is(button):focus-visible,
+.tactical-callouts-editor :is(button,input):focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+@media(max-width:540px){.tactical-callouts-fields{grid-template-columns:1fr}
+ .tactical-callouts-tray{max-height:33vh;padding:9px}
+ .tactical-callouts-favorites button,.tactical-callouts-defaults button{min-height:44px}}
+
+
+/* Role quick-chat packs are user-initiated drafts, never automatic messaging. */
+.tactical-callouts-role-packs{border-top:1px solid #5d877d;padding-top:13px;display:grid;gap:10px}
+.tactical-callouts-role-packs>strong{font-size:12px;letter-spacing:.06em;color:#e2f7b4}
+.tactical-callouts-role-packs p{margin:0;font-size:12px;line-height:1.5;color:#cadfd4}
+.tactical-callouts-role-packs>select{min-height:44px;padding:8px 11px;background:#193741;color:#f5fff0;border:1px solid #88aa9a;border-radius:8px}
+.tactical-callouts-role-packs button{min-height:44px;padding:9px 12px;background:#315449;color:#efffdf;border:1px solid #96b39c;border-radius:8px;font-weight:750}
+.tactical-callouts-role-packs :is(select,button):focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+.tactical-callouts-portable{display:flex;gap:10px;flex-wrap:wrap}
+.tactical-callouts-portable button{flex:1 1 160px}
+@media(max-width:540px){.tactical-callouts-role-packs>button{width:100%}
+ .tactical-callouts-portable button{flex:1 1 100%}}
+/* Local-only incoming room chat focus, never server moderation. */
+.native-chat-focus{display:grid;gap:6px;border:1px solid #567f77;padding:11px;border-radius:9px;background:#223e3c}
+.native-chat-focus label{display:grid;gap:7px;font-size:12px;color:#e4f5d3}
+.native-chat-focus select{min-height:44px;padding:8px;background:#193741;color:#f0ffec;border:1px solid #8cab9b;border-radius:8px}
+.native-chat-focus-note{font-size:11px;line-height:1.5;color:#c9d9cd;margin:0}
+.native-chat-player{flex-wrap:wrap}
+.native-chat-player span{flex:1 1 130px}
+.native-chat-player .native-chat-report{background:#40393a;color:#ffe8df;border-color:#a48c86}
+.tactical-callouts .native-chat-quick-focus{min-height:40px;margin-left:7px;padding:7px 11px;border-radius:7px;border:1px solid #97aea0;background:#2a4145;color:#e1f3db;font-size:11px;font-weight:780}
+.tactical-callouts .native-chat-quick-focus[aria-pressed="true"]{border-color:#c8ae8c;background:#554236;color:#fff1d4}
+.native-chat-focus select:focus-visible,.native-chat-player button:focus-visible,.tactical-callouts .native-chat-quick-focus:focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+@media(max-width:520px){.tactical-callouts .native-chat-quick-focus{margin:7px 0 0;width:100%}.native-chat-player button{flex:0 1 auto}}

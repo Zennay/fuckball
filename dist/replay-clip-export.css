@@ -1,9 +1,38 @@
-/* Optional field-only video capture, separate from HBR2 replay archive. */
+/* Local-only Replay Clip Studio. Never modifies recorded gameplay. */
 .replay-controls .replay-clip-tools{display:flex;align-items:center;gap:9px;flex-wrap:wrap;flex-basis:100%;padding:7px 0 0}
-.replay-clip-tools button{background:#243d40;border:1px solid #739a8e;border-radius:8px;padding:10px 14px;min-height:38px;font-size:11px;color:#ecf9e8;font-weight:750}
-.replay-clip-tools button:hover:not(:disabled){background:#365a4e}
-.replay-clip-tools button:nth-child(3){border-color:#bb8b7e;color:#ffcbba}
-.replay-clip-tools button:disabled{opacity:.45;cursor:default}
+.replay-clip-tools button,.replay-clip-studio button{
+ background:#243d40;border:1px solid #739a8e;border-radius:8px;padding:10px 14px;
+ min-height:42px;font-size:11px;color:#ecf9e8;font-weight:750
+}
+.replay-clip-tools button:hover:not(:disabled),.replay-clip-studio button:hover:not(:disabled){background:#365a4e}
+.replay-clip-tools button:disabled,.replay-clip-studio button:disabled{opacity:.45;cursor:default}
 .replay-clip-status{font-size:11px;color:#bad3c5;line-height:1.45;flex:1 1 200px}
-.replay-clip-tools button:focus-visible{outline:3px solid #d9f7a6;outline-offset:3px}
-@media(max-width:580px){.replay-clip-tools button{flex:1 1 auto}.replay-clip-status{flex-basis:100%}}
+.replay-clip-studio{flex:1 1 100%;min-width:0;border:1px solid #65897a;border-radius:9px;background:#1b3136;color:#e8f6dc}
+.replay-clip-studio summary{padding:10px 13px;cursor:pointer;font-weight:850;letter-spacing:.03em;font-size:12px;list-style-position:inside}
+.replay-clip-studio-body{padding:10px 14px 14px;display:grid;gap:10px}
+.replay-clip-studio-body>p{margin:0;font-size:11px;line-height:1.55;color:#c4d8c7}
+.replay-clip-points,.replay-clip-preview{display:flex;flex-wrap:wrap;gap:8px}
+.replay-clip-points button,.replay-clip-preview button{flex:1 1 125px}
+.replay-clip-readout{color:#e3f7b4;font-variant-numeric:tabular-nums;font-size:12px;font-weight:800}
+.replay-clip-studio label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#d8e5d4}
+.replay-clip-studio input{background:#0e232a;color:#f0f6ed;border:1px solid #729188;border-radius:7px;min-height:42px;padding:8px 11px;width:100%;box-sizing:border-box}
+.replay-clip-tools button:focus-visible,.replay-clip-studio :is(button,input,summary):focus-visible{
+ outline:3px solid #d9f7a6;outline-offset:3px
+}
+@media(max-width:580px){
+ .replay-clip-tools button{flex:1 1 auto}
+ .replay-clip-status{flex-basis:100%}
+ .replay-clip-studio-body{padding:8px 9px 12px}
+ .replay-clip-points button{flex:1 1 100%}
+}
+
+.replay-clip-goal-selector{display:grid;gap:9px;padding:12px;border-radius:10px;
+ border:1px solid #688a7e;background:#18353a}
+.replay-clip-goal-selector>strong{font-size:12px;letter-spacing:.07em;color:#ddf7b1}
+.replay-clip-goal-selector label{display:grid;gap:6px}
+.replay-clip-goal-selector select{width:100%;min-height:42px;background:#112b33;color:#f3fde9;
+ border:1px solid #789b8a;border-radius:7px;padding:8px}
+.replay-clip-offsets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.replay-clip-goal-status{margin:0;color:#d8eac5;font-size:11px;line-height:1.5}
+.replay-clip-goal-selector :is(select,button):focus-visible{outline:3px solid #d7ffb3;outline-offset:3px}
+@media(max-width:440px){.replay-clip-offsets{grid-template-columns:1fr}}
