@@ -22,6 +22,6 @@
 .practice-lab-panes [role="tabpanel"][hidden]{display:none!important}
 .practice-lab-panes [role="tabpanel"]{outline:none}
 .practice-lab-panes [role="tabpanel"]:focus-visible{outline:2px solid #b9efa1;outline-offset:2px}
-.practice-lab-panes :is(.first-play-card,.goal-rush-setup,.teamwork-panel){max-width:none;width:100%;box-sizing:border-box;margin:15px 0 0}
+.practice-lab-panes :is(.first-play-card,.goal-rush-setup,.teamwork-panel,.clean-sheet-setup){max-width:none;width:100%;box-sizing:border-box;margin:15px 0 0}
 @media(max-width:650px){.practice-lab-summary{padding:15px;flex-wrap:wrap}.practice-lab-badges{text-align:left;margin-left:52px}.practice-lab-content{padding:13px}.practice-lab-tabs button{flex-basis:120px}}
 @media(prefers-reduced-motion:reduce){.practice-lab-icon{transition:none}}
