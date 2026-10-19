@@ -52,7 +52,7 @@ The fixed rule-based bot and the neural model have different promotion tracks. H
 
 Every completed HaxLab cycle can:
 1. Warm-start tactical profile evolution from `latest-team-profile.json`, if there is a previously accepted training-only champion.
-2. Produce `team-policy.json` with five tactical parameters: support distance, spread, defensive cover, pressure range and screening distance.
+2. Produce `team-policy.json` with five formation parameters (support, spread, cover, press, screen) plus the bounded pass-safety, 2v1-overload, keeper-risk, bank-shot and shot-aggression parameters once the tactical intelligence upgrade is merged.
 3. Compare an evolved candidate against the current tactical checkpoint, using **16 fresh, side-swapped native 4v4 games** (BFF and Classic, four seeds and both sides); after a checkpoint exists, also compare against the frozen original default profile in 16 further games.
 4. Accept the candidate only if evolution itself selected it, incumbent comparison has at least **56.25% match score**, **+2 goal differential** and more wins than losses, and the frozen default profile is not regressed (at least 50% match score and nonnegative goal difference).
 5. Persist a versioned `latest-team-profile.json` for the **next research cycle** and a separate per-cycle `tactical-league.json` receipt. A rejection leaves the current tactical champion untouched.
