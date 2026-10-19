@@ -47,7 +47,7 @@ function quickPlay(mode,localConsent=false,timedNativeDrill=false){
  $('mode').value=mode;rosterPreset='';started=false;
  // Explicitly started local timed drills may disable ONLY local score/time caps.
  // Ordinary quick-play, external rooms, peers and persisted player defaults remain unchanged.
- const unlimited=timedNativeDrill===true&&localConsent===true&&['bot','4v4'].includes(mode);
+ const unlimited=timedNativeDrill===true&&localConsent===true&&['bot','4v4','local'].includes(mode);
  showView('play');resetMatch(true,unlimited);
  if(typeof closeMatchMenu==='function')closeMatchMenu();
  return true;

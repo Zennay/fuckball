@@ -104,18 +104,21 @@
    if(scope.id==='sudden'){
     if(![3,5,7].includes(item.bestOf)||![60,90,120].includes(item.duration)||
      !Array.isArray(item.rounds)||item.rounds.length<1||
-     item.rounds.length>item.bestOf||
-     !item.rounds.every(r=>r&&['human','ai','draw'].includes(r.winner)&&
+     item.rounds.length>item.bestOf||!int(item.draws,7))return false;
+    const couch=item.opponent==='human',first=couch?'player1':'human',
+     second=couch?'player2':'ai',a=couch?item.player1:item.human,
+     b=couch?item.player2:item.ai;
+    if(!couch&&item.opponent!==undefined&&item.opponent!=='ai')return false;
+    if(!int(a,7)||!int(b,7)||a+b+item.draws!==item.rounds.length||
+     !item.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
       int(r.frames,item.duration*60+120))||
-     !int(item.human,7)||!int(item.ai,7)||!int(item.draws,7)||
-     item.human+item.ai+item.draws!==item.rounds.length||
-     item.rounds.filter(r=>r.winner==='human').length!==item.human||
-     item.rounds.filter(r=>r.winner==='ai').length!==item.ai||
+     item.rounds.filter(r=>r.winner===first).length!==a||
+     item.rounds.filter(r=>r.winner===second).length!==b||
      item.rounds.filter(r=>r.winner==='draw').length!==item.draws)return false;
-    return item.winner===(item.human>item.ai?'human':item.ai>item.human?'ai':'draw')&&
+    return item.winner===(a>b?first:b>a?second:'draw')&&
      (item.rounds.length===item.bestOf||
-      item.human>=Math.floor(item.bestOf/2)+1||
-      item.ai>=Math.floor(item.bestOf/2)+1);
+      a>=Math.floor(item.bestOf/2)+1||
+      b>=Math.floor(item.bestOf/2)+1);
    }
   }
   if(scope.id==='attendance')return !!item&&typeof item==='object'&&

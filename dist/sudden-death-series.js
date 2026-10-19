@@ -16,8 +16,17 @@
  const section=node('section',null,'sudden-death-setup');
  section.setAttribute('aria-label','Offline sudden death best of series');
  section.append(node('h2','SUDDEN DEATH.'),
-  node('p','Play a best-of series against the native local AI. Each round ends on the first actual goal or the active round clock. Both sides use the approved football engine; this is private, unranked practice.'));
+  node('p','Play a first-goal best-of series against native local AI or another real player on the same screen. Actual native goals decide each round. The results are private and unranked.'));
  const fields=node('div',null,'sudden-death-fields');
+ const opponentLabel=node('label','Opponent'),opponent=node('select');
+ opponent.setAttribute('aria-label','Choose native AI or couch human opponent');
+ opponent.add(new Option('Local AI','ai'));opponent.add(new Option('Player 2 · couch','human'));
+ opponentLabel.append(opponent);
+ opponent.addEventListener('change',()=>{
+  status.textContent=opponent.value==='human'?
+   'Player 1 vs Player 2: use shared keyboard or two separate gamepads in local Couch 1v1.':
+   'Native local AI: complete full first-goal rounds for a private best-of result.';
+ });
  const gamesLabel=node('label','Series length'),games=node('select');
  games.setAttribute('aria-label','Best of rounds');
  for(const length of LENGTHS)games.add(new Option('Best of '+length,String(length)));
@@ -28,7 +37,7 @@
  time.value='90';timeLabel.append(time);
  const start=node('button','▶ START BEST-OF SERIES');
  start.type='button';start.className='primary';
- fields.append(gamesLabel,timeLabel,start);
+ fields.append(opponentLabel,gamesLabel,timeLabel,start);
  const status=node('p','Complete all needed rounds to save a private series result.','sudden-death-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const archive=node('div',null,'sudden-death-history');
@@ -56,21 +65,26 @@
  controls.append(next,stop,retry,dismiss);
  hud.append(title,clock,result,roundList,controls);pitch.append(hud);
  let session=null;
- const validHistory=x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000&&
-  LENGTHS.includes(x.bestOf)&&DURATIONS.includes(x.duration)&&
-  Array.isArray(x.rounds)&&x.rounds.length>=1&&x.rounds.length<=x.bestOf&&
-  x.rounds.every(r=>['human','ai','draw'].includes(r.winner)&&
-   Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
-  ['human','ai','draw'].includes(x.winner)&&
-  Number.isSafeInteger(x.human)&&Number.isSafeInteger(x.ai)&&Number.isSafeInteger(x.draws)&&
-  x.human>=0&&x.ai>=0&&x.draws>=0&&x.human+x.ai+x.draws===x.rounds.length&&
-  x.rounds.filter(r=>r.winner==='human').length===x.human&&
-  x.rounds.filter(r=>r.winner==='ai').length===x.ai&&
-  x.rounds.filter(r=>r.winner==='draw').length===x.draws&&
-  x.winner===(x.human>x.ai?'human':x.ai>x.human?'ai':'draw')&&
-  (x.rounds.length===x.bestOf||
-   x.human>=Math.floor(x.bestOf/2)+1||
-   x.ai>=Math.floor(x.bestOf/2)+1);
+ const validHistory=x=>{
+  if(!x||!Number.isSafeInteger(x.at)||x.at<=0||x.at>Date.now()+86400000||
+   !LENGTHS.includes(x.bestOf)||!DURATIONS.includes(x.duration)||
+   !Array.isArray(x.rounds)||x.rounds.length<1||x.rounds.length>x.bestOf||
+   !Number.isSafeInteger(x.draws)||x.draws<0||x.draws>7)return false;
+  const couch=x.opponent==='human';
+  if(!couch&&x.opponent!==undefined&&x.opponent!=='ai')return false;
+  const a=couch?x.player1:x.human,b=couch?x.player2:x.ai;
+  const first=couch?'player1':'human',second=couch?'player2':'ai';
+  if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<0||b<0||
+   a>7||b>7||a+b+x.draws!==x.rounds.length)return false;
+  if(!x.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
+   Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120))return false;
+  return x.rounds.filter(r=>r.winner===first).length===a&&
+   x.rounds.filter(r=>r.winner===second).length===b&&
+   x.rounds.filter(r=>r.winner==='draw').length===x.draws&&
+   x.winner===(a>b?first:b>a?second:'draw')&&
+   (x.rounds.length===x.bestOf||a>=Math.floor(x.bestOf/2)+1||
+    b>=Math.floor(x.bestOf/2)+1);
+ };
  function read(){
   try{
    const arr=JSON.parse(localStorage.getItem(KEY)||'[]');
@@ -81,13 +95,15 @@
   const history=read();rows.replaceChildren();
   download.disabled=clear.disabled=!history.length;
   if(!history.length){
-   rows.append(node('p','Finish your first native local AI best-of series to build a private history.'));
+   rows.append(node('p','Finish a local AI or two-player native best-of series to build a private history.'));
    return;
   }
   for(const record of history.slice(0,8)){
    const entry=node('article',null,'sudden-death-history-row');
-   const label=record.winner==='human'?'SERIES WON':record.winner==='ai'?'AI WON':'SERIES DRAW';
-   entry.append(node('strong',label+' · '+record.human+'–'+record.ai+
+   const couch=record.opponent==='human';
+   const first=couch?record.player1:record.human,second=couch?record.player2:record.ai;
+   const label=couch?'COUCH 1v1':record.winner==='human'?'SERIES WON':record.winner==='ai'?'AI WON':'SERIES DRAW';
+   entry.append(node('strong',label+' · '+first+'–'+second+
     ' ('+record.draws+' drawn)'),
     node('span',record.rounds.length+' genuine rounds · '+record.duration+
      's clock · '+new Date(record.at).toLocaleDateString()));
@@ -106,10 +122,17 @@
   }
  }
  function save(s){
-  const rounds=s.rounds.map(r=>({winner:r.winner,frames:r.frames}));
-  const entry={at:Date.now(),bestOf:s.bestOf,duration:s.duration,rounds,
-   human:s.human,ai:s.ai,draws:s.draws,
-   winner:s.human>s.ai?'human':s.ai>s.human?'ai':'draw'};
+  const couch=s.opponent==='human',first=couch?'player1':'human',
+   second=couch?'player2':'ai';
+  const rounds=s.rounds.map(r=>({winner:r.winner==='human'?first:
+   r.winner==='other'?second:'draw',frames:r.frames}));
+  const entry=couch?
+   {at:Date.now(),bestOf:s.bestOf,duration:s.duration,opponent:'human',
+    rounds,player1:s.human,player2:s.other,draws:s.draws,
+    winner:s.human>s.other?first:s.other>s.human?second:'draw'}:
+   {at:Date.now(),bestOf:s.bestOf,duration:s.duration,rounds,
+    human:s.human,ai:s.other,draws:s.draws,
+    winner:s.human>s.other?'human':s.other>s.human?'ai':'draw'};
   let stored=false;
   try{
    localStorage.setItem(KEY,JSON.stringify([entry,...read()].slice(0,MAX)));
@@ -136,15 +159,16 @@
  };
  paintHistory();
  const own=()=>room?.state?.players?.find?.(p=>p.id===1);
- function ready(){
-  const p=own();
+ function ready(opponentType){
+  const p=own(),couch=opponentType==='human';
   return !serverLink&&!peerConnected&&!replay&&started&&!pitch.hidden&&
-   document.getElementById('mode')?.value==='bot'&&room?.gameState&&
+   document.getElementById('mode')?.value===(couch?'local':'bot')&&room?.gameState&&
    Number.isSafeInteger(room.currentFrameNo)&&
    Number.isSafeInteger(room.gameState.redScore)&&
    Number.isSafeInteger(room.gameState.blueScore)&&
    p?.disc&&[1,2].includes(p?.team?.id)&&!botIds.has(1)&&
-   room.state.players.some(x=>x.id!==1&&botIds.has(x.id)&&
+   room.state.players.some(x=>x.id!==1&&
+    (couch?x.id===2&&!botIds.has(2):botIds.has(x.id))&&
     x.disc&&[1,2].includes(x.team?.id)&&x.team.id!==p.team.id);
  }
  function blocked(){
@@ -158,16 +182,17 @@
  function render(s){
   const finished=s.phase==='complete'||s.phase==='stopped';
   const waiting=s.phase==='between';
-  title.textContent=s.phase==='complete'?'SERIES COMPLETE · LOCAL AI':
+  title.textContent=s.phase==='complete'?'SERIES COMPLETE · '+(s.opponent==='human'?'TWO PLAYERS':'LOCAL AI'):
    s.phase==='stopped'?'SERIES STOPPED · NOT SAVED':'SUDDEN DEATH · LOCAL 1v1';
   clock.textContent=finished?'Final · '+s.rounds.length+' recorded round'+(s.rounds.length===1?'':'s'):
    waiting?'Round '+s.rounds.length+' complete · choose next round':
     'Round '+(s.rounds.length+1)+'/'+s.bestOf+' · '+Math.max(0,Math.ceil((s.duration*60-s.elapsed)/60))+'s left';
-  result.textContent='You '+s.human+' · AI '+s.ai+' · Draws '+s.draws+
+  result.textContent=(s.opponent==='human'?'Player 1 ':'You ')+s.human+' · '+(s.opponent==='human'?'Player 2 ':'AI ')+s.other+' · Draws '+s.draws+
    (waiting?' · next round requires your click':s.phase==='running'?' · first real goal wins':'');
   roundList.replaceChildren();
   for(const r of s.rounds){
-   const rlabel=r.winner==='human'?'YOU SCORED':r.winner==='ai'?'AI SCORED':'NO GOAL · DRAW';
+   const rlabel=r.winner==='human'?(s.opponent==='human'?'PLAYER 1 GOAL':'YOU SCORED'):
+    r.winner==='other'?(s.opponent==='human'?'PLAYER 2 GOAL':'AI SCORED'):'NO GOAL · DRAW';
    roundList.append(node('li','Round '+(roundList.childElementCount+1)+': '+rlabel+
     ' at '+(r.frames/60).toFixed(1)+'s'));
   }
@@ -193,11 +218,16 @@
   if(!s||s.phase!=='running')return;
   s.rounds.push({winner,frames:Math.min(s.duration*60,s.elapsed)});
   if(winner==='human')s.human++;
-  else if(winner==='ai')s.ai++;
+  else if(winner==='other')s.other++;
   else s.draws++;
   s.phase='between';
+  // Stop the real local native game at the declared end of this round.
+  // The next native round still requires an explicit player action.
+  if(room===s.room&&!serverLink&&!peerConnected&&!replay&&!paused){
+   room.setGamePaused(true,0);paused=true;releaseInputs();setButtons();
+  }
   const majority=Math.floor(s.bestOf/2)+1;
-  if(s.human>=majority||s.ai>=majority||s.rounds.length>=s.bestOf)
+  if(s.human>=majority||s.other>=majority||s.rounds.length>=s.bestOf)
    finalize(s,true);
   else render(s);
  }
@@ -205,7 +235,7 @@
   const s=session;
   if(!s||s.phase!=='running')return;
   if(document.hidden){finalize(s,false);return;}
-  if(!ready()||room!==s.room||own()?.team?.id!==s.side||
+  if(!ready(s.opponent)||room!==s.room||own()?.team?.id!==s.side||
    room.currentFrameNo<s.frame){finalize(s,false);return;}
   const now=room.currentFrameNo;
   if(!paused)s.elapsed+=Math.max(0,now-s.frame);
@@ -217,7 +247,7 @@
   const ownPoints=current[s.side===1?0:1]-s.score[s.side===1?0:1];
   const aiPoints=current[s.side===1?1:0]-s.score[s.side===1?1:0];
   if(ownPoints>0||aiPoints>0){
-   roundOver(ownPoints>0&&aiPoints===0?'human':aiPoints>0&&ownPoints===0?'ai':'draw');
+   roundOver(ownPoints>0&&aiPoints===0?'human':aiPoints>0&&ownPoints===0?'other':'draw');
    return;
   }
   if(s.elapsed>=s.duration*60){roundOver('draw');return;}
@@ -228,7 +258,8 @@
   const msg=blocked();
   if(msg){status.textContent=msg;return;}
   try{
-   if(!quickPlay('bot',true,true)||!ready())throw Error('Native offline 1v1 is unavailable.');
+   if(!quickPlay(s.opponent==='human'?'local':'bot',true,true)||!ready(s.opponent))
+    throw Error('Native offline 1v1 is unavailable.');
    s.room=room;s.side=own().team.id;s.score=score();
    s.frame=room.currentFrameNo;s.elapsed=0;s.phase='running';
    hud.hidden=false;render(s);
@@ -244,10 +275,11 @@
   if((started||replay)&&!confirm('Start a new offline best-of series? Your current unsaved local match or replay will be replaced.')){
    status.textContent='Existing local game preserved.';return;
   }
-  const bestOf=Number(games.value),duration=Number(time.value);
-  if(!LENGTHS.includes(bestOf)||!DURATIONS.includes(duration))return;
-  const s={bestOf,duration,phase:'between',room:null,side:0,score:[0,0],
-   frame:0,elapsed:0,rounds:[],human:0,ai:0,draws:0};
+  const bestOf=Number(games.value),duration=Number(time.value),opponentType=opponent.value;
+  if(!LENGTHS.includes(bestOf)||!DURATIONS.includes(duration)||
+   !['ai','human'].includes(opponentType))return;
+  const s={bestOf,duration,opponent:opponentType,phase:'between',room:null,side:0,score:[0,0],
+   frame:0,elapsed:0,rounds:[],human:0,other:0,draws:0};
   session=s;bootRound(s);
  };
  next.onclick=()=>{
