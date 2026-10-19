@@ -16,7 +16,13 @@ function integer(raw,min,max,label){
 function matchup(frames,map,side,profile,seed){
   let tick=0,plans={1:{},2:{}},r;
   const meter=new TacticalMetrics();
-  const env=makeRoom(),room=env.room;
+  const env=makeRoom({
+    onPlayerBallKick:id=>{
+      const player=r?.state?.players?.find(p=>p.id===(id?.id??id));
+      if(player)meter.kick(player,plans[player.team.id]?.[player.id],r.state,tick);
+    },
+    onTeamGoal:team=>meter.goal(team?.id??team,tick)
+  }),room=env.room;
   r=room;
   try {
     room.setCurrentStadium(env.map(map),0);
@@ -33,11 +39,6 @@ function matchup(frames,map,side,profile,seed){
       const drift=((Math.imul(seed+p.id*19,2654435761)>>>0)%31)-15;
       room.state.updatePlayer(p.id,{pos:[p.disc.pos.x,p.disc.pos.y+drift],speed:[0,0]});
     }
-    room.onPlayerBallKick=id=>{
-      const player=room.state.players.find(p=>p.id===(id?.id??id));
-      if(player)meter.kick(player,plans[player.team.id]?.[player.id],room.state,tick);
-    };
-    room.onTeamGoal=team=>meter.goal(team?.id??team,tick);
     const start=process.hrtime.bigint();
     for(let t=0;t<frames;t++){
       tick=t;
