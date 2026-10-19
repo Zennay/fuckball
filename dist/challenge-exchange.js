@@ -99,6 +99,12 @@
  const saved=make('section',null,'challenge-exchange-saved');
  saved.append(make('h3','MY SAVED CHALLENGES'));
  const list=make('div',null,'challenge-exchange-list');saved.append(list);
+ const transfers=make('div',null,'challenge-exchange-actions');
+ const download=make('button','Download my challenge pack'),upload=make('button','Import challenge pack');
+ download.type=upload.type='button';
+ const fileInput=make('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.hidden=true;
+ fileInput.setAttribute('aria-label','Import saved offline practice challenge pack');
+ transfers.append(download,upload,fileInput);saved.append(transfers);
  root.append(summary,intro,fields,actions,msg,incoming,saved);
  host.prepend(root);
  let inputs=new Map(),preview=null;
@@ -199,6 +205,39 @@
  copy.onclick=()=>{try{copyLink(record());}catch(e){setMsg(e.message);}};
  inspect.onclick=()=>{try{showPreview(parseShare(paste.value));setMsg('Preview only. Select Use or Save to accept.');}
   catch(e){preview=null;pending.hidden=true;pending.replaceChildren();setMsg(e.message);}};
+
+ download.onclick=()=>{
+  const items=storeList();
+  if(!items.length){setMsg('No saved challenges to export.');return;}
+  const payload=JSON.stringify({format:'fuckball-practice-challenge-pack',version:1,items},null,2);
+  const url=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download='fuckball-practice-challenges.json';
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  setMsg('Exported '+items.length+' private challenge presets. No results or accounts included.');
+ };
+ upload.onclick=()=>fileInput.click();
+ fileInput.addEventListener('change',async()=>{
+  const file=fileInput.files?.[0];fileInput.value='';
+  if(!file)return;
+  if(file.size>16384||file.size===0){setMsg('Challenge pack must be a non-empty JSON file under 16 KB.');return;}
+  try{
+   const source=JSON.parse(await file.text());
+   if(!source||source.format!=='fuckball-practice-challenge-pack'||source.version!==1||
+    !Array.isArray(source.items)||source.items.length<1||source.items.length>MAX)
+    throw Error('Not a supported challenge pack.');
+   // Validate the entire pack before writing a single item. Nothing is trusted
+   // about a local file; the native drill selectors remain the final authority.
+   const incoming=source.items.map(normalize),current=storeList(),combined=[...current];
+   let added=0;
+   for(const item of incoming){
+    if(combined.some(x=>JSON.stringify(x)===JSON.stringify(item)))continue;
+    if(combined.length>=MAX)throw Error('16-preset limit. Remove a local preset before importing.');
+    combined.push(item);added++;
+   }
+   if(!store(combined))throw Error('Browser storage unavailable; nothing imported.');
+   showList();setMsg(added+' presets imported locally; '+(incoming.length-added)+' exact duplicates skipped. No results imported.');
+  }catch(e){setMsg(e.message||'Challenge pack could not be read. Nothing changed.');}
+ });
  window.addEventListener('storage',event=>{if(event.key===KEY)showList();});
  showList();
  // Only a passive preview on arrival. Unknown fragments belong to other game flows.
