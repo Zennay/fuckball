@@ -1,0 +1,19 @@
+.room-referee-console{margin:14px 0;border:1px solid #a0b38d;border-radius:12px;padding:13px;background:#20363b;color:#eff8e6}
+.room-referee-console[hidden]{display:none}
+.room-referee-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:9px}
+.room-referee-heading strong{font-size:13px;letter-spacing:.07em;color:#e8f6ae}
+.room-referee-heading span{font-size:10px;color:#d1e0c4}
+.room-referee-console p{font-size:12px;line-height:1.55;color:#d4e5d7}
+.room-referee-status{font-weight:850;color:#e7f8b7!important}
+.room-referee-host{display:flex;flex-wrap:wrap;align-items:end;gap:8px}
+.room-referee-host label{display:grid;gap:6px;flex:1 1 180px;font-size:12px}
+.room-referee-host select{padding:9px 11px;border-radius:8px;background:#102e36;border:1px solid #779b8d;color:#e8f4df}
+.room-referee-console button{border:1px solid #8aaf92;border-radius:9px;background:#325a4a;color:#edf7e5;padding:9px 12px;font-size:12px;font-weight:750;min-height:40px;cursor:pointer}
+.room-referee-console button.primary{color:#1c3027;background:#d7f0a1}
+.room-referee-console button:disabled{opacity:.5;cursor:not-allowed}
+.room-referee-console button:focus-visible,.room-referee-console select:focus-visible,.room-referee-pitch-prompt:focus-visible{outline:3px solid #d5f7ae;outline-offset:3px}
+.room-referee-actions{margin-top:9px;display:flex;flex-wrap:wrap;gap:8px}
+.room-referee-request{padding:10px;border:1px solid #c9d8a0;border-radius:9px;background:#2d5048}
+.room-referee-pitch-prompt{position:absolute;z-index:31;right:16px;bottom:164px;max-width:230px;padding:12px;border-radius:10px;background:#cdeb96;border:2px solid #48705e;color:#1a3428;font-weight:850;cursor:pointer}
+.room-referee-pitch-prompt[hidden]{display:none}
+@media(max-width:540px){.room-referee-console{padding:10px}.room-referee-pitch-prompt{right:10px;bottom:195px;max-width:170px}}
