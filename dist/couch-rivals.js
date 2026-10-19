@@ -22,7 +22,7 @@
  }
  function names(){return {...playerNames};}
 
- const isMode=()=>document.getElementById('mode')?.value==='couchRivals';
+ const isMode=()=>['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
  function pads(){
   if(typeof navigator.getGamepads!=='function')return [];
   try{return Array.from(navigator.getGamepads()).filter(p=>p?.connected&&
