@@ -37,22 +37,39 @@
     preferred[id]=value;
   }
  }
- function prepare(){
-  const list=pads(),chosen=[],reserved=new Set();
+ function choosePads(){
+  const list=pads(),byId={},reserved=new Set();
+  // Explicit reservations are always honored BEFORE automatic assignment.
+  // Otherwise P3=auto and P4=port 1 could incorrectly fail with two pads.
   for(const id of [3,4]){
-   const preference=preferred[id];
-   const pad=preference==='auto'?list.find(p=>!reserved.has(p.index)):
-    list.find(p=>p.index===preference);
-   if(!pad||reserved.has(pad.index)){
-    assigned=null;
-    return {ok:false,message:'Player '+id+' needs a connected, exclusive standard controller. '+
-     'Choose two different ports for Blue before kickoff.'};
-   }
-   chosen.push({index:pad.index,id:pad.id});reserved.add(pad.index);
+   if(preferred[id]==='auto')continue;
+   const pad=list.find(p=>p.index===preferred[id]);
+   if(!pad||reserved.has(pad.index))return {ok:false,message:
+    'Blue Player '+id+' needs its own connected standard gamepad port.'};
+   byId[id]=pad;reserved.add(pad.index);
   }
-  // Ports and device IDs are locked: disconnects never transfer input to a
-  // different human, even if the browser renumbers controllers.
-  assigned=chosen;last='';
+  for(const id of [3,4]){
+   if(byId[id])continue;
+   const pad=list.find(p=>!reserved.has(p.index));
+   if(!pad)return {ok:false,message:'Connect two distinct standard controllers for Blue. '+
+    'Press any controller button to activate it in this browser.'};
+   byId[id]=pad;reserved.add(pad.index);
+  }
+  return {ok:true,pads:[byId[3],byId[4]]};
+ }
+ function preview(){
+  const result=choosePads();
+  if(!result.ok)return {ok:false,message:result.message,players:[]};
+  return {ok:true,players:result.pads.map((p,i)=>({seat:i+3,index:p.index,
+   id:String(p.id||'Controller').slice(0,60)})),
+   message:'Blue Player 3 and Player 4 have separate ready controllers.'};
+ }
+ function prepare(){
+  const result=choosePads();
+  if(!result.ok){assigned=null;return result;}
+  // Ports and device IDs lock per match: a disconnect cannot hand a seat to
+  // another real human, regardless of browser controller ordering.
+  assigned=result.pads.map(p=>({index:p.index,id:p.id}));last='';
   return {ok:true,message:'Blue controllers locked to ports '+
    assigned.map(p=>p.index+1).join(' and ')+'. P1/P2 use the shared keyboard.'};
  }
@@ -95,6 +112,6 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,read,describe,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
  requestAnimationFrame(frame);
 })();
