@@ -1,0 +1,12 @@
+/* Local optional audio accessibility; does not alter match HUD layout or physics. */
+.match-audio-guide-options{border:1px solid #789884;border-radius:10px;background:#1b363a;margin:14px 0;padding:12px;color:#e7f4dd}
+.match-audio-guide-options legend{font-size:12px;font-weight:900;letter-spacing:.08em;color:#dcf6af;padding:0 7px}
+.match-audio-guide-options p{font-size:12px;line-height:1.5;color:#d3e8dc}
+.match-audio-guide-option{display:flex;align-items:flex-start;gap:12px;margin:9px 0;padding:7px;border-radius:8px;cursor:pointer}
+.match-audio-guide-option input{flex:0 0 auto;width:18px;height:18px;margin:3px 0}
+.match-audio-guide-option span{display:grid;gap:4px}
+.match-audio-guide-option strong{font-size:13px;color:#f2fbd8}
+.match-audio-guide-option small{font-size:11px;line-height:1.5;color:#cee4d9}
+.match-audio-guide-caption{position:absolute;z-index:26;left:50%;top:82px;transform:translateX(-50%);background:#163132ed;border:2px solid #c4eb9f;color:#f7ffe9;border-radius:12px;padding:11px 16px;max-width:min(90vw,420px);text-align:center;line-height:1.4;font-size:16px;font-weight:850;pointer-events:none}
+.match-audio-guide-caption[hidden]{display:none}
+@media(max-width:580px){.match-audio-guide-caption{top:115px;width:max-content;max-width:85vw;font-size:14px}}
