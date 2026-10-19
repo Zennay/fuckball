@@ -19,3 +19,11 @@
 .room-rotation-suggestions small{display:block;margin-top:7px;font-size:11px;color:#cde3d6}
 .room-rotation-notice{min-height:18px}
 @media(max-width:650px){.room-rotation-columns{grid-template-columns:1fr}.room-rotation-controls button{flex:1 1 auto}}
+
+.room-rotation-manual{border-top:1px solid #658f7d;padding:12px 0 0;margin-top:12px}
+.room-rotation-manual>strong{color:#e3f7ba;font-size:12px}
+.room-rotation-manual-fields{display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.room-rotation-manual-fields label{display:grid;gap:4px;flex:1 1 155px;font-size:12px}
+.room-rotation-manual-fields select{min-width:0;width:100%;padding:9px;background:#122b2d;color:#eef9df;border:1px solid #769b8c;border-radius:7px}
+.room-rotation-manual-fields button{min-height:38px;padding:8px 12px;border:1px solid #a1be9b;border-radius:8px;background:#cee99a;color:#1a352b;font-weight:800;cursor:pointer}
+.room-rotation-manual-fields button:disabled{opacity:.55;cursor:not-allowed}
