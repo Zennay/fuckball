@@ -158,6 +158,8 @@ const CORE=[
  "./controller-setup.js",
  "./account-export.js",
  "./room-chat.js",
+ "./team-chat.js",
+ "./team-chat.css",
  "./player-report.js",
  "./room-chat.css",
  "./player-report.css",
