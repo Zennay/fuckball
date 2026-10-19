@@ -1,0 +1,29 @@
+.room-rotation-desk{margin:15px 0;padding:13px;border:1px solid #6c9686;border-radius:12px;background:#1c3439;color:#e5f5e6}
+.room-rotation-desk[hidden]{display:none}
+.room-rotation-desk>summary{cursor:pointer;letter-spacing:.065em;font-weight:900;color:#d7f2ae;font-size:13px;line-height:1.6}
+.room-rotation-desk>summary:focus-visible,.room-rotation-desk button:focus-visible,.room-rotation-desk select:focus-visible{outline:3px solid #d4f19f;outline-offset:2px}
+.room-rotation-desk p{font-size:12px;line-height:1.55;color:#d2e4dd}
+.room-rotation-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:end}
+.room-rotation-controls label{display:grid;gap:5px;flex:1 1 130px;font-size:12px}
+.room-rotation-controls select{background:#10282b;border:1px solid #83a494;color:#f1ffea;padding:9px;border-radius:8px}
+.room-rotation-controls button,.room-rotation-suggestions button{font-size:12px;font-weight:750;min-height:38px;padding:8px 10px;color:#eaffdb;background:#2a5145;border:1px solid #8cae9b;border-radius:8px;cursor:pointer}
+.room-rotation-controls button:disabled,.room-rotation-suggestions button:disabled{opacity:.5;cursor:not-allowed}
+.room-rotation-columns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.room-rotation-list{border:1px solid #5b8073;border-radius:9px;padding:10px;min-width:0;background:#183033}
+.room-rotation-list h4{margin:0 0 8px;color:#dff5b3;letter-spacing:.07em;font-size:12px}
+.room-rotation-list ol{margin:0;padding-left:18px;display:grid;gap:7px}
+.room-rotation-list li{font-size:12px;line-height:1.35;display:grid;gap:3px;overflow-wrap:anywhere}
+.room-rotation-list li small{font-size:11px;color:#c7ddcc}
+.room-rotation-suggestions{padding:12px;margin-top:10px;border:1px solid #86a98a;border-radius:10px;background:#28443b}
+.room-rotation-suggestions strong{font-size:12px;color:#e3f5b9}
+.room-rotation-suggestions small{display:block;margin-top:7px;font-size:11px;color:#cde3d6}
+.room-rotation-notice{min-height:18px}
+@media(max-width:650px){.room-rotation-columns{grid-template-columns:1fr}.room-rotation-controls button{flex:1 1 auto}}
+
+.room-rotation-manual{border-top:1px solid #658f7d;padding:12px 0 0;margin-top:12px}
+.room-rotation-manual>strong{color:#e3f7ba;font-size:12px}
+.room-rotation-manual-fields{display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.room-rotation-manual-fields label{display:grid;gap:4px;flex:1 1 155px;font-size:12px}
+.room-rotation-manual-fields select{min-width:0;width:100%;padding:9px;background:#122b2d;color:#eef9df;border:1px solid #769b8c;border-radius:7px}
+.room-rotation-manual-fields button{min-height:38px;padding:8px 12px;border:1px solid #a1be9b;border-radius:8px;background:#cee99a;color:#1a352b;font-weight:800;cursor:pointer}
+.room-rotation-manual-fields button:disabled{opacity:.55;cursor:not-allowed}
