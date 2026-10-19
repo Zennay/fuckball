@@ -14,3 +14,11 @@
 .self-bench-actions button:focus-visible{outline:3px solid #e0f2aa;outline-offset:2px}
 .self-bench-panel small{display:block;margin-top:8px;line-height:1.5;color:#c4d9c9;font-size:11px}
 @media(max-width:540px){.self-bench-panel{padding:11px}.self-bench-actions button{flex:1 1 100%}}
+
+.self-bench-pause-banner{background:#335048;border:1px solid #c8df99;border-radius:9px;padding:11px;margin:11px 0;display:grid;gap:8px}
+.self-bench-pause-banner[hidden],.self-bench-pause-prompt[hidden]{display:none}
+.self-bench-pause-banner p{margin:0;font-size:12px;color:#f0f7df}
+.self-bench-pause-banner button{width:max-content;max-width:100%;min-height:39px;padding:8px 13px;background:#d6f1ad;color:#19372e;border:1px solid #a0b98d;border-radius:8px;cursor:pointer;font-weight:850}
+.self-bench-pause-banner button:focus-visible,.self-bench-pause-prompt:focus-visible{outline:3px solid #f2ffbf;outline-offset:2px}
+.self-bench-pause-prompt{position:absolute;z-index:30;bottom:104px;right:16px;max-width:240px;padding:11px 14px;background:#dff5aa;color:#1b382a;border:2px solid #547b5f;border-radius:11px;font-weight:850;font-size:12px;cursor:pointer;box-shadow:0 4px 20px #071b2080}
+@media(max-width:540px){.self-bench-pause-prompt{right:9px;bottom:135px;max-width:185px;font-size:11px}}
