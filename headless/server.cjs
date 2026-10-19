@@ -415,7 +415,7 @@ function createServer(options={}){
    },
    send:(cid,data)=>{if(r.authority!=='server'||data?.type==='chat'&&
     !Number.isSafeInteger(data.from))return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),notice:null,accountsOnly:false,maxHumans:64,spectatorLimit:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),notice:null,accessKeyLock:null,accessKeyAttempts:[],accessKeyRevision:0,accountsOnly:false,maxHumans:64,spectatorLimit:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -449,6 +449,7 @@ function createServer(options={}){
   const now=Date.now();
   for(const [id,until]of r.chatMutes)if(until<=now||!r.clients.has(id))r.chatMutes.delete(id);
   if(r.notice&&r.notice.owner!==r.owner)r.notice=null;
+  if(r.accessKeyLock&&r.accessKeyLock.owner!==r.owner){r.accessKeyLock=null;r.accessKeyAttempts=[];r.accessKeyRevision++;}
   const spectatorCount=r.hb.getPlayerList().filter(p=>
    p.team===0&&r.clients.has(p.id)&&!r.botIds.has(p.id)).length;
   for(const client of r.sockets.values()){
@@ -463,6 +464,7 @@ function createServer(options={}){
     chatMutes:client.playerId===r.owner?[...r.chatMutes]:[],
     teamChatSupported:!r.quickMatch,
     spectatorCheerSupported:!r.quickMatch,
+    accessKeySupported:!r.quickMatch,accessKeyRequired:!!r.accessKeyLock,accessKeyRevision:r.accessKeyRevision,
     roomNoticeSupported:!r.quickMatch,
     notice:r.notice?{text:r.notice.text,by:r.notice.by,at:r.notice.at}:null});
   }
@@ -486,10 +488,30 @@ function createServer(options={}){
   if(r.quickMatch)throw Error('Quick Match rooms cannot be moderated or reconfigured by players.');
   if(ws.playerId!==r.owner||!r.sockets.has(ws.playerId))
    throw Error('Only the current room host can moderate this room.');
+  if(d.action==='setAccessKey'||d.action==='clearAccessKey'){
+   const setting=d.action==='setAccessKey',now=Date.now();
+   if(Object.keys(d).some(k=>!['type','action',...(setting?['accessKey']:[])].includes(k)))
+    throw Error('Invalid private access setting.');
+   const recent=(ws.accessKeyEdits||[]).filter(t=>now-t<60000);
+   if(recent.length>=5)throw Error('Wait before changing the room access key again.');
+   if(setting&&(typeof d.accessKey!=='string'||d.accessKey.length<10||
+      d.accessKey.length>64||d.accessKey!==d.accessKey.trim()||
+      !/^[\x20-\x7e]+$/.test(d.accessKey)))
+    throw Error('Access key must be 10–64 printable characters with no outer spaces.');
+   recent.push(now);ws.accessKeyEdits=recent;
+   if(setting){
+    const salt=crypto.randomBytes(16);
+    r.accessKeyLock={owner:r.owner,salt,
+      digest:crypto.scryptSync(d.accessKey,salt,32)};
+    r.listed=false; // An access-restricted room cannot be publicly browsed.
+   }else{r.accessKeyLock=null;r.accessKeyAttempts=[];}
+   r.accessKeyRevision++;roomControl(r);return;
+  }
   if(d.action==='lock'||d.action==='unlock'){
    r.locked=d.action==='lock';if(r.locked)r.listed=false;roomControl(r);return;
   }
   if(d.action==='publish'||d.action==='unpublish'){
+   if(d.action==='publish'&&r.accessKeyLock)throw Error('Remove the private access key before publishing.');
    if(d.action==='publish'&&(r.locked||r.clubId))throw Error('Unlock joins and disable Club-only access before publishing.');
    r.listed=d.action==='publish';roomControl(r);return;
   }
@@ -745,6 +767,23 @@ function createServer(options={}){
     if(practiceClub){r.clubId=practiceClub;r.accountsOnly=true;r.listed=false;}if(r.quickMatch&&!d.resume)throw Error('Quick Match rooms are reserved for the matched players.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(r.accountsOnly&&!account&&!d.resume)throw Error('This room requires a signed-in account.');if(!d.resume&&r.clients.size+r.pendingJoins.length>=r.maxHumans)throw Error('This room is full. Try again after a player leaves.');if(r.clubId&&(!account||clubs?.membership(account)?.id!==r.clubId))
     throw Error('Only members of this Club can join this room.');
    if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');
+   // Only brand-new room admissions need the room's separately shared key.
+   // An authenticated native reconnect ticket preserves its original slot.
+   if(r.accessKeyLock&&!d.resume){
+    const now=Date.now();
+    const attempts=r.accessKeyAttempts.filter(t=>now-t<60000);
+    if(attempts.length>=60||attempts.filter(t=>now-t<10000).length>=12)
+     throw Error('Too many room access attempts. Try again later.');
+    attempts.push(now);r.accessKeyAttempts=attempts;
+    if(typeof d.accessKey!=='string'||d.accessKey.length<10||
+       d.accessKey.length>64||d.accessKey!==d.accessKey.trim()||
+       !/^[\x20-\x7e]+$/.test(d.accessKey))
+     throw Error('Private room access key required or incorrect.');
+    const digest=crypto.scryptSync(d.accessKey,r.accessKeyLock.salt,32);
+    if(!crypto.timingSafeEqual(digest,r.accessKeyLock.digest))
+     throw Error('Private room access key required or incorrect.');
+   }
+
    ws.spectateOnJoin=d.spectate===true&&!d.create&&!d.resume;ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}

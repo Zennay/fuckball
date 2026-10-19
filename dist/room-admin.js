@@ -56,6 +56,7 @@
   if(link.roomControl?.accountsOnly)state.textContent+=' · signed-in only';
   if(link.roomControl?.spectatorLimitSupported)
    state.textContent+=' · spectators '+link.roomControl.spectatorCount+'/'+link.roomControl.spectatorLimit;
+  if(link.roomControl?.accessKeyRequired)state.textContent+=' · private access key';
   state.classList.toggle('locked',locked);
   controls.hidden=!isOwner;
   if(!isOwner){notice.textContent=locked?'The host has locked the room. Your game continues.':'The room host controls entry and moderation.';return;}
@@ -68,8 +69,8 @@
    'Disable Club-only admission. The room stays unlisted.':
    'All current players must be signed-in members of your Club.';
   listing.textContent=listed?'Remove from public rooms':'List room publicly';
-  listing.disabled=locked||clubOnly;listing.setAttribute('aria-pressed',String(listed));
-  listing.title=clubOnly?'Club-only rooms cannot appear in public listings.':locked?'Unlock joins to publish this room.':'Anyone can see and join a public room.';
+  listing.disabled=locked||clubOnly||link.roomControl?.accessKeyRequired===true;listing.setAttribute('aria-pressed',String(listed));
+  listing.title=link.roomControl?.accessKeyRequired?'Remove the private access key before public listing.':clubOnly?'Club-only rooms cannot appear in public listings.':locked?'Unlock joins to publish this room.':'Anyone can see and join a public room.';
   accountsOnly.textContent=link.roomControl?.accountsOnly?'Allow guests for new joins':'Require sign-in for new joins';
   accountsOnly.setAttribute('aria-pressed',String(link.roomControl?.accountsOnly===true));
   accountsOnly.disabled=false;
@@ -115,7 +116,7 @@
   notice.textContent=restricted?'Reopening to invited players…':'Checking Club membership and restricting room…';
  };
  listing.onclick=()=>{
-  if(!serverLink?.isOwner||serverLink.roomControl?.locked)return;
+  if(!serverLink?.isOwner||serverLink.roomControl?.locked||serverLink.roomControl?.accessKeyRequired)return;
   listing.disabled=true;
   send(serverLink.roomControl?.listed?'unpublish':'publish');
   notice.textContent='Updating room visibility…';
