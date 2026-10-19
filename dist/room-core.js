@@ -134,6 +134,41 @@ function createRoomCore(opts){
    r.pendingSubs.set(team,{team,outId:d.outId,inId:d.inId,requestedBy:id,requestId:++r.subSeq,accepted:false,expiresAt:Date.now()+60000});
    status();return;
   }
+  // A connected human may place ONLY their own inactive player on the Red
+  // or Blue bench, or revert to neutral spectator. No team/disc is assigned.
+  if(d.type==='selfBench'){
+   if(!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team))
+    throw Error('Choose Red bench, Blue bench or spectator.');
+   if(r.disconnected.has(id)||r.botIds.has(id)||hb.getPlayer(id)?.team!==0)
+    throw Error('Only connected inactive humans can choose a bench.');
+   expireSubs();
+   if([...r.pendingSubs.values()].some(p=>p.inId===id||p.outId===id))
+    throw Error('Finish your current substitution request before switching bench.');
+   const old=r.benches.get(id)||0;
+   if(old!==d.team){
+    if(d.team===0)r.benches.delete(id);else r.benches.set(id,d.team);
+    status();
+   }
+   return;
+  }
+  // A human can voluntarily relinquish only their own active side, and
+  // only at a genuine stoppage. Native clock, score and authority persist.
+  if(d.type==='selfSitOut'){
+   if(r.disconnected.has(id)||r.botIds.has(id))
+    throw Error('Only connected human players can sit out.');
+   const side=hb.getPlayer(id)?.team;
+   if(![1,2].includes(side))throw Error('You are not currently on the pitch.');
+   if(r.started&&!r.paused)throw Error('Ask the host to pause before sitting out.');
+   expireSubs();
+   if([...r.pendingSubs.values()].some(p=>[p.inId,p.outId,p.requestedBy].includes(id)))
+    throw Error('Resolve your current substitution request before sitting out.');
+   r.rematch=null;
+   if(r.captains.get(side)===id)r.captains.delete(side);
+   hb.setPlayerInput(id,0);
+   hb.setPlayerTeam(id,0);
+   r.benches.set(id,side);
+   status();snapshot();return;
+  }
   if(r.owner!==id)throw Error('Only the host can change the match.');
   if(d.type==='rematchRequest'){
    if(r.started||!r.lastResult||r.lastResult.round!==r.round)throw Error('Finish the current game before requesting a rematch.');
