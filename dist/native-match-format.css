@@ -13,3 +13,5 @@
 .native-match-format-status{min-height:22px;color:#daf3ad!important;font-weight:700}
 .native-match-format small{display:block;color:#b0c8be;line-height:1.55;margin-top:12px}
 .native-match-format button:focus-visible,.native-match-format input:focus-visible{outline:3px solid #dcf49e;outline-offset:3px}
+
+.native-match-format-current{color:#def4a9!important;font-weight:800;letter-spacing:.015em}
