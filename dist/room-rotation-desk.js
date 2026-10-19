@@ -21,9 +21,20 @@
  const context=mk('p',null,'room-rotation-context');context.setAttribute('role','status');
  const rows=mk('div',null,'room-rotation-columns');
  const suggestions=mk('div',null,'room-rotation-suggestions');
+ const manual=mk('section',null,'room-rotation-manual');
+ const manualTitle=mk('strong','MANUAL ROTATION · PREPARE ONLY');
+ const manualDescription=mk('p','Choose any current connected on-pitch human and an available human assigned to this team’s bench. This never overrides server roster rules or sends the swap.');
+ const manualFields=mk('div',null,'room-rotation-manual-fields');
+ const outLabel=mk('label','Player to rotate off'),outChoice=mk('select');
+ const inLabel=mk('label','Incoming bench player'),inChoice=mk('select');
+ outChoice.setAttribute('aria-label','Select outgoing active player for manual rotation');
+ inChoice.setAttribute('aria-label','Select incoming bench player for manual rotation');
+ outLabel.append(outChoice);inLabel.append(inChoice);
+ const manualButton=mk('button','Prepare selected pair');manualButton.type='button';
+ manualFields.append(outLabel,inLabel,manualButton);manual.append(manualTitle,manualDescription,manualFields);
  const notice=mk('p',null,'room-rotation-notice');
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
- section.append(heading,help,settings,context,rows,suggestions,notice);
+ section.append(heading,help,settings,context,rows,suggestions,manual,notice);
  host.append(section);
  let latest=null,signature='',roomToken=null;
  const validId=n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647;
@@ -111,6 +122,29 @@
   notice.textContent='Prepared: '+outgoing.name+' → '+incoming.name+
    '. Review the real Out/In fields, then explicitly press Propose swap. Incoming player consent is still required.';
  }
+
+ function populate(list,select,placeholder){
+  const old=select.value;select.replaceChildren();
+  if(!list.length){
+   const empty=new Option(placeholder,'');select.add(empty);select.disabled=true;return;
+  }
+  for(const person of list){
+   const label=person.name+' · '+elapsed(person.seconds);
+   select.add(new Option(label,String(person.id)));
+  }
+  select.disabled=false;
+  if(list.some(p=>String(p.id)===old))select.value=old;
+ }
+ manualButton.onclick=()=>{
+  const data=snapshot();
+  if(!data||!latest||data.token!==latest.token||data.desired!==latest.desired){
+   notice.textContent='Room changed; refresh before preparing a swap.';render(true);return;
+  }
+  const outgoing=data.active.find(p=>p.id===Number(outChoice.value)&&p.available);
+  const incoming=data.waiting.find(p=>p.id===Number(inChoice.value)&&p.available);
+  if(!outgoing||!incoming){notice.textContent='Choose a connected active and assigned bench player.';render(true);return;}
+  nativePrepare(outgoing,incoming);
+ };
  function render(force=false){
   const data=snapshot();
   if(!data){section.hidden=true;clear();return;}
@@ -145,6 +179,12 @@
    if(!data.mayPropose)suggestions.append(mk('small','Only the actual native room host or this team’s appointed captain can propose.'));
    if(data.pendingTeam)suggestions.append(mk('small','A prior substitution must finish or expire first.'));
   }
+  const activeChoices=data.active.filter(p=>p.available);
+  const benchChoices=data.waiting.filter(p=>p.available);
+  populate(activeChoices,outChoice,'No active human');
+  populate(benchChoices,inChoice,'No assigned bench player');
+  manualButton.disabled=!data.mayPropose||data.pendingTeam||!activeChoices.length||!benchChoices.length;
+  manual.hidden=!(activeChoices.length||benchChoices.length);
   download.disabled=!data.people.length;
  }
  side.onchange=()=>{signature='';render(true);};
