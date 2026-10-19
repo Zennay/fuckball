@@ -104,15 +104,37 @@ function outcome(F,o){
 }
 // Best kick from (x,y) with ball velocity (vx,vy): passes to feet, passes
 // into space, shots at several goal points. Returns direction and value.
+// Reward only demonstrably receivable passes. A teammate being nearby is
+// not enough: the first opposing interception window must be safely later.
+function receiverAdvantage(F,o,kicker){
+ if(o.goal||!o.ours||o.ours.id===kicker)return 0;
+ const margin=(o.theirs?.t??175)-o.ours.t;
+ if(margin<=0)return -.85;
+ if(margin<10)return -.52*(10-margin)/10;
+ const receiver=F.players.find(p=>p.id===o.ours.id);
+ if(!receiver)return 0;
+ const defenders=F.players.filter(p=>!p.mine&&Math.hypot(p.x-o.ours.x,p.y-o.ours.y)<165).length;
+ const supporters=F.players.filter(p=>p.mine&&p.id!==receiver.id&&Math.hypot(p.x-o.ours.x,p.y-o.ours.y)<190).length;
+ const overload=supporters>=1&&defenders<=1? .16 : 0;
+ const advancement=Math.max(-1,Math.min(1,F.sign*(o.ours.x-F.ox)/F.width));
+ return Math.min(.3,.10+overload+.07*advancement)*Math.min(1,margin/25);
+}
 function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
  const dirs=[];if(keep)dirs.push([keep[0],keep[1],'keep']);for(let i=0;i<24;i++){const a=i*Math.PI/12;dirs.push([Math.cos(a),Math.sin(a),'space']);}
  const add=(tx,ty,kind)=>{const dx=tx-x,dy=ty-y,l=Math.hypot(dx,dy);if(l>20)dirs.push([dx/l,dy/l,kind]);};
  for(const p of F.players)if(p.mine&&p.id!==kicker){add(p.x+p.vx*14,p.y+p.vy*14,'pass');add(p.x+F.sign*45,p.y,'pass');}
  for(const f of [-.8,-.5,-.2,.2,.5,.8])add(F.gx,f*F.gy,'shot');
+// Deliberate one-wall bank candidates (including rocket-style follow-ups).
+// Mirror the target across the side wall, then let the real ball rollout
+// decide whether the ricochet is actually safer than a direct attempt.
+if(F.sign*x>-.1*F.width)for(const wall of [-1,1])for(const f of [-.55,0,.55]){
+ const H=F.height-F.rb,virtualY=wall*2*H-f*F.gy;
+ add(F.gx,virtualY,'bank');
+}
  // Prefer kicks playable from the side the kicker already comes from:
  // walking around the ball costs time the opponents use.
  const me=F.players.find(p=>p.id===kicker),mx=me?x-me.x:0,my=me?y-me.y:0,ml=Math.hypot(mx,my)||1,near=ml<120?1:.4;
- const score=(dx,dy)=>{const n=kickNormal(vx,vy,dx,dy,F.K),o=rollout(F,x,y,dx*n.speed,dy*n.speed,kicker,t0);let v=outcome(F,o);if(o.ours&&o.ours.id!==kicker&&!o.goal)v+=F.passBonus;if(me)v-=F.approach*near*F.urgency*(1-(n.nx*mx+n.ny*my)/ml);return{v,o};};
+ const score=(dx,dy)=>{const n=kickNormal(vx,vy,dx,dy,F.K),o=rollout(F,x,y,dx*n.speed,dy*n.speed,kicker,t0);let v=outcome(F,o)+receiverAdvantage(F,o,kicker);if(o.ours&&o.ours.id!==kicker&&!o.goal)v+=F.passBonus;if(me)v-=F.approach*near*F.urgency*(1-(n.nx*mx+n.ny*my)/ml);return{v,o};};
  const scored=dirs.map(([dx,dy,kind])=>{const {v,o}=score(dx,dy);return{dx,dy,kind:o.goal>0||o.shotT?'shot':o.ours&&o.ours.id!==kicker?'pass':kind,raw:v,to:o.ours?.id,roll:o};});
  // Players steer in eight directions, so prefer kicks that still work a
  // few degrees off target: rate the best few by their worst neighbour.
@@ -178,6 +200,20 @@ function buildPlan(state,teamId,tick=0,raw={}){
  const leader=carrier||chaser;const remaining=bots.filter(p=>p.id!==leader.id);
  const nearest=ops.slice().sort((a,c)=>dist(a)-dist(c))[0],underPressure=nearest&&dist(nearest)<cfg.press,ownDanger=sign*b.pos.x<-Math.abs(gx)*.55,attacking=carrier&&!ownDanger;
  const free=remaining.filter(p=>p!==keeper).sort((a,c)=>a.id-c.id),plan={};
+// When defending, one outfielder presses while the other two mark different
+// threats goal-side. The goalkeeper remains the fourth, last-line defender.
+const opponentCarrier=nearest&&dist(nearest)<nearest.disc.radius+b.radius+30;
+const defending=!carrier&&(sign*b.pos.x<F.width*.18||opponentCarrier);
+const marking=new Map();
+if(defending){
+ const markers=remaining.filter(p=>p!==keeper).sort((a,c)=>
+   (slots[a.id]==='dm'?0:slots[a.id]==='am'?1:2)-
+   (slots[c.id]==='dm'?0:slots[c.id]==='am'?1:2)||a.id-c.id);
+ const threats=ops.filter(p=>p!==nearest).sort((a,c)=>
+   Math.hypot(a.disc.pos.x-ox,a.disc.pos.y)-
+   Math.hypot(c.disc.pos.x-ox,a.disc.pos.y));
+ for(let i=0;i<markers.length&&i<threats.length;i++)marking.set(markers[i].id,threats[i]);
+}
  const theirFirst=ops.reduce((m,o)=>{const h=hitOf(o);return h?Math.min(m,h.k):m;},Infinity);
  // Decide what the player who plays the ball next should do with it.
  const base={passBonus:F.passBonus,shotWindow:F.shotWindow,holdCost:F.holdCost};
@@ -225,6 +261,13 @@ function buildPlan(state,teamId,tick=0,raw={}){
     }
     if(clear){option=decide(p,true);option.shot=shot;}
    }
+  else if(p.id!==leader.id&&marking.has(p.id)){
+   // Individual man-marking: deny the lane toward our own goal rather than
+   // following the ball. Distinct players receive distinct opponents.
+   const mark=marking.get(p.id),dx=ox-mark.disc.pos.x,dy=-mark.disc.pos.y;
+   const d=Math.hypot(dx,dy)||1;
+   role='mark';x=mark.disc.pos.x+dx/d*45;y=mark.disc.pos.y+dy/d*45;
+  }
   else if(p.id!==leader.id&&slots[p.id]){
    // Position play: each outfield bot keeps its line (DM, AM, striker)
    // instead of everyone drifting toward the ball.
@@ -284,11 +327,35 @@ function playBall(state,p,b,intent,level,team,plan){const d=p.disc,sign=p.team.i
  const len=Math.hypot(ax,ay)||1,aligned=(dx*ax+dy*ay)/Math.max(1,dist*len)>charge;
  if(!keeper){const lead=Math.min(level.lead,dist/8),decay=b.damping||.99,travel=Math.abs(1-decay)<1e-6?lead:(1-Math.pow(decay,lead))/(1-decay);x=b.pos.x+b.speed.x*travel-ax/len*(b.radius+d.radius+back);y=b.pos.y+b.speed.y*travel-ay/len*(b.radius+d.radius+back);if(dx*sign<0&&Math.abs(dy)<35)y=b.pos.y+(d.pos.y>=b.pos.y?1:-1)*45;if(dist<45&&aligned){x=b.pos.x;y=b.pos.y;}}
  else{
-  // Keeper: attack the ball from the goal side so contact clears it.
-  const og=state.gameState.stadium.goals.find(q=>q.team.id===p.team.id),ox=og?(og.p0.x+og.p1.x)/2:-sign*700,ux=b.pos.x-ox,uy=b.pos.y,ul=Math.hypot(ux,uy)||1;
-  if(dist<40){x=b.pos.x-ux/ul*4;y=b.pos.y-uy/ul*4;}else{x-=ux/ul*(b.radius+d.radius-4);y-=uy/ul*(b.radius+d.radius-4);}
+  // Keeper: use the same engine-verified pass/clearance search as attackers.
+  // A reflex clearance directly at a pressuring opponent must NOT be kicked
+  // unless it is the only available emergency save.
+  const og=state.gameState.stadium.goals.find(q=>q.team.id===p.team.id);
+  const ox=og?(og.p0.x+og.p1.x)/2:-sign*700,ux=b.pos.x-ox,uy=b.pos.y,ul=Math.hypot(ux,uy)||1;
+  const viable=o&&o.value>-.35&&o.kind!=='shot'&&o.roll?.goal>=0;
+  const desired=viable?kickNormal(b.speed.x,b.speed.y,o.dx,o.dy,F.K):null;
+  // Most keeper distributions advance or spread play sideways. Passing back
+  // into the own goal corridor is never selected just for its passing bonus.
+  const safeDirection=desired&&sign*desired.nx>-.08;
+  if(safeDirection&&dist>25){
+   x=b.pos.x-desired.nx*(b.radius+d.radius+4);
+   y=b.pos.y-desired.ny*(b.radius+d.radius+4);
+  }else if(dist<40){x=b.pos.x-ux/ul*4;y=b.pos.y-uy/ul*4;}
+  else{x-=ux/ul*(b.radius+d.radius-4);y-=uy/ul*(b.radius+d.radius-4);}
   const away=(dx*ux+dy*uy)/Math.max(1,dist*ul)>-.2;
-  const [sx,sy]=steer(d,x,y,dist<60?2:5,1.5),kick=dist<d.radius+b.radius+4&&away&&!(p.input&16);return key(sx,sy,kick);}
+  const inContact=dist<d.radius+b.radius+4&&!(p.input&16);
+  let kick=false;
+  if(inContact&&away){
+   const v0=dist?{x:dx/dist,y:dy/dist}:{x:ux/ul,y:uy/ul};
+   const result=rollout(F,b.pos.x,b.pos.y,b.speed.x+v0.x*F.K,b.speed.y+v0.y*F.K,p.id);
+   const margin=(result.theirs?.t??999)-(result.ours?.t??999);
+   const dangerous=result.goal<0||result.theirs&&(!result.ours||margin<5);
+   const emergency=sign*b.speed.x<-.5&&Math.hypot(b.pos.x-ox,b.pos.y)<175;
+   kick=!dangerous||emergency&&result.goal>=0;
+  }
+  const [sx,sy]=steer(d,x,y,dist<60?2:5,1.5);
+  return key(sx,sy,kick);
+ }
  let kick=dist<d.radius+b.radius+3.8&&aligned&&!(p.input&16);
  if(kick){
   // Check the kick that will really happen: contact normal at the frame of contact.
