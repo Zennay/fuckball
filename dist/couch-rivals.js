@@ -4,6 +4,7 @@
 (function(){
  const neutral=()=>({x:0,y:0,kick:false});
  let assigned=null,last='';
+ let preferred={3:'auto',4:'auto'};
  const NAME_KEY='fuckball.couch-rivals.names.v1';
  const defaults={2:'Player 2',3:'Player 3',4:'Player 4'};
  const clean=(value,fallback)=>String(value??'').replace(/[<>\x00-\x1f\x7f-\x9f]/g,'').trim().slice(0,20)||fallback;
@@ -28,14 +29,30 @@
    p.mapping==='standard'&&Number.isSafeInteger(p.index)&&p.index>=0&&p.index<=15)
    .sort((a,b)=>a.index-b.index);}catch{return [];}
  }
+ function setSources(sources){
+  if(!sources||typeof sources!=='object')return;
+  for(const id of [3,4]){
+   const value=sources[id];
+   if(value==='auto'||Number.isSafeInteger(value)&&value>=0&&value<=15)
+    preferred[id]=value;
+  }
+ }
  function prepare(){
-  const list=pads();
-  if(list.length<2){assigned=null;return {ok:false,message:
-   'Connect two independent standard gamepads for Blue Players 3 and 4. Red uses the shared keyboard.'};}
-  // A controller is locked to one blue human for this match. No fallback to
-  // another slot if the cable is pulled or a browser changes the port order.
-  assigned=list.slice(0,2).map(p=>({index:p.index,id:p.id}));
-  last='';
+  const list=pads(),chosen=[],reserved=new Set();
+  for(const id of [3,4]){
+   const preference=preferred[id];
+   const pad=preference==='auto'?list.find(p=>!reserved.has(p.index)):
+    list.find(p=>p.index===preference);
+   if(!pad||reserved.has(pad.index)){
+    assigned=null;
+    return {ok:false,message:'Player '+id+' needs a connected, exclusive standard controller. '+
+     'Choose two different ports for Blue before kickoff.'};
+   }
+   chosen.push({index:pad.index,id:pad.id});reserved.add(pad.index);
+  }
+  // Ports and device IDs are locked: disconnects never transfer input to a
+  // different human, even if the browser renumbers controllers.
+  assigned=chosen;last='';
   return {ok:true,message:'Blue controllers locked to ports '+
    assigned.map(p=>p.index+1).join(' and ')+'. P1/P2 use the shared keyboard.'};
  }
@@ -78,6 +95,6 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,read,describe,names,setNames});
+ window.fuckballCouchRivals=Object.freeze({prepare,read,describe,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
  requestAnimationFrame(frame);
 })();

@@ -27,7 +27,7 @@
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  controls.append(launch,coop2,coop4,rivals,configure);
  const namesPanel=node('details',null,'couch-rivals-names');
- const namesTitle=node('summary','Set four-player team names (device only)');
+ const namesTitle=node('summary','Four-player names and Blue controllers');
  const namesRow=node('div',null,'couch-rivals-name-fields');
  const nameInputs={};
  const initial=window.fuckballCouchRivals?.names?.()||{};
@@ -43,7 +43,39 @@
    status.textContent='Team names saved only on this device. They apply at the next four-player kickoff.';
   });
  }
- namesPanel.append(namesTitle,namesRow);
+ const blueRow=node('div',null,'couch-rivals-name-fields');
+ const blueSources={};let blueSignature=null;
+ for(const id of [3,4]){
+  const label=node('label','Blue Player '+id+' · controller port');
+  const select=node('select');
+  select.setAttribute('aria-label','Blue Player '+id+' controller port');
+  select.addEventListener('change',()=>{
+   const value=select.value;
+   const sources={};sources[id]=value==='auto'?'auto':Number(value);
+   window.fuckballCouchRivals?.setSources?.(sources);
+   status.textContent='Blue controller choice ready for the next four-player kickoff.';
+  });
+  label.append(select);blueRow.append(label);blueSources[id]=select;
+ }
+ function paintBlueSources(){
+  const list=window.fuckballCouchRivals?.available?.()||[];
+  const sig=list.map(p=>p.index+':'+p.id).join('|');
+  if(sig!==blueSignature){
+   blueSignature=sig;
+   for(const id of [3,4]){
+    const select=blueSources[id],value=select.value||'auto';
+    select.replaceChildren(new Option('Automatic · unused port','auto'));
+    for(const pad of list)
+     select.add(new Option('Port '+(pad.index+1)+' · '+pad.id,String(pad.index)));
+    if(value!=='auto'&&!list.some(p=>String(p.index)===value))
+     select.add(new Option('Port '+(Number(value)+1)+' · disconnected',value));
+    select.value=value;
+   }
+  }
+  const locked=isLocal()&&document.getElementById('mode')?.value==='couchRivals';
+  for(const id of [3,4])blueSources[id].disabled=locked;
+ }
+ namesPanel.append(namesTitle,namesRow,node('strong','Blue · two separate gamepads'),blueRow);
  section.append(title,intro,controls,namesPanel,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
@@ -120,6 +152,7 @@
    }
    source.value=chosen;
   }
+  paintBlueSources();
   // Four-human rivals exclusively reserve both gamepads for Blue.
   source.disabled=document.getElementById('mode')?.value==='couchRivals';
   configure.title=source.disabled?'Red Player 2 uses arrows/Enter in four-human 2v2.':'Select a dedicated Player 2 controller.';
