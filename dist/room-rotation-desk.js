@@ -169,6 +169,8 @@
   notice.textContent='Local roster CSV exported. No server data changed.';
  };
  section.addEventListener('toggle',()=>{if(section.open)render(true);});
- setInterval(()=>{if(section.open&&!document.hidden)render();else if(!section.hidden)render();},2400);
+ // The panel starts hidden before a room exists. Poll for the first genuine
+ // server state as well as later changes; never make hidden DOM block discovery.
+ setInterval(()=>{if(!document.hidden)render();},2400);
  render();
 })();
