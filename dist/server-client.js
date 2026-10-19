@@ -19,27 +19,28 @@ function cancelRoomRecovery(){
 function retryRoomRecovery(info,attempt){
  if(serverLink)return;
  clearRoomRecovery();
- if(navigator.onLine===false){offerRoomRecovery({...info,offline:true});return;}
+ if(navigator.onLine===false){offerRoomRecovery({...info,offline:true,tries:attempt===0?0:info.tries});return;}
  connectServer(false,info.room,info.name,
   {ticket:info.ticket,previousId:info.previousId,retries:attempt,roomRecovery:true});
  if(serverLink?.recoveryAttempt)window.FuckballRoomRecovery?.show({
   phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery
  });
+ else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
 }
 function offerRoomRecovery(info){
  if(!/^[A-Z0-9]{6,12}$/.test(info.room||''))return;
  clearRoomRecovery();roomRecovery.context=info;
- if(navigator.onLine===false||info.offline&&navigator.onLine===false){
-  roomRecovery.offlineRetry=()=>retryRoomRecovery(info,Math.min(3,info.tries+1));
-  window.FuckballRoomRecovery?.show({
-   phase:'offline',attempt:Math.min(3,info.tries+1),max:3,
-   retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
-  });return;
- }
  if(info.tries>=3){
   window.FuckballRoomRecovery?.show({
    phase:'failed',attempt:3,max:3,
-   retry:()=>retryRoomRecovery(info,0),cancel:cancelRoomRecovery
+   retry:()=>retryRoomRecovery({...info,tries:0},0),cancel:cancelRoomRecovery
+  });return;
+ }
+ if(navigator.onLine===false){
+  roomRecovery.offlineRetry=()=>retryRoomRecovery(info,info.tries+1);
+  window.FuckballRoomRecovery?.show({
+   phase:'offline',attempt:info.tries+1,max:3,
+   retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
   });return;
  }
  const attempt=info.tries+1,delay=1000*2**info.tries;
@@ -54,10 +55,18 @@ window.addEventListener('offline',()=>{
  if(roomRecovery.context&&roomRecovery.timer!==null)
   offerRoomRecovery({...roomRecovery.context,offline:true});
 });
-document.getElementById('tabHome')?.addEventListener('click',()=>{
- if(serverLink?.recoveryAttempt)disconnect();
- else if(roomRecovery.context)clearRoomRecovery();
-});
+for(const id of ['tabHome','tabReplay'])
+ document.getElementById(id)?.addEventListener('click',()=>{
+  if(serverLink?.recoveryAttempt)disconnect();
+  else if(roomRecovery.context)clearRoomRecovery();
+ });
+window.addEventListener('pagehide',clearRoomRecovery);
+const originalQuickPlay=quickPlay;
+quickPlay=function(...args){
+ const launched=originalQuickPlay(...args);
+ if(launched&&roomRecovery.context)clearRoomRecovery();
+ return launched;
+};
 const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();const link=serverLink;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
