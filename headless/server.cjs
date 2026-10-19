@@ -431,7 +431,8 @@ function createServer(options={}){
   for(const [id,c]of r.clients){const own=mine.get(id);if(own&&c.timeline)c.timeline.receive(own.changes.filter(x=>x[0]>c.timeline.lastSeq),r.frame,r.frame);}
   for(const id of [...r.clients.keys()])if(!r.sockets.has(id)&&!r.parked.has(id))r.leave(id);
   for(const id of r.parked.keys())if(r.clients.has(id))r.disconnected.add(id);
-  for(const [id,ws]of r.sockets)if(!r.clients.has(id))try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch{}
+  for(const [id,ws]of r.sockets)if(!r.clients.has(id))try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account,
+   spectate:!r.quickMatch&&ws.spectateOnJoin===true});}catch{}
   r.migration=null;r.standby=null;r.lastMigration=Date.now();r.status();
   for(const ws of r.pendingJoins.splice(0))if(ws.readyState===1)try{join(ws,r);}catch(e){ws.room=null;ws.pendingResumeToken=null;send(ws,{type:'error',message:e?.message||'Unable to rejoin.'});}}
  function failover(r,reason){if(r.authority==='server'||!r.standby)return;const old=hostSocket(r);r.penalty.set(r.authority,Date.now()+60000);r.epoch++;resume(r,r.standby,{failover:true});r.migration={frame:r.frame};announce(r,'server');r.migration=null;if(old)send(old,{type:'stopHost'});}
@@ -570,7 +571,8 @@ function createServer(options={}){
   // A browser host cannot add players; take the room back first (a seamless handover), then join.
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
   if(ws.pendingResumeToken){const ticket=ws.pendingResumeToken;ws.pendingResumeToken=null;rejoin(ws,r,ticket);return;}
-  while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
+  while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account,
+   spectate:!r.quickMatch&&ws.spectateOnJoin===true});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
   if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);roomControl(r);}
  // RoomCore also powers public custom rooms, whose bots fill empty sides.
  // Competitive-looking Quick Match rooms must never run or display those bots.
@@ -656,6 +658,11 @@ function createServer(options={}){
    const d=JSON.parse(raw.toString());
    if(d.type==='ping'){send(ws,ws.room?{type:'pong',t:d.t,frame:roomTime(ws.room)}:{type:'pong',t:d.t,frame:frame+fraction()});return;}
    if(d.type==='sping'){send(ws,{type:'spong',t:d.t,frame:ws.room?roomTime(ws.room):null});return;}
+   // WATCH-only clients negotiate spectator admission before sending join.
+   if(d.type==='spectatorAdmissionInfo'){
+    if(ws.room)throw Error('Already joined a room.');
+    send(ws,{type:'spectatorAdmissionInfo',supported:true});return;
+   }
    if(d.type==='queueJoin'){
     if(ws.room)throw Error('Leave the current room before searching.');
     const account=accounts.user(d.token);
@@ -711,7 +718,11 @@ function createServer(options={}){
     quickMatch.remove(ws);return;
    }
    if(d.type==='queueReadyResponse'){quickMatch.respond(ws,d.id,d.accept===true?true:d.accept===false?false:null);return;}
-   if(d.type==='join'){quickMatch.remove(ws,true);if(ws.room)throw Error('Already in a room.');const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');
+   if(d.type==='join'){quickMatch.remove(ws,true);if(ws.room)throw Error('Already in a room.');
+    if(d.spectate!==undefined&&typeof d.spectate!=='boolean')
+     throw Error('Invalid spectator admission preference.');
+    if(d.create&&d.spectate===true)throw Error('A new room owner cannot start in spectator mode.');
+    const account=accounts.user(d.token),name=account||String(d.name||'Player').trim().slice(0,25)||'Player';if(!account&&accounts.reserved(name))throw Error('Name reserved: that nickname belongs to an account. Log in or pick another name.');
     // Club practice creation is an atomic admission policy: authenticate
     // membership *before* allocating a room; never expose a public interval.
     const practiceClub=d.clubPractice===true&&d.create===true&&
@@ -722,7 +733,8 @@ function createServer(options={}){
     if(!r)throw Error('Room not found.');
     if(practiceClub){r.clubId=practiceClub;r.accountsOnly=true;r.listed=false;}if(r.quickMatch&&!d.resume)throw Error('Quick Match rooms are reserved for the matched players.');if(r.locked&&!d.resume)throw Error('This room is locked to new players.');if(r.accountsOnly&&!account&&!d.resume)throw Error('This room requires a signed-in account.');if(!d.resume&&r.clients.size+r.pendingJoins.length>=r.maxHumans)throw Error('This room is full. Try again after a player leaves.');if(r.clubId&&(!account||clubs?.membership(account)?.id!==r.clubId))
     throw Error('Only members of this Club can join this room.');
-   if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
+   if(!admitted(r,account))throw Error('You are temporarily blocked from this room.');
+   ws.spectateOnJoin=d.spectate===true&&!d.create&&!d.resume;ws.name=name;ws.account=account||null;ws.accountToken=account?d.token:null;ws.resumeEnabled=!!account||d.resumeOptIn===true;ws.netcode=d.netcode;ws.mesh=peerHosting&&d.mesh===true&&d.netcode===3&&v3Enabled;if(d.resume!==undefined)ws.pendingResumeToken=d.resume;join(ws,r);return;}
    const r=ws.room;if(!r||ws.playerId==null)throw Error('Join a room first.');
    if(d.type==='roomAdmin'){roomAdmin(ws,r,d);return;}
    if(r.quickMatch&&!['in','input','chat','reportPlayer'].includes(d.type))throw Error('Quick Match settings are controlled by the server.');
