@@ -15,3 +15,5 @@ The desk reads only the existing authoritative Custom Room roster, server-issued
 This is **not** automatic rebalancing, guaranteed fairness, an official match statistic, or a verified league result. Bots are excluded from human rotations; reconnecting players cannot be suggested. The desk never gives a spectator captain authority or changes the accepted BFF physics / netcode / server protocol / Quick Match / Clubs.
 
 PWA stores its UI assets, never a roster snapshot or credential.
+
+Native bench volunteers may explicitly opt into an **AVAILABLE** indicator. The time-based suggestion prefers connected volunteers who opted in, then falls back to existing eligible benches if none is available. Readiness is **not substitution consent** and does not bypass recipient acceptance, captain authorization or the required stoppage.
