@@ -19,3 +19,8 @@
 .couch-rivals-name-fields label{display:grid;gap:6px;flex:1 1 140px;font-size:12px}
 .couch-rivals-name-fields input,.couch-rivals-name-fields select{min-height:40px;box-sizing:border-box;width:100%;background:#13292e;color:#f0f9ee;border:1px solid #7ba38a;border-radius:8px;padding:8px}
 .couch-rivals-name-fields input:focus-visible,.couch-rivals-name-fields select:focus-visible,.couch-rivals-names summary:focus-visible{outline:3px solid #d8f1ad;outline-offset:3px}
+.couch-play-rules{display:grid;gap:5px;padding:14px;margin:12px 0;border:1px solid #5c8474;border-radius:10px;background:#143032}
+.couch-play-rules label{display:grid;gap:7px;font-size:12px;font-weight:800;letter-spacing:.025em}
+.couch-play-rules select{box-sizing:border-box;width:100%;max-width:460px;min-height:44px;border:1px solid #93b9a1;border-radius:8px;background:#0a242a;color:#f4fcf0;padding:9px 11px}
+.couch-play-rules p{font-size:12px;color:#d0e5d8;margin:4px 0 0;line-height:1.5}
+.couch-play-rules select:focus-visible{outline:3px solid #d8f1ad;outline-offset:3px}
