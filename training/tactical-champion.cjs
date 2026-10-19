@@ -63,16 +63,14 @@ function tournament(candidate, incumbent, seed, frames) {
     kicksFor: games.reduce((n,g)=>n+g.kicks,0),
     kicksAgainst: games.reduce((n,g)=>n+g.opponentKicks,0), games };
 }
-function decide(challenger, incumbent, defaultBaseline, teamPromoted) {
+function decide(incumbent, defaultBaseline, teamPromoted, changed) {
   const reasons = [];
   if (!teamPromoted) reasons.push('tactical self-play did not select a challenger');
-  if (JSON.stringify(challenger) === JSON.stringify(incumbent))
-    reasons.push('tactical profile unchanged');
-  if (incumbent) {
-    if (incumbent.matches < 16 || incumbent.scoreRate < 0.5625 ||
-        incumbent.goalDifference < 2 || incumbent.wins <= incumbent.losses)
-      reasons.push('no convincing side-swapped improvement over tactical incumbent');
-  }
+  if (!changed) reasons.push('tactical profile unchanged');
+  if (!incumbent) reasons.push('no independent incumbent evaluation');
+  else if (incumbent.matches < 16 || incumbent.scoreRate < 0.5625 ||
+           incumbent.goalDifference < 2 || incumbent.wins <= incumbent.losses)
+    reasons.push('no convincing side-swapped improvement over tactical incumbent');
   if (defaultBaseline && (defaultBaseline.matches < 16 ||
       defaultBaseline.scoreRate < 0.5 || defaultBaseline.goalDifference < 0))
     reasons.push('regression versus frozen default tactical baseline');
@@ -97,7 +95,7 @@ function main() {
   const againstDefault = team.promoted && !same && incumbentCheckpoint
     ? tournament(challenger, checkedProfile(AI.defaultProfile), (seed+100019)>>>0, frames)
     : null;
-  const gate = decide(challenger, againstIncumbent, againstDefault, team.promoted);
+  const gate = decide(againstIncumbent, againstDefault, team.promoted, !same);
   const report = { schema: 'fuckball-tactical-ladder-v1', seed, frames,
     incumbent: incumbentCheckpoint?.sourceCycle || 'frozen-default',
     teamPromoted: team.promoted, againstIncumbent, againstDefault, gate,
