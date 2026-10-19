@@ -211,7 +211,7 @@ if(defending){
    (slots[c.id]==='dm'?0:slots[c.id]==='am'?1:2)||a.id-c.id);
  const threats=ops.filter(p=>p!==nearest).sort((a,c)=>
    Math.hypot(a.disc.pos.x-ox,a.disc.pos.y)-
-   Math.hypot(c.disc.pos.x-ox,a.disc.pos.y));
+   Math.hypot(c.disc.pos.x-ox,c.disc.pos.y));
  for(let i=0;i<markers.length&&i<threats.length;i++)marking.set(markers[i].id,threats[i]);
 }
  const theirFirst=ops.reduce((m,o)=>{const h=hitOf(o);return h?Math.min(m,h.k):m;},Infinity);
