@@ -10,7 +10,8 @@
   goals:{name:'Goal Rush',description:'Finish a real timed shooting target against local AI.',route:'goals'},
   team:{name:'Teamwork',description:'Complete a real team-link target in native 4v4 practice.',route:'team'},
   defense:{name:'Clean Sheet',description:'Concede at most your chosen target in a full-clock real native local 1v1.',route:'defense'},
-  rockets:{name:'Rocket Kick',description:'Hit your raw native ball-speed burst target after real human kicks.',route:'rockets'}
+  rockets:{name:'Rocket Kick',description:'Hit your raw native ball-speed burst target after real human kicks.',route:'rockets'},
+  ladder:{name:'AI Gauntlet',description:'Complete all three full-clock native 1v1 AI stages.',route:'ladder'}
  };
  const PRESETS=[
   {name:'Fundamentals · touch → finishing → team play',order:['touch','goals','team']},
@@ -19,7 +20,9 @@
   {name:'Defender focus · clean sheet → first touch → teamwork',order:['defense','touch','team']},
   {name:'Complete player · finishing → clean sheet → teamwork',order:['goals','defense','team']},
   {name:'Rocket striker · finishing → rocket kick → clean sheet',order:['goals','rockets','defense']},
-  {name:'All-rounder · rocket kick → teamwork → clean sheet',order:['rockets','team','defense']}
+  {name:'All-rounder · rocket kick → teamwork → clean sheet',order:['rockets','team','defense']},
+  {name:'AI challenger · goal rush → clean sheet → AI gauntlet',order:['goals','defense','ladder']},
+  {name:'Elite preparation · first touch → rocket kick → AI gauntlet',order:['touch','rockets','ladder']}
  ];
  const make=(tag,cls='',value)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(value!==undefined)el.textContent=value;return el;};
  function data(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}}
@@ -52,6 +55,24 @@
   catch{return false;}
  }
  function latestSuccess(type){
+  if(type==='ladder'){
+   const rows=data('fuckball.ai-gauntlet-history.v1');
+   if(!Array.isArray(rows)||rows.length>12)return 0;
+   const levels={standard:['easy','normal','hard'],elite:['normal','hard','elite']};
+   let latest=0;
+   for(const r of rows){
+    if(!r||r.version!==1||!Object.hasOwn(levels,r.route)||
+     ![60,120].includes(r.duration)||!validAt(r.finishedAt)||!validAt(r.startedAt)||
+     r.finishedAt<r.startedAt||r.finishedAt-r.startedAt>30*DAY||
+     !Array.isArray(r.wins)||r.wins.length!==3||
+     !r.wins.every((w,i)=>w&&w.level===levels[r.route][i]&&
+      w.duration===r.duration&&validAt(w.at)&&w.at>=r.startedAt&&w.at<=r.finishedAt&&
+      Number.isSafeInteger(w.for)&&Number.isSafeInteger(w.against)&&
+      w.for>w.against&&w.against>=0&&w.for<=999))continue;
+    latest=Math.max(latest,r.finishedAt);
+   }
+   return latest;
+  }
   if(type==='touch'){
    const value=data('fuckball.first-play-guide.v1');
    return value?.version===1&&validAt(value.at)?value.at:0;
@@ -162,7 +183,7 @@
  function completed(){
   if(!session||session.armedStep!==session.done||!session.armedAt)return false;
   const at=latestSuccess(session.order[session.done]);
-  if(at<=session.baseline||at<session.armedAt||at> Date.now())return false;
+  if(at<=session.baseline||at<session.armedAt||at>Date.now())return false;
   session.done++;
   if(session.done===3){
    const finishedAt=Date.now(),row={version:1,startedAt:session.startedAt,finishedAt,order:session.order};
@@ -204,7 +225,8 @@
   tab?.click();
   tab?.scrollIntoView({block:'center',behavior:'smooth'});
   const drill=step==='touch'?'.first-play-card':step==='goals'?'.goal-rush-setup':
-   step==='defense'?'.clean-sheet-setup':step==='rockets'?'.native-ball-burst':'.teamwork-panel';
+   step==='defense'?'.clean-sheet-setup':step==='rockets'?'.native-ball-burst':
+   step==='ladder'?'.ai-gauntlet-setup':'.teamwork-panel';
   home.querySelector(drill+' button.primary')?.focus();
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }
@@ -247,7 +269,7 @@
  window.addEventListener('storage',event=>{
   if([STATE,HISTORY,'fuckball.first-play-guide.v1','fuckball-local-goal-rush-history-v1',
    'fuckball.teamwork-native-drill.v1','fuckball.clean-sheet-history.v1',
-   'fuckball.native-ball-burst-history.v1'].includes(event.key)){
+   'fuckball.native-ball-burst-history.v1','fuckball.ai-gauntlet-history.v1'].includes(event.key)){
    session=readState();if(!completed())render();
   }
  });

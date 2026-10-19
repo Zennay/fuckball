@@ -1,0 +1,34 @@
+/* Native local AI Gauntlet — no network, physics or ranked changes. */
+.ai-gauntlet-setup{margin:16px 0;padding:18px;background:#192e36;border:1px solid #95b7a1;border-radius:14px;color:#ecf9e7;display:grid;gap:14px}
+.ai-gauntlet-setup h2{margin:0;color:#e6f5b8;font-size:clamp(21px,2.5vw,28px);letter-spacing:.05em}
+.ai-gauntlet-setup>p{margin:0;color:#ccdfd0;font-size:13px;line-height:1.6}
+.ai-gauntlet-fields{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.ai-gauntlet-fields label{display:grid;gap:7px;font-size:12px;flex:1 1 160px;color:#d7edda}
+.ai-gauntlet-fields select,.ai-gauntlet-fields button,.ai-gauntlet-history button,.ai-gauntlet-hud button{min-height:42px;border:1px solid #80aaa0;border-radius:8px;padding:9px 12px;background:#25463f;color:#f3fce9}
+.ai-gauntlet-fields .primary{background:#c9eca1;border-color:#e5ffc5;color:#203832;font-weight:800}
+.ai-gauntlet-fields button,.ai-gauntlet-history button,.ai-gauntlet-hud button{cursor:pointer}
+.ai-gauntlet-setup button:disabled{opacity:.44;cursor:not-allowed}
+.ai-gauntlet-status{font-size:13px;min-height:20px}
+.ai-gauntlet-stages{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:0;margin:0}
+.ai-gauntlet-stages li{border:1px solid #618d81;background:#21413e;border-radius:10px;padding:12px;display:grid;gap:6px;min-width:0}
+.ai-gauntlet-stages strong{color:#f0f8d5;font-size:13px}
+.ai-gauntlet-stages span{font-size:12px;color:#cbdfd2}
+.ai-gauntlet-history{display:grid;gap:10px}
+.ai-gauntlet-history-head{display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+.ai-gauntlet-history h3{font-size:14px;margin:0 auto 0 0;color:#ddf4bd}
+.ai-gauntlet-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.ai-gauntlet-result{border-radius:8px;background:#24463f;border:1px solid #598a79;padding:12px;display:grid;gap:7px}
+.ai-gauntlet-result strong{font-size:13px;color:#e3f7b5}
+.ai-gauntlet-result span,.ai-gauntlet-result small{font-size:12px;color:#d2e4d6}
+.ai-gauntlet-hud[hidden]{display:none!important}
+.ai-gauntlet-hud{position:absolute;top:85px;left:50%;transform:translateX(-50%);z-index:26;pointer-events:auto;width:min(430px,calc(100vw - 20px));border:1px solid #e2f5b3;border-radius:12px;background:#122d34f0;color:#effbe9;display:grid;gap:10px;padding:14px;box-shadow:0 8px 30px #071a2088}
+.ai-gauntlet-hud strong{font-size:14px;color:#e3f6ba;letter-spacing:.03em}
+.ai-gauntlet-hud>span{font-size:22px;font-weight:850}
+.ai-gauntlet-hud p{margin:0;line-height:1.45;font-size:12px}
+.ai-gauntlet-hud progress{width:100%;height:12px;accent-color:#bde3a4}
+.ai-gauntlet-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ai-gauntlet-actions button{flex:1}
+.ai-gauntlet-setup :is(button,select):focus-visible,.ai-gauntlet-hud button:focus-visible{outline:3px solid #ddf6b1;outline-offset:3px}
+@media(max-width:620px){.ai-gauntlet-stages{grid-template-columns:1fr}.ai-gauntlet-setup{padding:12px}.ai-gauntlet-hud{top:62px}}
+@media(prefers-reduced-motion:reduce){.ai-gauntlet-setup *,.ai-gauntlet-hud *{animation:none!important;transition:none!important}}
+

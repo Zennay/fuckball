@@ -17,7 +17,8 @@
   {id:'attendance',key:'fuckball.private-match-attendance.v1',name:'Private match attendance',limit:200,chars:1024*1024},
   {id:'pins',key:'fuckball.pinned-public-rooms.v1',name:'Pinned public room codes',limit:12,chars:4096},
   {id:'loadouts',key:'fuckball.local-match-loadouts.v1',name:'Local match loadouts',limit:8,chars:12000},
-  {id:'academy',key:'fuckball.solo-academy.v1',name:'Solo Academy progress',limit:1,chars:12000}
+  {id:'academy',key:'fuckball.solo-academy.v1',name:'Solo Academy progress',limit:1,chars:12000},
+  {id:'gauntlet',key:'fuckball.ai-gauntlet-history.v1',name:'Completed native AI Gauntlets',limit:12,chars:24000}
  ];
  const known=new Map(SCOPES.map(scope=>[scope.id,scope]));
  const format='fuckball-local-data-vault',version=1,MAX_FILE=1536*1024;
@@ -43,6 +44,20 @@
     ['touch','goals','team','match'].includes(proof.type)&&
     Number.isSafeInteger(proof.at)&&proof.at>0&&proof.at<=Date.now()+86400000&&
     Number.isSafeInteger(proof.armedAt)&&proof.armedAt>0&&proof.armedAt<proof.at);
+  if(scope.id==='gauntlet'){
+   const levels={standard:['easy','normal','hard'],elite:['normal','hard','elite']};
+   return !!item&&item.version===1&&Object.hasOwn(levels,item.route)&&
+    [60,120].includes(item.duration)&&Number.isSafeInteger(item.startedAt)&&
+    Number.isSafeInteger(item.finishedAt)&&item.startedAt>0&&
+    item.finishedAt>=item.startedAt&&item.finishedAt<=Date.now()+86400000&&
+    item.finishedAt-item.startedAt<=30*86400000&&
+    Number.isSafeInteger(item.retries)&&item.retries>=0&&item.retries<=999&&
+    Array.isArray(item.wins)&&item.wins.length===3&&item.wins.every((w,i)=>
+     w&&w.level===levels[item.route][i]&&w.duration===item.duration&&
+     Number.isSafeInteger(w.for)&&Number.isSafeInteger(w.against)&&
+     w.for>w.against&&w.against>=0&&w.for<=999&&
+     Number.isSafeInteger(w.at)&&w.at>=item.startedAt&&w.at<=item.finishedAt);
+  }
   if(scope.id==='attendance')return !!item&&typeof item==='object'&&
    typeof item.key==='string'&&Array.isArray(item.people)&&item.people.length<=24;
   return !!item&&typeof item==='object'&&!Array.isArray(item)&&item.version===1&&
@@ -57,6 +72,7 @@
   const ids=items.map(item=>scope.id==='pins'?item:
    scope.id==='attendance'?item.key:
     scope.id==='loadouts'?item.name.toLocaleLowerCase():
+   scope.id==='gauntlet'?item.startedAt+':'+item.finishedAt+':'+item.route:
      scope.id==='academy'?'solo-academy':item.id);
   if(new Set(ids).size!==ids.length)throw Error(scope.name+': duplicate records.');
   return items;
@@ -83,7 +99,7 @@
  panel.setAttribute('aria-label','Device-local data vault');
  const title=make('h2','MY LOCAL DATA VAULT.');
  const intro=make('p','Review and archive private competitions, match attendance, saved public room codes and native solo training progress and loadouts on this device. These are NOT your online account, HBR2 replay files or authenticated match results.');
- const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. No data is uploaded or deleted by this vault.','local-vault-warning');
+ const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. Gauntlet and Academy proofs are reference-only; importing archives cannot award progression. No data is uploaded or deleted by this vault.','local-vault-warning');
  const top=make('div',null,'local-vault-actions');
  const downloadAll=click('↓ Export selected archive',()=>downloadArchive());
  const browse=click('Browse native backup files',()=>{
@@ -134,14 +150,14 @@
   }
   downloadAll.disabled=browse.disabled=readable===0;
   message.textContent=(problems?problems+' category read failure(s). ':'')+
-   'Only the seven explicitly listed browser keys are inspected. Your account credentials and IndexedDB replays are never included.';
+   'Only the '+SCOPES.length+' explicitly listed browser keys are inspected. Your account credentials and IndexedDB replays are never included.';
  }
  function archive(){
   const selected=SCOPES.filter(scope=>checks.get(scope.id).check.checked);
   if(!selected.length)throw Error('Choose at least one local data category.');
   const datasets=selected.map(scope=>({scope:scope.id,items:read(scope)}));
   const packed={format,version,createdAt:new Date().toISOString(),datasets,
-   note:'Private, user-entered device data only. Extraction never restores data automatically.'};
+   note:'Private device-local data and native-only training observations. Extraction never restores data or awards wins.'};
   if(JSON.stringify(packed).length>MAX_FILE)throw Error('Archive exceeds 1.5 MiB. Export fewer categories.');
   return packed;
  }
@@ -178,7 +194,7 @@
  function showArchive(datasets){
   extractList.replaceChildren();
   extractInfo.textContent='Preview only: '+datasets.length+
-   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Academy proof summaries are read-only and cannot be restored as missions.';
+   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Academy and AI Gauntlet proof summaries are read-only, never restorable as earned milestones.';
   for(const {scope,items}of datasets){
    const group=make('div',null,'local-vault-extract-group');
    group.append(make('strong',scope.name+' · '+items.length+' records'));
@@ -205,6 +221,15 @@
     actions.append(click('↓ Native local match loadouts',()=>save('fuckball-local-match-loadouts.json',
      {format:'fuckball-local-match-loadouts',version:1,source:'private-device-only',
       exportedAt:new Date().toISOString(),presets:items})));
+   }else if(scope.id==='gauntlet'){
+    actions.append(click('↓ Native AI Gauntlet history (read-only proof)',()=>{
+     save('fuckball-local-ai-gauntlet-proof.json',{
+      format:'fuckball-native-local-ai-gauntlet',version:1,
+      source:'private device-local native match observations, not verified or ranked',
+      exportedAt:new Date().toISOString(),ladders:items
+     });
+     message.textContent='Local AI Gauntlet history downloaded. Opening an archive never credits wins or changes active ladders.';
+    }));
    }else if(scope.id==='academy'){
     const progress=items[0];
     if(progress)actions.append(click('↓ Academy progress proof summary (read-only)',()=>{
