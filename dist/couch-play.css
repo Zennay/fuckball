@@ -12,3 +12,10 @@
 .couch-play-hud span{font-size:11px;line-height:1.35}
 .couch-play button:focus-visible,.couch-play select:focus-visible{outline:3px solid #d8f1ad;outline-offset:3px}
 @media(max-width:640px){.couch-play-actions>*{flex:1 1 100%}.couch-play-hud{left:8px;bottom:89px}}
+
+.couch-rivals-names{border-top:1px solid #56736b;margin:6px 0;padding-top:9px}
+.couch-rivals-names summary{cursor:pointer;font-weight:700;font-size:13px;color:#d6f1de}
+.couch-rivals-name-fields{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.couch-rivals-name-fields label{display:grid;gap:6px;flex:1 1 140px;font-size:12px}
+.couch-rivals-name-fields input,.couch-rivals-name-fields select{min-height:40px;box-sizing:border-box;width:100%;background:#13292e;color:#f0f9ee;border:1px solid #7ba38a;border-radius:8px;padding:8px}
+.couch-rivals-name-fields input:focus-visible,.couch-rivals-name-fields select:focus-visible,.couch-rivals-names summary:focus-visible{outline:3px solid #d8f1ad;outline-offset:3px}

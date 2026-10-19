@@ -12,20 +12,71 @@
   return e;
  };
  const section=node('section',null,'couch-play');
- section.setAttribute('aria-label','Local two-player couch football');
+ section.setAttribute('aria-label','Local two- or four-player couch football');
  const title=node('h2','COUCH FOOTBALL.');
- const intro=node('p','Two real players, one native pitch. Play against each other in 1v1, or team up against native AI in 2v2 or 4v4. P1 uses WASD/F or their controller, P2 uses arrows/Enter or a separate controller. No account or leaderboard.');
+ const intro=node('p','Play 1v1 with two humans, team up against native AI in 2v2/4v4, or compete in four-human 2v2. For four-player games Red uses WASD/F and arrows/Enter; Blue uses two independent controllers. Offline and unranked.');
  const controls=node('div',null,'couch-play-actions');
  const launch=node('button','▶ PLAY LOCAL TWO-PLAYER');launch.className='primary';launch.type='button';
  const coop2=node('button','▶ TEAM UP 2v2');coop2.type='button';
  const coop4=node('button','▶ TEAM UP 4v4');coop4.type='button';
+ const rivals=node('button','▶ FOUR HUMANS · 2v2');rivals.type='button';
  const configure=node('label','Player 2 controller');
  const source=node('select');source.setAttribute('aria-label','Choose a separate gamepad for Player 2');
  configure.append(source);
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- controls.append(launch,coop2,coop4,configure);
- section.append(title,intro,controls,status);
+ controls.append(launch,coop2,coop4,rivals,configure);
+ const namesPanel=node('details',null,'couch-rivals-names');
+ const namesTitle=node('summary','Four-player names and Blue controllers');
+ const namesRow=node('div',null,'couch-rivals-name-fields');
+ const nameInputs={};
+ const initial=window.fuckballCouchRivals?.names?.()||{};
+ for(const id of [2,3,4]){
+  const label=node('label','Player '+id+' · '+(id===2?'Red':'Blue'));
+  const field=node('input');field.type='text';field.maxLength=20;
+  field.autocomplete='off';field.setAttribute('aria-label','Player '+id+' local nickname');
+  field.value=initial[id]||'Player '+id;
+  nameInputs[id]=field;label.append(field);namesRow.append(label);
+  field.addEventListener('change',()=>{
+   window.fuckballCouchRivals?.setNames?.(Object.fromEntries(
+    [2,3,4].map(i=>[i,nameInputs[i].value])));
+   status.textContent='Team names saved only on this device. They apply at the next four-player kickoff.';
+  });
+ }
+ const blueRow=node('div',null,'couch-rivals-name-fields');
+ const blueSources={};let blueSignature=null;
+ for(const id of [3,4]){
+  const label=node('label','Blue Player '+id+' · controller port');
+  const select=node('select');
+  select.setAttribute('aria-label','Blue Player '+id+' controller port');
+  select.addEventListener('change',()=>{
+   const value=select.value;
+   const sources={};sources[id]=value==='auto'?'auto':Number(value);
+   window.fuckballCouchRivals?.setSources?.(sources);
+   status.textContent='Blue controller choice ready for the next four-player kickoff.';
+  });
+  label.append(select);blueRow.append(label);blueSources[id]=select;
+ }
+ function paintBlueSources(){
+  const list=window.fuckballCouchRivals?.available?.()||[];
+  const sig=list.map(p=>p.index+':'+p.id).join('|');
+  if(sig!==blueSignature){
+   blueSignature=sig;
+   for(const id of [3,4]){
+    const select=blueSources[id],value=select.value||'auto';
+    select.replaceChildren(new Option('Automatic · unused port','auto'));
+    for(const pad of list)
+     select.add(new Option('Port '+(pad.index+1)+' · '+pad.id,String(pad.index)));
+    if(value!=='auto'&&!list.some(p=>String(p.index)===value))
+     select.add(new Option('Port '+(Number(value)+1)+' · disconnected',value));
+    select.value=value;
+   }
+  }
+  const locked=isLocal()&&document.getElementById('mode')?.value==='couchRivals';
+  for(const id of [3,4])blueSources[id].disabled=locked;
+ }
+ namesPanel.append(namesTitle,namesRow,node('strong','Blue · two separate gamepads'),blueRow);
+ section.append(title,intro,controls,namesPanel,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=node('aside',null,'couch-play-hud');
@@ -39,7 +90,7 @@
   typeof replay!=='undefined'&&!replay&&
   typeof serverLink!=='undefined'&&!serverLink&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
-  ['local','coop2v2','coop4v4'].includes(document.getElementById('mode')?.value)&&
+  ['local','coop2v2','coop4v4','couchRivals'].includes(document.getElementById('mode')?.value)&&
   document.getElementById('joinScreen')?.hidden!==false&&
   !pitch.hidden;
  function pads(){
@@ -53,6 +104,7 @@
   return Number.isSafeInteger(index)?index:null;
  }
  function selected(){
+  if(document.getElementById('mode')?.value==='couchRivals')return null;
   const all=pads(),first=playerOneIndex();
   if(chosen!=='auto'){
    const index=Number(chosen);
@@ -100,12 +152,20 @@
    }
    source.value=chosen;
   }
+  paintBlueSources();
+  // Four-human rivals exclusively reserve both gamepads for Blue.
+  source.disabled=document.getElementById('mode')?.value==='couchRivals';
+  configure.title=source.disabled?'Red Player 2 uses arrows/Enter in four-human 2v2.':'Select a dedicated Player 2 controller.';
   hud.hidden=!isLocal();
   if(!hud.hidden){
    const p2=selected(),mode=document.getElementById('mode')?.value;
-   hudTitle.textContent=mode==='coop2v2'?'COUCH CO-OP · 2v2':
+   hudTitle.textContent=mode==='couchRivals'?'COUCH RIVALS · FOUR HUMANS':
+    mode==='coop2v2'?'COUCH CO-OP · 2v2':
     mode==='coop4v4'?'COUCH CO-OP · 4v4':'COUCH 1v1 · TWO HUMANS';
-   activeHint.textContent='P1 WASD/F or controller'+(first===null?'':' '+(first+1))+
+   activeHint.textContent=mode==='couchRivals'?
+    'RED · P1 WASD/F · P2 arrows/Enter | BLUE · '+
+     (window.fuckballCouchRivals?.describe?.()||'two gamepads required'):
+    'P1 WASD/F or controller'+(first===null?'':' '+(first+1))+
     ' · P2 arrows/Enter'+(p2?' or controller '+(p2.index+1):' · no separate controller');
   }
  }
@@ -129,21 +189,30 @@
    if(reason){status.textContent=reason;return;}
   }
   const name=mode==='coop2v2'?'Couch Co-op 2v2':
-   mode==='coop4v4'?'Couch Co-op 4v4':'Couch 1v1';
+   mode==='coop4v4'?'Couch Co-op 4v4':
+   mode==='couchRivals'?'Couch Rivals 2v2':'Couch 1v1';
   if((started||replay)&&!window.confirm('Replace your current offline match or replay with '+
    name+'? Unsaved local progress may be lost.')){
    status.textContent='Existing local game preserved.';return;
   }
+  if(mode==='couchRivals'){
+   const prepared=window.fuckballCouchRivals?.prepare?.();
+   if(!prepared?.ok){status.textContent=prepared?.message||'Four-player controllers unavailable.';return;}
+  }
   if(!quickPlay(mode,true,false)){
    status.textContent=name+' is unavailable while another session is active.';return;
   }
-  status.textContent=name+' started with two real native local humans. '+
-   (mode==='local'?'Play against each other.':'Play on Red together against actual local AI.');
+  status.textContent=name+' started with '+(mode==='couchRivals'?'four':'two')+
+   ' real native local humans. '+
+   (mode==='local'?'Play against each other.':mode==='couchRivals'?
+    'Red is shared keyboard; Blue uses two exclusive gamepads. No bots.':
+    'Play on Red together against actual local AI.');
   paint();
  }
  launch.onclick=()=>startMode('local');
  coop2.onclick=()=>startMode('coop2v2');
  coop4.onclick=()=>startMode('coop4v4');
+ rivals.onclick=()=>startMode('couchRivals');
  let lastLive=false;
  function frame(){
   const live=canInput();
