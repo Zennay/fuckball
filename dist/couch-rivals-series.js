@@ -28,7 +28,8 @@
  const next=make('button','▶ NEXT ROUND');next.type='button';next.hidden=true;
  const end=make('button','End series');end.type='button';end.hidden=true;
  const exportButton=make('button','↓ Save series result');exportButton.type='button';exportButton.hidden=true;
- actions.append(formatLabel,teamLabel,start,next,end,exportButton);
+ const imageButton=make('button','↓ Save PNG scorecard');imageButton.type='button';imageButton.hidden=true;
+ actions.append(formatLabel,teamLabel,start,next,end,exportButton,imageButton);
  const status=make('p','Requires two independent standard gamepads for Blue. Red plays on shared keyboard.','couch-series-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const tally=make('div',null,'couch-series-tally');tally.hidden=true;
@@ -80,10 +81,14 @@
   for(const r of archived.slice(0,5)){
    const day=new Date(r.created);
    const title=Number.isFinite(day.getTime())?day.toLocaleDateString():'Previous series';
-   history.append(make('p',title+' · '+(r.teamSize||2)+'v'+(r.teamSize||2)+
-    ' · Best of '+r.bestOf+' · Red '+r.red+
-    ' : '+r.blue+' Blue · '+(r.winner==='red'?'Red':'Blue')+' won'+
+   const row=make('div',null,'couch-series-history-row');
+   row.append(make('p',title+' · '+(r.teamSize||2)+'v'+(r.teamSize||2)+
+    ' · Best of '+r.bestOf+' · Red '+r.red+' : '+r.blue+' Blue · '+
+    (r.winner==='red'?'Red':'Blue')+' won'+
     (r.draws?' · '+r.draws+' drawn rounds':'')));
+   const card=make('button','↓ PNG');card.type='button';
+   card.setAttribute('aria-label','Download private PNG scorecard from '+title);
+   card.onclick=()=>savePng(r);row.append(card);history.append(row);
   }
  }
  function display(){
@@ -91,6 +96,7 @@
   start.hidden=active;formatLabel.hidden=active;teamLabel.hidden=active;
   next.hidden=!active||!series.resolved||series.complete;
   end.hidden=!active;exportButton.hidden=!active||!series.complete;
+  imageButton.hidden=!active||!series.complete;
   tally.hidden=!active;hud.hidden=!active||pitch.hidden;
   if(!active){tally.replaceChildren();hud.replaceChildren();return;}
   const text='RED '+series.red+' — '+series.blue+' BLUE · '+series.teamSize+
@@ -210,7 +216,55 @@
     resolve(team===1?'red':'blue');
   });
  });
- start.onclick=startSeries;next.onclick=nextRound;exportButton.onclick=exportResult;
+ function savePng(saved){
+  const result=saved&&typeof saved==='object'&&!Array.isArray(saved)?
+   saved:(series?.complete?series.final:null);
+  if(!result)return;
+  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=675;
+  const ctx=canvas.getContext?.('2d');
+  if(!ctx){announce('PNG export is unavailable in this browser. Use JSON export instead.');return;}
+  try{
+   const gradient=ctx.createLinearGradient(0,0,1200,675);
+   gradient.addColorStop(0,'#102f34');gradient.addColorStop(1,'#0a1d2c');
+   ctx.fillStyle=gradient;ctx.fillRect(0,0,1200,675);
+   const text=(value,x,y,size,color='#eef9eb',weight=700,width=1080)=>{
+    ctx.fillStyle=color;ctx.font=weight+' '+size+'px system-ui, sans-serif';
+    ctx.fillText(String(value),x,y,width);
+   };
+   ctx.fillStyle='#c7f29e';ctx.fillRect(62,58,77,8);
+   text('FUCKBALL / COUCH RIVALS',62,115,25,'#d0f3b1',800);
+   text('FOUR HUMAN PLAYERS · LOCAL ONLY',62,154,19,'#b9d2cc',600);
+   const size=[2,3,4].includes(result.teamSize)?result.teamSize:2;
+   text(size+'v'+size+' · BEST OF '+result.bestOf,62,228,44,'#f8fdeb',850);
+   ctx.fillStyle='#264955';ctx.fillRect(62,270,1076,230);
+   text('RED',98,318,23,'#ffb6b6',800);
+   text(String(result.names?.red||'Player 1 + Player 2'),98,362,25,'#f9e6e2',750,400);
+   text('BLUE',705,318,23,'#a6d6ff',800);
+   text(String(result.names?.blue||'Player 3 + Player 4'),705,362,25,'#e1f1ff',750,400);
+   text(String(result.red),190,463,86,'#ffd7d7',900);
+   text(':',556,449,67,'#d7ecd6',700);
+   text(String(result.blue),855,463,86,'#bde4ff',900);
+   text((result.winner==='red'?'RED':'BLUE')+' WIN',63,560,36,'#d3f7a8',850);
+   text((result.draws||0)+' DRAWN ROUNDS · '+(result.rounds?.length||0)+' ROUNDS PLAYED',63,595,18,'#c7dcdb',650);
+   ctx.fillStyle='#587d76';ctx.fillRect(62,617,1076,1);
+   text('UNVERIFIED · DEVICE-LOCAL · NOT A RANKED RESULT',62,650,17,'#bad2c8',650);
+   const date=new Date(result.created);
+   if(Number.isFinite(date.getTime()))text(date.toLocaleDateString(),900,650,16,'#b1c8c0',550,235);
+   canvas.toBlob(blob=>{
+    if(!blob){announce('PNG export failed. Your original result is still available as JSON.');return;}
+    const url=URL.createObjectURL(blob),link=make('a');link.href=url;
+    link.download='fuckball-couch-series-'+size+'v'+size+'-'+
+     new Date(result.created).toISOString().slice(0,10)+'.png';
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    announce('Private 2D series PNG saved; local score, not a server-verified result.');
+   },'image/png');
+  }catch{
+   announce('PNG export is not supported in this browser. Your JSON result remains available.');
+  }
+ }
+ start.onclick=startSeries;next.onclick=nextRound;
+ exportButton.onclick=exportResult;imageButton.onclick=()=>savePng();
  end.onclick=()=>{
   if(!series)return;
   if(!series.complete&&!window.confirm('End the unfinished local series? Its partial result will not be saved.'))return;
