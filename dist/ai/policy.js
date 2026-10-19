@@ -166,7 +166,8 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
 // Deliberate one-wall bank candidates (including rocket-style follow-ups).
 // Mirror the target across the side wall, then let the real ball rollout
 // decide whether the ricochet is actually safer than a direct attempt.
-if(F.sign*x>-.1*F.width)for(const wall of [-1,1])for(const f of [-.55,0,.55]){
+// Only explore expensive bank shots in realistic attacking wing windows.
+if(F.sign*x>F.width*.23&&Math.abs(y)>F.height*.25)for(const wall of [-1,1])for(const f of [-.55,0,.55]){
  const H=F.height-F.rb,virtualY=wall*2*H-f*F.gy;
  add(F.gx,virtualY,'bank');
 }
