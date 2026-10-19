@@ -1,0 +1,9 @@
+# Custom Room spectator cheers
+
+Spectators can react to the real match using four allowlisted emojis (clap, fire, ball and heart). The buttons appear only when the client is connected to a **supporting Custom Room** and its native roster identifies the current player as a neutral spectator. A server `roomControl.spectatorCheerSupported` capability prevents accidentally sending unrecognized messages to older rooms. There is no reaction mode for ranked or human Quick Match.
+
+The room control-plane server is the **only authority**. It verifies the sender's connected WebSocket, game roster (team 0, not a player or assigned active slot), absence from the disconnected list, and that the sender is not a bot. It accepts only a specified reaction identifier and no arbitrary texts, team metadata, recipients or invented match stats. The established host chat mute applies. Reactions are additionally limited to one every three seconds and six per 30 seconds per socket; all connected room participants receive the authenticated event, including the spectator originator. A player-host cannot originate reaction packets on behalf of others.
+
+Players see a bounded transient toast (no more than four simultaneously), with a local privacy/accessibility toggle to disable overlays. The toggle only controls the local display. It does not alter any other participant, create replay events, send analytics, persist a reaction ledger or change gameplay, score, stadium or training state. Only the two new static client assets enter the existing offline application shell; room messages require a real live server.
+
+Release must follow existing exact-head GitHub CI, independent review, protected-branch and authorized game-VPS cutover/rollback procedures. Code/PR integration does not prove live deployment. No manual QA suites or test fixtures are introduced under the 17 October 2026 delivery policy.
