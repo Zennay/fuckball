@@ -1,0 +1,66 @@
+'use strict';
+// Four local human participants, never online clients or bot substitutes.
+// Red P1/P2 share a keyboard; Blue P3/P4 require independent standard pads.
+(function(){
+ const neutral=()=>({x:0,y:0,kick:false});
+ let assigned=null,last='';
+ const isMode=()=>document.getElementById('mode')?.value==='couchRivals';
+ function pads(){
+  if(typeof navigator.getGamepads!=='function')return [];
+  try{return Array.from(navigator.getGamepads()).filter(p=>p?.connected&&
+   p.mapping==='standard'&&Number.isSafeInteger(p.index)&&p.index>=0&&p.index<=15)
+   .sort((a,b)=>a.index-b.index);}catch{return [];}
+ }
+ function prepare(){
+  const list=pads();
+  if(list.length<2){assigned=null;return {ok:false,message:
+   'Connect two independent standard gamepads for Blue Players 3 and 4. Red uses the shared keyboard.'};}
+  // A controller is locked to one blue human for this match. No fallback to
+  // another slot if the cable is pulled or a browser changes the port order.
+  assigned=list.slice(0,2).map(p=>({index:p.index,id:p.id}));
+  last='';
+  return {ok:true,message:'Blue controllers locked to ports '+
+   assigned.map(p=>p.index+1).join(' and ')+'. P1/P2 use the shared keyboard.'};
+ }
+ function padFor(id){
+  const slot=id-3,choice=assigned?.[slot];
+  if(!choice)return null;
+  return pads().find(p=>p.index===choice.index&&p.id===choice.id)||null;
+ }
+ function usable(){return isMode()&&typeof started!=='undefined'&&started&&
+  typeof paused!=='undefined'&&!paused&&typeof replay!=='undefined'&&!replay&&
+  typeof peerConnected!=='undefined'&&!peerConnected&&
+  typeof serverLink!=='undefined'&&!serverLink&&
+  !document.hidden&&!document.getElementById('matchView')?.hidden&&
+  document.getElementById('joinScreen')?.hidden!==false&&
+  (typeof menuOpen==='undefined'||!menuOpen)&&
+  !document.querySelector('dialog[open]');}
+ const held=(p,i)=>p.buttons?.[i]?.pressed===true||
+  (Number(p.buttons?.[i]?.value)||0)>.6;
+ const axis=n=>Number.isFinite(n)&&Math.abs(n)>=.30?Math.sign(n):0;
+ function read(id){
+  if(!usable()||![3,4].includes(id))return neutral();
+  const p=padFor(id);
+  if(!p)return neutral();
+  let x=axis(p.axes?.[0]),y=axis(p.axes?.[1]);
+  if(held(p,14))x=-1;if(held(p,15))x=1;
+  if(held(p,12))y=-1;if(held(p,13))y=1;
+  return {x,y,kick:held(p,0)||held(p,2)||held(p,7)};
+ }
+ function describe(){
+  if(!assigned)return 'Blue needs two connected controllers.';
+  return assigned.map((p,i)=>'P'+(i+3)+' pad '+(p.index+1)+
+   (padFor(i+3)?' ready':' disconnected · input neutral')).join(' · ');
+ }
+ function frame(){
+  if(isMode()){
+   const a=read(3),b=read(4);
+   const sig=[usable(),a.x,a.y,a.kick,b.x,b.y,b.kick].join(':');
+   if(sig!==last){last=sig;if(typeof refreshInput==='function'&&
+    typeof started!=='undefined'&&started)refreshInput();}
+  }else last='';
+  requestAnimationFrame(frame);
+ }
+ window.fuckballCouchRivals=Object.freeze({prepare,read,describe});
+ requestAnimationFrame(frame);
+})();

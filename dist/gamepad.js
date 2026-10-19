@@ -123,7 +123,7 @@
   return !document.hidden&&!$('matchView').hidden&&$('joinScreen').hidden&&
    !menuOpen&&started&&!paused&&!replay&&$('mode').value!=='watch';
  }
- function read(){return playable()?sample(controller()):neutral();}
+ function read(){return playable()&&$('mode').value!=='couchRivals'?sample(controller()):neutral();}
  function describe(pad){
   const next=pad?'Connected: '+String(pad.id||'Controller').slice(0,70)+
    ' · stick / D-pad move · configured buttons kick · Start menu.':
@@ -164,7 +164,7 @@
   const pad=controller();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
-  if(start&&!wasStart&&!$('matchView').hidden&&$('joinScreen').hidden){
+  if(start&&!wasStart&&$('mode').value!=='couchRivals'&&!$('matchView').hidden&&$('joinScreen').hidden){
    // Menu control is edge-triggered, never fires repeatedly while held.
    toggleMatchMenu();
   }
