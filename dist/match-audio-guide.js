@@ -61,10 +61,6 @@
   if(!prefs.voice)stopSpeech();
  }
  sync();
- function active(){
-  return!match.hidden&&document.visibilityState==='visible'&&
-   !document.getElementById('pauseMenu')?.hidden===false?false:true;
- }
  function visibleActive(){
   // Ignore replay scrubbing and menu/hidden transitions: they are not
   // independent new native goals. Rebaseline rather than fabricate events.
