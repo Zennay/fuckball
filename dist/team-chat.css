@@ -1,0 +1,29 @@
+/* Real native Custom Room team chat: outbound privacy is enforced by server. */
+.team-chat-channel[hidden],.team-chat-quick[hidden]{display:none!important}
+.team-chat-channel{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+ margin:0 0 6px;padding:7px 9px;border:1px solid #7e9b92;border-radius:9px;
+ background:#13252bdc;color:#e7f8e4;box-shadow:0 3px 12px #07161966}
+.team-chat-channel label{display:flex;align-items:center;gap:8px;
+ font-size:11px;font-weight:850;letter-spacing:.065em;white-space:nowrap}
+.team-chat-channel select{font-size:12px;padding:7px 9px;min-height:38px;
+ background:#183f44;color:#f2f9eb;border:1px solid #93bbb2;
+ border-radius:7px;font-weight:750}
+.team-chat-channel select.private-channel{background:#284d37;border-color:#c1e6a6}
+.team-chat-note{font-size:11px;line-height:1.4;flex:1 1 160px;color:#d5e7d6}
+.team-chat-channel :is(select):focus-visible,.team-chat-quick button:focus-visible{
+ outline:3px solid #d9ff9e;outline-offset:2px}
+.team-chat-quick{display:flex;align-items:center;flex-wrap:wrap;gap:6px;max-width:min(560px,calc(100vw - 20px));
+ padding:8px;background:#12342add;border:1px solid #90c6a2;
+ border-radius:9px;pointer-events:auto}
+.team-chat-quick>span:first-child{font-size:10px;letter-spacing:.07em;color:#d9efcf;font-weight:900}
+.team-chat-quick button{min-height:36px;max-width:135px;border-radius:6px;
+ border:1px solid #8bb7a2;background:#285140;color:#ecfce5;
+ padding:7px 9px;white-space:normal;font-size:11px;font-weight:750}
+.team-chat-quick>span:last-child{font-size:11px;color:#e2f1d6;flex:1 1 200px}
+@media(max-width:580px){
+ .team-chat-channel{align-items:flex-start}
+ .team-chat-channel label{width:100%}
+ .team-chat-channel select{flex:1}
+ .team-chat-quick{max-width:calc(100vw - 16px)}
+ .team-chat-quick button{flex:1 1 110px}
+}

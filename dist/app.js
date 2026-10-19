@@ -147,12 +147,17 @@ $('zoom').oninput=()=>renderer.zoomCoeff=+$('zoom').value;
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>b.closest('dialog').close();
 const toggleFullscreen=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('pitch').requestFullscreen();}catch{notify('Fullscreen unavailable.');}};
 // Chat lives in the bottom-left corner: always readable, opened with the chat key.
-function openChat(){releaseInputs();$('chatForm').hidden=false;document.body.classList.add('chat-open');$('chatInput').focus();}
+function openChat(){window.FuckballTeamChat?.sync();releaseInputs();$('chatForm').hidden=false;document.body.classList.add('chat-open');$('chatInput').focus();}
 function closeChat(){$('chatForm').hidden=true;$('chatInput').value='';document.body.classList.remove('chat-open');$('gameCanvas').focus();}
 $('chatForm').onsubmit=e=>{e.preventDefault();const msg=$('chatInput').value.trim();if(msg.startsWith('/'))runCommand(msg);else if(msg){
  // Online room messages only appear after the real server acknowledges
  // their authenticated author. Direct peer chat preserves its existing path.
- if(serverLink?.room)serverLink.send({type:'chat',text:msg.slice(0,140)});
+ if(serverLink?.room){
+  const audience=window.FuckballTeamChat?.audience(serverLink);
+  if(audience===null){notify('Team channel unavailable; message was not sent.');return;}
+  serverLink.send({type:'chat',text:msg.slice(0,140),
+   ...(audience==='team'?{audience:'team'}:{})});
+ }
  else{const text=settings.name+': '+msg;log(text,false);if(peerConnected)send({type:'chat',text});}
  }closeChat();};
 // Chat slash commands change local settings; they are never sent to the room.

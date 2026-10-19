@@ -116,7 +116,12 @@
      typeof message.text!=='string'||message.text.length<1||message.text.length>140||
      /[\u0000-\u001f\u007f-\u009f]/.test(message.text))return;
   if(muted.has(message.from)||!visibleMessage(message.from))return;
-  log(message.name+': '+message.text,false);
+  if(message.channel==='team'){
+   if(![1,2].includes(message.team))return;
+   log('[TEAM · '+(message.team===1?'RED':'BLUE')+'] '+message.name+': '+message.text,false);
+  }else if(message.channel===undefined||message.channel==='room'){
+   log(message.name+': '+message.text,false);
+  }
  };
 
  // Tactical callouts use the EXISTING authenticated room chat submit path.
@@ -154,7 +159,7 @@
   const toolbar=document.createElement('div');toolbar.className='tactical-callouts';
   toolbar.hidden=true;
   const toggle=document.createElement('button');toggle.type='button';
-  toggle.className='tactical-callouts-toggle';toggle.textContent='⚑ TEAM CALLS';
+  toggle.className='tactical-callouts-toggle';toggle.textContent='⚑ CHAT CALLS';
   toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Show team chat callouts');
   const tray=document.createElement('div');tray.className='tactical-callouts-tray';tray.hidden=true;
   tray.setAttribute('role','group');tray.setAttribute('aria-label','Send a quick room chat message');
@@ -180,6 +185,8 @@
    if(mutedUntil>Date.now()){
     notice.textContent='Room chat is muted by the host right now.';return;
    }
+   const audience=window.FuckballTeamChat?.audience(serverLink);
+   if(audience===null){notice.textContent='Team chat unavailable; message not sent.';return;}
    if(!form.onsubmit){
     notice.textContent='Chat is not ready yet.';return;
    }
@@ -189,7 +196,7 @@
    try{
     form.requestSubmit();
     lastSent=now();
-    notice.textContent='Sent to room chat · subject to server rules.';
+    notice.textContent='Submitted to '+(audience==='team'?'team-only':'room')+' chat · server decides delivery.';
    }catch{
     input.value='';
     notice.textContent='Could not open room chat.';
@@ -210,10 +217,10 @@
    if(!updateVisibility())return;
    expanded=!expanded;tray.hidden=!expanded;
    toggle.setAttribute('aria-expanded',String(expanded));
-   if(expanded){notice.textContent='Tap a phrase to send it. Visible to room players.';customButtons[0]?.focus();}
+   if(expanded){notice.textContent='Tap to send using the selected ROOM or TEAM chat channel.';customButtons[0]?.focus();}
   });
   const editor=document.createElement('section');editor.className='tactical-callouts-editor';
-  const editorTitle=document.createElement('h3');editorTitle.textContent='TEAM CALLOUTS.';
+  const editorTitle=document.createElement('h3');editorTitle.textContent='CHAT CALLOUTS.';
   const editorHelp=document.createElement('p');
   editorHelp.textContent='Set four one-tap phrases for team communication. A tap sends through ordinary authenticated room chat; no automation or extra chat rights. Your phrases stay on this device.';
   const fields=document.createElement('div');fields.className='tactical-callouts-fields';
