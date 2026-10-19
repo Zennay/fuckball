@@ -264,7 +264,7 @@
   }
  }
  start.onclick=startSeries;next.onclick=nextRound;
- exportButton.onclick=exportResult;imageButton.onclick=savePng;
+ exportButton.onclick=exportResult;imageButton.onclick=()=>savePng();
  end.onclick=()=>{
   if(!series)return;
   if(!series.complete&&!window.confirm('End the unfinished local series? Its partial result will not be saved.'))return;
