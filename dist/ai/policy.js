@@ -353,7 +353,10 @@ function playBall(state,p,b,intent,level,team,plan){const d=p.disc,sign=p.team.i
    // An opponent already behind the ball cannot intercept a forward exit
    // just because the conservative reach approximation places them close.
    const inLane=interceptor&&sign*(interceptor.x-b.pos.x)>-5;
-   const dangerous=result.goal<0||result.theirs&&inLane&&(!result.ours||margin<5);
+   // An opponent receiving a long clearance later in the match is not an
+   // immediate interception at the goalkeeper. Urgent exits are judged by
+   // the next 45 physics frames, not by eventual possession far downfield.
+   const dangerous=result.goal<0||result.theirs&&inLane&&result.theirs.t<=45&&(!result.ours||margin<5);
    const emergency=sign*b.speed.x<-.5&&Math.hypot(b.pos.x-ox,b.pos.y)<175;
    kick=!dangerous||emergency&&result.goal>=0;
   }
