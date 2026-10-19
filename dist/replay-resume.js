@@ -88,7 +88,7 @@
   // Opening a saved HBR2 starts the ordinary viewer at frame zero. Do not
   // overwrite an older resume marker with the first few seconds of autoplay.
   // Choosing Forget explicitly opts back into tracking from the beginning.
-  if(existing&&ms<existing.ms-1500)return;
+  if(existing&&ms<existing.ms)return;
   const now=Date.now();
   if(existing&&now-lastSaved<4500)return;
   const entry={id:s.id,ms,duration:Math.round(s.duration),at:now};

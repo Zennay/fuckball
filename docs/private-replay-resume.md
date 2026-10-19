@@ -11,3 +11,5 @@ Playback completion removes the old resume point near the end of the recording. 
 New JavaScript/CSS are static PWA assets only. Existing project CI, security, code review and protected production immutable release/rollback gates are unchanged. This source feature is not proof of a VPS live release. No QA or regression suites were added or run during development.
 
 **Home → Continue Playing** also shows a saved resume timestamp on the existing recent recording shortcut and offers an explicit **Continue at mm:ss** action. Sudden Death full-series history is included among recent local practice shortcuts; neither shortcut sends a server request.
+
+An old resume marker remains intact when the ordinary viewer autoplays from zero. Watching or seeking past that stored timestamp updates it; players who want to replace the marker from the beginning can use **Forget** first.
