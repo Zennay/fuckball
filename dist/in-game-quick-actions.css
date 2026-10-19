@@ -1,0 +1,32 @@
+/* Non-modal pitch shortcuts; all actions delegate to original controls. */
+.in-game-quick-trigger{min-height:38px;font-size:12px;font-weight:800;letter-spacing:.04em}
+.in-game-quick-trigger[hidden],.in-game-quick-sheet[hidden]{display:none!important}
+.in-game-quick-sheet{position:absolute;top:max(78px,calc(env(safe-area-inset-top) + 58px));
+ right:clamp(10px,2.5vw,24px);z-index:18;width:min(370px,calc(100vw - 20px));
+ max-height:min(65vh,560px);overflow:auto;padding:16px;border-radius:13px;
+ border:1px solid #96ad97;background:#142f36f5;box-shadow:0 14px 45px #0009;
+ color:#eaf9e9;backdrop-filter:blur(8px)}
+.in-game-quick-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.in-game-quick-heading strong{font-size:13px;letter-spacing:.08em;color:#ddf8ab}
+.in-game-quick-sheet p{font-size:11px;line-height:1.6;color:#c4dfd0;margin:10px 0}
+.in-game-quick-heading button{padding:7px 12px;border:1px solid #809b92;background:#24453f;
+ color:#f6fff0;border-radius:8px;min-height:37px}
+.in-game-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.in-game-quick-action{display:grid;gap:8px;text-align:left;align-content:start;padding:12px;
+ min-height:76px;border-radius:10px;border:1px solid #789b92;background:#294d4b;color:#f5fff0;cursor:pointer}
+.in-game-quick-action strong{font-weight:850;font-size:13px;color:#e7ffcf}
+.in-game-quick-action span{font-size:11px;line-height:1.45;color:#c0dbd0}
+.in-game-quick-action[hidden]{display:none!important}
+.in-game-quick-sheet .in-game-quick-feedback{color:#dcfbaa;min-height:15px;margin-bottom:0}
+.in-game-quick-sheet button:hover:not(:disabled){filter:brightness(1.14)}
+.in-game-quick-sheet button:focus-visible,.in-game-quick-trigger:focus-visible{
+ outline:3px solid #d9ffb0;outline-offset:3px}
+@media(max-width:620px){
+ .in-game-quick-trigger{min-height:44px}
+ .in-game-quick-sheet{top:auto;bottom:max(104px,calc(env(safe-area-inset-bottom) + 88px));
+  max-height:55vh;right:10px;left:10px;width:auto;padding:13px;backdrop-filter:none}
+ .in-game-quick-grid{grid-template-columns:1fr}
+ .in-game-quick-action{min-height:50px}
+}
+@media(prefers-reduced-transparency:reduce){.in-game-quick-sheet{background:#142b35;backdrop-filter:none}}
+@media print{.in-game-quick-sheet,.in-game-quick-trigger{display:none!important}}
