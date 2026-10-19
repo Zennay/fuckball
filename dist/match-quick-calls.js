@@ -1,0 +1,149 @@
+'use strict';
+// Player-initiated preset chat through the EXISTING moderated native room.
+// Not team-private: all connected room participants may receive these calls.
+(function(){
+ const match=document.getElementById('matchView');
+ const quick=match?.querySelector('#fbQuickActions .in-game-quick-grid');
+ const quickSheet=match?.querySelector('#fbQuickActions');
+ if(!match||!quick||!quickSheet)return;
+ const KEY='fuckball.quick-calls.v1',MAX=80;
+ const DEFAULTS=[
+  'I am open for a pass!',
+  'Cover the middle!',
+  'Rotate back!',
+  'Hold our shape!',
+  'I will defend!',
+  'Great play!'
+ ];
+ const make=(tag,label,cls)=>{const e=document.createElement(tag);
+  if(label!==undefined&&label!==null)e.textContent=String(label);
+  if(cls)e.className=cls;return e;};
+ const valid=v=>typeof v==='string'&&v.trim()===v&&v.length>=2&&v.length<=MAX&&
+  !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/u.test(v);
+ const verified=x=>x&&x.version===1&&Array.isArray(x.messages)&&
+  x.messages.length===6&&x.messages.every(valid);
+ function read(){
+  try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return verified(x)?x.messages.slice():DEFAULTS.slice();}
+  catch{return DEFAULTS.slice();}
+ }
+ let messages=read(),sent=[],lastRoom=null;
+ const launch=make('button',null,'in-game-quick-action match-quick-call-open');launch.type='button';
+ launch.append(make('strong','✦ QUICK CALLS'),make('span','Send one preset line to everyone in this actual online room'));
+ launch.setAttribute('aria-label','Open room-wide quick chat calls');
+ quick.append(launch);
+ const panel=make('section',null,'match-quick-calls');
+ panel.setAttribute('aria-label','Send native room-wide chat calls');
+ panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','false');panel.hidden=true;
+ const heading=make('header',null,'match-quick-calls-head');
+ const title=make('div');
+ title.append(make('span','HUMAN MATCH COMMUNICATION','match-quick-calls-eyebrow'),
+  make('h2','QUICK CALLS.'));
+ const close=make('button','✕');close.type='button';close.setAttribute('aria-label','Close quick calls');
+ heading.append(title,close);
+ const intro=make('p','Each click sends one real message using this server’s existing public room chat. Opponents and spectators can also see it. Your incoming chat filter does NOT make outgoing calls private; server mute and rate limits still apply.');
+ const options=make('div',null,'match-quick-calls-options');
+ const status=make('p','Select one message to send.','match-quick-calls-status');
+ status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const editor=make('details',null,'match-quick-calls-editor');
+ editor.append(make('summary','Customize six local phrases · no auto-send'));
+ const form=make('div',null,'match-quick-calls-fields');
+ const inputs=[];
+ for(let i=0;i<6;i++){
+  const label=make('label','Quick call '+(i+1)),input=make('input');
+  input.type='text';input.maxLength=MAX;input.autocomplete='off';
+  input.setAttribute('aria-label','Quick call message '+(i+1));inputs.push(input);
+  label.append(input);form.append(label);
+ }
+ const save=make('button','Save these six phrases'),reset=make('button','Restore defaults');
+ save.type=reset.type='button';
+ const tools=make('div',null,'match-quick-calls-tools');
+ tools.append(save,reset);editor.append(form,tools);
+ panel.append(heading,intro,options,status,editor);
+ match.append(panel);
+ let opened=false;
+ function actualRoom(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  return link?.room&&link.ws?.readyState===1?link:null;
+ }
+ function usable(){
+  const link=actualRoom();if(!link||match.hidden||document.hidden)return null;
+  const until=Math.max(link.chatMutedUntil||0,link.roomControl?.chatMuteUntil||0);
+  return{link,until};
+ }
+ function showEditor(){inputs.forEach((input,i)=>{input.value=messages[i];});}
+ function closePanel(focus=true){
+  opened=false;panel.hidden=true;
+  if(focus&&!launch.hidden&&match.hidden===false)launch.focus({preventScroll:true});
+ }
+ function drawOptions(){
+  options.replaceChildren();
+  for(const [i,msg] of messages.entries()){
+   const button=make('button',null,'match-quick-calls-message');
+   button.type='button';
+   button.append(make('span',String(i+1).padStart(2,'0')),make('strong',msg));
+   button.onclick=()=>send(i);
+   options.append(button);
+  }
+  showEditor();
+ }
+ function update(){
+  const link=actualRoom();
+  launch.hidden=!link||match.hidden||document.hidden;
+  if(lastRoom!==link?.room){lastRoom=link?.room||null;sent=[];if(!link&&opened)closePanel(false);}
+  if(!opened)return;
+  const state=usable(),until=state?.until||0;
+  const now=Date.now();
+  sent=sent.filter(t=>now-t<10000);
+  const wait=sent.length>=3||sent.length>0&&now-sent[sent.length-1]<3000;
+  options.querySelectorAll('button').forEach(b=>{b.disabled=!state||until>now||wait;});
+  if(!state)status.textContent='Join a real online room before sending calls.';
+  else if(until>now)status.textContent='Your chat is currently muted by the server. Quick Calls cannot bypass it.';
+ }
+ function send(i){
+  const state=usable();if(!state||!valid(messages[i])){status.textContent='No active native room chat is available.';return;}
+  const now=Date.now();
+  if(state.until>now){status.textContent='Room host muted your chat. No call sent.';update();return;}
+  sent=sent.filter(t=>now-t<10000);
+  if(sent.length>=3||sent.length&&now-sent[sent.length-1]<3000){
+   status.textContent='Quick Calls cooldown. Wait before sending another message.';update();return;
+  }
+  // Actual moderation, bans, server rate limits and transport identity
+  // remain authoritative. The client does not claim the room delivered it.
+  try{
+   state.link.send({type:'chat',text:messages[i]});sent.push(now);
+   status.textContent='Submitted to native room chat: "'+messages[i]+'". Actual delivery depends on server moderation.';
+  }catch{status.textContent='The game server could not accept this call.';}
+  update();
+ }
+ launch.onclick=()=>{
+  if(!usable())return;
+  const nativeClose=quickSheet.querySelector('.in-game-quick-heading button');
+  if(nativeClose)nativeClose.click();
+  opened=true;panel.hidden=false;drawOptions();update();
+  close.focus({preventScroll:true});
+ };
+ close.onclick=()=>closePanel();
+ panel.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.stopPropagation();closePanel();}
+ });
+ save.onclick=()=>{
+  const next=inputs.map(x=>x.value);
+  if(!next.every(valid)){status.textContent='Use six unique or repeated printable lines, each 2–80 characters, without control characters.';return;}
+  messages=next.slice();drawOptions();
+  try{localStorage.setItem(KEY,JSON.stringify({version:1,messages}));status.textContent='Phrases saved only on this device. Nothing was sent.';}
+  catch{status.textContent='Browser storage unavailable. Phrases updated in this tab only.';}
+  update();
+ };
+ reset.onclick=()=>{
+  messages=DEFAULTS.slice();drawOptions();
+  try{localStorage.removeItem(KEY);}catch{}
+  status.textContent='Default phrases restored on this device. No messages were sent.';
+  update();
+ };
+ window.addEventListener('storage',event=>{
+  if(event.key===KEY){messages=read();if(opened){drawOptions();status.textContent='Local phrases updated from another tab.';update();}}
+ });
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&opened)closePanel(false);else update();});
+ setInterval(update,1200);
+ update();
+})();
