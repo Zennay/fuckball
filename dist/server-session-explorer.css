@@ -1,0 +1,21 @@
+/* Client-only grouping for authenticated server receipts. Does not touch live game. */
+.native-play-sessions{margin:18px 0 22px;border:1px solid #78938a;border-radius:12px;background:#162e33;padding:16px;display:grid;gap:13px}
+.native-play-sessions h3{color:#d4efad;font-size:clamp(17px,2.3vw,23px);letter-spacing:.045em;margin:0}
+.native-session-intro,.native-session-count,.native-session-message{font-size:12px;line-height:1.55;color:#b6d0c5;margin:0}
+.native-session-top{display:flex;gap:12px;justify-content:space-between;align-items:end;flex-wrap:wrap}
+.native-session-top label{display:grid;gap:5px;color:#d2e7cb;font-size:11px}
+.native-session-top select{padding:9px;border:1px solid #7b9a8e;background:#23443e;border-radius:8px;color:#f4f8f0;min-height:42px}
+.native-session-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px}
+.native-session-card{display:grid;gap:9px;align-content:start;border:1px solid #5f7e79;border-radius:10px;padding:13px;background:#254044;min-width:0}
+.native-session-card.selected{border:2px solid #cfed93;background:#294943}
+.native-session-card strong{font-size:13px;color:#e7f5c5}
+.native-session-card small{font-size:11px;color:#b8d4cc;overflow-wrap:anywhere}
+.native-session-card p{margin:0;font-size:12px;line-height:1.5;color:#e8f0e8}
+.native-session-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto}
+.native-play-sessions button{font:inherit;border:1px solid #95ac9d;background:#355b51;color:#f2f9e9;border-radius:8px;padding:9px 10px;min-height:40px;cursor:pointer;font-size:12px}
+.native-play-sessions button:disabled{opacity:.5;cursor:default}
+.native-play-sessions button:focus-visible,.native-play-sessions select:focus-visible{outline:3px solid #d8f1a6;outline-offset:2px}
+.native-session-clear{justify-self:start;border-color:#c9ed9b!important}
+.native-session-more{justify-self:center}
+@media(max-width:660px){.native-play-sessions{padding:12px}.native-session-grid{grid-template-columns:1fr}.native-session-actions button{flex:1 1 90px}}
+@media(prefers-reduced-motion:reduce){.native-play-sessions *{animation:none!important;transition:none!important}}
