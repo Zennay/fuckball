@@ -148,15 +148,23 @@ function createRoomCore(opts){
     r.clients.size===1&&activeBefore.length===1&&!r.disconnected.size;
   const spectatorAdmission=spectate===true||!!r.kickoff||!!r.lastResult||
     (r.started&&!soloOpponentJoin);
-  if(!spectatorAdmission)r.rematch=null;
-  if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
-  const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
-  const red=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===1).length,blue=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
-  // Connected clients are unlimited, but only four HUMANS may be active per
-  // side. Extra participants start on the spectator/bench slot (team 0).
-  // bots(false) below yields a bot slot to an admitted human immediately.
+  if(r.botIds.has(id))throw Error('Player ID already in use.');
+  if(r.clients.has(id))throw Error('Already in this room.');
+  // Preflight projected native neutral slot before touching any client,
+  // owner, match result, rematch or physics state. Reserved reconnects never
+  // use this fresh-admission path, but their places still consume capacity.
+  const players=hb.getPlayerList();
+  const red=players.filter(p=>!r.botIds.has(p.id)&&p.team===1).length;
+  const blue=players.filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
   const assigned=spectatorAdmission?0:
     red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
+  const neutral=players.filter(p=>p.team===0&&r.clients.has(p.id)&&!r.botIds.has(p.id)).length;
+  const spectatorLimit=[0,4,8,16,64].includes(r.spectatorLimit)?r.spectatorLimit:64;
+  if(assigned===0&&neutral>=spectatorLimit)
+   throw Error('This room is not accepting new spectators or bench participants.');
+  if(!spectatorAdmission)r.rematch=null;
+  const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
+  // The assigned native position was preflighted above.
   hb.addPlayer(id,c.name,assigned);
   send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2,
     spectatorAdmission:assigned===0,liveAdmission:spectatorAdmission});

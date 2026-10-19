@@ -26,13 +26,21 @@
  capacity.setAttribute('aria-label','Maximum human participants including bench and spectators');
  for(const limit of [8,12,16,24,64])capacity.add(new Option(limit===64?'Open room · up to 64 people':limit+' people',String(limit)));
  capacityWrap.append(capacity);
+ const spectatorWrap=document.createElement('label');
+ spectatorWrap.textContent='New spectator / bench capacity';
+ const spectatorLimit=document.createElement('select');
+ spectatorLimit.setAttribute('aria-label','Maximum neutral spectators and assigned bench people');
+ for(const n of [0,4,8,16,64])
+  spectatorLimit.add(new Option(n===0?'No new spectators':n===64?'Up to 64 spectators':n+' spectators / bench',String(n)));
+ spectatorWrap.append(spectatorLimit);
+
  const targetWrap=document.createElement('label');targetWrap.textContent='Connected player';
  const target=document.createElement('select');target.setAttribute('aria-label','Player to moderate');
  targetWrap.append(target);
  const kick=document.createElement('button');kick.type='button';kick.textContent='Remove';
  const ban=document.createElement('button');ban.type='button';ban.className='danger';ban.textContent='Suspend 10 min';
  const muteChat=document.createElement('button');muteChat.type='button';muteChat.textContent='Mute chat 10 min';
- controls.append(lock,clubLock,listing,accountsOnly,capacityWrap,targetWrap,muteChat,kick,ban);
+ controls.append(lock,clubLock,listing,accountsOnly,capacityWrap,spectatorWrap,targetWrap,muteChat,kick,ban);
  const notice=document.createElement('p');notice.className='room-admin-notice';
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(heading,description,controls,notice);
@@ -46,6 +54,8 @@
   state.textContent=locked?'🔒 Closed to new players':clubOnly?'🛡 Club members only':listed?'🌍 Public room · opt-in':'🔗 Unlisted · invite link only';
   state.textContent+=' · '+(link.roomControl?.connectedHumans??'?')+'/'+(link.roomControl?.maxHumans??64)+' participants';
   if(link.roomControl?.accountsOnly)state.textContent+=' · signed-in only';
+  if(link.roomControl?.spectatorLimitSupported)
+   state.textContent+=' · spectators '+link.roomControl.spectatorCount+'/'+link.roomControl.spectatorLimit;
   if(link.roomControl?.accessKeyRequired)state.textContent+=' · private access key';
   state.classList.toggle('locked',locked);
   controls.hidden=!isOwner;
@@ -67,6 +77,12 @@
   const currentCapacity=String(link.roomControl?.maxHumans??64);
   if(capacity.value!==currentCapacity)capacity.value=currentCapacity;
   capacity.disabled=false;
+  spectatorWrap.hidden=link.roomControl?.spectatorLimitSupported!==true;
+  if(!spectatorWrap.hidden){
+   const current=String(link.roomControl.spectatorLimit);
+   if(spectatorLimit.value!==current)spectatorLimit.value=current;
+   spectatorLimit.disabled=false;
+  }
   const current=target.value,players=room?.state?.players||[];
   const eligible=players.filter(p=>Number.isSafeInteger(p.id)&&p.id!==networkPlayerId&&!botIds.has(p.id));
   const signature=JSON.stringify(eligible.map(p=>[p.id,p.name,p.team?.id]));
@@ -111,6 +127,14 @@
   const now=serverLink.roomControl?.accountsOnly===true;
   accountsOnly.disabled=true;send(now?'allowGuests':'accountsOnly');
   notice.textContent=now?'Allowing guests to join…':'Requiring accounts for new joins…';
+ };
+ spectatorLimit.onchange=()=>{
+  if(!serverLink?.isOwner||serverLink.roomControl?.spectatorLimitSupported!==true)return;
+  const limit=Number(spectatorLimit.value);
+  if(![0,4,8,16,64].includes(limit))return;
+  spectatorLimit.disabled=true;
+  serverLink.send({type:'roomAdmin',action:'spectatorLimit',limit});
+  notice.textContent='Updating native spectator admission limit… Existing players stay.';
  };
  capacity.onchange=()=>{
   if(!serverLink?.isOwner)return;
