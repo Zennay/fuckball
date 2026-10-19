@@ -39,7 +39,7 @@
  if(anchor)anchor.insertAdjacentElement('afterend',panel);else home.append(panel);
  const hud=make('aside',null,'couch-series-hud');hud.hidden=true;
  hud.setAttribute('aria-label','Current four-player best-of series score');pitch.append(hud);
- let series=null,message='',archived=[];
+ let series=null,message='',archived=[],showAllHistory=false;
  function announce(text){if(text!==message){message=text;status.textContent=text;}}
  function saveArchive(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,records:archived.slice(0,MAX)}));return true;}
@@ -74,11 +74,56 @@
   if(!saveArchive())announce('Series finished. Local history could not be saved; export your result now.');
   return result;
  }
+ function exportArchive(){
+  if(!archived.length)return;
+  const payload={format:'fuckball-couch-series-archive-v1',source:'offline-unverified',
+   exportedAt:Date.now(),results:archived.slice(0,MAX)};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\n'],
+   {type:'application/json'}));
+  const link=make('a');link.href=url;
+  link.download='fuckball-couch-private-archive-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  announce('Your local archive was exported. Nothing was uploaded.');
+ }
+ function removeResult(index){
+  const selected=archived[index];if(!selected)return;
+  if(!window.confirm('Permanently delete this device-local series result?'))return;
+  const old=archived;archived=old.filter((_,i)=>i!==index);
+  if(!saveArchive()){
+   archived=old;announce('Local storage refused deletion. No saved result was changed.');return;
+  }
+  announce('The selected private result has been deleted from this device.');
+  displayHistory();
+ }
+ function clearArchive(){
+  if(!archived.length)return;
+  if(!window.confirm('Delete ALL '+archived.length+' local Couch Rivals series results on this device? '+
+   'This cannot be undone. Export the archive first if you need a copy.'))return;
+  try{localStorage.removeItem(KEY);}catch{
+   announce('Local storage refused deletion. Archive unchanged.');return;
+  }
+  archived=[];showAllHistory=false;displayHistory();
+  announce('Private Couch Rivals history cleared from this device.');
+ }
  function displayHistory(){
   history.replaceChildren();
   if(!archived.length)return;
-  history.append(make('strong','RECENT PRIVATE RESULTS'));
-  for(const r of archived.slice(0,5)){
+  history.append(make('strong','PRIVATE SERIES HISTORY · '+archived.length+' saved'));
+  const tools=make('div',null,'couch-series-archive-tools');
+  const exportAll=make('button','↓ Export all JSON');exportAll.type='button';
+  exportAll.onclick=exportArchive;
+  const clear=make('button','Delete entire history');clear.type='button';
+  clear.className='danger';clear.onclick=clearArchive;
+  tools.append(exportAll,clear);
+  if(archived.length>5){
+   const toggle=make('button',showAllHistory?'Show recent five':'Show all '+archived.length);
+   toggle.type='button';toggle.onclick=()=>{showAllHistory=!showAllHistory;displayHistory();};
+   tools.append(toggle);
+  }
+  history.append(tools);
+  for(const [index,r] of archived.entries()){
+   if(index>=5&&!showAllHistory)break;
    const day=new Date(r.created);
    const title=Number.isFinite(day.getTime())?day.toLocaleDateString():'Previous series';
    const row=make('div',null,'couch-series-history-row');
@@ -88,7 +133,11 @@
     (r.draws?' · '+r.draws+' drawn rounds':'')));
    const card=make('button','↓ PNG');card.type='button';
    card.setAttribute('aria-label','Download private PNG scorecard from '+title);
-   card.onclick=()=>savePng(r);row.append(card);history.append(row);
+   card.onclick=()=>savePng(r);row.append(card);
+   const remove=make('button','Delete');remove.type='button';remove.className='danger';
+   remove.setAttribute('aria-label','Delete private series from '+title);
+   remove.onclick=()=>removeResult(index);row.append(remove);
+   history.append(row);
   }
  }
  function display(){
