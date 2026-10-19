@@ -52,15 +52,28 @@ function tournament(candidate, incumbent, seed, frames) {
       const gameSeed = (seed + 3900017 + s * 7919 + (map === 'Classic' ? 1171 : 0)) >>> 0;
       const g = SP.match(makeRoom, candidate, incumbent, side, gameSeed, map, frames);
       games.push({ seed: gameSeed, map, side, goals: g.goals, conceded: g.conceded,
-        kicks: g.kicks, opponentKicks: g.opponentKicks, territoryFitness: g.fitness });
+        kicks: g.kicks, opponentKicks: g.opponentKicks, territoryFitness: g.fitness,
+        events: g.events || null, opponentEvents: g.opponentEvents || null });
     }
   const wins = games.filter(g => g.goals > g.conceded).length;
   const losses = games.filter(g => g.goals < g.conceded).length;
   const goalsFor = games.reduce((n, g) => n + g.goals, 0);
   const goalsAgainst = games.reduce((n, g) => n + g.conceded, 0);
+  const count = key => games.reduce((n, g) => n + (g.events?.[key] || 0), 0);
+  const passAttempts=count('passAttempts'),passCompleted=count('passCompleted');
+  const shotAttempts=count('shotAttempts'),shotsScored=count('shotsScored');
+  const football={ passAttempts,passCompleted,passToTarget:count('passToTarget'),
+    passIntercepted:count('passIntercepted'),passMissed:count('passMissed'),
+    passCompletionRate:passAttempts?passCompleted/passAttempts:0,
+    shotAttempts,shotProjectedOnTarget:count('shotProjectedOnTarget'),
+    shotsScored,shotConversionRate:shotAttempts?shotsScored/shotAttempts:0,
+    keeperClearances:count('keeperClearances'),
+    keeperDistributionsCompleted:count('keeperDistributionsCompleted'),
+    keeperTurnovers:count('keeperTurnovers') };
   return { matches: games.length, wins, losses, draws: games.length-wins-losses,
     scoreRate: (wins + (games.length-wins-losses)/2)/games.length,
     goalsFor, goalsAgainst, goalDifference: goalsFor-goalsAgainst,
+    football,
     kicksFor: games.reduce((n,g)=>n+g.kicks,0),
     kicksAgainst: games.reduce((n,g)=>n+g.opponentKicks,0), games };
 }
