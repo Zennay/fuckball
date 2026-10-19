@@ -52,7 +52,8 @@
   catch{return false;}
  }
  function link(item){
-  const url=new URL(window.location.href);url.searchParams.delete('challenge');
+  // Never leak a room invite, recovery ticket or other query into a share URL.
+  const url=new URL(window.location.pathname,window.location.origin);
   url.hash=HASH.slice(1)+encodeURIComponent(JSON.stringify(normalize(item)));
   return url.href;
  }
@@ -161,6 +162,42 @@
    setMsg('Clipboard unavailable. Copy the selected challenge link manually.');
   }
  }
+ // The native drill history is the only source for the *device-local*
+ // observation below. Matching settings do not prove a preset was activated.
+ const histories={
+  goals:{key:'fuckball-local-goal-rush-history-v1',matches:(x,o)=>x.duration===o.duration&&x.target===o.target,
+   valid:x=>Number.isSafeInteger(x.goals)&&x.goals>=0&&x.goals<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=180&&
+    x.completed===(x.goals>=x.target)},
+  team:{key:'fuckball.teamwork-native-drill.v1',matches:(x,o)=>x.seconds===o.duration&&x.target===o.target,
+   valid:x=>Number.isSafeInteger(x.links)&&x.links>=0&&x.links<=99&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=300&&
+    x.completed===(x.links>=x.target)},
+  defense:{key:'fuckball.clean-sheet-history.v1',matches:(x,o)=>x.duration===o.duration&&x.allowance===o.allowance,
+   valid:x=>Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    x.completed===(x.conceded<=x.allowance)},
+  rockets:{key:'fuckball.native-ball-burst-history.v1',matches:(x,o)=>x.duration===o.duration&&x.threshold===o.threshold&&x.target===o.target,
+   valid:x=>Number.isSafeInteger(x.hits)&&x.hits>=0&&x.hits<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=x.duration+1&&
+    x.completed===(x.hits>=x.target)},
+  comeback:{key:'fuckball.native-comeback-arena.v1',matches:(x,o)=>x.duration===o.duration&&x.deficit===o.deficit,
+   valid:x=>Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
+    Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    x.completed===(x.scored>x.conceded+x.deficit)}
+ };
+ function matchingLocalHistory(item){
+  const h=histories[item.mode];
+  try{
+   const rows=JSON.parse(localStorage.getItem(h.key)||'[]');
+   if(!Array.isArray(rows)||rows.length>20)return null;
+   const found=rows.filter(x=>x&&typeof x==='object'&&!Array.isArray(x)&&
+    Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000&&
+    typeof x.completed==='boolean'&&h.matches(x,item.options)&&h.valid(x));
+   return{attempts:found.length,met:found.filter(x=>x.completed).length};
+  }catch{return null;}
+ }
  function showList(){
   const all=storeList();list.replaceChildren();
   if(!all.length){list.append(make('p','No saved presets yet.'));return;}
@@ -180,7 +217,14 @@
     if(store(current)){setMsg('Saved challenge removed from this device.');showList();}
     else setMsg('Browser storage refused the change.');
    };
-   controls.append(load,go,share,remove);row.append(description,controls);list.append(row);
+   const history=matchingLocalHistory(item);
+   const historyNote=make('small',history?
+    history.attempts+' matching recent device-only attempt'+(history.attempts===1?'':'s')+
+    ' · '+history.met+' personal objective'+(history.met===1?'':'s')+' met':
+    'Local attempt records unavailable');
+   historyNote.className='challenge-exchange-history-note';
+   historyNote.title='Only retained native offline attempts with the same settings; not proof this saved preset was used. No shared or ranked results.';
+   controls.append(load,go,share,remove);row.append(description,historyNote,controls);list.append(row);
   });
  }
  function showPreview(item){
@@ -238,7 +282,8 @@
    showList();setMsg(added+' presets imported locally; '+(incoming.length-added)+' exact duplicates skipped. No results imported.');
   }catch(e){setMsg(e.message||'Challenge pack could not be read. Nothing changed.');}
  });
- window.addEventListener('storage',event=>{if(event.key===KEY)showList();});
+ window.addEventListener('storage',event=>{if(event.key===KEY||Object.values(histories).some(h=>h.key===event.key))showList();});
+ root.addEventListener('toggle',()=>{if(root.open)showList();});
  showList();
  // Only a passive preview on arrival. Unknown fragments belong to other game flows.
  if(window.location.hash.startsWith(HASH)){
