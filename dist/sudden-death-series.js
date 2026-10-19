@@ -110,9 +110,13 @@
   const entry={at:Date.now(),bestOf:s.bestOf,duration:s.duration,rounds,
    human:s.human,ai:s.ai,draws:s.draws,
    winner:s.human>s.ai?'human':s.ai>s.human?'ai':'draw'};
-  try{localStorage.setItem(KEY,JSON.stringify([entry,...read()].slice(0,MAX)));}
-  catch{status.textContent='Series finished, but local browser storage is unavailable.';}
+  let stored=false;
+  try{
+   localStorage.setItem(KEY,JSON.stringify([entry,...read()].slice(0,MAX)));
+   stored=true;
+  }catch{}
   paintHistory();
+  return stored;
  }
  download.onclick=()=>{
   const history=read();if(!history.length)return;
@@ -175,8 +179,10 @@
   if(session!==s)return;
   s.phase=complete?'complete':'stopped';
   if(complete){
-   save(s);
-   status.textContent='Best-of series complete. Local result saved on this device.';
+   const stored=save(s);
+   status.textContent=stored?
+    'Best-of series complete. Local result saved on this device.':
+    'Best-of series complete, but browser storage could not save your result.';
   }else{
    status.textContent='Series interrupted. Partial rounds were not saved.';
   }
