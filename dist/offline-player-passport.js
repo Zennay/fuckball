@@ -4,6 +4,7 @@
  const profile=document.getElementById('careerProfileView');if(!profile)return;
  const sources={goals:'fuckball-local-goal-rush-history-v1',
   team:'fuckball.teamwork-native-drill.v1',defense:'fuckball.clean-sheet-history.v1',
+  rockets:'fuckball.native-ball-burst-history.v1',
   matches:'fuckball.local-practice-journal.v1',
   first:'fuckball.first-play-guide.v1',academy:'fuckball.solo-academy.v1'};
  const el=(tag,text,klass)=>{
@@ -35,6 +36,13 @@
   Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
   Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
   typeof x.completed==='boolean'&&x.completed===(x.conceded<=x.allowance);
+ const validRocket=x=>x&&validAt(x.at)&&[60,120,180].includes(x.duration)&&
+  [3,5,7].includes(x.threshold)&&[1,3,5].includes(x.target)&&
+  Number.isSafeInteger(x.hits)&&x.hits>=0&&x.hits<=999&&
+  Number.isSafeInteger(x.kicks)&&x.kicks>=x.hits&&x.kicks<=9999&&
+  Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=x.duration+1&&
+  Number.isFinite(x.peak)&&x.peak>=0&&x.peak<=1000&&
+  typeof x.completed==='boolean'&&x.completed===(x.hits>=x.target);
  const validMatch=x=>x&&validAt(x.at)&&['bot','practice','2v2','4v4'].includes(x.mode)&&
   [1,2].includes(x.side)&&Number.isSafeInteger(x.red)&&x.red>=0&&x.red<=999&&
   Number.isSafeInteger(x.blue)&&x.blue>=0&&x.blue<=999&&
@@ -51,6 +59,7 @@
   const goals=readRows('goals',20,validGoal);
   const team=readRows('team',20,validTeam);
   const defense=readRows('defense',20,validDefense);
+  const rockets=readRows('rockets',20,validRocket);
   const matches=readRows('matches',30,validMatch);
   const rawFirst=read(sources.first);
   const first=rawFirst?.version===1&&validAt(rawFirst.at)?rawFirst.at:null;
@@ -59,7 +68,7 @@
    Number.isSafeInteger(rawAcademy.next)&&rawAcademy.next>=0&&rawAcademy.next<=12&&
    Array.isArray(rawAcademy.proofs)&&rawAcademy.proofs.length===rawAcademy.next?
     rawAcademy.next:0;
-  const issues=[goals.problem,team.problem,defense.problem,matches.problem,
+  const issues=[goals.problem,team.problem,defense.problem,rockets.problem,matches.problem,
    rawFirst!==null&&rawFirst!==undefined&&!first,
    rawAcademy!==null&&rawAcademy!==undefined&&academy===0].filter(Boolean).length;
   const wins=matches.entries.filter(x=>x.side===1?x.red>x.blue:x.blue>x.red);
@@ -68,6 +77,7 @@
   const goalWins=goals.entries.filter(x=>x.completed===true&&x.goals>=x.target);
   const teamWins=team.entries.filter(x=>x.completed===true&&x.links>=x.target);
   const defenseWins=defense.entries.filter(x=>x.completed);
+  const rocketWins=rockets.entries.filter(x=>x.completed);
   const activities=[
    ...matches.entries.map(x=>({at:x.at,kind:'SOLO MATCH',
     title:(x.side===1?x.red>x.blue:x.blue>x.red)?'Win':
@@ -76,6 +86,10 @@
    ...goals.entries.map(x=>({at:x.at,kind:'GOAL RUSH',
     title:x.goals+' / '+x.target+' goals',detail:x.duration+'s · '+
      (x.completed?'Target reached':'Target not reached')})),
+   ...rockets.entries.map(x=>({at:x.at,kind:'ROCKET KICK',
+    title:x.hits+' / '+x.target+' qualifying native kicks',
+    detail:x.kicks+' human kicks · peak '+x.peak.toFixed(1)+' raw engine ball-speed units · '+
+     x.elapsed+'s active · '+(x.completed?'Goal met':'Time up')})),
    ...defense.entries.map(x=>({at:x.at,kind:'CLEAN SHEET',
     title:x.conceded+' conceded / '+x.allowance+' allowed',
     detail:x.duration+'s real active local play · '+x.scored+' scored · '+
@@ -86,7 +100,7 @@
    ...(first?[{at:first,kind:'FIRST TOUCH',title:'Native tutorial completed',
      detail:'Moved, kicked and scored in the local first-play guide.'}]:[])
   ].sort((a,b)=>b.at-a.at);
-  return {goals,team,defense,matches,wins,draws,losses,goalWins,teamWins,defenseWins,first,academy,
+  return {goals,team,defense,rockets,matches,wins,draws,losses,goalWins,teamWins,defenseWins,rocketWins,first,academy,
    activities,issues};
  }
  const root=el('section',null,'offline-passport');
@@ -137,6 +151,8 @@
    model.wins.length+' wins · '+model.draws.length+' draws · '+model.losses+' losses');
   fact('Goal Rush sessions',model.goals.entries.length,
    model.goalWins.length+' target met · '+model.goals.entries.reduce((a,x)=>a+x.goals,0)+' actual goals');
+  fact('Rocket Kick drills',model.rockets.entries.length,
+   model.rocketWins.length+' target met · '+model.rockets.entries.reduce((n,x)=>n+x.hits,0)+' real kick bursts');
   fact('Clean Sheet drills',model.defense.entries.length,
    model.defenseWins.length+' defensive goals met · '+
     model.defense.entries.filter(x=>x.conceded===0).length+' complete clean sheets');
@@ -148,6 +164,8 @@
    'Real timed scoring drills only · not official matches.');
   bar('Teamwork target completion',model.team.entries.length,model.teamWins.length,
    'Observed teammate kick follow-ups; not verified completed passes.');
+  bar('Rocket Kick target completion',model.rockets.entries.length,model.rocketWins.length,
+   'Observed raw native ball speed after real kicks; not real-world shot speed.');
   bar('Defensive goal completion',model.defense.entries.length,model.defenseWins.length,
    'Full-clock native local 1v1 only; counts actual conceded goals, not saves.');
   bar('Solo-vs-AI wins',model.matches.entries.length,model.wins.length,
@@ -171,6 +189,7 @@
    ['Goal Rush attempts / target met',model.goals.entries.length+' / '+model.goalWins.length],
    ['Teamwork attempts / target met',model.team.entries.length+' / '+model.teamWins.length],
    ['Clean Sheet attempts / target met',model.defense.entries.length+' / '+model.defenseWins.length],
+   ['Rocket Kick attempts / target met',model.rockets.entries.length+' / '+model.rocketWins.length],
    ['Solo Academy missions',model.academy+' / 12']
   ];
   const rows=model.activities.map(row=>'<tr><td>'+htmlEscape(date(row.at))+'</td><td>'+
