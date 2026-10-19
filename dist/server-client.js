@@ -207,6 +207,16 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
+    (d.message.startsWith('Room access changed before admission.')||
+     d.message.startsWith('This room was locked before you could join.')||
+     d.message.startsWith('This room filled while the connection was being prepared.')||
+     d.message.startsWith('This room now requires a signed-in account.'))){
+   link.failed=true;ws.close();showJoinScreen(roomId,d.message);
+   if(document.getElementById('joinSpectator'))
+    $('joinSpectator').checked=link.requestedSpectate;
+   return;
+  }
+ else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     /^(Private room access key required or incorrect\.|Too many room access attempts\.)/.test(d.message)){
    link.failed=true;ws.close();
    showJoinScreen(roomId,d.message);
