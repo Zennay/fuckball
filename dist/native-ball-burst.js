@@ -70,6 +70,8 @@
     mk('span',row.kicks+' native human kicks · peak '+row.peak.toFixed(1)+' engine units · '+row.elapsed+'s played · '+new Date(row.at).toLocaleDateString()));
    history.append(item);
   }
+  const best=Math.max(...rows.map(x=>x.peak));
+  history.append(mk('p','Private personal best observed post-kick ball speed: '+best.toFixed(1)+' raw native engine units. Not km/h or official shooting power.','native-ball-burst-best'));
  }
  function persist(s){
   const row={at:Date.now(),duration:s.duration,threshold:s.threshold,
@@ -121,7 +123,8 @@
   const left=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
   score.textContent=s.hits+' / '+s.target+' qualifying kicks · '+left+'s left';
   detail.textContent=s.kicks+' actual human kicks · peak '+s.peak.toFixed(1)+' engine speed units'+
-   (s.pending?' · measuring last own kick…':'');
+   (s.pending?' · measuring last own kick…':s.lastMeasured===null?'':
+    ' · last measured '+s.lastMeasured.toFixed(1)+(s.lastQualified?' · reached speed goal':' · under speed goal'));
   progress.value=Math.min(100,Math.round(s.hits/s.target*100));
  }
  function finish(label,saveAttempt=false){
@@ -141,6 +144,7 @@
  }
  function finalizeKick(s){
   if(!s.pending)return;
+  if(s.pending.samples>0){s.lastMeasured=s.pending.peak;s.lastQualified=s.pending.peak>=s.threshold;}
   if(s.pending.samples>0&&s.pending.peak>=s.threshold){
    s.hits++;
    if(s.hits>=s.target){s.pending=null;finish('ROCKET KICK · TARGET MET',true);return;}
@@ -151,9 +155,10 @@
   const s=active,info=event.detail;
   if(!s||!info||info.room!==s.room||document.hidden||!ready()||ownTeam()!==s.side||
    !Number.isSafeInteger(info.frame)||info.frame<s.frame)return;
+  // A different native kicker ends attribution before we could credit a burst.
+  if(info.playerId!==1||info.team!==s.side){s.pending=null;return;}
   if(s.pending)finalizeKick(s);
   if(!active)return;
-  if(info.playerId!==1||info.team!==s.side){s.pending=null;return;}
   s.kicks=Math.min(9999,s.kicks+1);
   s.pending={start:info.frame,peak:0,samples:0};
  });
@@ -190,7 +195,8 @@
    if(!quickPlay('bot',true,true))throw Error('Original local 1v1 refused a new practice game.');
    if(!ready())throw Error('Native 1v1 with local AI is not available.');
    active={room,side:ownTeam(),duration:time,threshold:speed,target:goal,
-    frame:room.currentFrameNo,frames:0,hits:0,kicks:0,peak:0,pending:null};
+    frame:room.currentFrameNo,frames:0,hits:0,kicks:0,peak:0,pending:null,
+    lastMeasured:null,lastQualified:false};
    hud.hidden=false;title.textContent='ROCKET KICK · LOCAL AI';
    stop.hidden=false;retry.hidden=true;close.hidden=true;
    message.textContent='Rocket Kick running from genuine local native physics.';
