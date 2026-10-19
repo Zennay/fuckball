@@ -47,8 +47,15 @@ const ax=aimX-ball.pos.x,ay=aimY-ball.pos.y,al=Math.hypot(ax,ay)||1,dx=ball.pos.
 const aligned=(dx*ax+dy*ay)/Math.max(1,dist*al)>.78;const close=dist<d.radius+ball.radius+3.8;const kick=close&&aligned&&!(p.input&16);if(dist<45&&aligned&&role==='striker'){tx=ball.pos.x;ty=ball.pos.y;}
 tx=Math.max(-width+20,Math.min(width-20,tx));ty=Math.max(-height+20,Math.min(height-20,ty));const mx=tx-d.pos.x-d.speed.x*5,my=ty-d.pos.y-d.speed.y*5;return key(Math.abs(mx)<2?0:Math.sign(mx),Math.abs(my)<2?0:Math.sign(my),kick);}
 const levels={easy:{reaction:18,lead:5,aim:.93,teamwork:false},normal:{reaction:6,lead:12,aim:.85,slack:.3,teamwork:true},hard:{reaction:2,lead:18,aim:.78,slack:.18,teamwork:true},elite:{reaction:1,lead:24,aim:.72,slack:.08,teamwork:true}};
-const defaultProfile={support:115,spread:115,cover:150,press:110,screen:55};
-function profile(raw={}){const out={};for(const k of Object.keys(defaultProfile)){const n=Number(raw[k]);out[k]=Number.isFinite(n)?Math.max(k==='screen'?30:60,Math.min(k==='screen'?90:220,n)):defaultProfile[k];}return out;}
+const defaultProfile={support:115,spread:115,cover:150,press:110,screen:55,
+ passSafety:12,overloadReward:.16,keeperRiskTime:45,bankRisk:.12,shotAggression:.08};
+const profileBounds={support:[60,220],spread:[60,220],cover:[60,220],press:[60,220],
+ screen:[30,90],passSafety:[6,24],overloadReward:[0,.4],keeperRiskTime:[20,80],
+ bankRisk:[0,.4],shotAggression:[0,.24]};
+function profile(raw={}){const out={};for(const [k,defaultValue] of Object.entries(defaultProfile)){
+ const n=Number(raw[k]),[min,max]=profileBounds[k];
+ out[k]=raw[k]!==undefined&&Number.isFinite(n)?Math.max(min,Math.min(max,n)):defaultValue;
+}return out;}
 // Engine player movement from rest (plus current velocity) after k frames.
 function playerPhysics(s){const pp=s?.playerPhysics||{};const a=Number(pp.VW??pp.acceleration)||.1,d=Number(pp.m??pp.damping)||.96;return{a,d,vmax:a*d/(1-d)};}
 function reach(p,k,tx,ty,ph){const d=p.disc,dx=tx-d.pos.x,dy=ty-d.pos.y,l=Math.hypot(dx,dy)||1,v0=(d.speed.x*dx+d.speed.y*dy)/l,g=ph.d*(1-Math.pow(ph.d,k))/(1-ph.d);return ph.vmax*(k-g)+v0*g;}
@@ -141,12 +148,13 @@ function receiverAdvantage(F,o,kicker){
  if(o.goal||!o.ours||o.ours.id===kicker)return 0;
  const margin=(o.theirs?.t??175)-o.ours.t;
  if(margin<=0)return -.85;
- if(margin<10)return -.52*(10-margin)/10;
+ const safety=F.passSafety??12;
+ if(margin<safety)return -.52*(safety-margin)/safety;
  const receiver=F.players.find(p=>p.id===o.ours.id);
  if(!receiver)return 0;
  const defenders=F.players.filter(p=>!p.mine&&Math.hypot(p.x-o.ours.x,p.y-o.ours.y)<165).length;
  const supporters=F.players.filter(p=>p.mine&&p.id!==receiver.id&&Math.hypot(p.x-o.ours.x,p.y-o.ours.y)<190).length;
- const overload=supporters>=1&&defenders<=1? .16 : 0;
+ const overload=supporters>=1&&defenders<=1?(F.overloadReward??.16):0;
  const advancement=Math.max(-1,Math.min(1,F.sign*(o.ours.x-F.ox)/F.width));
  return Math.min(.3,.10+overload+.07*advancement)*Math.min(1,margin/25);
 }
@@ -166,12 +174,22 @@ if(F.sign*x>-.1*F.width)for(const wall of [-1,1])for(const f of [-.55,0,.55]){
  // walking around the ball costs time the opponents use.
  const me=F.players.find(p=>p.id===kicker),mx=me?x-me.x:0,my=me?y-me.y:0,ml=Math.hypot(mx,my)||1,near=ml<120?1:.4;
  const score=(dx,dy)=>{const n=kickNormal(vx,vy,dx,dy,F.K),o=rollout(F,x,y,dx*n.speed,dy*n.speed,kicker,t0);let v=outcome(F,o)+receiverAdvantage(F,o,kicker);if(o.ours&&o.ours.id!==kicker&&!o.goal)v+=F.passBonus;if(me)v-=F.approach*near*F.urgency*(1-(n.nx*mx+n.ny*my)/ml);return{v,o};};
- const scored=dirs.map(([dx,dy,kind])=>{const {v,o}=score(dx,dy);return{dx,dy,kind:o.goal>0||o.shotT?'shot':o.ours&&o.ours.id!==kicker?'pass':kind,raw:v,to:o.ours?.id,roll:o};});
+ const scored=dirs.map(([dx,dy,kind])=>{const result=score(dx,dy);
+  let v=result.v;const o=result.o;
+  // A wall bank is useful only when the simulated rebound threatens goal.
+  if(kind==='bank'&&o.goal<=0&&!o.shotT)v-=F.bankRisk??.12;
+  if((kind==='shot'||kind==='bank')&&(o.goal>0||o.shotT))v+=F.shotAggression??.08;
+  return{dx,dy,kind:o.goal>0||o.shotT?'shot':o.ours&&o.ours.id!==kicker?'pass':kind,
+    origin:kind,raw:v,to:o.ours?.id,roll:o};});
  // Players steer in eight directions, so prefer kicks that still work a
  // few degrees off target: rate the best few by their worst neighbour.
  scored.sort((a,c)=>c.raw-a.raw);let best=null;
  for(const c of scored.slice(0,6)){let v=c.raw;for(const a of [-F.spread,F.spread]){const cs=Math.cos(a),sn=Math.sin(a);v=Math.min(v,score(c.dx*cs-c.dy*sn,c.dx*sn+c.dy*cs).v);}
-  v=(v*2+c.raw)/3;if(keep)v-=F.turn*(1-c.dx*keep[0]-c.dy*keep[1]);if(!best||v>best.value)best={...c,value:v};}
+  v=(v*2+c.raw)/3;
+  if(c.origin==='bank'&&c.roll.goal<=0&&!c.roll.shotT)v-=F.bankRisk??.12;
+  if((c.origin==='shot'||c.origin==='bank')&&(c.roll.goal>0||c.roll.shotT))
+   v+=F.shotAggression??.08;
+  if(keep)v-=F.turn*(1-c.dx*keep[0]-c.dy*keep[1]);if(!best||v>best.value)best={...c,value:v};}
  return best;
 }
 // What the player on the ball would do with it right now: {type:'shot'|'pass'
@@ -203,6 +221,9 @@ function buildPlan(state,teamId,tick=0,raw={}){
  const g=state.gameState,b=g?.physicsState.discs[0],team=state.players.filter(p=>p.disc&&p.team.id===teamId),ops=state.players.filter(p=>p.disc&&p.team.id===3-teamId),cfg=profile(raw),sign=teamId===1?1:-1;if(!b||!team.length)return {};
  const s=g.stadium,goal=s.goals.find(x=>x.team.id!==teamId),own=s.goals.find(x=>x.team.id===teamId),gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,height=s.bgHeight||s.height-30;
  const physics=playerPhysics(s),F=fieldOf(state,teamId),hits=new Map(),hitOf=p=>{if(!hits.has(p.id))hits.set(p.id,intercept(b,p,physics,120,s));return hits.get(p.id);};
+ F.passSafety=cfg.passSafety;F.overloadReward=cfg.overloadReward;
+ F.bankRisk=cfg.bankRisk;F.shotAggression=cfg.shotAggression;
+ F.keeperRiskTime=cfg.keeperRiskTime;
  const dist=p=>Math.hypot(p.disc.pos.x-b.pos.x,p.disc.pos.y-b.pos.y);
  // Rank chasers by when they can actually reach the ball, so a pass's
  // receiver takes over at once instead of the passer chasing its own pass.
@@ -387,7 +408,7 @@ function playBall(state,p,b,intent,level,team,plan){const d=p.disc,sign=p.team.i
    // An opponent receiving a long clearance later in the match is not an
    // immediate interception at the goalkeeper. Urgent exits are judged by
    // the next 45 physics frames, not by eventual possession far downfield.
-   const dangerous=result.goal<0||result.theirs&&inLane&&result.theirs.t<=45&&(!result.ours||margin<5);
+   const dangerous=result.goal<0||result.theirs&&inLane&&result.theirs.t<=(F.keeperRiskTime??45)&&(!result.ours||margin<5);
    const emergency=sign*b.speed.x<-.5&&Math.hypot(b.pos.x-ox,b.pos.y)<175;
    kick=!dangerous||emergency&&result.goal>=0;
   }
@@ -414,5 +435,5 @@ function tactical(state,id,tick=0,options={}){
  const vx=d.pos.x-b.pos.x,vy=d.pos.y-b.pos.y,l=Math.hypot(vx,vy),R=d.radius+b.radius+14,behind=(b.pos.x-plan.field.ox)*vx+b.pos.y*vy>0;if(behind&&l>0&&l<R+20){x+=vx/l*(R+20-l)*1.5;y+=vy/l*(R+20-l)*1.5;}
  const [sx,sy]=steer(d,x,y,5,1.5);return key(sx,sy,false);
 }
-root.FuckballAI={characters,characterOf,botName,chooseDelivery,intercept,playerPhysics,levels,defaultProfile,profile,teamPlan,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
+root.FuckballAI={characters,characterOf,botName,chooseDelivery,intercept,playerPhysics,levels,defaultProfile,profileBounds,profile,teamPlan,legacyTactical,columns,key,features,validateModel,infer,tactical,reset,memoryOf,setMemory};if(typeof module!=='undefined')module.exports=root.FuckballAI;
 })(typeof window!=='undefined'?window:globalThis);
