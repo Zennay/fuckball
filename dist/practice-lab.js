@@ -143,7 +143,10 @@
   const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Update';
   const exportSummary=document.createElement('button');exportSummary.type='button';
   exportSummary.textContent='↓ Export private summary';
-  controls.append(periodLabel,refresh,exportSummary);
+  const exportCard=document.createElement('button');exportCard.type='button';
+  exportCard.textContent='↓ Save private PNG card';
+  exportCard.setAttribute('aria-label','Save local practice goals as a private PNG image');
+  controls.append(periodLabel,refresh,exportSummary,exportCard);
   const board=document.createElement('div');board.className='practice-insights-board';
   const advice=document.createElement('p');advice.className='practice-insights-advice';
   const explore=document.createElement('button');explore.type='button';explore.textContent='Explore a drill ↗';
@@ -192,10 +195,18 @@
     snapshot.push({key:metric.key,name:metric.name,attempts:counts.attempts,goalsMet:counts.met});
    }
    const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
-   const completed=Array.isArray(ladders)&&ladders.length<=12?ladders.filter(x=>x&&x.version===1&&
-    ['standard','elite'].includes(x.route)&&[60,120].includes(x.duration)&&
-    Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&
-    x.finishedAt>0&&x.finishedAt<=now+DAY&&x.finishedAt>=cutoff).length:0;
+   const levels={standard:['easy','normal','hard'],elite:['normal','hard','elite']};
+   const completed=Array.isArray(ladders)&&ladders.length<=12?ladders.filter(x=>x&&
+    x.version===1&&Object.hasOwn(levels,x.route)&&[60,120].includes(x.duration)&&
+    Number.isSafeInteger(x.startedAt)&&x.startedAt>0&&x.startedAt<=now+DAY&&
+    Number.isSafeInteger(x.finishedAt)&&x.finishedAt>=x.startedAt&&
+    x.finishedAt<=now+DAY&&x.finishedAt>=cutoff&&
+    Number.isSafeInteger(x.retries)&&x.retries>=0&&x.retries<=999&&
+    Array.isArray(x.wins)&&x.wins.length===3&&x.wins.every((w,i)=>w&&
+     w.level===levels[x.route][i]&&w.duration===x.duration&&
+     Number.isSafeInteger(w.for)&&Number.isSafeInteger(w.against)&&
+     w.against>=0&&w.for>w.against&&w.for<=999&&
+     Number.isSafeInteger(w.at)&&w.at>=x.startedAt&&w.at<=x.finishedAt)).length:0;
    const note=document.createElement('p');note.className='practice-insights-gauntlet';
    note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
    board.append(note);
@@ -208,7 +219,7 @@
     if(!target)return;activate(target.key,true);
     document.getElementById('practice-lab-pane-'+target.key)?.scrollIntoView({block:'start',behavior:'auto'});
    };
-   exportSummary.disabled=!snapshot.some(x=>x.attempts>0||x.completedLadders>0);
+   exportSummary.disabled=exportCard.disabled=!snapshot.some(x=>x.attempts>0||x.completedLadders>0);
    message.textContent='Showing only validated saved native drill records; no account data or server requests.';
   }
 
@@ -235,6 +246,61 @@
    setTimeout(()=>URL.revokeObjectURL(url),30000);
    message.textContent='Private native drill summary downloaded. No server upload.';
   };
+  function saveProgressCard(){
+   if(!snapshot.some(x=>x.attempts>0||x.completedLadders>0))return;
+   if(!window.confirm('Save a private 1200×675 PNG with only your device-local drill goal counts? There are no names, accounts or rankings on this image.'))return;
+   const entries=snapshot.map(x=>({...x})),windowLabel=
+    period.value==='7'?'LAST 7 DAYS':period.value==='30'?'LAST 30 DAYS':'RETAINED RECORDS';
+   const canvas=document.createElement('canvas');
+   canvas.width=1200;canvas.height=675;
+   const context=canvas.getContext('2d');
+   if(!context){message.textContent='PNG drawing is unavailable in this browser.';return;}
+   const c=context;
+   function box(x,y,w,h,r,fill,stroke){
+    c.beginPath();c.roundRect(x,y,w,h,r);
+    c.fillStyle=fill;c.fill();
+    if(stroke){c.lineWidth=2;c.strokeStyle=stroke;c.stroke();}
+   }
+   c.fillStyle='#10272e';c.fillRect(0,0,1200,675);
+   box(34,29,1132,617,27,'#1a3438','#668e80');
+   c.fillStyle='#dff5a9';c.font='900 41px system-ui, sans-serif';
+   c.fillText('FUCKBALL / PRACTICE INSIGHTS',70,94);
+   c.fillStyle='#cfe0d5';c.font='600 20px system-ui, sans-serif';
+   c.fillText(windowLabel+' · AS OF '+new Date().toISOString().slice(0,10)+' · THIS DEVICE',71,133);
+   const items=entries.filter(x=>x.key!=='ladder').slice(0,4);
+   for(const [i,row] of items.entries()){
+    const x=70+(i%2)*545,y=166+Math.floor(i/2)*169;
+    box(x,y,510,149,17,'#284940','#658e7d');
+    c.fillStyle='#e9f6c4';c.font='800 25px system-ui, sans-serif';
+    c.fillText(row.name,x+23,y+38);
+    c.fillStyle='#f5fff1';c.font='700 26px system-ui, sans-serif';
+    c.fillText(row.attempts?row.goalsMet+' / '+row.attempts+' GOALS MET':'NO SAVED ATTEMPTS',x+23,y+78);
+    c.fillStyle='#39584d';c.fillRect(x+23,y+99,465,14);
+    if(row.attempts>0){
+     c.fillStyle='#b7e29a';c.fillRect(x+23,y+99,Math.min(465,Math.round(465*row.goalsMet/row.attempts)),14);
+    }
+    c.fillStyle='#d1e0d1';c.font='500 15px system-ui, sans-serif';
+    c.fillText('Native saved drill objectives · not competitive wins',x+23,y+136);
+   }
+   box(70,518,1055,61,14,'#2d5045');
+   const gauntlet=entries.find(x=>x.key==='ladder')?.completedLadders||0;
+   c.fillStyle='#e3f4b2';c.font='800 21px system-ui, sans-serif';
+   c.fillText('AI GAUNTLET · '+gauntlet+' completed three-win native ladders',94,556);
+   c.fillStyle='#c7d9cf';c.font='500 16px system-ui, sans-serif';
+   c.fillText('Saved local observations only. Not Elo, official match statistics, or full lifetime history.',73,612);
+   const link=document.createElement('a');
+   function download(blob){
+    if(!blob){message.textContent='Could not encode the PNG image.';return;}
+    const url=URL.createObjectURL(blob);
+    link.href=url;link.download='fuckball-private-native-practice-'+period.value+'.png';
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    message.textContent='Private PNG summary saved. No network request or account details.';
+   }
+   canvas.toBlob(download,'image/png');
+  }
+  exportCard.onclick=saveProgressCard;
+
   renderInsights();
  }
  setupInsights();
