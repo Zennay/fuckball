@@ -1,0 +1,33 @@
+/* Client-only grouping for authenticated server receipts. Does not touch live game. */
+.native-play-sessions{margin:18px 0 22px;border:1px solid #78938a;border-radius:12px;background:#162e33;padding:16px;display:grid;gap:13px}
+.native-play-sessions h3{color:#d4efad;font-size:clamp(17px,2.3vw,23px);letter-spacing:.045em;margin:0}
+.native-session-intro,.native-session-count,.native-session-message{font-size:12px;line-height:1.55;color:#b6d0c5;margin:0}
+.native-session-top{display:flex;gap:12px;justify-content:space-between;align-items:end;flex-wrap:wrap}
+.native-session-top label{display:grid;gap:5px;color:#d2e7cb;font-size:11px}
+.native-session-top select{padding:9px;border:1px solid #7b9a8e;background:#23443e;border-radius:8px;color:#f4f8f0;min-height:42px}
+.native-session-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px}
+.native-session-card{display:grid;gap:9px;align-content:start;border:1px solid #5f7e79;border-radius:10px;padding:13px;background:#254044;min-width:0}
+.native-session-card.selected{border:2px solid #cfed93;background:#294943}
+.native-session-card strong{font-size:13px;color:#e7f5c5}
+.native-session-card small{font-size:11px;color:#b8d4cc;overflow-wrap:anywhere}
+.native-session-card p{margin:0;font-size:12px;line-height:1.5;color:#e8f0e8}
+.native-session-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto}
+.native-play-sessions button{font:inherit;border:1px solid #95ac9d;background:#355b51;color:#f2f9e9;border-radius:8px;padding:9px 10px;min-height:40px;cursor:pointer;font-size:12px}
+.native-play-sessions button:disabled{opacity:.5;cursor:default}
+.native-play-sessions button:focus-visible,.native-play-sessions select:focus-visible{outline:3px solid #d8f1a6;outline-offset:2px}
+.native-session-clear{justify-self:start;border-color:#c9ed9b!important}
+.native-session-more{justify-self:center}
+@media(max-width:660px){.native-play-sessions{padding:12px}.native-session-grid{grid-template-columns:1fr}.native-session-actions button{flex:1 1 90px}}
+@media(prefers-reduced-motion:reduce){.native-play-sessions *{animation:none!important;transition:none!important}}/* Explicit comparison of two real, unranked receipt groups; no skill claims. */
+.native-session-comparison[hidden]{display:none!important}
+.native-session-comparison{display:grid;gap:12px;padding:13px;border:1px solid #a7bc90;border-radius:10px;background:#233b3a}
+.native-session-comparison h4{font-size:14px;letter-spacing:.05em;color:#e4f5bd;margin:0}
+.native-session-comparison p{font-size:12px;line-height:1.6;color:#cee0d0;margin:0}
+.native-session-compare-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.native-session-compare-grid article{display:grid;gap:8px;padding:12px;border:1px solid #7c9e8e;border-radius:8px;background:#2b4b44;min-width:0}
+.native-session-compare-grid strong{color:#e6f5b7;font-size:13px}
+.native-session-compare-grid small{overflow-wrap:anywhere;color:#ccdad0;font-size:11px}
+.native-session-compare-line{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#e6f1e7}
+.native-session-compare-line b{white-space:nowrap}
+.native-session-comparison>button{justify-self:start}
+@media(max-width:600px){.native-session-compare-grid{grid-template-columns:1fr}}
