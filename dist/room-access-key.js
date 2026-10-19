@@ -14,11 +14,11 @@
  const fields=document.createElement('div');fields.className='room-access-key-fields';
  const label=document.createElement('label');label.textContent='New room access key';
  const key=document.createElement('input');key.type='password';key.minLength=10;key.maxLength=64;
- key.autocomplete='new-password';key.placeholder='10–64 printable characters';
+ key.autocomplete='off';key.placeholder='10–64 printable characters';
  key.setAttribute('aria-label','New private room access key');label.append(key);
  const confirmLabel=document.createElement('label');confirmLabel.textContent='Confirm new access key';
  const confirm=document.createElement('input');confirm.type='password';confirm.minLength=10;confirm.maxLength=64;
- confirm.autocomplete='new-password';confirm.setAttribute('aria-label','Confirm private room access key');
+ confirm.autocomplete='off';confirm.setAttribute('aria-label','Confirm private room access key');
  confirmLabel.append(confirm);
  const buttons=document.createElement('div');buttons.className='room-access-key-actions';
  const save=document.createElement('button');save.type='button';save.className='primary';
@@ -29,7 +29,7 @@
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  fields.append(label,confirmLabel,buttons,notice);
  panel.append(title,description,summary,fields);menu.append(panel);
- let roomId=null,lastProtected=null;
+ let roomId=null,lastProtected=null,lastRevision=null;
  function current(){return typeof serverLink!=='undefined'?serverLink:null;}
  function secure(link){
   try{const url=new URL(link.ws.url);
@@ -40,7 +40,7 @@
  function render(){
   const link=current();
   if(link?.room!==roomId){
-   roomId=link?.room||null;lastProtected=null;key.value='';confirm.value='';notice.textContent='';
+   roomId=link?.room||null;lastProtected=null;lastRevision=null;key.value='';confirm.value='';notice.textContent='';
   }
   const owner=!!link?.room&&!link.quickMatchMode&&link.isOwner===true;
   const supported=link?.roomControl?.accessKeySupported===true;
@@ -49,10 +49,14 @@
   const protectedNow=link.roomControl?.accessKeyRequired===true;
   summary.textContent=protectedNow?'🔒 Private key required for new joins · hidden from guests.':
    '🔓 No private key · current room admission rules still apply.';
-  if(lastProtected!==null&&lastProtected!==protectedNow)
-   notice.textContent=protectedNow?'Room server confirmed the new key. Share it separately from your link.':
+  const revision=Number.isSafeInteger(link.roomControl?.accessKeyRevision)?
+   link.roomControl.accessKeyRevision:0;
+  if(lastRevision!==null&&lastRevision!==revision)
+   notice.textContent=protectedNow?'Room server confirmed the private key was set or replaced.':
     'Room server confirmed that the private key was removed.';
-  lastProtected=protectedNow;
+  else if(lastProtected!==null&&lastProtected!==protectedNow)
+   notice.textContent=protectedNow?'Room server confirmed the key.':'Room server removed the key.';
+  lastRevision=revision;lastProtected=protectedNow;
   save.textContent=protectedNow?'Replace room access key':'Enable private key';
   remove.disabled=!protectedNow;
   const safe=secure(link);

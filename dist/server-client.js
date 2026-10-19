@@ -150,6 +150,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     teamChatSupported:d.teamChatSupported===true&&!link.quickMatchMode,
     spectatorCheerSupported:d.spectatorCheerSupported===true&&!link.quickMatchMode,
     accessKeySupported:d.accessKeySupported===true&&!link.quickMatchMode,accessKeyRequired:d.accessKeyRequired===true,
+    accessKeyRevision:Number.isSafeInteger(d.accessKeyRevision)&&d.accessKeyRevision>=0?d.accessKeyRevision:0,
     roomNoticeSupported:d.roomNoticeSupported===true&&!link.quickMatchMode,
     notice:d.notice&&typeof d.notice.text==='string'&&d.notice.text.length<=120&&
       typeof d.notice.by==='string'&&d.notice.by.length<=25&&
@@ -205,6 +206,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    $('timeLimit').value=String(d.timeLimit);
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
+ else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
+    /^(Private room access key required or incorrect\.|Too many room access attempts\.)/.test(d.message)){
+   link.failed=true;ws.close();
+   showJoinScreen(roomId,d.message);
+   if(document.getElementById('joinSpectator'))$('joinSpectator').checked=link.requestedSpectate;
+   return;
+  }
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
  else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
  else if(d.type==='recordingStatus'){$('recordIndicator').hidden=!d.active;$('recordButton').textContent=d.active?'■ Save recording':'● Record';}

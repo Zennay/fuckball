@@ -415,7 +415,7 @@ function createServer(options={}){
    },
    send:(cid,data)=>{if(r.authority!=='server'||data?.type==='chat'&&
     !Number.isSafeInteger(data.from))return;const ws=sockets.get(cid);if(ws)send(ws,toWire(data));},canSend:cid=>{const ws=sockets.get(cid);return !!ws&&ws.socket.writableLength<65536;}});
-  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),notice:null,accessKeyLock:null,accessKeyAttempts:[],accountsOnly:false,maxHumans:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
+  Object.assign(r,{sockets,locked:false,listed:false,clubId:null,roomBans:new Map(),chatMutes:new Map(),notice:null,accessKeyLock:null,accessKeyAttempts:[],accessKeyRevision:0,accountsOnly:false,maxHumans:64,authority:'server',epoch:0,migration:null,clock:0,reports:new Map(),standby:null,standbyAt:0,lastMigration:-Infinity,pendingJoins:[],sessionTokens:new Map(),parked:new Map(),penalty:new Map(),election:Netcode.createElection(electionOptions)});rooms.set(id,r);return r;}
  const roomTime=r=>r.clock+fraction();
  const hostSocket=r=>r.authority==='server'?null:r.sockets.get(r.authority);
  function meshUpdate(r){if(!peerHosting)return;const ids=[...r.sockets].filter(([,ws])=>ws.mesh).map(([id])=>id);for(const id of ids)send(r.sockets.get(id),{type:'mesh',peers:ids});}
@@ -449,7 +449,7 @@ function createServer(options={}){
   const now=Date.now();
   for(const [id,until]of r.chatMutes)if(until<=now||!r.clients.has(id))r.chatMutes.delete(id);
   if(r.notice&&r.notice.owner!==r.owner)r.notice=null;
-  if(r.accessKeyLock&&r.accessKeyLock.owner!==r.owner){r.accessKeyLock=null;r.accessKeyAttempts=[];}
+  if(r.accessKeyLock&&r.accessKeyLock.owner!==r.owner){r.accessKeyLock=null;r.accessKeyAttempts=[];r.accessKeyRevision++;}
   for(const client of r.sockets.values()){
    const ownerAccount=client.playerId===r.owner&&client.account&&
     accounts.user(client.accountToken)?.toLowerCase()===client.account.toLowerCase()?
@@ -461,7 +461,7 @@ function createServer(options={}){
     chatMutes:client.playerId===r.owner?[...r.chatMutes]:[],
     teamChatSupported:!r.quickMatch,
     spectatorCheerSupported:!r.quickMatch,
-    accessKeySupported:!r.quickMatch,accessKeyRequired:!!r.accessKeyLock,
+    accessKeySupported:!r.quickMatch,accessKeyRequired:!!r.accessKeyLock,accessKeyRevision:r.accessKeyRevision,
     roomNoticeSupported:!r.quickMatch,
     notice:r.notice?{text:r.notice.text,by:r.notice.by,at:r.notice.at}:null});
   }
@@ -502,7 +502,7 @@ function createServer(options={}){
       digest:crypto.scryptSync(d.accessKey,salt,32)};
     r.listed=false; // An access-restricted room cannot be publicly browsed.
    }else{r.accessKeyLock=null;r.accessKeyAttempts=[];}
-   roomControl(r);return;
+   r.accessKeyRevision++;roomControl(r);return;
   }
   if(d.action==='lock'||d.action==='unlock'){
    r.locked=d.action==='lock';if(r.locked)r.listed=false;roomControl(r);return;
