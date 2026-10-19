@@ -14,10 +14,11 @@
  const section=node('section',null,'couch-play');
  section.setAttribute('aria-label','Local two- or four-player couch football');
  const title=node('h2','COUCH FOOTBALL.');
- const intro=node('p','Play 1v1 with two humans, team up against native AI in 2v2/4v4, or compete in four-human 2v2. For four-player games Red uses WASD/F and arrows/Enter; Blue uses two independent controllers. Offline and unranked.');
+ const intro=node('p','Play 1v1 with two humans, team up against native AI in 2v2/3v3/4v4, or compete in four-human 2v2. For four-player games Red uses WASD/F and arrows/Enter; Blue uses two independent controllers. Offline and unranked.');
  const controls=node('div',null,'couch-play-actions');
  const launch=node('button','▶ PLAY LOCAL TWO-PLAYER');launch.className='primary';launch.type='button';
  const coop2=node('button','▶ TEAM UP 2v2');coop2.type='button';
+ const coop3=node('button','▶ TEAM UP 3v3');coop3.type='button';
  const coop4=node('button','▶ TEAM UP 4v4');coop4.type='button';
  const rivals=node('button','▶ FOUR HUMANS · 2v2');rivals.type='button';
  const configure=node('label','Player 2 controller');
@@ -25,7 +26,7 @@
  configure.append(source);
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- controls.append(launch,coop2,coop4,rivals,configure);
+ controls.append(launch,coop2,coop3,coop4,rivals,configure);
  const namesPanel=node('details',null,'couch-rivals-names');
  const namesTitle=node('summary','Four-player names and Blue controllers');
  const namesRow=node('div',null,'couch-rivals-name-fields');
@@ -90,7 +91,7 @@
   typeof replay!=='undefined'&&!replay&&
   typeof serverLink!=='undefined'&&!serverLink&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
-  ['local','coop2v2','coop4v4','couchRivals'].includes(document.getElementById('mode')?.value)&&
+  ['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes(document.getElementById('mode')?.value)&&
   document.getElementById('joinScreen')?.hidden!==false&&
   !pitch.hidden;
  function pads(){
@@ -161,6 +162,7 @@
    const p2=selected(),mode=document.getElementById('mode')?.value;
    hudTitle.textContent=mode==='couchRivals'?'COUCH RIVALS · FOUR HUMANS':
     mode==='coop2v2'?'COUCH CO-OP · 2v2':
+    mode==='coop3v3'?'COUCH CO-OP · 3v3':
     mode==='coop4v4'?'COUCH CO-OP · 4v4':'COUCH 1v1 · TWO HUMANS';
    activeHint.textContent=mode==='couchRivals'?
     'RED · P1 WASD/F · P2 arrows/Enter | BLUE · '+
@@ -189,6 +191,7 @@
    if(reason){status.textContent=reason;return;}
   }
   const name=mode==='coop2v2'?'Couch Co-op 2v2':
+   mode==='coop3v3'?'Couch Co-op 3v3':
    mode==='coop4v4'?'Couch Co-op 4v4':
    mode==='couchRivals'?'Couch Rivals 2v2':'Couch 1v1';
   if((started||replay)&&!window.confirm('Replace your current offline match or replay with '+
@@ -211,6 +214,7 @@
  }
  launch.onclick=()=>startMode('local');
  coop2.onclick=()=>startMode('coop2v2');
+ coop3.onclick=()=>startMode('coop3v3');
  coop4.onclick=()=>startMode('coop4v4');
  rivals.onclick=()=>startMode('couchRivals');
  let lastLive=false;
