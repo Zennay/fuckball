@@ -455,7 +455,8 @@ function createServer(options={}){
     clubOnly:!!r.clubId,canClubLock:!!ownerAccount,
     owner:r.owner,banMinutes:10,accountsOnly:r.accountsOnly===true,maxHumans:r.maxHumans,connectedHumans:r.clients.size,
     chatMuteUntil:r.chatMutes.get(client.playerId)||null,
-    chatMutes:client.playerId===r.owner?[...r.chatMutes]:[]});
+    chatMutes:client.playerId===r.owner?[...r.chatMutes]:[],
+    spectatorCheerSupported:!r.quickMatch});
   }
  }
  // Temporary account-scoped ban; never block a shared public IP, and never
@@ -742,6 +743,36 @@ function createServer(options={}){
      send(ws,{type:'playerReportStatus',ok:false,
       message:String(error?.message||'Report unavailable.').slice(0,160)});
     }
+    return;
+   }
+   if(d.type==='spectatorCheer'){
+    // Reactions are strictly public cosmetics. The room server (never the
+    // player/peer host) authenticates sender, validates spectator state, rate
+    // limits and moderates delivery. No user-provided text or fake score.
+    if(r.quickMatch||r.sockets.get(ws.playerId)!==ws||r.disconnected.has(ws.playerId)||
+       r.botIds.has(ws.playerId)||r.hb.getPlayer(ws.playerId)?.team!==0)
+     throw Error('Only connected neutral spectators may cheer in a Custom Room.');
+    if(!['clap','fire','ball','heart'].includes(d.kind)||
+       Object.keys(d).some(k=>!['type','kind'].includes(k)))
+     throw Error('Invalid spectator reaction.');
+    if((r.chatMutes.get(ws.playerId)||0)>now){
+     if(!ws.lastChatMuteNotice||now-ws.lastChatMuteNotice>3000){
+      ws.lastChatMuteNotice=now;
+      send(ws,{type:'chatModeration',muted:true,until:r.chatMutes.get(ws.playerId)});
+     }
+     return;
+    }
+    if(now-(ws.lastSpectatorCheerAt||0)<3000)
+     throw Error('Please wait before cheering again.');
+    const recent=(ws.spectatorCheerTimes||[]).filter(t=>now-t<30000);
+    if(recent.length>=6)throw Error('Too many spectator reactions. Try again soon.');
+    recent.push(now);ws.spectatorCheerTimes=recent;
+    ws.lastSpectatorCheerAt=now;
+    const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Spectator')
+      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25)||'Spectator';
+    const message={type:'spectatorCheer',room:r.id,from:ws.playerId,name,
+      kind:d.kind,at:now};
+    for(const peer of r.sockets.values())send(peer,message);
     return;
    }
    if(d.type==='chat'){

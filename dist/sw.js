@@ -20,6 +20,8 @@ const CORE=[
  "./spectator-tactical-radar.js",
  "./spectator-tactical-radar.css",
  "./spectator-broadcast.js",
+ "./spectator-cheers.js",
+ "./spectator-cheers.css",
  "./spectator-broadcast.css",
  "./live-match-center.js",
  "./in-game-quick-actions.js",
