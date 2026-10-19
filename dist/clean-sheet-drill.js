@@ -12,7 +12,7 @@
  const panel=el('section',null,'clean-sheet-setup');
  panel.setAttribute('aria-label','Offline defensive clean sheet challenge');
  const heading=el('h2','CLEAN SHEET CHALLENGE.');
- const intro=el('p','Defend your goal against native local AI for the entire clock. Allow no more than your chosen number of genuine opponent goals. This is offline practice, not verified saves, matchmaking or ranked competition.');
+ const intro=el('p','Defend your goal against native local AI for the entire active clock. Normal game score/time limits are disabled for this drill only; your standard settings remain unchanged. This is offline practice, not verified saves or ranked competition.');
  const settings=el('div',null,'clean-sheet-fields');
  const durationLabel=el('label','Active match duration');
  const duration=el('select');duration.setAttribute('aria-label','Defensive drill length');
@@ -163,7 +163,7 @@
   if(!DURATIONS.includes(seconds)||!ALLOW.includes(allowed)){status.textContent='Choose supported drill settings.';return;}
   quit();
   try{
-   if(!quickPlay('bot',true))throw Error('Native offline 1v1 could not start. Existing session was kept.');
+   if(!quickPlay('bot',true,true))throw Error('Native offline 1v1 could not start. Existing session was kept.');
    if(!matchReady())throw Error('Offline native 1v1 is unavailable. Leave any existing online game.');
    const side=team(),g=room.gameState;
    active={room,side,duration:seconds,allowance:allowed,
