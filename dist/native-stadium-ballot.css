@@ -1,0 +1,16 @@
+.native-stadium-ballot{margin:18px 0;padding:18px;border:1px solid #638b82;border-radius:12px;background:#1c3437;color:#e9f6ec}
+.native-stadium-ballot[hidden]{display:none!important}
+.native-stadium-ballot h3{margin:0 0 8px;font-size:15px;letter-spacing:.09em}
+.native-stadium-ballot p{line-height:1.5;color:#d7e4dd;font-size:12px}
+.native-stadium-ballot-current{font-weight:700;color:#d9f3a8!important}
+.native-stadium-ballot-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin:14px 0}
+.native-stadium-ballot-option{display:flex;gap:10px;align-items:center;background:#132a2d;padding:11px;border:1px solid #4b7268;border-radius:8px;font-size:12px;min-height:44px}
+.native-stadium-ballot-option input{accent-color:#d6f4a2;flex:0 0 17px;width:17px;height:17px}
+.native-stadium-ballot-option span{flex:1;overflow-wrap:anywhere}
+.native-stadium-ballot-option strong{font-size:11px;white-space:nowrap;color:#c9e2da}
+.native-stadium-ballot-leader{border-color:#d2ed99;background:#24413e}
+.native-stadium-ballot-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.native-stadium-ballot-actions button{min-height:43px;padding:9px 12px;border:1px solid #95b5a3;border-radius:8px;flex:1 1 135px}
+.native-stadium-ballot-status{color:#d4f3ad!important;font-weight:700;min-height:20px}
+.native-stadium-ballot small{display:block;color:#acc4ba;line-height:1.6}
+.native-stadium-ballot button:focus-visible,.native-stadium-ballot input:focus-visible{outline:3px solid #d2f59a;outline-offset:3px}
