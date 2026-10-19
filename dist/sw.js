@@ -53,6 +53,8 @@ const CORE=[
  "./native-sub-timeline.css",
  "./room-referee-console.js",
  "./room-referee-console.css",
+ "./match-quick-calls.js",
+ "./match-quick-calls.css",
  "./room-presets.css",
  "./stadium-locker.js",
  "./stadium-locker.css",
