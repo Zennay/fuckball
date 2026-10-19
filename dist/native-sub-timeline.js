@@ -81,7 +81,11 @@
   const rows=current.events.filter(e=>filter.value==='all'||e.team===Number(filter.value));
   if(!rows.length){status.textContent='Nothing to export.';return;}
   if(!window.confirm('Export the currently visible player names and native substitution events to a private local CSV file?'))return;
-  const quote=v=>'"'+String(v).replace(/"/g,'""')+'"';
+  // Spreadsheet programs may execute user-provided cells beginning with an
+  // Excel formula prefix even inside CSV quotes. Force a literal string.
+  const quote=value=>{let cell=String(value);
+   if(/^[\s\uFEFF]*[=+\-@]/u.test(cell))cell="'"+cell;
+   return '"'+cell.replace(/"/g,'""')+'"';};
   const lines=[['Side','Outgoing player','Incoming player','Native room frame','Limitations'],
    ...rows.map(e=>[e.team===1?'Red':'Blue',e.outName,e.inName,e.frame,
     'Locally observed server-applied swap; not official competition evidence'])];
