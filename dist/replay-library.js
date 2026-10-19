@@ -394,7 +394,16 @@ async function renderMyGames(){
      await ReplayLibrary.setFavorite(item.id,item.favorite!==true);await renderMyGames();
     });
    star.className='game-star';star.setAttribute('aria-pressed',String(item.favorite===true));
+   const resumePosition=window.FuckballReplayResume?.get?.(item.id);
+   const resumeAction=resumePosition?makeGameButton(
+    '▶ Resume '+Math.floor(resumePosition.ms/60000)+':'+
+     String(Math.floor(resumePosition.ms/1000)%60).padStart(2,'0'),
+    'Resume '+item.name+' from the saved local playhead',async()=>{
+     const ok=await window.FuckballReplayResume.open(item.id);
+     if(!ok)gamesMessage('Could not resume this local recording; use Watch to start from the beginning.');
+    }):null;
    controls.append(
+    ...(resumeAction?[resumeAction]:[]),
     makeGameButton('▶ Watch','Watch '+item.name,async()=>{
      const {bytes}=await ReplayLibrary.get(item.id);
      loadReplay(bytes,item.name);activeLocalReplayId=item.id;

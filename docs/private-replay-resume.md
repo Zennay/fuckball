@@ -15,3 +15,5 @@ New JavaScript/CSS are static PWA assets only. Existing project CI, security, co
 An old resume marker remains intact when the ordinary viewer autoplays from zero. Watching or seeking past that stored timestamp updates it; players who want to replace the marker from the beginning can use **Forget** first.
 
 Selecting **Forget** while watching a recording suppresses progress tracking for that current replay playback instance, so its deleted marker cannot immediately reappear. Playing the recording again opens a new session and makes progress tracking available again.
+
+In the regular **My Games** recording list each entry with an unfinished saved playhead also gets its own **Resume mm:ss** button alongside the existing **Watch** button, so starting from zero remains an explicit choice.
