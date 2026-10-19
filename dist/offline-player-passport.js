@@ -147,8 +147,15 @@
   document.getElementById('practice-lab-tab-ladder')?.click();
   document.querySelector('.ai-gauntlet-setup')?.scrollIntoView({block:'start',behavior:'auto'});
  });
+ const insightLink=button('Practice Insights ↗',()=>{
+  document.getElementById('tabHome')?.click();
+  const lab=document.querySelector('.practice-lab-disclosure');
+  if(lab)lab.open=true;
+  const insights=document.querySelector('.practice-insights');
+  if(insights){insights.open=true;insights.scrollIntoView({block:'start',behavior:'auto'});}
+ });
  const exportButton=button('↓ Printable private passport',download);
- actions.append(refresh,academyLink,ladderLink,exportButton);head.append(caption,actions);
+ actions.append(refresh,academyLink,ladderLink,insightLink,exportButton);head.append(caption,actions);
  const facts=el('div',null,'offline-passport-facts');
  const sections=el('div',null,'offline-passport-sections');
  const formPanel=el('section',null,'offline-passport-form');
