@@ -22,3 +22,4 @@
 .challenge-exchange-row>span{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:650px){.challenge-exchange{padding:11px}.challenge-exchange-row>div{width:100%}.challenge-exchange-row button{flex:1}}
 @media(prefers-reduced-motion:reduce){.challenge-exchange *{scroll-behavior:auto!important}}
+.challenge-exchange-history-note{font-size:11px;color:#bfdbc9;flex:1 1 190px;line-height:1.45}
