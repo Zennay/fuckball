@@ -63,7 +63,7 @@
    sentinel=lock;
    lock.addEventListener('release',()=>{
     if(sentinel!==lock)return;
-    sentinel=null;
+    sentinel=null;wanted=false;
     // Do not spin or retry if the OS revokes a foreground lock.
     // A later visibility change or explicit user action may retry.
     render('Display protection was released by the device. Tap Keep screen awake to retry.');
@@ -76,7 +76,7 @@
    }
   }finally{
    pending=false;
-   if(serial===generation)render();
+   if(serial!==generation&&wanted&&active()&&!sentinel)acquire();
   }
  }
  async function toggleWake(){
