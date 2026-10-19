@@ -352,6 +352,29 @@
    msg='Private tactics plan restored without overwriting existing plans.';render();
   }catch(error){info('Import refused: '+(error.message||'Invalid formation.'));}
  };
+ // Explicit opt-in import from the Custom Room's current native, local disc
+ // positions. This is an *additional private plan*, never match/AI state.
+ window.addEventListener('fuckball:private-live-formation',event=>{
+  const d=event?.detail;
+  if(!d||d.version!==1||d.source!=='custom-room-local-snapshot'||
+   !Array.isArray(d.spots)||d.spots.length!==9||!d.spots.every(checkedPoint)||
+   !Array.isArray(d.teamSizes)||d.teamSizes.length!==2||
+   d.teamSizes[0]!==4||d.teamSizes[1]!==4||
+   !Number.isSafeInteger(d.at)||d.at<=0||d.at>Date.now()+5000||
+   Date.now()-d.at>30000||plans.length>=MAX){
+   if(d)d.message='Native formation invalid or your private plan limit is full.';
+   return;
+  }
+  try{
+   const timestamp=new Date(d.at).toISOString().slice(0,16).replace('T',' ');
+   const name='Observed 4v4 '+timestamp;
+   const proposed=verify({...fresh(name),spots:d.spots.map(p=>p.slice()),arrows:[]});
+   commit([...plans,proposed]);active=proposed.id;selected=0;mode='move';arrowFrom=-1;
+   disclosure.open=true;
+   msg='Saved eight actual locally observed room player-disc coordinates. Ball marker is a centre placeholder. Private diagram only.';
+   render();d.saved=true;
+  }catch(error){d.message=error?.message||'Could not save a private formation.';}
+ });
  window.addEventListener('storage',e=>{
   if(e.key!==KEY)return;
   try{
