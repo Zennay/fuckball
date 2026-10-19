@@ -1,0 +1,16 @@
+.native-lobby-ready{padding:17px;margin:16px 0;border:1px solid #698b79;background:#22383a;border-radius:11px;color:#eaf7e8}
+.native-lobby-ready[hidden]{display:none!important}
+.native-lobby-ready-header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.native-lobby-ready-header strong{letter-spacing:.08em;font-size:13px}
+.native-lobby-ready-header span{font-size:10px;color:#c8e8ac}
+.native-lobby-ready p{font-size:12px;line-height:1.5;color:#d0e1da}
+.native-lobby-ready-progress{font-weight:700;color:#d7f7ad!important;min-height:18px}
+.native-lobby-ready-roster{list-style:none;padding:0;display:grid;gap:6px;max-height:260px;overflow-y:auto;margin:12px 0}
+.native-lobby-ready-player{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 11px;border-radius:8px;background:#182b2e;border:1px solid #46625d;font-size:12px}
+.native-lobby-ready-player span:first-child{overflow-wrap:anywhere}
+.native-lobby-ready-player .is-ready{color:#d1f5a5;font-weight:700;white-space:nowrap}
+.native-lobby-ready-player .is-waiting{color:#e5bdb5;font-weight:700;white-space:nowrap}
+.native-lobby-ready-actions{display:flex;gap:8px;flex-wrap:wrap}
+.native-lobby-ready-actions button{min-height:42px;padding:9px 12px;border-radius:8px;flex:1 1 140px}
+.native-lobby-ready button:focus-visible{outline:3px solid #e2f7ad;outline-offset:3px}
+.native-lobby-ready-note{font-size:11px!important;color:#b6cbc1!important}
