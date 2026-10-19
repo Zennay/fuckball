@@ -8,12 +8,15 @@
  const TYPES={
   touch:{name:'First Touch',description:'Move, kick and score in the existing native solo tutorial.',route:'touch'},
   goals:{name:'Goal Rush',description:'Finish a real timed shooting target against local AI.',route:'goals'},
-  team:{name:'Teamwork',description:'Complete a real team-link target in native 4v4 practice.',route:'team'}
+  team:{name:'Teamwork',description:'Complete a real team-link target in native 4v4 practice.',route:'team'},
+  defense:{name:'Clean Sheet',description:'Concede at most your chosen target in a full-clock real native local 1v1.',route:'defense'}
  };
  const PRESETS=[
   {name:'Fundamentals · touch → finishing → team play',order:['touch','goals','team']},
   {name:'Striker focus · finishing → touch → team play',order:['goals','touch','team']},
-  {name:'Team focus · team play → touch → finishing',order:['team','touch','goals']}
+  {name:'Team focus · team play → touch → finishing',order:['team','touch','goals']},
+  {name:'Defender focus · clean sheet → first touch → teamwork',order:['defense','touch','team']},
+  {name:'Complete player · finishing → clean sheet → teamwork',order:['goals','defense','team']}
  ];
  const make=(tag,cls='',value)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(value!==undefined)el.textContent=value;return el;};
  function data(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}}
@@ -50,7 +53,8 @@
    const value=data('fuckball.first-play-guide.v1');
    return value?.version===1&&validAt(value.at)?value.at:0;
   }
-  const key=type==='goals'?'fuckball-local-goal-rush-history-v1':'fuckball.teamwork-native-drill.v1';
+  const key=type==='goals'?'fuckball-local-goal-rush-history-v1':
+   type==='defense'?'fuckball.clean-sheet-history.v1':'fuckball.teamwork-native-drill.v1';
   const rows=data(key);
   if(!Array.isArray(rows))return 0;
   let latest=0;
@@ -60,6 +64,12 @@
     if(![60,120,180].includes(x.duration)||![1,3,5].includes(x.target)||
       !Number.isSafeInteger(x.goals)||x.goals<x.target||x.goals>999||
       !Number.isSafeInteger(x.elapsed)||x.elapsed<0||x.elapsed>180)continue;
+   }else if(type==='defense'){
+    if(![60,120,180].includes(x.duration)||![0,1,2].includes(x.allowance)||
+     !Number.isSafeInteger(x.conceded)||x.conceded<0||x.conceded>999||
+     !Number.isSafeInteger(x.scored)||x.scored<0||x.scored>999||
+     !Number.isSafeInteger(x.elapsed)||x.elapsed<x.duration||x.elapsed>x.duration+1||
+     x.completed!==(x.conceded<=x.allowance))continue;
    }else{
     if(![120,180,300].includes(x.seconds)||![2,4,6].includes(x.target)||
      !Number.isSafeInteger(x.links)||x.links<x.target||x.links>99||
@@ -183,7 +193,8 @@
   const tab=document.getElementById('practice-lab-tab-'+(step==='touch'?'first':step));
   tab?.click();
   tab?.scrollIntoView({block:'center',behavior:'smooth'});
-  const drill=step==='touch'?'.first-play-card':step==='goals'?'.goal-rush-setup':'.teamwork-panel';
+  const drill=step==='touch'?'.first-play-card':step==='goals'?'.goal-rush-setup':
+   step==='defense'?'.clean-sheet-setup':'.teamwork-panel';
   home.querySelector(drill+' button.primary')?.focus();
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }
@@ -224,7 +235,8 @@
  // refresh the completed-circuit list without disturbing a running drill.
  window.addEventListener('fuckball-practice-circuits-updated',()=>renderHistory());
  window.addEventListener('storage',event=>{
-  if([STATE,HISTORY,'fuckball.first-play-guide.v1','fuckball-local-goal-rush-history-v1','fuckball.teamwork-native-drill.v1'].includes(event.key)){
+  if([STATE,HISTORY,'fuckball.first-play-guide.v1','fuckball-local-goal-rush-history-v1',
+   'fuckball.teamwork-native-drill.v1','fuckball.clean-sheet-history.v1'].includes(event.key)){
    session=readState();if(!completed())render();
   }
  });

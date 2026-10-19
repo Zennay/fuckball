@@ -15,7 +15,7 @@
  const FIRST_TOUCH_KEY='fuckball.first-play-guide.v1',GOAL_BEST_KEY='fuckball-local-goal-rush-v1';
  const GOAL_DURATIONS=['60','120','180'];
  const CIRCUIT_HISTORY_KEY='fuckball.practice-circuit-history.v1',MAX_CIRCUITS=12;
- const CIRCUIT_TYPES=['touch','goals','team'];
+ const CIRCUIT_TYPES=['touch','goals','team','defense'];
  // Completed training summaries only. Never import active in-match circuit state.
  function normalizeCircuitHistory(raw){
   if(raw===undefined||raw===null)return[]; // Earlier v1 snapshots omit circuits.
