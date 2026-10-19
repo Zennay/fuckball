@@ -23,3 +23,13 @@ Source and static assets are available in GitHub after merge. They do **not** pr
 ## Share a private local result card
 
 Every completed saved series now has a **Save private PNG scorecard** action. The result card draws the actual local round wins/draws and time configuration on a self-contained browser canvas and downloads the PNG to the device. It contains **no usernames, tokens or account identifiers**, and deliberately labels the result as unranked and not server-verified. Incomplete series cannot be exported as results.
+
+## 2026-10-19 expansion — Native Couch 1v1 Sudden Death
+
+The same real first-goal best-of competition can now be played by two humans sharing a device. Choose Opponent → Player 2 (Couch); the original native game launches in the actual local two-player mode. Player 1 can use WASD/F or their controller; Player 2 can use arrows/Enter or a different standard controller via the integrated Couch 1v1 controls.
+
+Each native first goal or expired 60/90/120-second active-frame timer ends a round, pauses the local engine and shows the actual result. New rounds never auto-kick off; players press Play next round. Best-of 3/5/7 records actual Player 1 / Player 2 round scores, stops on majority or at the full round limit and preserves draws.
+
+Completed two-human matches have an explicit separate record schema under the same private local Sudden Death history key: opponent=human, player1, player2, and round winners player1/player2/draw. Historical AI records remain unchanged (human/ai and the original marker values). The library, Practice Lab insights, Native Data Vault and downloadable PNG scorecards recognize both formats and correctly label the human opponent; imported archives remain read-only. No fabricated AI wins, online matches, ratings, rewards or replay changes. Interrupted series are never saved as complete.
+
+Only the existing offline quickPlay native path can launch this mode; the explicit local drill clock disables regular local score/time caps for that drill only, without changing the saved player defaults or online authority. All existing exact-head CI and authorized release gates remain in place. No QA/regression suites were written or run manually.

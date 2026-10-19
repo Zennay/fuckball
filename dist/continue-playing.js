@@ -47,13 +47,24 @@
     [120,180,300].includes(x.seconds)&&[2,4,6].includes(x.target)&&
     Number.isSafeInteger(x.links)&&x.links>=0&&x.links<=99&&typeof x.completed==='boolean',
     title:x=>x.links+' / '+x.target+' teammate kick links'},
-   {key:'fuckball.native-sudden-death.v1',kind:'Sudden Death',valid:x=>
-    [3,5,7].includes(x.bestOf)&&[60,90,120].includes(x.duration)&&
-    ['human','ai','draw'].includes(x.winner)&&
-    Number.isSafeInteger(x.human)&&Number.isSafeInteger(x.ai)&&Number.isSafeInteger(x.draws)&&
-    x.human>=0&&x.ai>=0&&x.draws>=0&&Array.isArray(x.rounds)&&
-    x.rounds.length<=x.bestOf&&x.human+x.ai+x.draws===x.rounds.length,
-    title:x=>'You '+x.human+' · AI '+x.ai+' · '+x.draws+' drawn rounds'},
+   {key:'fuckball.native-sudden-death.v1',kind:'Sudden Death',valid:x=>{
+    if(![3,5,7].includes(x.bestOf)||![60,90,120].includes(x.duration)||
+     !Array.isArray(x.rounds)||x.rounds.length<1||x.rounds.length>x.bestOf||
+     !Number.isSafeInteger(x.draws)||x.draws<0||x.draws>7)return false;
+    const couch=x.opponent==='human',first=couch?'player1':'human',
+     second=couch?'player2':'ai',a=couch?x.player1:x.human,b=couch?x.player2:x.ai;
+    return (couch||x.opponent===undefined||x.opponent==='ai')&&
+     Number.isSafeInteger(a)&&Number.isSafeInteger(b)&&a>=0&&b>=0&&a<=7&&b<=7&&
+     a+b+x.draws===x.rounds.length&&
+     x.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
+      Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
+     x.winner===(a>b?first:b>a?second:'draw')&&
+     (x.rounds.length===x.bestOf||a>=Math.floor(x.bestOf/2)+1||
+      b>=Math.floor(x.bestOf/2)+1);
+   },
+    title:x=>x.opponent==='human'?
+     'Player 1 '+x.player1+' · Player 2 '+x.player2+' · '+x.draws+' drawn':
+     'You '+x.human+' · AI '+x.ai+' · '+x.draws+' drawn rounds'},
    {key:'fuckball.local-practice-journal.v1',kind:'Solo Practice',valid:x=>
     ['bot','practice','2v2','4v4'].includes(x.mode)&&[1,2].includes(x.side)&&
     Number.isSafeInteger(x.red)&&x.red>=0&&x.red<=999&&

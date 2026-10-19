@@ -12,7 +12,7 @@
   {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'},
   {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'},
   {key:'keepaway',title:'Keep Away',selector:'.keep-away-setup',intro:'Build genuine kick streaks before the local AI or a goal breaks control.'},
-  {key:'sudden',title:'Sudden Death',selector:'.sudden-death-setup',intro:'Play a genuine first-goal best-of series against native local AI.'}
+  {key:'sudden',title:'Sudden Death',selector:'.sudden-death-setup',intro:'First-goal best-of versus native AI or a real Couch 1v1 opponent.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -20,7 +20,7 @@
  const KEY='fuckball.practice-lab.display.v1';
  let saved={};try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');if(s&&typeof s==='object'&&!Array.isArray(s))saved=s;}catch{}
  const root=document.createElement('section');root.className='practice-lab';
- root.setAttribute('aria-label','Optional local AI practice lab');
+ root.setAttribute('aria-label','Optional local AI and Couch practice lab');
  const disclosure=document.createElement('details');disclosure.className='practice-lab-disclosure';
  const summary=document.createElement('summary');summary.className='practice-lab-summary';
  const summaryIcon=document.createElement('span');summaryIcon.className='practice-lab-icon';summaryIcon.textContent='↗';
@@ -36,7 +36,7 @@
  const content=document.createElement('div');content.className='practice-lab-content';
  const explanation=document.createElement('p');
  explanation.className='practice-lab-help';
- explanation.textContent='Train against native local AI only. No bots enter human Quick Match, no leaderboard, and no game rules change.';
+ explanation.textContent='Train with native local AI or play the two-human Couch Sudden Death series. Human Quick Match, server results and rankings are separate; physics is unchanged.';
  const tabs=document.createElement('div');tabs.className='practice-lab-tabs';
  tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Choose offline practice');
  const panes=document.createElement('div');panes.className='practice-lab-panes';
@@ -148,22 +148,25 @@
     Number.isSafeInteger(x.breaks)&&x.breaks>=0&&x.breaks<=9999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
     typeof x.completed==='boolean'&&x.completed===(x.best>=x.target)},
-   {key:'sudden',name:'Sudden Death',store:'fuckball.native-sudden-death.v1',valid:x=>
-    [3,5,7].includes(x.bestOf)&&[60,90,120].includes(x.duration)&&
-    Array.isArray(x.rounds)&&x.rounds.length>=1&&x.rounds.length<=x.bestOf&&
-    x.rounds.every(r=>['human','ai','draw'].includes(r.winner)&&
-     Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
-    Number.isSafeInteger(x.human)&&Number.isSafeInteger(x.ai)&&
-    Number.isSafeInteger(x.draws)&&x.human>=0&&x.ai>=0&&x.draws>=0&&
-    x.human+x.ai+x.draws===x.rounds.length&&
-    x.rounds.filter(r=>r.winner==='human').length===x.human&&
-    x.rounds.filter(r=>r.winner==='ai').length===x.ai&&
-    x.rounds.filter(r=>r.winner==='draw').length===x.draws&&
-    ['human','ai','draw'].includes(x.winner)&&
-    x.winner===(x.human>x.ai?'human':x.ai>x.human?'ai':'draw')&&
-    (x.rounds.length===x.bestOf||
-     x.human>=Math.floor(x.bestOf/2)+1||x.ai>=Math.floor(x.bestOf/2)+1)&&
-    typeof x.completed==='boolean'&&x.completed===(x.human>x.ai)}
+   {key:'sudden',name:'Sudden Death',store:'fuckball.native-sudden-death.v1',valid:x=>{
+    if(![3,5,7].includes(x.bestOf)||![60,90,120].includes(x.duration)||
+     !Array.isArray(x.rounds)||x.rounds.length<1||x.rounds.length>x.bestOf||
+     !Number.isSafeInteger(x.draws)||x.draws<0||x.draws>7)return false;
+    const couch=x.opponent==='human',first=couch?'player1':'human',
+     second=couch?'player2':'ai',a=couch?x.player1:x.human,b=couch?x.player2:x.ai;
+    return (couch||x.opponent===undefined||x.opponent==='ai')&&
+     Number.isSafeInteger(a)&&Number.isSafeInteger(b)&&a>=0&&b>=0&&a<=7&&b<=7&&
+     a+b+x.draws===x.rounds.length&&
+     x.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
+      Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
+     x.rounds.filter(r=>r.winner===first).length===a&&
+     x.rounds.filter(r=>r.winner===second).length===b&&
+     x.rounds.filter(r=>r.winner==='draw').length===x.draws&&
+     x.winner===(a>b?first:b>a?second:'draw')&&
+     (x.rounds.length===x.bestOf||a>=Math.floor(x.bestOf/2)+1||
+      b>=Math.floor(x.bestOf/2)+1)&&
+     typeof x.completed==='boolean'&&x.completed===(a>b);
+   }}
   ];
   const part=document.createElement('details');part.className='practice-insights';
   const sum=document.createElement('summary');sum.textContent='PRACTICE INSIGHTS · MY NATIVE RESULTS';
@@ -196,7 +199,7 @@
    if(!Array.isArray(rows)||rows.length>20)return[];
    return rows.filter(x=>x&&typeof x==='object'&&
     Number.isSafeInteger(x.at)&&x.at>0&&x.at<=now+DAY&&
-    (metric.key==='sudden'?metric.valid({...x,completed:x.winner==='human'}):metric.valid(x)));
+    (metric.key==='sudden'?metric.valid({...x,completed:(x.winner==='human'||x.winner==='player1')}):metric.valid(x)));
   }
   function aggregate(rows){return{
    attempts:rows.length,met:rows.filter(x=>x.completed===true).length
@@ -207,7 +210,7 @@
    board.replaceChildren();snapshot=[];
    for(const metric of metrics){
     const rows=savedRows(metric,now).filter(x=>x.at>=cutoff);
-    const counts=metric.key==='sudden'?{attempts:rows.length,met:rows.filter(x=>x.winner==='human').length}:aggregate(rows);
+    const counts=metric.key==='sudden'?{attempts:rows.length,met:rows.filter(x=>x.winner==='human'||x.winner==='player1').length}:aggregate(rows);
     const card=document.createElement('article');card.className='practice-insights-card';
     const title=document.createElement('strong');title.textContent=metric.name;
     const outcome=document.createElement('p');
