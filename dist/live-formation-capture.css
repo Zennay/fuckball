@@ -1,0 +1,8 @@
+.live-formation-capture{margin:15px 0;padding:13px;border:1px solid #7ca992;border-radius:11px;background:#203c3d;color:#e6f7db}
+.live-formation-capture[hidden]{display:none}
+.live-formation-capture strong{font-size:13px;letter-spacing:.06em;color:#e4f3b4}
+.live-formation-capture p{font-size:12px;line-height:1.5;color:#d0e4d9}
+.live-formation-capture small{font-size:11px;line-height:1.4;color:#b9d5c5;display:block;margin-top:9px}
+.live-formation-capture button{margin:9px 0;padding:9px 13px;border-radius:8px;background:#d8f2a8;color:#1c332c;border:1px solid #a4b995;font-weight:850;cursor:pointer;min-height:41px}
+.live-formation-capture button:disabled{opacity:.5;cursor:not-allowed}
+.live-formation-capture button:focus-visible{outline:3px solid #e9ffbf;outline-offset:3px}
