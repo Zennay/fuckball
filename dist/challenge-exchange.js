@@ -85,10 +85,18 @@
  const options=make('div',null,'challenge-exchange-options');
  fields.append(nameLabel,modeLabel,options);
  const actions=make('div',null,'challenge-exchange-actions');
- const save=make('button','Save on this device'),copy=make('button','Copy challenge link');
+ const save=make('button','Save on this device'),copy=make('button','Copy challenge link'),qr=make('button','Show challenge QR');
  const apply=make('button','Set up this drill');apply.className='primary';
- for(const b of [save,copy,apply])b.type='button';
- actions.append(apply,save,copy);
+ for(const b of [save,copy,apply,qr])b.type='button';
+ actions.append(apply,save,copy,qr);
+ const qrPanel=make('section',null,'challenge-exchange-qr');qrPanel.hidden=true;
+ qrPanel.setAttribute('aria-label','Share this offline challenge by QR');
+ const qrTitle=make('p','Scan to preview this native offline challenge. No account or results.');
+ const qrCanvas=make('div',null,'challenge-exchange-qr-canvas');
+ const qrActions=make('div',null,'challenge-exchange-actions');
+ const qrSave=make('button','Save QR PNG'),qrClose=make('button','Hide QR');
+ qrSave.type=qrClose.type='button';qrActions.append(qrSave,qrClose);
+ qrPanel.append(qrTitle,qrCanvas,qrActions);
  const msg=make('p','No multiplayer or rankings are changed.','challenge-exchange-status');
  msg.setAttribute('role','status');msg.setAttribute('aria-live','polite');
  const incoming=make('section',null,'challenge-exchange-incoming');
@@ -106,7 +114,7 @@
  const fileInput=make('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.hidden=true;
  fileInput.setAttribute('aria-label','Import saved offline practice challenge pack');
  transfers.append(download,upload,fileInput);saved.append(transfers);
- root.append(summary,intro,fields,actions,msg,incoming,saved);
+ root.append(summary,intro,fields,actions,qrPanel,msg,incoming,saved);
  host.prepend(root);
  let inputs=new Map(),preview=null;
  function setMsg(t){msg.textContent=t;}
@@ -198,6 +206,33 @@
    return{attempts:found.length,met:found.filter(x=>x.completed).length};
   }catch{return null;}
  }
+ function showQr(item){
+  const url=link(item);
+  if(typeof QRCode!=='function'){setMsg('QR creation unavailable. Use Copy challenge link instead.');return;}
+  if(url.length>1200){setMsg('This challenge link is too long for a compact QR. Use the link instead.');return;}
+  try{
+   qrCanvas.replaceChildren();
+   new QRCode(qrCanvas,{text:url,width:280,height:280,
+    colorDark:'#142b2c',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+   qrPanel.hidden=false;
+   qrTitle.textContent='SCAN TO PREVIEW · '+normalize(item).name+
+    ' · options only, no account or result';
+   qrPanel.scrollIntoView({block:'nearest',behavior:'auto'});
+   setMsg('Challenge QR generated on your device. The recipient chooses whether to use it.');
+  }catch{qrPanel.hidden=true;qrCanvas.replaceChildren();setMsg('QR cannot be generated here. Copy the link instead.');}
+ }
+ qr.onclick=()=>{try{showQr(record());}catch(e){setMsg(e.message);}};
+ qrClose.onclick=()=>{qrPanel.hidden=true;qrCanvas.replaceChildren();};
+ qrSave.onclick=()=>{
+  const pic=qrCanvas.querySelector('canvas')||qrCanvas.querySelector('img');
+  if(qrPanel.hidden||!pic){setMsg('Create a challenge QR first.');return;}
+  try{
+   const data=pic.tagName==='CANVAS'?pic.toDataURL('image/png'):pic.src;
+   if(!data.startsWith('data:image/png'))throw Error('QR PNG unsupported.');
+   const a=document.createElement('a');a.href=data;a.download='fuckball-practice-challenge-qr.png';
+   document.body.append(a);a.click();a.remove();setMsg('Saved your challenge QR PNG locally.');
+  }catch{setMsg('Your browser could not save the QR image. Use Copy link instead.');}
+ };
  function showList(){
   const all=storeList();list.replaceChildren();
   if(!all.length){list.append(make('p','No saved presets yet.'));return;}
@@ -206,10 +241,10 @@
    const description=make('span',item.name+' · '+MODES[item.mode].name+' · '+
     MODES[item.mode].fields.map(([k])=>k+' '+item.options[k]).join(' · '));
    const controls=make('div');
-   const load=make('button','Edit'),go=make('button','Prepare'),share=make('button','Share'),remove=make('button','Remove');
-   for(const b of [load,go,share,remove])b.type='button';
+   const load=make('button','Edit'),go=make('button','Prepare'),share=make('button','Share'),showCode=make('button','QR'),remove=make('button','Remove');
+   for(const b of [load,go,share,showCode,remove])b.type='button';
    load.onclick=()=>display(item);go.onclick=()=>{display(item);setUp(item);};
-   share.onclick=()=>copyLink(item);
+   share.onclick=()=>copyLink(item);showCode.onclick=()=>showQr(item);
    remove.onclick=()=>{
     const current=storeList();const found=current.findIndex(x=>JSON.stringify(x)===JSON.stringify(item));
     if(found===-1)return;
@@ -224,7 +259,7 @@
     'Local attempt records unavailable');
    historyNote.className='challenge-exchange-history-note';
    historyNote.title='Only retained native offline attempts with the same settings; not proof this saved preset was used. No shared or ranked results.';
-   controls.append(load,go,share,remove);row.append(description,historyNote,controls);list.append(row);
+   controls.append(load,go,share,showCode,remove);row.append(description,historyNote,controls);list.append(row);
   });
  }
  function showPreview(item){
