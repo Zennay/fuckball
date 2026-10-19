@@ -14,7 +14,7 @@
  const button=node('button','Capture native 4v4 positions');
  button.type='button';button.className='primary';
  const status=node('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- const note=node('small','Requires exactly four Red and four Blue active discs. Ball marker defaults to centre; names are not copied. A client snapshot is not an official live replay.');
+ const note=node('small','Requires exactly four Red and four Blue active discs. Visible native pitch lines are copied when available; otherwise the generic board is used. Ball marker stays at centre. No player names or match data are copied.');
  panel.append(button,status,note);pane.append(panel);
  const valid=n=>Number.isFinite(n)&&Math.abs(n)<=1e6;
  function observe(){
@@ -42,8 +42,31 @@
   const spots=participants.flatMap(list=>list.sort((a,b)=>a.id-b.id).map(p=>
    [coordinate(p.disc.pos.x,stadium.width),coordinate(p.disc.pos.y,stadium.height)]));
   spots.push([500,500]); // Native ball source not guaranteed in all host transports.
+  // Copy only visible pitch geometry, never a room URL or user-supplied name
+  // embedded in live settings. The existing Studio also re-validates its shape.
+  let geometry=null;
+  try{
+   if(typeof Utils!=='undefined'&&typeof Utils.exportStadium==='function'&&
+    typeof JSON5!=='undefined'&&typeof JSON5.parse==='function'){
+    const raw=JSON5.parse(Utils.exportStadium(stadium)),vertices=raw.vertexes;
+    if(Array.isArray(vertices)&&Array.isArray(raw.segments)){
+     const lines=[];
+     for(const segment of raw.segments){
+      if(lines.length>=160)break;
+      if(segment?.vis===false||!Number.isSafeInteger(segment?.v0)||
+       !Number.isSafeInteger(segment?.v1))continue;
+      const p=vertices[segment.v0],q=vertices[segment.v1];
+      if(!p||!q||![p.x,p.y,q.x,q.y].every(valid))continue;
+      lines.push([[coordinate(p.x,stadium.width),coordinate(p.y,stadium.height)],
+       [coordinate(q.x,stadium.width),coordinate(q.y,stadium.height)]]);
+     }
+     if(lines.length)geometry={name:String(stadium.name||'Native pitch').slice(0,45),
+      width:Math.round(stadium.width),height:Math.round(stadium.height),lines};
+    }
+   }
+  }catch{/* A custom stadium may not expose parseable visible lines; keep the default private board. */}
   return{spots,at:Date.now(),stadium:String(stadium.name||'Native room').slice(0,45),
-   teamSizes:[4,4]};
+   geometry,teamSizes:[4,4]};
  }
  function show(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
@@ -59,7 +82,7 @@
   if(!snapshot){status.textContent='The native roster changed; nothing was saved.';show();return;}
   if(!window.confirm('Save these eight observed disc positions to a new private Formation Studio plan? No player names or account data will be included.'))return;
   const detail={version:1,source:'custom-room-local-snapshot',spots:snapshot.spots,at:snapshot.at,
-   stadium:snapshot.stadium,saved:false,message:''};
+   stadium:snapshot.stadium,geometry:snapshot.geometry,saved:false,message:''};
   window.dispatchEvent(new CustomEvent('fuckball:private-live-formation',{detail}));
   status.textContent=detail.saved?'Private formation saved. Open Formation Studio on Home to edit or export it.':
    (detail.message||'Formation Studio did not accept this snapshot.');
