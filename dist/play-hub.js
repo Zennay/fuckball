@@ -48,13 +48,15 @@
  const modeButtons=new Map();
  const status=node('p','Choose your format, then open the real Quick Match controls.','play-hub-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- const primary=action('Open human Quick Match →',openQueue,'play-hub-primary');
+ const primary=action('Configure human Quick Match →',openQueue,'play-hub-primary');
+ const queueNow=action('▶ Find 1v1 now',findHumanNow,'play-hub-queue-now');
+ queueNow.title='Start the real human matchmaking queue with one deliberate click. Every player still has to accept the ready check.';
  for(const mode of playlists){
   const b=action(mode,()=>chooseMode(mode),'play-hub-format');
   b.setAttribute('aria-label',mode+' human Quick Match, '+(2*Number(mode[0]))+' total real players');
   modes.append(b);modeButtons.set(mode,b);
  }
- human.append(humanCopy,modes,primary);
+ human.append(humanCopy,modes,queueNow,primary);
  const rooms=node('article',null,'play-hub-card');
  rooms.append(node('span','02 · ONLINE · CUSTOM ROOM','play-hub-label'),
   node('h3','PLAY WITH FRIENDS'),
@@ -62,11 +64,19 @@
  const roomActions=node('div',null,'play-hub-actions');
  roomActions.append(
   action('Browse rooms',()=>openSection('.room-browser','No public room browser is available here.','Public room browser opened.'),'play-hub-secondary'),
+  action('Join by invite',()=>{
+   const state=activeState();
+   if(state.server||state.pending||state.peer||state.inQueue||state.ready)
+    return announce('Leave your active room or cancel your human matchmaking queue before joining another room.');
+   openSection('.direct-invite-join','The invitation form is unavailable.',
+    'Paste an invite URL or room code, then confirm the join. Only the server can admit you.');
+  },'play-hub-secondary'),
   action('Create a room',()=>{
    if(!canSwitch('create a room'))return;
    const b=document.getElementById('quickOnline');
    if(!b||b.disabled)return announce('Creating a room is unavailable.');
-   b.click();announce('Opening existing room creation controls.');
+   if(!startNativeCustomRoom(true))return announce('Existing room setup was not started.');
+   announce('Opening existing room creation controls.');
   },'play-hub-secondary')
  );
  rooms.append(roomActions);
@@ -100,16 +110,18 @@
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
   const server=typeof serverLink!=='undefined'&&!!serverLink?.room;
+  const pending=typeof serverLink!=='undefined'&&!!serverLink&&!serverLink.room&&!serverLink.quickMatchMode;
   const peer=typeof peerConnected!=='undefined'&&!!peerConnected;
   const inQueue=!!home.querySelector('.quick-queue-actions button:not([hidden])');
   const ready=!!home.querySelector('.quick-ready:not([hidden])');
   const local=typeof started!=='undefined'&&!!started;
   const playingReplay=typeof replay!=='undefined'&&!!replay;
-  return {server,peer,inQueue,ready,local,playingReplay};
+  return {server,pending,peer,inQueue,ready,local,playingReplay};
  }
  function announce(message){status.textContent=message;}
  function canSwitch(what){
   const state=activeState();
+  if(state.pending)return void announce('An online room is still connecting. Cancel that connection explicitly before you '+what+'.');
   if(state.server||state.peer)
    return void announce('You are connected to a live room. Return to the match and leave it explicitly before you '+what+'.');
   if(state.inQueue||state.ready)
@@ -123,7 +135,9 @@
   if(!canSwitch('start '+name))return;
   const b=document.getElementById(id);
   if(!b||b.disabled)return announce(name+' is unavailable.');
-  b.click();
+  if(!quickPlay(id==='quickSquad'?'4v4':'bot',true)){
+   announce(name+' could not start; the prior session remains.');return;
+  }
   announce('Opened '+name+' via the original local game controls.');
  }
  function reveal(target){
@@ -140,8 +154,8 @@
  }
  function openQueue(){
   const state=activeState();
-  if(state.server||state.peer||state.local||state.playingReplay)
-   return announce('A game is currently open. Finish or leave it before searching for humans.');
+  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
+   return announce('A room is connecting or a game is open. Finish or leave it before searching for humans.');
   if(state.inQueue||state.ready)return openSection('.quick-queue-panel',
    'The existing human queue is unavailable.','Returning to your ongoing search or ready check.');
   const native=home.querySelector('.quick-queue-panel');
@@ -154,6 +168,29 @@
   reveal(native);
   announce('Ready to search for '+playlist+'. Choose the native Find Match button to join; no search has started yet.');
  }
+ function findHumanNow(){
+  const state=activeState();
+  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
+   return announce('Finish or cancel your connecting room, game or replay before starting human Quick Match.');
+  if(state.inQueue||state.ready)
+   return openSection('.quick-queue-panel','The human queue is unavailable.',
+    'An existing search or ready check is active. Finish or cancel it first.');
+  const native=home.querySelector('.quick-queue-panel');
+  const preferred=native?.querySelector('select[aria-label="Preferred human Quick Match format"]');
+  const start=native?.querySelector('.quick-queue-shortcut-actions button.primary');
+  // Never synthesize a network request, bypass the server-owned queue, or accept ready.
+  if(!native||!preferred||!start||start.disabled)
+   return openQueue();
+  if(!settings.account?.token||!document.getElementById('serverAddress')?.value.trim()){
+   openQueue();
+   return announce('Sign in and choose a live multiplayer server before starting. The native Quick Match controls are open.');
+  }
+  preferred.value=playlist;
+  preferred.dispatchEvent(new Event('change',{bubbles:true}));
+  start.click();
+  reveal(native);
+  announce('Requested a real '+playlist+' human search through the native server queue. Every human must still accept the ready check.');
+ }
  function chooseMode(mode){
   if(!playlists.includes(mode))return;
   playlist=mode;
@@ -162,7 +199,8 @@
    b.classList.toggle('selected',active);
    b.setAttribute('aria-pressed',String(active));
   }
-  primary.textContent='Choose '+mode+' human match →';
+  primary.textContent='Configure '+mode+' human match →';
+  queueNow.textContent='▶ Find '+mode+' now';
   const state=activeState();
   if(state.inQueue||state.ready){
    announce('You selected '+mode+' for next time. Your current queue or ready check was not changed.');
@@ -176,6 +214,8 @@
   if(state.server||state.peer){
    current.textContent='↗ Return to online room';
    network.textContent='● ONLINE ROOM ACTIVE';
+  }else if(state.pending){
+   network.textContent='● CONNECTING TO ONLINE ROOM';
   }else if(state.inQueue||state.ready){
    network.textContent='● HUMAN QUEUE / READY CHECK';
   }else if(state.local||state.playingReplay){

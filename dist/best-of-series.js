@@ -455,7 +455,14 @@
     try{scheduleGame(v,i,date.value,venue.value.trim());}catch(e){inform(e.message);}
    };
    schedule.append(label('Provisional local date',date),label('Venue',venue),save,clear);
-   card.append(line,form,schedule);grid.append(card);
+   card.append(line,form,schedule);
+   if(!data.winner||g.redScore!==null){
+    const poster=button('▣ Design match poster',()=>window.dispatchEvent(
+     new CustomEvent('fuckball:open-private-poster-fixture',{detail:{uid:v.id+'-'+g.id}})));
+    poster.className='series-game-poster';
+    card.append(poster);
+   }
+   grid.append(card);
   }
   board.append(grid);
  }

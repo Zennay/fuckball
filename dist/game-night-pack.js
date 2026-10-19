@@ -2,7 +2,7 @@
 // Portable, device-local game night: no account, server, room or verified match state.
 (function(){
  const home=document.getElementById('homeView');if(!home)return;
- const FORMAT='fuckball-private-game-night',VERSION=3,MAX_FILE=640*1024;
+ const FORMAT='fuckball-private-game-night',VERSION=4,MAX_FILE=2*1024*1024;
  const TYPES=[
   {kind:'leagues',key:'fuckball.local-tournaments.v1',max:8,bytes:128*1024},
   {kind:'cups',key:'fuckball.private-knockout-cups.v1',max:8,bytes:96*1024},
@@ -145,7 +145,7 @@
  }
  // Reuse the exact local Poster Designer contract. All text remains optional
  // except both team names, and user-entered results are never server-verified.
- const posterLimits={competition:60,home:30,away:30,venue:60,tagline:84};
+ const posterLimits={competition:60,home:35,away:35,venue:60,tagline:84};
  const posterText=(s,max)=>typeof s==='string'&&s.length<=max&&s===s.trim()&&
   !/[\u0000-\u001f\u007f-\u009f]/.test(s);
  function poster(x){
@@ -207,6 +207,49 @@ function bestOfSeries(raw){
    throw Error(type+' exceeds its own storage limit.');
   return result;
  }
+ 
+ // Private attendance is organiser-entered and does not make an official RSVP.
+ const RSVP_KEY='fuckball.private-match-attendance.v1',RSVP_LIMIT=1024*1024;
+ const RSVP_KEY_PATTERN=/^(League|Knockout|Series):([a-f0-9-]{16,50}):(r[1-9]\d*g[1-9]\d*|r[1-9]\d*m[1-9]\d*|g[1-7])$/i;
+ const kindFor={League:'leagues',Knockout:'cups',Series:'series'};
+ function validateAttendance(entries){
+  if(!Array.isArray(entries)||entries.length>200)throw Error('Invalid attendance backup.');
+  const keys=new Set();
+  return entries.map(e=>{
+   if(!e||typeof e.key!=='string'||!RSVP_KEY_PATTERN.test(e.key)||keys.has(e.key)||
+     !Array.isArray(e.people)||e.people.length>24)throw Error('Invalid attendance match.');
+   keys.add(e.key);
+   const names=new Set();let red=0,blue=0;
+   const people=e.people.map(p=>{
+    const side=p?.side===undefined?'bench':p.side;
+    if(!p||!nameOk(p.name,35)||!['going','maybe','out'].includes(p.status)||
+      typeof p.note!=='string'||p.note.length>120||
+      /[\u0000-\u001f\u007f-\u009f]/.test(p.note)||
+      !['bench','red','blue'].includes(side)||(side!=='bench'&&p.status!=='going')||
+      names.has(p.name.toLocaleLowerCase()))throw Error('Invalid attendance player or lineup.');
+    names.add(p.name.toLocaleLowerCase());
+    if(side==='red')red++;if(side==='blue')blue++;
+    return {name:p.name,status:p.status,note:p.note,side};
+   });
+   if(red>4||blue>4)throw Error('A saved private lineup exceeds four players per side.');
+   return {key:e.key,people};
+  });
+ }
+ function readAttendance(){
+  const raw=localStorage.getItem(RSVP_KEY);
+  if(raw!==null&&raw.length>RSVP_LIMIT)throw Error('Stored attendance exceeds capacity.');
+  const value=raw?JSON.parse(raw):{version:1,entries:[]};
+  if(!value||value.version!==1)throw Error('Invalid private attendance data.');
+  return {raw,entries:validateAttendance(value.entries)};
+ }
+ function hasParentFixture(key,lists){
+  const m=key.match(RSVP_KEY_PATTERN);if(!m)return false;
+  const parent=lists[kindFor[m[1]]]?.find(x=>x.id.toLowerCase()===m[2].toLowerCase());
+  if(!parent)return false;
+  const fixtures=m[1]==='League'?parent.fixtures:m[1]==='Knockout'?parent.matches:parent.games;
+  return fixtures.some(f=>f.id===m[3]);
+ }
+
  function readAll(){
   const snapshots={},lists={};
   for(const item of TYPES){
@@ -223,7 +266,7 @@ function bestOfSeries(raw){
  const summary=dom('summary','🎒 GAME NIGHT PACK · OPEN');
  const inner=dom('div',undefined,'game-night-body');
  inner.append(dom('h2','TAKE YOUR GAME NIGHT WITH YOU.'),
-  dom('p','Backup private league calendars, knockout cups, best-of series, tactical diagrams and saved matchday posters together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
+  dom('p','Backup private leagues, knockout cups, best-of series, tactical diagrams, posters and private attendance together. Restore additional copies on another device. This never transfers recorded HBR2 files, accounts or verified online scores.'));
  const controls=dom('div',undefined,'game-night-controls');
  const exportButton=button('↓ Backup game night',exportPack);
  const importButton=button('↑ Restore game night',()=>file.click());
@@ -246,12 +289,16 @@ function bestOfSeries(raw){
     const card=dom('article',undefined,'game-night-counter');
     card.append(dom('strong',lists[type].length),dom('span',title));grid.append(card);
    }
-   info('Only local planning data. All scores are self-entered and unverified.');
+   const count=readAttendance().entries.reduce((sum,e)=>sum+e.people.length,0);
+    const rsvpCard=dom('article',undefined,'game-night-counter');
+    rsvpCard.append(dom('strong',count),dom('span','Private attendance names'));
+    grid.append(rsvpCard);
+    info('Only local planning data. All scores are self-entered and unverified.');
   }catch(error){info('Unable to read private game night data: '+(error.message||'Storage error'));}
  }
  function download(filename,value){
   const blob=new Blob([value],{type:'application/json'});
-  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 640 KiB portable limit.');
+  if(blob.size>MAX_FILE)throw Error('Backup exceeds the 2 MiB portable limit.');
   const url=URL.createObjectURL(blob),link=dom('a');
   link.href=url;link.download=filename;link.click();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -260,7 +307,8 @@ function bestOfSeries(raw){
   if(busy)return;busy=true;exportButton.disabled=true;
   try{
    const {lists}=readAll();
-   const pack={format:FORMAT,version:VERSION,createdAt:Date.now(),
+   const attendance=validateAttendance(readAttendance().entries.filter(e=>hasParentFixture(e.key,lists)));
+   const pack={format:FORMAT,version:VERSION,createdAt:Date.now(),attendance,
     ...lists,notice:'Private user-organised plans only; not verified server results'};
    download('fuckball-private-game-night-'+new Date().toISOString().slice(0,10)+'.json',
     JSON.stringify(pack,null,2));
@@ -271,38 +319,59 @@ function bestOfSeries(raw){
  file.onchange=async()=>{
   const candidate=file.files?.[0];file.value='';if(!candidate||busy)return;
   if(candidate.size<1||candidate.size>MAX_FILE)
-   return info('Select a private Game Night Pack JSON file smaller than 640 KiB.');
+   return info('Select a private Game Night Pack JSON file smaller than 2 MiB.');
   busy=true;importButton.disabled=true;
   try{
    const data=JSON.parse(await candidate.text());
-   if(data?.format!==FORMAT||![1,2,VERSION].includes(data.version)||!atOk(data.createdAt))
+   if(data?.format!==FORMAT||![1,2,3,VERSION].includes(data.version)||!atOk(data.createdAt))
     throw Error('Unsupported Game Night Pack.');
    const imported={};
    for(const item of TYPES)imported[item.kind]=validated(item.kind,
      (data.version===1&&item.kind==='posters')||(data.version<3&&item.kind==='series')?[]:data[item.kind]);
+   const importedAttendance=validateAttendance(data.version===VERSION?data.attendance:[]);
+   if(importedAttendance.some(e=>!hasParentFixture(e.key,imported)))
+    throw Error('Attendance refers to an unrecognised imported fixture.');
    const {snapshots,lists}=readAll(),next={},totals={};
+   const currentAttendance=readAttendance();snapshots[RSVP_KEY]=currentAttendance.raw;
+   const idRemap=new Map();
    const now=Date.now();
    for(const item of TYPES){
     const incoming=imported[item.kind];
     if(incoming.length+lists[item.kind].length>item.max)
      throw Error('Not enough room for '+item.kind+'. Export and delete individual old items first.');
     const additions=incoming.map(x=>{
-     if(item.kind==='posters')return {...x,id:uuid()};
-     const copy={...x,id:uuid(),updatedAt:now};
+     const newId=uuid();
+     if(['leagues','cups','series'].includes(item.kind))
+      idRemap.set(item.kind+':'+x.id.toLowerCase(),newId);
+     if(item.kind==='posters')return {...x,id:newId};
+     const copy={...x,id:newId,updatedAt:now};
      if(item.kind!=='formations')copy.createdAt=now;
      return copy;
     });
     next[item.key]=JSON.stringify(validated(item.kind,[...lists[item.kind],...additions]));
     totals[item.kind]=additions.length;
    }
+   const restoredAttendance=importedAttendance.map(e=>{
+    const m=e.key.match(RSVP_KEY_PATTERN);
+    const id=idRemap.get(kindFor[m[1]]+':'+m[2].toLowerCase());
+    if(!id)throw Error('An imported attendance entry lost its competition.');
+    return {key:m[1]+':'+id+':'+m[3],people:e.people};
+   });
+   const allAttendance=validateAttendance([...currentAttendance.entries,...restoredAttendance]);
+   const attendanceValue=JSON.stringify({version:1,entries:allAttendance});
+   if(attendanceValue.length>RSVP_LIMIT)throw Error('Attendance exceeds this device capacity.');
+   next[RSVP_KEY]=attendanceValue;
+   const restoredNames=restoredAttendance.reduce((sum,e)=>sum+e.people.length,0);
    if(!totals.leagues&&!totals.cups&&!totals.series&&!totals.formations&&!totals.posters)
     throw Error('This pack has no game night items to restore.');
    if(!window.confirm('Add '+totals.leagues+' leagues, '+totals.cups+' cups, '+
       totals.series+' best-of series, '+totals.formations+' tactics plans and '+totals.posters+
-      ' poster designs to this device? Existing items are preserved.'))return;
+      ' poster designs and '+restoredNames+' organiser-entered attendance names to this device? Existing items are preserved.'))return;
    // localStorage has no multi-key transaction. Snapshot each old value, stage every new
    // value, then do bounded synchronous writes with rollback on a storage exception.
    const written=[];
+   if(localStorage.getItem(RSVP_KEY)!==snapshots[RSVP_KEY])
+    throw Error('Attendance changed in another tab. Refresh and retry.');
    try{
     for(const item of TYPES){
      if(localStorage.getItem(item.key)!==snapshots[item.key])
@@ -311,6 +380,7 @@ function bestOfSeries(raw){
     for(const item of TYPES){
      localStorage.setItem(item.key,next[item.key]);written.push(item.key);
     }
+   localStorage.setItem(RSVP_KEY,next[RSVP_KEY]);written.push(RSVP_KEY);
    }catch(error){
     for(const key of written.reverse()){
      try{
@@ -329,11 +399,15 @@ function bestOfSeries(raw){
      storageArea:localStorage,url:location.href
     }));
    }
+   window.dispatchEvent(new StorageEvent('storage',{
+    key:RSVP_KEY,oldValue:snapshots[RSVP_KEY],newValue:next[RSVP_KEY],
+    storageArea:localStorage,url:location.href
+   }));
    window.dispatchEvent(new Event('fuckball:private-competition-change'));
    inspect();
    info('Restored '+totals.leagues+' leagues, '+totals.cups+' knockout cups, '+
     totals.series+' best-of series, '+totals.formations+' tactics plans and '+totals.posters+
-    ' poster designs as additional private copies. No server data changed.');
+    ' poster designs and '+restoredNames+' attendance names as additional private copies. No server data changed.');
   }catch(error){info('Game Night Pack not restored: '+(error.message||'File/storage error'));}
   finally{busy=false;importButton.disabled=false;}
  };

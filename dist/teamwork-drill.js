@@ -12,7 +12,7 @@
  const head=document.createElement('div');head.className='teamwork-panel-head';
  const heading=document.createElement('h2');heading.textContent='TEAMWORK TRAINING.';
  const intro=document.createElement('p');
- intro.textContent='Practise link-up play with your 4v4 AI team: kick the ball, then get a teammate to kick it before an opponent does. Every link is detected from real engine kicks — not a claimed completed pass.';
+ intro.textContent='Practise link-up play with your 4v4 AI team. Kick, then have a teammate kick before an opponent. The drill has no early match score/time cap, so the full active clock is possible; your ordinary settings remain. These are native kicks, not verified passes.';
  head.append(heading,intro);
  const fields=document.createElement('div');fields.className='teamwork-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Active play time';
@@ -102,7 +102,7 @@
  };
  refresh();
  function ready(){
-  if(serverLink?.room||peerConnected||replay||!room||!started||paused||match.hidden)return null;
+  if(serverLink||peerConnected||replay||!room||!started||paused||match.hidden)return null;
   if(document.getElementById('mode')?.value!=='4v4'||!room.gameState)return null;
   const human=room.state?.players?.find?.(p=>p.id===1);
   const team=human?.team?.id;
@@ -111,10 +111,11 @@
   return team;
  }
  function blocked(){
-  if(serverLink?.room||peerConnected)return 'Leave the active online room before starting a local drill.';
+  if(serverLink||peerConnected)return 'Leave or cancel the active online room or connecting session before starting a local drill.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])'))return 'Cancel the human Quick Match search before local practice.';
   const readyCheck=document.querySelector('.quick-ready:not([hidden])');
   if(readyCheck)return 'Complete or decline the human matchmaking ready-check first.';
+  if(document.getElementById('joinScreen')?.hidden===false)return 'Close the open room invitation before starting local practice.';
   return '';
  }
  function paint(){
@@ -143,8 +144,13 @@
  }
  launch.onclick=()=>{
   const reason=blocked();if(reason){status.textContent=reason;return;}
+  if((started||replay)&&!window.confirm('Start Teamwork with a fresh local 4v4 match? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   status.textContent='Current local game or replay kept. Teamwork did not start.';return;
+  }
   quit();
-  squad.click(); // Existing sandbox 4v4 setup; no new engine or modified rules.
+  if(!quickPlay('4v4',true,true)){
+   status.textContent='Original local 4v4 did not start; your session was preserved.';return;
+  } // Existing sandbox 4v4 setup, no alternate game engine.
   const side=ready();
   if(!side){status.textContent='4v4 local practice could not start. Use 4v4 Practice first.';return;}
   const seconds=Number(duration.value),goal=Number(target.value);
@@ -155,7 +161,7 @@
   paint();
  };
  stop.onclick=()=>finish('TEAMWORK · STOPPED',false);
- restart.onclick=()=>{quit();launch.click();};
+ restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=session,d=event.detail;

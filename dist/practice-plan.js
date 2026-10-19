@@ -8,13 +8,16 @@
  const SOURCES=[
   {id:'goals',name:'Finishing',key:'fuckball-local-goal-rush-history-v1',limit:20,tab:'goals',type:'goal'},
   {id:'team',name:'Teamwork',key:'fuckball.teamwork-native-drill.v1',limit:20,tab:'team',type:'team'},
+  {id:'defense',name:'Defending',key:'fuckball.clean-sheet-history.v1',limit:20,tab:'defense',type:'defense'},
+  {id:'rockets',name:'Rocket Kick',key:'fuckball.native-ball-burst-history.v1',limit:20,tab:'rockets',type:'rockets'},
+  {id:'comeback',name:'Comeback Arena',key:'fuckball.native-comeback-arena.v1',limit:20,tab:'comeback',type:'comeback'},
   {id:'matches',name:'Match experience',key:'fuckball.local-practice-journal.v1',limit:30,tab:null,type:'match'}
  ];
- const defaultGoals={goals:3,team:2,matches:2};
+ const defaultGoals={goals:3,team:2,defense:2,rockets:2,comeback:2,matches:2};
  const FIRST_TOUCH_KEY='fuckball.first-play-guide.v1',GOAL_BEST_KEY='fuckball-local-goal-rush-v1';
  const GOAL_DURATIONS=['60','120','180'];
  const CIRCUIT_HISTORY_KEY='fuckball.practice-circuit-history.v1',MAX_CIRCUITS=12;
- const CIRCUIT_TYPES=['touch','goals','team'];
+ const CIRCUIT_TYPES=['touch','goals','team','defense','rockets','ladder','comeback'];
  // Completed training summaries only. Never import active in-match circuit state.
  function normalizeCircuitHistory(raw){
   if(raw===undefined||raw===null)return[]; // Earlier v1 snapshots omit circuits.
@@ -110,6 +113,24 @@
    Number.isSafeInteger(row.goals)&&row.goals>=0&&row.goals<=999&&
    Number.isSafeInteger(row.elapsed)&&row.elapsed>=0&&row.elapsed<=180&&
    typeof row.completed==='boolean';
+  if(type==='rockets')return [60,120,180].includes(row.duration)&&
+   [3,5,7].includes(row.threshold)&&[1,3,5].includes(row.target)&&
+   Number.isSafeInteger(row.hits)&&row.hits>=0&&row.hits<=999&&
+   Number.isSafeInteger(row.kicks)&&row.kicks>=row.hits&&row.kicks<=9999&&
+   Number.isSafeInteger(row.elapsed)&&row.elapsed>=0&&row.elapsed<=row.duration+1&&
+   Number.isFinite(row.peak)&&row.peak>=0&&row.peak<=1000&&
+   typeof row.completed==='boolean'&&row.completed===(row.hits>=row.target);
+  if(type==='comeback')return [60,120,180].includes(row.duration)&&
+   [1,2,3].includes(row.deficit)&&Number.isSafeInteger(row.scored)&&
+   row.scored>=0&&row.scored<=999&&Number.isSafeInteger(row.conceded)&&
+   row.conceded>=0&&row.conceded<=999&&Number.isSafeInteger(row.elapsed)&&
+   row.elapsed>=row.duration&&row.elapsed<=row.duration+1&&
+   typeof row.completed==='boolean'&&row.completed===(row.scored>row.conceded+row.deficit);
+  if(type==='defense')return [60,120,180].includes(row.duration)&&[0,1,2].includes(row.allowance)&&
+   Number.isSafeInteger(row.conceded)&&row.conceded>=0&&row.conceded<=999&&
+   Number.isSafeInteger(row.scored)&&row.scored>=0&&row.scored<=999&&
+   Number.isSafeInteger(row.elapsed)&&row.elapsed>=row.duration&&row.elapsed<=row.duration+1&&
+   typeof row.completed==='boolean'&&row.completed===(row.conceded<=row.allowance);
   if(type==='team')return [120,180,300].includes(row.seconds)&&[2,4,6].includes(row.target)&&
    Number.isSafeInteger(row.links)&&row.links>=0&&row.links<=99&&
    Number.isSafeInteger(row.attempts)&&row.attempts>=0&&row.attempts<=9999&&
@@ -251,6 +272,14 @@
   if(!validRecord(value,source.type))throw Error('Backup has an invalid '+source.name+' record.');
   if(source.type==='goal')return{at:value.at,duration:value.duration,target:value.target,
    goals:value.goals,elapsed:value.elapsed,completed:value.completed};
+  if(source.type==='rockets')return{at:value.at,duration:value.duration,
+   threshold:value.threshold,target:value.target,hits:value.hits,kicks:value.kicks,
+   elapsed:value.elapsed,peak:value.peak,completed:value.completed};
+  if(source.type==='comeback')return{at:value.at,duration:value.duration,
+   deficit:value.deficit,scored:value.scored,conceded:value.conceded,
+   elapsed:value.elapsed,completed:value.completed};
+  if(source.type==='defense')return{at:value.at,duration:value.duration,allowance:value.allowance,
+   conceded:value.conceded,scored:value.scored,elapsed:value.elapsed,completed:value.completed};
   if(source.type==='team')return{at:value.at,seconds:value.seconds,target:value.target,
    links:value.links,attempts:value.attempts,elapsed:value.elapsed,completed:value.completed};
   const allowedFocus=['none','finishing','passing','defense','positioning','decision'];
@@ -263,7 +292,8 @@
   if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Missing saved weekly goals.');
   const result={};
   for(const key of Object.keys(defaultGoals)){
-   const value=data[key];
+   // Older v1 snapshots predate Clean Sheet. Preserve existing targets.
+   const value=(key==='defense'||key==='rockets'||key==='comeback')&&data[key]===undefined?defaultGoals[key]:data[key];
    if(!Number.isSafeInteger(value)||value<0||value>14)
     throw Error('Invalid weekly target for '+key+'.');
    result[key]=value;
@@ -277,7 +307,8 @@
    throw Error('This is not a Fuckball local practice snapshot.');
   const targets=targetSnapshot(data.targets),streams={};
   for(const source of SOURCES){
-   const list=data.sessions[source.id];
+   // Older v1 exports legitimately have no defending stream at all.
+   const list=(source.id==='defense'||source.id==='rockets'||source.id==='comeback')&&data.sessions[source.id]===undefined?[]:data.sessions[source.id];
    if(!Array.isArray(list)||list.length>source.limit)
     throw Error('Backup exceeds local '+source.name+' history limit.');
    streams[source.id]=list.map(item=>normalizeSnapshotRecord(item,source));

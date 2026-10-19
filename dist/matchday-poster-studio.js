@@ -4,6 +4,7 @@
   const host=document.getElementById('homeView');
   if (!host) return;
   const FIXTURES_KEY='fuckball.local-tournaments.v1';
+  const SERIES_KEY='fuckball.private-series.v1';
   const DRAFTS_KEY='fuckball.custom-poster-drafts.v1';
   const MAX_DRAFTS=8, MAX_STORE=96*1024;
   const make=(tag,text,cls)=>{
@@ -26,7 +27,7 @@
   };
   const clean=(text,max)=>typeof text==='string'&&text.length<=max&&text.trim()===text&&
     !/[\u0000-\u001f\u007f-\u009f]/.test(text);
-  const TEXT_LIMITS={competition:60,home:30,away:30,venue:60,tagline:84};
+  const TEXT_LIMITS={competition:60,home:35,away:35,venue:60,tagline:84};
   const themes={
     lime:{back:'#111f23',panel:'#1e3031',accent:'#dafb66',text:'#f6f8ef',muted:'#b8cac4'},
     ice:{back:'#10212d',panel:'#1b3341',accent:'#91d9ff',text:'#f3faff',muted:'#b7cbd7'},
@@ -63,8 +64,8 @@
   const fixtureRow=make('div',null,'poster-studio-fixture-row');
   fixtureRow.append(choose,refresh);
   const competition=input('text',60,'Friendly League');
-  const home=input('text',30,'Red');
-  const away=input('text',30,'Blue');
+  const home=input('text',35,'Red');
+  const away=input('text',35,'Blue');
   const venue=input('text',60,'Optional pitch / venue');
   const tagline=input('text',84,'Bring your best game.');
   const kickoff=input('datetime-local');
@@ -179,9 +180,51 @@
     if(!ok)notify('Enter two different team names. Result mode needs whole scores from 0 to 99.');
     else if(status.textContent.startsWith('Enter two different'))notify('');
   }
+  function readSeriesFixtures(){
+    const stored=localStorage.getItem(SERIES_KEY);if(!stored)return[];
+    if(stored.length>128*1024)throw Error('Series collection exceeds its 128 KiB limit.');
+    const records=JSON.parse(stored);
+    if(!Array.isArray(records)||records.length>12)throw Error('Invalid saved best-of-series collection.');
+    const list=[];
+    for(const serie of records){
+      if(!serie||serie.version!==1||
+       typeof serie.id!=='string'||!/^[a-f0-9-]{16,50}$/i.test(serie.id)||
+       !clean(serie.name,60)||!serie.name||!clean(serie.red,35)||!serie.red||
+       !clean(serie.blue,35)||!serie.blue||
+       serie.red.toLocaleLowerCase()===serie.blue.toLocaleLowerCase()||
+       ![3,5,7].includes(serie.bestOf)||!Array.isArray(serie.games)||
+       serie.games.length!==serie.bestOf)
+       throw Error('Unrecognised private series format.');
+      const need=Math.floor(serie.bestOf/2)+1;
+      let red=0,blue=0,seenEmpty=false,decided=false;
+      for(const [i,game]of serie.games.entries()){
+       const time=game?.kickoff===undefined?null:game.kickoff,venue=game?.venue??'';
+       if(!game||game.id!=='g'+(i+1)||
+        !((game.redScore===null&&game.blueScore===null)||
+         (Number.isSafeInteger(game.redScore)&&Number.isSafeInteger(game.blueScore)&&
+          game.redScore>=0&&game.blueScore>=0&&game.redScore<=99&&game.blueScore<=99&&
+          game.redScore!==game.blueScore))||
+        !(time===null||(Number.isSafeInteger(time)&&time>=1577836800000&&time<=4102444800000))||
+        !clean(venue,60))
+        throw Error('Invalid game score or kickoff in private series.');
+       if(game.redScore===null)seenEmpty=true;
+       else{
+        if(seenEmpty||decided)throw Error('Best-of series result order is impossible.');
+        if(game.redScore>game.blueScore)red++;else blue++;
+        if(red>=need||blue>=need)decided=true;
+       }
+       // A finished series never advertises unused future games as live fixtures.
+       if(decided&&game.redScore===null)continue;
+       list.push({league:serie.name,home:serie.red,away:serie.blue,
+        time,venue,red:game.redScore,blue:game.blueScore,game:i+1,
+        uid:serie.id+'-'+game.id});
+      }
+    }
+    return list;
+  }
   function readFixtures(){
     const raw=localStorage.getItem(FIXTURES_KEY);
-    if(!raw)return [];
+    if(!raw)return readSeriesFixtures();
     if(raw.length>128*1024)throw Error('League collection exceeds the safe reading limit.');
     const data=JSON.parse(raw);
     if(!Array.isArray(data)||data.length>8)throw Error('League collection is invalid.');
@@ -207,6 +250,9 @@
             String(f.id||'').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30)});
       }
     }
+    try{all.push(...readSeriesFixtures());}
+    catch(error){notify('Saved series posters could not be loaded: '+(error.message||'Invalid series')+
+      '. League posters remain available.');}
     return all.sort((a,b)=>(a.time||Number.MAX_SAFE_INTEGER)-(b.time||Number.MAX_SAFE_INTEGER)).slice(0,256);
   }
   function localDate(ms){
@@ -220,7 +266,7 @@
     catch{fixtures=[];notify('Stored fixture data is invalid or unavailable. You can still design a poster manually.');}
     choose.replaceChildren(new Option('Create poster manually',''));
     fixtures.forEach((f,i)=>{
-      const label=f.league+' · '+f.home+' vs '+f.away+(f.time?' · '+new Date(f.time).toLocaleDateString():'');
+      const label=f.league+(f.game?' · Game '+f.game:'')+' · '+f.home+' vs '+f.away+(f.time?' · '+new Date(f.time).toLocaleDateString():'');
       choose.add(new Option(label,String(i)));
     });
     choose.value='';
@@ -231,6 +277,7 @@
     const f=fixtures[Number(choose.value)];if(!f)return;
     competition.value=f.league;home.value=f.home;away.value=f.away;
     venue.value=f.venue;kickoff.value=localDate(f.time);
+    tagline.value=f.game?'PRIVATE BEST-OF SERIES · GAME '+f.game:'PLAY FOR THE LOVE OF FOOTBALL.';
     format.value=f.red===null?'fixture':'result';
     scoreRed.value=String(f.red??0);scoreBlue.value=String(f.blue??0);
     scoreRow.hidden=format.value!=='result';draw();
@@ -439,7 +486,7 @@
     });
   }
   window.addEventListener('storage',e=>{
-    if(e.key===FIXTURES_KEY)refreshFixtures();
+    if(e.key===FIXTURES_KEY||e.key===SERIES_KEY)refreshFixtures();
     if(e.key===DRAFTS_KEY){
       try{drafts=readDrafts();draftsSnapshot=localStorage.getItem(DRAFTS_KEY)||'';
         draftsBlocked=false;activeDraftId=null;renderDrafts();}
