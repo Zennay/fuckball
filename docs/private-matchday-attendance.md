@@ -66,3 +66,147 @@ date is not evidence a finalist is known or that a game has been played.
 
 Use **Set kickoff / Edit kickoff** on a cup fixture to open its existing Cup
 Builder editor, which remains the sole writer for those local match fields.
+
+## Provisional Red / Blue 4v4 lineup
+
+For each unsplayed fixture, the organiser can assign a friend marked **Going** to
+Red (max. four players), Blue (max. four players) or Bench/unassigned. The
+attendance panel displays a three-column draft team preview and headcount.
+**Maybe** and **Cannot play** players remain unassigned, and changing a Going
+player to a different availability automatically moves them to Bench. Team
+slots cannot be overfilled. Changing this draft never moves a real online
+player, invites anybody or changes any server room or actual match result.
+
+The existing private attendance JSON and selected-match CSV now preserve each
+provisional side. Older backups without a `side` field remain valid and
+restore everyone unassigned on the Bench. Additive imports keep existing
+players and downgrade a new incoming Red/Blue assignment to Bench when that
+team already has four players; the status message states the number benched.
+
+
+### Arrange or reset a friendly draft
+
+**Arrange available players** alternates the first eight friends currently
+marked Going between Red and Blue, preserving their saved list order. Remaining
+friends stay on the bench. This is not skill-based balancing; it requires your
+confirmation before replacing a draft. **Clear draft teams** moves everybody
+to the provisional bench while preserving their availability and notes. Neither
+action changes a real game room or validated competition score.
+
+
+## Reuse familiar players for a new fixture
+
+Open **Matchday Hub → Attendance**, select the **new, unsplayed** target match,
+then choose another locally saved private match under **Reuse friends for another
+match**. The source can be an earlier or completed competition fixture (its
+organiser-entered names remain in local storage). An optional filter copies
+only names previously marked Going, or the entire prior list.
+
+A count preview distinguishes new names, already-listed names and those beyond
+the 24-person target limit. After explicit confirmation, only new names are added:
+**each starts Maybe / unassigned, with a blank note**. The organiser must
+collect availability again and explicitly form the Red/Blue draft teams for this
+new date. Existing target players, notes, responses and team sides are untouched.
+
+The copy uses the original private attendance storage's optimistic tab conflict
+checks and capacity bounds. No network request, server roster change, automatic
+invitation, or claim of consent is made.
+
+## Private match sheet
+
+Select an unsplayed fixture and choose **Private team sheet TXT** to download
+an intentionally unofficial, human-readable local text file. It includes the
+original stored private competition name, actual saved kickoff and venue,
+up to four players per provisional Red and Blue lineup, Going teammates on
+the bench, Maybe and Out lists and the organiser's own notes. No data is sent
+to online servers. Share the resulting file only with the participants you
+choose, as it can include their names and private notes.
+
+
+## Printable private team sheet and clipboard
+
+Inside a still-unplayed private fixture's attendance panel, **Print team
+sheet** downloads a self-contained, offline-readable HTML document with the
+competition, actual entered kickoff/venue, provisional Red and Blue players,
+Going bench, Maybe and Unavailable groups. Open the HTML file in a browser to
+read it or print it as a normal webpage. This is not a server-generated match
+report or official roster and does not claim anyone actually attended.
+
+**Copy team sheet text** uses the clipboard only when the organiser explicitly
+clicks the button and the browser supports clipboard access. It creates the
+same limited roster summary in plain text; if clipboard access is unavailable,
+download the printable team sheet instead.
+
+Both formats intentionally **exclude the private per-player notes**, account
+identifiers, invites, room URLs, tokens, recorded results and direct network
+calls. Because names and provisional availability are personal, share the
+download or clipboard text only with people you intend to inform. HTML team
+sheets have no scripts, tracking, external fonts or remote resources and
+escape all user-controlled names, competition names and venues.
+
+## League RSVP identity fix and private kickoff-overlap planner
+
+The Matchday Hub now explicitly marks imported, validated league fixtures with
+`type: 'League'` just like Cup and Best-of series fixtures. This fixes the
+existing mismatch that prevented some league games from appearing in the
+selected match attendance roster and produced an undefined competition type in
+the central fixture list/CSV. The original league editor remains the only
+writer for results and kickoff times.
+
+The Matchday Hub additionally lists possible **schedule overlaps** from saved,
+upcoming, unplayed private leagues, cups and active series. Two kickoff dates
+less than **60 minutes** apart are shown as a potential overlap. This 60-minute
+window is only a convenient planning placeholder; the app **does not know match
+durations** or confirm an actual scheduling conflict. An optional checkbox
+reduces the list to matches that share an identical written team name. Matching
+names across competitions can refer to different people and should be reviewed
+before treating this as a double booking. Cup qualifiers not yet known are not
+assumed to be real participants.
+
+The list shows the two stored match names, their actual local kickoffs and the
+time gap. **Review first/second kickoff** opens each original private editor,
+where an organiser can intentionally adjust the date. An optional CSV download
+includes the full selected overlap set (not only the first 24 visible rows),
+neutralises formula-sensitive cells, and leaves local storage unchanged. No
+calendar invite, remote message, match result, real room or server database is
+changed by this view or export.
+
+## All upcoming private fixtures and calendar export
+
+The **Matchday Hub → Upcoming private fixtures** panel now lists every validated
+future, unplayed local league, knockout and active best-of-series kickoff. It
+shows twelve initially and provides **Show 12 more** to reveal the remaining
+saved fixtures without discarding or truncating them. Events are grouped by
+local calendar day and can be searched by the original saved competition,
+team or venue. A period control supports the next 7, 30 or 90 days, or all
+future dates. The matching-count label makes it clear when search or date
+filters hide some events.
+
+Every row opens the **original competition's schedule editor** for that exact
+league fixture, private cup match or best-of game. This is a navigation
+shortcut, not an additional writer, room invitation or verified result.
+The All fixtures ICS download now contains **all validated upcoming fixture
+records**, not a previously fixed 200-item slice, subject to the existing
+strict source collection limits. Events retain the existing placeholder
+60-minute duration; HaxLab does not claim to know actual match durations.
+No player account, online match, live team assignment or network API is
+modified by browsing or exporting the local schedule.
+
+## Full read-only standings for private leagues
+
+Open **Matchday Hub → Saved competitions → League table** under any private
+league. This computes a complete standings table directly from the league's
+validated locally saved fixtures. Each team shows played (P), wins (W), draws
+(D), losses (L), goals for (GF), goals against (GA), goal difference (GD)
+and points (Pts). Scoring is **3 points for a manually recorded win** and
+**1 for a draw**. Equal points are ordered by goal difference, goals scored,
+and then team name. Teams with zero played games remain visible with zero
+statistics; the app never fabricates missing results.
+
+**Export this table CSV** downloads every current team and the underlying
+competition name. Spreadsheet formula-style prefixes in user-authored names
+are escaped. This view and export are read-only and do **not** update match
+scores, verified ratings, online leaderboards, player identities, game
+physics or native room state. Only the existing private League editor may
+write fixture results. These are self-reported friendly standings, not an
+official competition ranking.

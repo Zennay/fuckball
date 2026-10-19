@@ -1,0 +1,7 @@
+/* Truthful status sourced from existing verified casual human-only queue observations. */
+#homeView .season-line .status-pill{display:inline-flex;align-items:center;gap:8px;line-height:1.4;max-width:100%;overflow-wrap:anywhere;text-wrap:balance}
+#homeView .season-line .status-pill[data-state="live"]{color:#dfffb9;border-color:#6c9e70;background:#244d3b}
+#homeView .season-line .status-pill[data-state="unknown"]{color:#e4dfc5;border-color:#9b9373;background:#3f4239}
+#homeView .season-line .status-pill[data-state="offline"]{color:#fbd8c6;border-color:#ad8c76;background:#493b3a}
+@media(max-width:650px){#homeView .season-line .status-pill{font-size:10px;max-width:100%;justify-content:center}}
+@media(prefers-reduced-motion:reduce){#homeView .season-line .status-pill{animation:none!important;transition:none!important}}

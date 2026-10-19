@@ -10,7 +10,7 @@
  card.setAttribute('aria-label','Local goal rush practice');
  const title=document.createElement('h2');title.textContent='GOAL RUSH.';
  const explanation=document.createElement('p');
- explanation.textContent='A timed, offline scoring challenge inside the real 1v1-vs-AI practice match. No rankings, virtual rewards or changed game physics.';
+ explanation.textContent='A timed, offline scoring challenge inside the real 1v1-vs-AI match. The score/time caps are disabled for this drill only, so five real goals are possible; your normal match defaults remain unchanged. No rankings, rewards or changed physics.';
  const fields=document.createElement('div');fields.className='goal-rush-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Drill length';
  const duration=document.createElement('select');duration.setAttribute('aria-label','Goal Rush drill duration');
@@ -192,7 +192,7 @@
   }
   if(session)quit();
   try{
-   if(!quickPlay('bot',true))throw Error('Original local 1v1 could not start without preserving your session.');
+   if(!quickPlay('bot',true,true))throw Error('Original local 1v1 could not start without preserving your session.');
    if(!localReady()||!started)throw Error('Local 1v1 practice could not start.');
    const side=ownSide();
    if(!side)throw Error('Join Red or Blue to start a scoring drill.');

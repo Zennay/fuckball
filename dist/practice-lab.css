@@ -22,6 +22,27 @@
 .practice-lab-panes [role="tabpanel"][hidden]{display:none!important}
 .practice-lab-panes [role="tabpanel"]{outline:none}
 .practice-lab-panes [role="tabpanel"]:focus-visible{outline:2px solid #b9efa1;outline-offset:2px}
-.practice-lab-panes :is(.first-play-card,.goal-rush-setup,.teamwork-panel){max-width:none;width:100%;box-sizing:border-box;margin:15px 0 0}
+.practice-lab-panes :is(.first-play-card,.goal-rush-setup,.teamwork-panel,.clean-sheet-setup,.native-ball-burst,.comeback-arena,.ai-gauntlet-setup){max-width:none;width:100%;box-sizing:border-box;margin:15px 0 0}
 @media(max-width:650px){.practice-lab-summary{padding:15px;flex-wrap:wrap}.practice-lab-badges{text-align:left;margin-left:52px}.practice-lab-content{padding:13px}.practice-lab-tabs button{flex-basis:120px}}
 @media(prefers-reduced-motion:reduce){.practice-lab-icon{transition:none}}
+/* Native, browser-private drill coverage and objective trends; never ranking. */
+.practice-insights{margin:0 0 16px;padding:13px;border-radius:12px;border:1px solid #608c79;background:#1a3238}
+.practice-insights>summary{color:#e2f9af;font-size:13px;font-weight:850;letter-spacing:.07em;cursor:pointer;min-height:35px;align-content:center}
+.practice-insights[open]>summary{margin-bottom:13px}
+.practice-insights>p{font-size:12px;line-height:1.55;color:#d4e9da;margin:0 0 12px}
+.practice-insights-controls{display:flex;gap:9px;align-items:end;flex-wrap:wrap;margin:13px 0}
+.practice-insights-controls label{display:grid;gap:5px;flex:1 1 150px;font-size:12px;color:#d7ead7}
+.practice-insights select,.practice-insights button{border:1px solid #9ebd9b;background:#264a42;color:#e9fae3;border-radius:8px;min-height:42px;padding:9px 12px;font-size:12px;cursor:pointer}
+.practice-insights-controls button{flex:1 1 150px}
+.practice-insights button:disabled{opacity:.45;cursor:not-allowed}
+.practice-insights-board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:13px 0}
+.practice-insights-card{display:grid;gap:7px;min-width:0;padding:12px 13px;border:1px solid #548276;background:#22443e;border-radius:10px}
+.practice-insights-card strong{font-size:13px;color:#e5f7b4}
+.practice-insights-card p{font-size:13px;margin:0;color:#f2f8ed}
+.practice-insights-card small{font-size:11px;color:#c3d8cf;line-height:1.5}
+.practice-insights-card progress{width:100%;height:10px;accent-color:#bcdf96}
+.practice-insights-gauntlet{grid-column:1/-1;margin:1px 0;font-size:12px;color:#d8e8cc}
+.practice-insights .practice-insights-advice{font-size:12px;border-left:3px solid #b7e4a2;padding:9px 12px;background:#27453d;color:#f3ffe8}
+.practice-insights .practice-insights-message{margin:12px 0 0;color:#b9d4c4;font-size:11px}
+.practice-insights :is(summary,select,button):focus-visible{outline:3px solid #e3ffaa;outline-offset:2px}
+@media(max-width:620px){.practice-insights-board{grid-template-columns:1fr}.practice-insights-controls button{flex:1 1 100%}}

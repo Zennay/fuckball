@@ -1,0 +1,54 @@
+/* Auth-independent device-local activity, distinct from native server career. */
+.offline-passport{margin:26px 0;border:1px solid #6e9580;
+ border-radius:16px;background:linear-gradient(140deg,#1a393b,#223b32);
+ color:#f1f7e9;padding:clamp(17px,3vw,28px)}
+.offline-passport-head{display:flex;justify-content:space-between;align-items:start;
+ gap:17px;flex-wrap:wrap}
+.offline-passport-head>div:first-child{flex:2 1 290px}
+.offline-passport-kicker{font-size:.73rem;font-weight:850;color:#dbf5ac;letter-spacing:.1em}
+.offline-passport h2{font-size:clamp(24px,4vw,38px);letter-spacing:-.05em;
+ font-style:italic;margin:9px 0}
+.offline-passport-head p{line-height:1.6;color:#c8d9cb;font-size:.82rem;max-width:77ch}
+.offline-passport-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:start}
+.offline-passport button{font:inherit;min-height:44px;border:1px solid #acd2a0;
+ border-radius:8px;padding:9px 13px;color:#17362a;background:#d5f2b2;
+ font-size:.78rem;font-weight:780;cursor:pointer}
+.offline-passport button:focus-visible{outline:3px solid #ffe3a0;outline-offset:3px}
+.offline-passport button:disabled{opacity:.55;cursor:not-allowed}
+.offline-passport-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:10px;margin:18px 0 21px}
+.offline-passport-fact{display:grid;align-content:start;gap:7px;
+ background:#274b43;border:1px solid #648c75;border-radius:10px;padding:15px}
+.offline-passport-fact strong{font-size:clamp(20px,3vw,30px);font-variant-numeric:tabular-nums;
+ color:#e0f8ab}
+.offline-passport-fact span{font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;
+ font-weight:850;color:#e2efe4}
+.offline-passport-fact small{font-size:.71rem;line-height:1.5;color:#c1d7ca}
+.offline-passport-sections{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.offline-passport-bar{padding:13px;background:#153635;border:1px solid #507f6e;
+ border-radius:10px;min-width:0}
+.offline-passport-bar>div:first-child{display:flex;justify-content:space-between;gap:10px;
+ font-size:.77rem}
+.offline-passport-bar>div:first-child span{color:#dcf3bc;font-weight:850;
+ font-variant-numeric:tabular-nums}
+.offline-passport-track{height:9px;border-radius:20px;overflow:hidden;
+ background:#4e7165;margin:12px 0}
+.offline-passport-track>div{height:100%;background:#cbec9e;border-radius:20px}
+.offline-passport-bar p{font-size:.74rem;line-height:1.55;color:#c7d8ce;margin:0}
+.offline-passport-form{border-top:1px solid #668477;padding-top:18px;margin-top:20px}
+.offline-passport-form h3{font-size:.93rem;letter-spacing:.07em;margin:0 0 15px;color:#e2f7ba}
+.offline-passport-timeline{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.offline-passport-entry{display:grid;grid-template-columns:85px minmax(0,1fr) 1.1fr;
+ align-items:center;gap:11px;padding:11px;border-radius:9px;
+ background:#25473e;border:1px solid #5a7c6b}
+.offline-passport-entry time{font-size:.72rem;color:#b5cdbf;font-variant-numeric:tabular-nums}
+.offline-passport-entry strong{font-size:.81rem;overflow-wrap:anywhere}
+.offline-passport-entry span{font-size:.74rem;line-height:1.5;color:#d1e4d6}
+.offline-passport>p{font-size:.76rem;line-height:1.6;color:#c7d9c8}
+.offline-passport-status{color:#dbefb8!important}
+@media(max-width:1000px){.offline-passport-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .offline-passport-sections{grid-template-columns:1fr}}
+@media(max-width:600px){.offline-passport-actions button{flex:1 1 100%}
+ .offline-passport-entry{grid-template-columns:1fr;gap:5px}}
+@media print{.offline-passport-actions{display:none!important}
+ .offline-passport-entry{break-inside:avoid}}

@@ -1,0 +1,16 @@
+/* On-demand same-origin diagnostics in Online Rooms; not in-game latency telemetry. */
+.connection-doctor{padding:16px 17px;display:grid;gap:11px;margin:13px 0;border:1px solid #648d80;border-radius:12px;background:#1b3639}
+.connection-doctor h3{color:#d9f3ad;font-size:16px;letter-spacing:.045em;margin:0}
+.connection-doctor>p{font-size:12px;line-height:1.5;color:#d1dfd4;margin:0}
+.connection-doctor-actions{display:flex;flex-wrap:wrap;gap:9px}
+.connection-doctor-actions button{padding:10px 14px;min-height:42px;border-radius:8px;border:1px solid #90b29a;background:#2c5547;color:#f2ffea;cursor:pointer}
+.connection-doctor-actions button:disabled{opacity:.5;cursor:default}
+.connection-doctor-status{min-height:20px;color:#ecf4bf!important;font-weight:700}
+.connection-doctor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr));gap:8px;margin:0}
+.connection-doctor-tile{display:grid;gap:6px;min-width:0;padding:10px;border:1px solid #598578;border-radius:8px;background:#294847}
+.connection-doctor-tile dt{font-size:10px;color:#b7d2c1;letter-spacing:.03em}
+.connection-doctor-tile dd{font-size:12px;margin:0;line-height:1.55;color:#f5ffed;overflow-wrap:anywhere}
+.connection-doctor :is(button):focus-visible{outline:3px solid #e0ffb5;outline-offset:2px}
+@media(max-width:560px){.connection-doctor{padding:11px}.connection-doctor-actions button{flex:1}.connection-doctor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:345px){.connection-doctor-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.connection-doctor *{transition:none!important;animation:none!important}}

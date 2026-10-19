@@ -32,7 +32,7 @@ function pendingSessionBlock(){
   return 'Close the active sign-in or room invitation before starting another game.';
  return '';
 }
-function quickPlay(mode,localConsent=false){
+function quickPlay(mode,localConsent=false,timedNativeDrill=false){
  const reason=pendingSessionBlock();
  if(reason){notify(reason);return false;}
  // Explicitly confirmed drill launchers pass localConsent=true. Direct Home
@@ -45,7 +45,10 @@ function quickPlay(mode,localConsent=false){
  if(typeof closeMatchMenu==='function')closeMatchMenu();
  if(replay)closeReplay();
  $('mode').value=mode;rosterPreset='';started=false;
- showView('play');resetMatch(true);
+ // Explicitly started local timed drills may disable ONLY local score/time caps.
+ // Ordinary quick-play, external rooms, peers and persisted player defaults remain unchanged.
+ const unlimited=timedNativeDrill===true&&localConsent===true&&['bot','4v4'].includes(mode);
+ showView('play');resetMatch(true,unlimited);
  if(typeof closeMatchMenu==='function')closeMatchMenu();
  return true;
 }

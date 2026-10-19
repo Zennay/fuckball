@@ -12,7 +12,7 @@
  const head=document.createElement('div');head.className='teamwork-panel-head';
  const heading=document.createElement('h2');heading.textContent='TEAMWORK TRAINING.';
  const intro=document.createElement('p');
- intro.textContent='Practise link-up play with your 4v4 AI team: kick the ball, then get a teammate to kick it before an opponent does. Every link is detected from real engine kicks — not a claimed completed pass.';
+ intro.textContent='Practise link-up play with your 4v4 AI team. Kick, then have a teammate kick before an opponent. The drill has no early match score/time cap, so the full active clock is possible; your ordinary settings remain. These are native kicks, not verified passes.';
  head.append(heading,intro);
  const fields=document.createElement('div');fields.className='teamwork-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Active play time';
@@ -148,7 +148,7 @@
    status.textContent='Current local game or replay kept. Teamwork did not start.';return;
   }
   quit();
-  if(!quickPlay('4v4',true)){
+  if(!quickPlay('4v4',true,true)){
    status.textContent='Original local 4v4 did not start; your session was preserved.';return;
   } // Existing sandbox 4v4 setup, no alternate game engine.
   const side=ready();

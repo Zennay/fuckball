@@ -54,14 +54,18 @@
  trend.append(trendLabel,trendPills);
  const playlists=document.createElement('div');playlists.className='server-form-explorer-playlists';
  insights.append(insightsHeading,insightsText,insightsStats,trend,playlists);
+ const calendarHost=document.createElement('div');calendarHost.className='native-calendar-anchor';
+ const sessionHost=document.createElement('div');sessionHost.className='native-session-anchor';
  const list=document.createElement('div');list.className='server-results-grid';list.setAttribute('aria-label','My online match results');
  const divider=document.createElement('h2');divider.className='server-local-heading';divider.textContent='SAVED REPLAYS ON THIS DEVICE';
+ const reviewVault=document.createElement('div');reviewVault.className='server-review-vault-anchor';
  const detail=document.createElement('p');detail.className='server-results-note';
  detail.textContent='Online result receipts do not include HBR2 playback. Your local recordings below stay on this device. Account totals may outlive the 50 most recent server receipts.';
- panel.append(heading,controls,status,summary,form,insights,list,detail);
+ panel.append(heading,controls,status,summary,form,insights,calendarHost,sessionHost,list,reviewVault,detail);
  games.insertBefore(panel,document.getElementById('gamesStatus'));
  games.insertBefore(divider,document.getElementById('gamesStatus'));
  let generation=0,currentToken=null,currentUser=null,items=null,busy=false;
+ let selectedSession=null,selectedDay=null,visibleRows=[];
  const valid=x=>x&&typeof x==='object'&&
   typeof x.id==='string'&&/^[0-9a-f]{24}$/.test(x.id)&&
   ['bot','1v1','2v2','3v3','4v4'].includes(x.mode)&&
@@ -80,9 +84,10 @@
    typeof username==='string'&&username.length>0?{token,username}:null;
  }
  function reset(message){
+  selectedSession=null;selectedDay=null;visibleRows=[];calendarHost.replaceChildren();sessionHost.replaceChildren();
   items=null;currentToken=null;currentUser=null;list.replaceChildren();
   summary.textContent='';form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();status.textContent=message;
-  exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;
+  exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;reviewVault.replaceChildren();
  }
  function renderInsights(scope){
   insights.hidden=!scope.length;
@@ -151,14 +156,38 @@
  function render(){
   list.replaceChildren();
   if(!items)return;
+  // Never keep another account's private results visible after sign-out or a switch.
+  const active=authenticated();
+  if(active?.token!==currentToken||active?.username!==currentUser){
+   generation++;reset('Account changed. Private online results have been hidden.');return;
+  }
   const scope=items.filter(item=>
    (mode.value==='all'||item.mode===mode.value)&&
    (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
-  const filtered=scope.filter(item=>filter.value==='all'||outcome(item)===filter.value);
+  const daySet=window.FuckballNativeMatchCalendar?.render(calendarHost,items,scope,selectedDay,day=>{
+   if(!items||!currentToken||authenticated()?.token!==currentToken||
+    authenticated()?.username!==currentUser)return;
+   selectedDay=day;render();
+   if(day)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
+  },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
+  const sessionSet=window.FuckballNativePlaySessions?.render(sessionHost,items,scope,selectedSession,session=>{
+   if(!items||!currentToken||authenticated()?.token!==currentToken||
+    authenticated()?.username!==currentUser)return;
+   selectedSession=session;render();
+   if(session)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
+  },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
+  const filtered=scope.filter(item=>(filter.value==='all'||outcome(item)===filter.value)&&
+   (!sessionSet||sessionSet.has(item.id))&&(!daySet||daySet.has(item.id)));
+  visibleRows=filtered;
   summary.textContent=filtered.length+' shown · '+scope.length+' in this period and mode · '+
    items.length+' recent server receipts · unranked';
   form.replaceChildren();
   renderInsights(scope);
+  if(window.FuckballOnlineMatchReviews&&currentToken&&currentUser){
+   window.FuckballOnlineMatchReviews.renderToolbar(reviewVault,currentUser,()=>
+    !!items&&!!currentToken&&authenticated()?.token===currentToken&&
+    authenticated()?.username===currentUser,items);
+  }else reviewVault.replaceChildren();
   if(scope.length){
    const count=type=>scope.reduce((n,x)=>n+Number(outcome(x)===type),0);
    const gf=scope.reduce((n,x)=>n+(x.team===1?x.red:x.blue),0);
@@ -207,7 +236,11 @@
     }catch(error){status.textContent=error?.message||'Could not share this result.';}
     finally{share.disabled=false;}
    });
-   actions.append(share);card.append(top,sub,when,actions);list.append(card);
+   actions.append(share);card.append(top,sub,when,actions);
+   window.FuckballOnlineMatchReviews?.renderInto(card,item,currentUser,()=>
+    !!items?.includes(item)&&!!currentToken&&authenticated()?.token===currentToken&&
+    authenticated()?.username===currentUser);
+   list.append(card);
   }
  }
  async function load(){
@@ -221,7 +254,7 @@
     headers:{Authorization:'Bearer '+account.token},cache:'no-store'
    });
    const data=await response.json().catch(()=>({}));
-   if(seq!==generation||authenticated()?.token!==account.token)return;
+   if(seq!==generation||authenticated()?.token!==account.token||authenticated()?.username!==account.username)return;
    if(response.status===401)throw Error('Session expired. Sign in again.');
    if(!response.ok)throw Error(data.error||'Online match history unavailable.');
    if(data.source!=='native-server'||data.ranked!==false||
@@ -229,6 +262,7 @@
       !data.items.every(valid))throw Error('Server results could not be verified.');
    currentToken=account.token;currentUser=account.username;
    items=data.items.slice().sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
+   selectedSession=null;selectedDay=null;
    status.textContent='Private results for '+currentUser+'. Stored on this server only; never a ranked rating.';
    exportButton.disabled=false;csvButton.disabled=false;erase.disabled=false;render();
   }catch(e){if(seq===generation)reset(e.message||'Online results unavailable.');}
@@ -239,10 +273,7 @@
  csvButton.onclick=()=>{
   if(!items||!currentToken||authenticated()?.token!==currentToken)return;
   // Export only the selected rows, not raw account data or match receipt IDs.
-  const shown=items.filter(item=>
-   (filter.value==='all'||outcome(item)===filter.value)&&
-   (mode.value==='all'||item.mode===mode.value)&&
-   (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
+  const shown=visibleRows.filter(item=>items.includes(item));
   if(!shown.length){status.textContent='No visible online results to export.';return;}
   const rows=[['UTC date','Mode','Outcome','Side','Goals for','Goals against','Active seconds','Ranked'],
    ...shown.map(item=>{
@@ -273,28 +304,95 @@
   setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
  erase.onclick=async()=>{
-  if(busy||!items||!currentToken||authenticated()?.token!==currentToken)return;
+  if(busy||!items||!currentToken)return;
+  const token=currentToken,user=currentUser,sourceItems=items,seq=generation;
+  const ownSession=()=>{
+   const now=authenticated();
+   if(now?.token!==token||now?.username!==user||
+    generation!==seq||items!==sourceItems)return false;
+   // Confirmations can keep this tab blocked while a different browser tab
+   // changes the persisted sign-in. Fail closed before irreversible deletion.
+   try{
+    const saved=JSON.parse(localStorage.getItem('fuckball.settings')||'null')?.account;
+    return saved?.token===token&&saved?.username===user;
+   }catch{return false;}
+  };
+  if(!ownSession()){
+   status.textContent='Account changed. Reload your own results before deleting anything.';return;
+  }
   if(!confirm('Erase your match history AND career totals stored on this server? This cannot be undone. Local replays are kept.'))return;
   if(!confirm('Confirm permanent erasure of all your server-recorded match receipts and career statistics.'))return;
-  const token=currentToken;busy=true;erase.disabled=true;
+  if(!ownSession()){
+   status.textContent='Account changed during confirmation. Nothing was deleted.';return;
+  }
+  // Disable repeated destructive clicks until the one native-server DELETE
+  // resolves. The server retains final authority over account ownership.
+  busy=true;erase.disabled=true;refresh.disabled=true;
+  exportButton.disabled=true;csvButton.disabled=true;
+  status.textContent='Deleting this account’s server history…';
   try{
    const response=await fetch('/api/match-history',{
     method:'DELETE',headers:{Authorization:'Bearer '+token},cache:'no-store'
    });
    const payload=await response.json().catch(()=>({}));
-   if(authenticated()?.token!==token){reset('Account changed. Refresh results.');return;}
+   if(!ownSession()){
+    reset('Account changed during deletion. Refresh the current account to see its state.');return;
+   }
    if(!response.ok||payload.ok!==true)throw Error(payload.error||'Could not erase server history.');
-   await load();status.textContent='Your server history and career totals were erased. Local replays are unaffected.';
-  }catch(e){status.textContent=e.message||'Could not erase server history.';erase.disabled=false;}
-  finally{busy=false;}
+   await load();
+   if(authenticated()?.token===token&&authenticated()?.username===user)
+    status.textContent='Your server history and career totals were erased. Local replays are unaffected.';
+  }catch(e){
+   if(ownSession())status.textContent=e.message||'Could not erase server history.';
+  }finally{
+   busy=false;
+   if(authenticated()?.token===currentToken&&authenticated()?.username===currentUser&&items){
+    erase.disabled=false;exportButton.disabled=false;csvButton.disabled=false;
+   }
+   refresh.disabled=false;
+  }
  };
  // Hook into the existing view router, after app.js/views.js/profile integration.
  const previousShowView=showView;
  showView=function(next){
   previousShowView(next);
   if(next==='games')load();
-  else{generation++;currentToken=null;items=null;form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
+  else{generation++;currentToken=null;currentUser=null;items=null;selectedSession=null;selectedDay=null;
+   visibleRows=[];calendarHost.replaceChildren();sessionHost.replaceChildren();list.replaceChildren();reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
+ // The native account UI is updated on login, logout and server-forced
+ // invalidation. Clear sensitive match cards synchronously on the next DOM
+ // microtask, without touching authentication/server-client or polling gameplay.
+ function syncAccount(){
+  const account=authenticated();
+  if(account?.token===currentToken&&account?.username===currentUser)return;
+  generation++;reset(account?'Account changed. Fetching only your own server results…':
+   'Signed out. Private server results and coaching notes were hidden.');
+  if(account&&!games.hidden)load();
+ }
+ const accountLabel=document.getElementById('joinAccount');
+ if(accountLabel)new MutationObserver(syncAccount).observe(accountLabel,
+  {childList:true,subtree:true,characterData:true});
+ window.addEventListener('storage',event=>{
+  if(event.key!==null&&event.key!=='fuckball.settings')return;
+  // A second tab may have logged out or switched accounts. Do not reuse
+  // stale in-memory credentials or display old account-owned cards.
+  try{
+   const prefs=JSON.parse(localStorage.getItem('fuckball.settings')||'null');
+   const persisted=prefs?.account;
+   const current=authenticated();
+   if(persisted?.token!==current?.token||persisted?.username!==current?.username){
+    generation++;reset('Account changed in another tab. Reload to see private online results.');
+   }
+  }catch{
+   generation++;reset('Account storage changed. Reload before viewing private online results.');
+  }
+ });
+ window.addEventListener('fuckball:online-review-imported',()=>{
+  if(items&&currentToken&&!games.hidden&&authenticated()?.token===currentToken){
+   render();status.textContent='Your own private notes were restored on this device; genuine server receipts are unchanged.';
+  }
+ });
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&!games.hidden&&authenticated()?.token!==currentToken)load();
  });

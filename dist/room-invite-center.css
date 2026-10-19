@@ -28,3 +28,20 @@
 @media(max-width:570px){.room-invite-center{padding:12px}
  .room-invite-center-actions button{flex:1 1 100%}}
 @media print{.room-invite-center{display:none!important}}
+
+/* Locally generated scanner-ready QR for the currently active native room. */
+.room-invite-qr{display:grid;gap:11px;justify-items:center;padding:16px;
+ border-radius:12px;border:1px solid #90bdac;background:#173331;text-align:center}
+.room-invite-qr[hidden]{display:none!important}
+.room-invite-qr>strong{letter-spacing:.08em;color:#e5ffbd;font-size:.81rem}
+.room-invite-qr-image{box-sizing:content-box;padding:14px;border-radius:8px;
+ background:#fff;max-width:calc(100% - 28px);overflow:hidden;min-height:224px;min-width:min(224px,65vw)}
+.room-invite-qr-image canvas,.room-invite-qr-image img{max-width:100%;height:auto;margin:auto}
+.room-invite-qr-code{font:800 20px ui-monospace,monospace;letter-spacing:.12em;color:#d9f9b0;margin:0}
+.room-invite-qr>p:last-child{font-size:.78rem;line-height:1.5;color:#d0e7dc;margin:0;max-width:55ch}
+@media(max-width:570px){.room-invite-qr{padding:10px}}
+
+/* Scannable room card is generated and saved on the user's own device. */
+.room-invite-qr .room-invite-qr-download{justify-self:center;width:min(100%,360px);
+ background:#d7f5aa;color:#16332a;border-color:#e5ffc0;font-weight:850}
+.room-invite-qr .room-invite-qr-download:disabled{opacity:.55;cursor:wait}
