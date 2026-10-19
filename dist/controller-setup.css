@@ -21,3 +21,12 @@
  background:#244d42;border:1px solid #add6a0;color:#efffdf;font-weight:800;min-height:48px}
 .controller-setup-dialog .controller-setup-bind:hover{filter:brightness(1.12)}
 .controller-setup-dialog .controller-setup-bind:focus-visible{outline:3px solid #e4ffa2}
+
+/* Gamepad motor feedback never runs during setup; this panel only configures it. */
+.controller-setup-haptics{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:9px;padding:14px;border:1px solid #669b85;border-radius:10px;min-width:0}
+.controller-setup-haptics legend{font-weight:850;color:#d5f3a5;padding:0 6px;font-size:13px}
+.controller-setup-haptics label{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.35}
+.controller-setup-haptics input[type=checkbox]{width:19px;height:19px;accent-color:#c8f28c}
+.controller-setup-haptics small{grid-column:1/-1;color:#c0ddd1;line-height:1.5}
+@media(max-width:550px){.controller-setup-haptics{grid-template-columns:1fr}}
