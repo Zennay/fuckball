@@ -10,7 +10,8 @@
   {key:'defense',title:'Clean Sheet',selector:'.clean-sheet-setup',intro:'Protect your own goal against local AI for the full active clock.'},
   {key:'rockets',title:'Rocket Kick',selector:'.native-ball-burst',intro:'Train real ball speed following your own native kicks.'},
   {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'},
-  {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'}
+  {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'},
+  {key:'keepaway',title:'Keep Away',selector:'.keep-away-setup',intro:'Build genuine kick streaks before the local AI or a goal breaks control.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -96,10 +97,11 @@
   const rockets=getLocal('fuckball.native-ball-burst-history.v1');
   const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
   const comebacks=getLocal('fuckball.native-comeback-arena.v1');
+  const keepaway=getLocal('fuckball.native-keep-away.v1');
   const valid=list=>Array.isArray(list)?list.filter(x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000).length:0;
   const parts=[];
   if(completed)parts.push('First Touch complete');
-  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets)+valid(comebacks);
+  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets)+valid(comebacks)+valid(keepaway);
   const ladderWins=Array.isArray(ladders)?ladders.filter(x=>x?.version===1&&Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&x.finishedAt>0&&x.finishedAt<=Date.now()+86400000).length:0;
   if(attempts)parts.push(attempts+' local drill attempt'+(attempts===1?'':'s'));
   if(ladderWins)parts.push(ladderWins+' completed local AI ladder'+(ladderWins===1?'':'s'));
@@ -136,7 +138,14 @@
     Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
     Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
-    typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit)}
+    typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit)},
+   {key:'keepaway',name:'Keep Away',store:'fuckball.native-keep-away.v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[3,5,8].includes(x.target)&&
+    Number.isSafeInteger(x.best)&&x.best>=0&&x.best<=999&&
+    Number.isSafeInteger(x.kicks)&&x.kicks>=x.best&&x.kicks<=9999&&
+    Number.isSafeInteger(x.breaks)&&x.breaks>=0&&x.breaks<=9999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    typeof x.completed==='boolean'&&x.completed===(x.best>=x.target)}
   ];
   const part=document.createElement('details');part.className='practice-insights';
   const sum=document.createElement('summary');sum.textContent='PRACTICE INSIGHTS · MY NATIVE RESULTS';
@@ -219,7 +228,7 @@
    note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
    board.append(note);
    snapshot.push({key:'ladder',name:'AI Gauntlet',completedLadders:completed});
-   const target=[...snapshot.slice(0,5)].sort((a,b)=>a.attempts-b.attempts)[0];
+   const target=snapshot.filter(x=>Number.isSafeInteger(x.attempts)).sort((a,b)=>a.attempts-b.attempts)[0];
    advice.textContent=target?
     'Explore '+target.name+': '+target.attempts+' recorded attempts in this lookback. This is a coverage suggestion, not a diagnosis of your skill.':
     'Play a native drill to build your own private history.';

@@ -12,7 +12,8 @@
   defense:{name:'Clean Sheet',description:'Concede at most your chosen target in a full-clock real native local 1v1.',route:'defense'},
   rockets:{name:'Rocket Kick',description:'Hit your raw native ball-speed burst target after real human kicks.',route:'rockets'},
   ladder:{name:'AI Gauntlet',description:'Complete all three full-clock native 1v1 AI stages.',route:'ladder'},
-  comeback:{name:'Comeback Arena',description:'Overcome a virtual goal deficit with a complete genuine local 1v1.',route:'comeback'}
+  comeback:{name:'Comeback Arena',description:'Overcome a virtual goal deficit with a complete genuine local 1v1.',route:'comeback'},
+  keepaway:{name:'Keep Away',description:'Reach the consecutive native kick target against local AI in a full active local clock.',route:'keepaway'}
  };
  const PRESETS=[
   {name:'Fundamentals · touch → finishing → team play',order:['touch','goals','team']},
@@ -25,7 +26,9 @@
   {name:'AI challenger · goal rush → clean sheet → AI gauntlet',order:['goals','defense','ladder']},
   {name:'Elite preparation · first touch → rocket kick → AI gauntlet',order:['touch','rockets','ladder']},
   {name:'Comeback striker · finishing → defending → comeback',order:['goals','defense','comeback']},
-  {name:'Pressure specialist · first touch → teamwork → comeback',order:['touch','team','comeback']}
+  {name:'Pressure specialist · first touch → teamwork → comeback',order:['touch','team','comeback']},
+  {name:'Ball control · touch → keep away → teamwork',order:['touch','keepaway','team']},
+  {name:'Press resistant · keep away → rockets → comeback',order:['keepaway','rockets','comeback']}
  ];
  const make=(tag,cls='',value)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(value!==undefined)el.textContent=value;return el;};
  function data(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch{return null;}}
@@ -69,6 +72,21 @@
      !Number.isSafeInteger(x.scored)||x.scored<0||x.scored>999||
      !Number.isSafeInteger(x.conceded)||x.conceded<0||x.conceded>999||
      x.completed!==true||x.scored<=x.conceded+x.deficit)continue;
+    latest=Math.max(latest,x.at);
+   }
+   return latest;
+  }
+  if(type==='keepaway'){
+   const rows=data('fuckball.native-keep-away.v1');
+   if(!Array.isArray(rows)||rows.length>20)return 0;
+   let latest=0;
+   for(const x of rows){
+    if(!x||![60,120,180].includes(x.duration)||![3,5,8].includes(x.target)||
+     !validAt(x.at)||!Number.isSafeInteger(x.best)||x.best<x.target||x.best>999||
+     !Number.isSafeInteger(x.kicks)||x.kicks<x.best||x.kicks>9999||
+     !Number.isSafeInteger(x.breaks)||x.breaks<0||x.breaks>9999||
+     !Number.isSafeInteger(x.elapsed)||x.elapsed<x.duration||x.elapsed>x.duration+1||
+     x.completed!==true)continue;
     latest=Math.max(latest,x.at);
    }
    return latest;
@@ -244,7 +262,8 @@
   tab?.scrollIntoView({block:'center',behavior:'smooth'});
   const drill=step==='touch'?'.first-play-card':step==='goals'?'.goal-rush-setup':
    step==='defense'?'.clean-sheet-setup':step==='rockets'?'.native-ball-burst':
-   step==='ladder'?'.ai-gauntlet-setup':step==='comeback'?'.comeback-arena':'.teamwork-panel';
+   step==='ladder'?'.ai-gauntlet-setup':step==='comeback'?'.comeback-arena':
+   step==='keepaway'?'.keep-away-setup':'.teamwork-panel';
   home.querySelector(drill+' button.primary')?.focus();
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }

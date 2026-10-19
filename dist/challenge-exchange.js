@@ -14,7 +14,9 @@
   rockets:{name:'Rocket Kick',tab:'rockets',selector:'.native-ball-burst',fields:[
    ['duration','Active time',[60,120,180]],['threshold','Minimum speed (raw engine units)',[3,5,7]],['target','Qualifying kicks',[1,3,5]]]},
   comeback:{name:'Comeback Arena',tab:'comeback',selector:'.comeback-arena',fields:[
-   ['deficit','Virtual goal deficit',[1,2,3]],['duration','Active time',[60,120,180]]]}
+   ['deficit','Virtual goal deficit',[1,2,3]],['duration','Active time',[60,120,180]]]},
+  keepaway:{name:'Keep Away',tab:'keepaway',selector:'.keep-away-setup',fields:[
+   ['duration','Active time',[60,120,180]],['target','Consecutive native kicks',[3,5,8]]]}
  };
  const available=Object.keys(MODES).filter(k=>document.querySelector(MODES[k].selector));
  if(!available.length)return;
@@ -193,7 +195,13 @@
    valid:x=>Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
     Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
-    x.completed===(x.scored>x.conceded+x.deficit)}
+    x.completed===(x.scored>x.conceded+x.deficit)},
+  keepaway:{key:'fuckball.native-keep-away.v1',matches:(x,o)=>x.duration===o.duration&&x.target===o.target,
+   valid:x=>Number.isSafeInteger(x.best)&&x.best>=0&&x.best<=999&&
+    Number.isSafeInteger(x.kicks)&&x.kicks>=x.best&&x.kicks<=9999&&
+    Number.isSafeInteger(x.breaks)&&x.breaks>=0&&x.breaks<=9999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    x.completed===(x.best>=x.target)}
  };
  function matchingLocalHistory(item){
   const h=histories[item.mode];
