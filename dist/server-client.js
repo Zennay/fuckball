@@ -216,9 +216,11 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     (d.message.startsWith('This room is not accepting new spectators or bench participants.')||
      d.message.startsWith('This room is full.')||
-     d.message.startsWith('Room capacity is below the number of current'))){
-   // Keep the guest on the same invitation rather than redirecting them to
-   // connection settings when the host reduces capacity during their join.
+     d.message.startsWith('Room capacity is below the number of current')||
+     d.message.startsWith('Room access changed before admission.')||
+     d.message.startsWith('This room was locked before you could join.')||
+     d.message.startsWith('This room filled while the connection was being prepared.')||
+     d.message.startsWith('This room now requires a signed-in account.'))){
    link.failed=true;ws.close();showJoinScreen(roomId,d.message);
    if(document.getElementById('joinSpectator'))
     $('joinSpectator').checked=link.requestedSpectate;
