@@ -10,7 +10,8 @@
   {id:'team',name:'Teamwork',selector:'.teamwork-panel',params:[['duration',[120,180,300]],['target',[2,4,6]]],store:'fuckball.teamwork-native-drill.v1',fields:['seconds','target']},
   {id:'defense',name:'Clean Sheet',selector:'.clean-sheet-setup',params:[['duration',[60,120,180]],['allowance',[0,1,2]]],store:'fuckball.clean-sheet-history.v1',fields:['duration','allowance']},
   {id:'rockets',name:'Rocket Kick',selector:'.native-ball-burst',params:[['duration',[60,120,180]],['threshold',[3,5,7]],['target',[1,3,5]]],store:'fuckball.native-ball-burst-history.v1',fields:['duration','threshold','target']},
-  {id:'comeback',name:'Comeback Arena',selector:'.comeback-arena',params:[['deficit',[1,2,3]],['duration',[60,120,180]]],store:'fuckball.native-comeback-arena.v1',fields:['deficit','duration']}
+  {id:'comeback',name:'Comeback Arena',selector:'.comeback-arena',params:[['deficit',[1,2,3]],['duration',[60,120,180]]],store:'fuckball.native-comeback-arena.v1',fields:['deficit','duration']},
+  {id:'keepaway',name:'Keep Away',selector:'.keep-away-setup',params:[['duration',[60,120,180]],['target',[3,5,8]]],store:'fuckball.native-keep-away.v1',fields:['duration','target']}
  ].filter(x=>document.querySelector(x.selector));
  if(!CONFIG.length)return;
  const el=(tag,t,cls)=>{const n=document.createElement(tag);

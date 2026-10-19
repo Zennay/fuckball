@@ -5,7 +5,7 @@
 (function(){
  const home=document.getElementById('homeView'),pitch=document.getElementById('matchView');
  if(!home||!pitch||!document.getElementById('quickPractice'))return;
- const KEY='fuckball.native-keep-away.v1',DURATIONS=[60,120,180],TARGETS=[3,5,8],MAX=24;
+ const KEY='fuckball.native-keep-away.v1',DURATIONS=[60,120,180],TARGETS=[3,5,8],MAX=20;
  const el=(tag,text,className)=>{
   const node=document.createElement(tag);
   if(text!==undefined&&text!==null)node.textContent=String(text);
