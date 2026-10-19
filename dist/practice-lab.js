@@ -9,7 +9,8 @@
   {key:'team',title:'Teamwork',selector:'.teamwork-panel',intro:'Train real teammate kick follow-ups.'},
   {key:'defense',title:'Clean Sheet',selector:'.clean-sheet-setup',intro:'Protect your own goal against local AI for the full active clock.'},
   {key:'rockets',title:'Rocket Kick',selector:'.native-ball-burst',intro:'Train real ball speed following your own native kicks.'},
-  {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'}
+  {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'},
+  {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -94,10 +95,11 @@
   const defending=getLocal('fuckball.clean-sheet-history.v1');
   const rockets=getLocal('fuckball.native-ball-burst-history.v1');
   const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
+  const comebacks=getLocal('fuckball.native-comeback-arena.v1');
   const valid=list=>Array.isArray(list)?list.filter(x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000).length:0;
   const parts=[];
   if(completed)parts.push('First Touch complete');
-  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets);
+  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets)+valid(comebacks);
   const ladderWins=Array.isArray(ladders)?ladders.filter(x=>x?.version===1&&Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&x.finishedAt>0&&x.finishedAt<=Date.now()+86400000).length:0;
   if(attempts)parts.push(attempts+' local drill attempt'+(attempts===1?'':'s'));
   if(ladderWins)parts.push(ladderWins+' completed local AI ladder'+(ladderWins===1?'':'s'));
@@ -128,7 +130,13 @@
     Number.isSafeInteger(x.kicks)&&x.kicks>=x.hits&&x.kicks<=9999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=x.duration+1&&
     Number.isFinite(x.peak)&&x.peak>=0&&x.peak<=1000&&
-    typeof x.completed==='boolean'&&x.completed===(x.hits>=x.target)}
+    typeof x.completed==='boolean'&&x.completed===(x.hits>=x.target)},
+   {key:'comeback',name:'Comeback Arena',store:'fuckball.native-comeback-arena.v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[1,2,3].includes(x.deficit)&&
+    Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
+    Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit)}
   ];
   const part=document.createElement('details');part.className='practice-insights';
   const sum=document.createElement('summary');sum.textContent='PRACTICE INSIGHTS · MY NATIVE RESULTS';
@@ -211,7 +219,7 @@
    note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
    board.append(note);
    snapshot.push({key:'ladder',name:'AI Gauntlet',completedLadders:completed});
-   const target=[...snapshot.slice(0,4)].sort((a,b)=>a.attempts-b.attempts)[0];
+   const target=[...snapshot.slice(0,5)].sort((a,b)=>a.attempts-b.attempts)[0];
    advice.textContent=target?
     'Explore '+target.name+': '+target.attempts+' recorded attempts in this lookback. This is a coverage suggestion, not a diagnosis of your skill.':
     'Play a native drill to build your own private history.';
@@ -267,7 +275,7 @@
    c.fillText('FUCKBALL / PRACTICE INSIGHTS',70,94);
    c.fillStyle='#cfe0d5';c.font='600 20px system-ui, sans-serif';
    c.fillText(windowLabel+' · AS OF '+new Date().toISOString().slice(0,10)+' · THIS DEVICE',71,133);
-   const items=entries.filter(x=>x.key!=='ladder').slice(0,4);
+   const items=entries.filter(x=>x.key!=='ladder'&&x.key!=='comeback').slice(0,4);
    for(const [i,row] of items.entries()){
     const x=70+(i%2)*545,y=166+Math.floor(i/2)*169;
     box(x,y,510,149,17,'#284940','#658e7d');
@@ -285,7 +293,11 @@
    box(70,518,1055,61,14,'#2d5045');
    const gauntlet=entries.find(x=>x.key==='ladder')?.completedLadders||0;
    c.fillStyle='#e3f4b2';c.font='800 21px system-ui, sans-serif';
-   c.fillText('AI GAUNTLET · '+gauntlet+' completed three-win native ladders',94,556);
+   c.font='800 19px system-ui, sans-serif';
+   c.fillText('AI GAUNTLET · '+gauntlet+' completed three-win ladders',94,542);
+   const comeback=entries.find(x=>x.key==='comeback');
+   c.font='650 17px system-ui, sans-serif';
+   c.fillText('COMEBACK ARENA · '+(comeback?.goalsMet||0)+' / '+(comeback?.attempts||0)+' virtual deficits overcome',94,570);
    c.fillStyle='#c7d9cf';c.font='500 16px system-ui, sans-serif';
    c.fillText('Saved local observations only. Not Elo, official match statistics, or full lifetime history.',73,612);
    const link=document.createElement('a');

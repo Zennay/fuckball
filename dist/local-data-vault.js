@@ -18,7 +18,8 @@
   {id:'pins',key:'fuckball.pinned-public-rooms.v1',name:'Pinned public room codes',limit:12,chars:4096},
   {id:'loadouts',key:'fuckball.local-match-loadouts.v1',name:'Local match loadouts',limit:8,chars:12000},
   {id:'academy',key:'fuckball.solo-academy.v1',name:'Solo Academy progress',limit:1,chars:12000},
-  {id:'gauntlet',key:'fuckball.ai-gauntlet-history.v1',name:'Completed native AI Gauntlets',limit:12,chars:24000}
+  {id:'gauntlet',key:'fuckball.ai-gauntlet-history.v1',name:'Completed native AI Gauntlets',limit:12,chars:24000},
+  {id:'comeback',key:'fuckball.native-comeback-arena.v1',name:'Native Comeback Arena history',limit:20,chars:24000}
  ];
  const known=new Map(SCOPES.map(scope=>[scope.id,scope]));
  const format='fuckball-local-data-vault',version=1,MAX_FILE=1536*1024;
@@ -58,6 +59,14 @@
      w.for>w.against&&w.against>=0&&w.for<=999&&
      Number.isSafeInteger(w.at)&&w.at>=item.startedAt&&w.at<=item.finishedAt);
   }
+  if(scope.id==='comeback')return !!item&&typeof item==='object'&&
+   Number.isSafeInteger(item.at)&&item.at>0&&item.at<=Date.now()+86400000&&
+   [60,120,180].includes(item.duration)&&[1,2,3].includes(item.deficit)&&
+   Number.isSafeInteger(item.scored)&&item.scored>=0&&item.scored<=999&&
+   Number.isSafeInteger(item.conceded)&&item.conceded>=0&&item.conceded<=999&&
+   Number.isSafeInteger(item.elapsed)&&item.elapsed>=item.duration&&
+   item.elapsed<=item.duration+1&&typeof item.completed==='boolean'&&
+   item.completed===(item.scored>item.conceded+item.deficit);
   if(scope.id==='attendance')return !!item&&typeof item==='object'&&
    typeof item.key==='string'&&Array.isArray(item.people)&&item.people.length<=24;
   return !!item&&typeof item==='object'&&!Array.isArray(item)&&item.version===1&&
@@ -73,6 +82,7 @@
    scope.id==='attendance'?item.key:
     scope.id==='loadouts'?item.name.toLocaleLowerCase():
    scope.id==='gauntlet'?item.startedAt+':'+item.finishedAt+':'+item.route:
+   scope.id==='comeback'?item.at+':'+item.deficit+':'+item.duration:
      scope.id==='academy'?'solo-academy':item.id);
   if(new Set(ids).size!==ids.length)throw Error(scope.name+': duplicate records.');
   return items;
@@ -99,7 +109,7 @@
  panel.setAttribute('aria-label','Device-local data vault');
  const title=make('h2','MY LOCAL DATA VAULT.');
  const intro=make('p','Review and archive private competitions, match attendance, saved public room codes and native solo training progress and loadouts on this device. These are NOT your online account, HBR2 replay files or authenticated match results.');
- const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. Gauntlet and Academy proofs are reference-only; importing archives cannot award progression. No data is uploaded or deleted by this vault.','local-vault-warning');
+ const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. Comeback, Gauntlet and Academy proof summaries are reference-only; importing archives cannot award progression. No data is uploaded or deleted by this vault.','local-vault-warning');
  const top=make('div',null,'local-vault-actions');
  const downloadAll=click('↓ Export selected archive',()=>downloadArchive());
  const browse=click('Browse native backup files',()=>{
@@ -194,7 +204,7 @@
  function showArchive(datasets){
   extractList.replaceChildren();
   extractInfo.textContent='Preview only: '+datasets.length+
-   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Academy and AI Gauntlet proof summaries are read-only, never restorable as earned milestones.';
+   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Comeback, Academy and AI Gauntlet proof summaries are read-only, never restorable as earned milestones.';
   for(const {scope,items}of datasets){
    const group=make('div',null,'local-vault-extract-group');
    group.append(make('strong',scope.name+' · '+items.length+' records'));
@@ -221,6 +231,16 @@
     actions.append(click('↓ Native local match loadouts',()=>save('fuckball-local-match-loadouts.json',
      {format:'fuckball-local-match-loadouts',version:1,source:'private-device-only',
       exportedAt:new Date().toISOString(),presets:items})));
+   }else if(scope.id==='comeback'){
+    actions.append(click('↓ Comeback Arena native training history (read-only)',()=>{
+     save('fuckball-comeback-arena-proof.json',{
+      format:'fuckball-native-comeback-arena',version:1,
+      source:'private device-only native score and virtual practice deficit',
+      warning:'Adjusted score is not a real native match score or ranked result.',
+      exportedAt:new Date().toISOString(),attempts:items
+     });
+     message.textContent='Local native Comeback Arena summary saved. Archive import cannot award a comeback.';
+    }));
    }else if(scope.id==='gauntlet'){
     actions.append(click('↓ Native AI Gauntlet history (read-only proof)',()=>{
      save('fuckball-local-ai-gauntlet-proof.json',{

@@ -6,6 +6,7 @@
   team:'fuckball.teamwork-native-drill.v1',defense:'fuckball.clean-sheet-history.v1',
   rockets:'fuckball.native-ball-burst-history.v1',
   ladders:'fuckball.ai-gauntlet-history.v1',
+  comeback:'fuckball.native-comeback-arena.v1',
   matches:'fuckball.local-practice-journal.v1',
   first:'fuckball.first-play-guide.v1',academy:'fuckball.solo-academy.v1'};
  const el=(tag,text,klass)=>{
@@ -53,6 +54,12 @@
    w.level===ladderLevels[x.route][i]&&w.duration===x.duration&&validAt(w.at)&&
    w.at>=x.startedAt&&w.at<=x.finishedAt&&Number.isSafeInteger(w.for)&&
    Number.isSafeInteger(w.against)&&w.for>w.against&&w.against>=0&&w.for<=999);
+ const validComeback=x=>x&&validAt(x.at)&&[60,120,180].includes(x.duration)&&
+  [1,2,3].includes(x.deficit)&&Number.isSafeInteger(x.elapsed)&&
+  x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+  Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
+  Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
+  typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit);
  const validMatch=x=>x&&validAt(x.at)&&['bot','practice','2v2','4v4'].includes(x.mode)&&
   [1,2].includes(x.side)&&Number.isSafeInteger(x.red)&&x.red>=0&&x.red<=999&&
   Number.isSafeInteger(x.blue)&&x.blue>=0&&x.blue<=999&&
@@ -71,6 +78,7 @@
   const defense=readRows('defense',20,validDefense);
   const rockets=readRows('rockets',20,validRocket);
   const ladders=readRows('ladders',12,validLadder);
+  const comeback=readRows('comeback',20,validComeback);
   const pending=read('fuckball.ai-gauntlet-run.v1');
   const currentLadder=pending?.version===1&&Object.hasOwn(ladderLevels,pending.route)&&
    [60,120].includes(pending.duration)&&validAt(pending.startedAt)&&
@@ -87,7 +95,7 @@
    Number.isSafeInteger(rawAcademy.next)&&rawAcademy.next>=0&&rawAcademy.next<=12&&
    Array.isArray(rawAcademy.proofs)&&rawAcademy.proofs.length===rawAcademy.next?
     rawAcademy.next:0;
-  const issues=[goals.problem,team.problem,defense.problem,rockets.problem,ladders.problem,matches.problem,
+  const issues=[goals.problem,team.problem,defense.problem,rockets.problem,ladders.problem,comeback.problem,matches.problem,
    rawFirst!==null&&rawFirst!==undefined&&!first,
    rawAcademy!==null&&rawAcademy!==undefined&&academy===0].filter(Boolean).length;
   const wins=matches.entries.filter(x=>x.side===1?x.red>x.blue:x.blue>x.red);
@@ -97,7 +105,13 @@
   const teamWins=team.entries.filter(x=>x.completed===true&&x.links>=x.target);
   const defenseWins=defense.entries.filter(x=>x.completed);
   const rocketWins=rockets.entries.filter(x=>x.completed);
+  const comebackWins=comeback.entries.filter(x=>x.completed);
   const activities=[
+   ...comeback.entries.map(x=>({at:x.at,kind:'COMEBACK ARENA',
+    title:(x.completed?'Comeback completed':x.scored===x.conceded+x.deficit?'Virtual draw':'Comeback missed')+
+     ' · '+x.scored+'–'+(x.conceded+x.deficit)+' adjusted',
+    detail:'Native '+x.scored+'–'+x.conceded+' · '+x.deficit+' virtual goal deficit · '+
+     x.duration+'s real active local play'})),
    ...ladders.entries.map(x=>({at:x.finishedAt,kind:'AI GAUNTLET',
     title:(x.route==='elite'?'Elite':'Standard')+' ladder · 3 genuine wins',
     detail:x.wins.map(w=>w.level+' '+w.for+'–'+w.against).join(' · ')+
@@ -123,7 +137,7 @@
    ...(first?[{at:first,kind:'FIRST TOUCH',title:'Native tutorial completed',
      detail:'Moved, kicked and scored in the local first-play guide.'}]:[])
   ].sort((a,b)=>b.at-a.at);
-  return {goals,team,defense,rockets,ladders,currentLadder,matches,wins,draws,losses,goalWins,teamWins,defenseWins,rocketWins,first,academy,
+  return {goals,team,defense,rockets,ladders,currentLadder,comeback,comebackWins,matches,wins,draws,losses,goalWins,teamWins,defenseWins,rocketWins,first,academy,
    activities,issues};
  }
  const root=el('section',null,'offline-passport');
@@ -195,6 +209,8 @@
     model.defense.entries.filter(x=>x.conceded===0).length+' complete clean sheets');
   fact('Teamwork drills',model.team.entries.length,
    model.teamWins.length+' target met · '+model.team.entries.reduce((a,x)=>a+x.links,0)+' native kick follow-ups');
+  fact('Comeback Arena',model.comeback.entries.length+' attempts',
+   model.comebackWins.length+' virtual challenges won · actual native goals only');
   fact('AI Gauntlet',model.ladders.entries.length+' completed',
    model.ladders.entries.filter(x=>x.route==='elite').length+' elite ladders · '+
     (model.currentLadder?'stage '+(model.currentLadder.wins.length+1)+'/3 in progress':'no ladder in progress'));
@@ -208,6 +224,8 @@
    'Observed raw native ball speed after real kicks; not real-world shot speed.');
   bar('Defensive goal completion',model.defense.entries.length,model.defenseWins.length,
    'Full-clock native local 1v1 only; counts actual conceded goals, not saves.');
+  bar('Comeback Arena objective completion',model.comeback.entries.length,model.comebackWins.length,
+   'Virtual handicap applied only to local training display; real native scores retained.');
   bar('Elite AI ladders',model.ladders.entries.length,
    model.ladders.entries.filter(x=>x.route==='elite').length,
    'Three native 1v1 stage wins each; unranked and local to this device.');
@@ -233,6 +251,7 @@
    ['Teamwork attempts / target met',model.team.entries.length+' / '+model.teamWins.length],
    ['Clean Sheet attempts / target met',model.defense.entries.length+' / '+model.defenseWins.length],
    ['Rocket Kick attempts / target met',model.rockets.entries.length+' / '+model.rocketWins.length],
+   ['Comeback Arena attempts / objectives met',model.comeback.entries.length+' / '+model.comebackWins.length],
    ['AI Gauntlet ladders / elite',model.ladders.entries.length+' / '+model.ladders.entries.filter(x=>x.route==='elite').length],
    ['Current native Gauntlet stage',model.currentLadder?(model.currentLadder.wins.length+1)+' / 3 · '+model.currentLadder.route:'Not started'],
    ['Solo Academy missions',model.academy+' / 12']
