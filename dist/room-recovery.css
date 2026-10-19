@@ -1,0 +1,12 @@
+.native-room-recovery{position:absolute;z-index:24;left:50%;bottom:clamp(14px,6vh,54px);transform:translateX(-50%);width:min(430px,calc(100vw - 28px));padding:22px;border:1px solid #a1c7a1;border-radius:14px;color:#eaf9ec;background:rgba(19,38,43,.97);box-shadow:0 18px 64px #0009;backdrop-filter:blur(10px)}
+.native-room-recovery[hidden]{display:none!important}
+.native-room-recovery-tag{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;color:#c7e5a6}
+.native-room-recovery h2{font-size:22px;margin:9px 0 10px;letter-spacing:-.04em}
+.native-room-recovery-description{font-size:13px;line-height:1.55;color:#d3e3dd}
+.native-room-recovery-progress{font-weight:700;font-size:13px;color:#e6f9b2;min-height:24px}
+.native-room-recovery-actions{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+.native-room-recovery-actions button{flex:1 1 130px;min-height:42px;padding:8px 12px;border-radius:8px}
+.native-room-recovery-note{font-size:11px;color:#b3c9c4;line-height:1.5;margin-bottom:0}
+.native-room-recovery button:focus-visible{outline:3px solid #d7f49d;outline-offset:4px}
+@media(prefers-reduced-transparency:reduce){.native-room-recovery{backdrop-filter:none;background:#172e33}}
+@media(max-height:450px){.native-room-recovery{bottom:6px;padding:12px}.native-room-recovery h2{font-size:17px;margin:4px 0}.native-room-recovery-note{display:none}}
