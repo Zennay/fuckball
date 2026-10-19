@@ -368,10 +368,14 @@
   try{
    const timestamp=new Date(d.at).toISOString().slice(0,16).replace('T',' ');
    const name='Observed 4v4 '+timestamp;
-   const proposed=verify({...fresh(name),spots:d.spots.map(p=>p.slice()),arrows:[]});
+   if(!validStadium(d.geometry===undefined?null:d.geometry))throw Error('Invalid captured native stadium geometry.');
+   const proposed=verify({...fresh(name),spots:d.spots.map(p=>p.slice()),
+    arrows:[],stadium:d.geometry===undefined?null:d.geometry});
    commit([...plans,proposed]);active=proposed.id;selected=0;mode='move';arrowFrom=-1;
    disclosure.open=true;
-   msg='Saved eight actual locally observed room player-disc coordinates. Ball marker is a centre placeholder. Private diagram only.';
+   msg='Saved eight actual locally observed player-disc coordinates'+
+    (proposed.stadium?' with visible native pitch outline':' on the generic tactics pitch')+
+    '. Ball marker is a centre placeholder. Private diagram only.';
    render();d.saved=true;
   }catch(error){d.message=error?.message||'Could not save a private formation.';}
  });
