@@ -1,0 +1,27 @@
+/* Native ball velocity from original Haxball physics, never gameplay alterations. */
+.native-ball-burst{margin:14px 0;padding:15px 17px;display:grid;gap:12px;color:#eaf2e8;background:#203a40;border:1px solid #7f9d8b;border-radius:13px}
+.native-ball-burst h2{font-size:clamp(18px,2.3vw,26px);color:#dcf4aa;margin:0}
+.native-ball-burst>p{font-size:12px;line-height:1.6;color:#c9dfd0;margin:0}
+.native-ball-burst-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.native-ball-burst-controls label{display:grid;gap:7px;font-size:12px;color:#d3e9d1;flex:1 1 145px}
+.native-ball-burst-controls select{min-height:42px;padding:9px;color:#f0fbe9;background:#30514b;border:1px solid #85a890;border-radius:8px}
+.native-ball-burst-controls button{min-height:42px;padding:10px 14px;border-radius:8px}
+.native-ball-burst-result-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.native-ball-burst-result-header h3{margin:0 auto 0 0;font-size:13px;color:#e8efb9}
+.native-ball-burst-result-header button,.native-ball-burst-buttons button{background:#36594e;color:#e9fbe4;border:1px solid #8bab95;border-radius:8px;min-height:42px;padding:9px 12px;cursor:pointer}
+.native-ball-burst-result-header button:disabled{opacity:.45;cursor:default}
+.native-ball-burst-history{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:8px}
+.native-ball-burst-row{display:grid;gap:8px;padding:10px;background:#28473e;border:1px solid #668879;border-radius:8px}
+.native-ball-burst-row strong{font-size:12px;color:#e4f4b7}
+.native-ball-burst-row span{font-size:11px;color:#c9ddd2;line-height:1.5}
+.native-ball-burst-hud[hidden]{display:none!important}
+.native-ball-burst-hud{position:absolute;top:89px;left:50%;transform:translateX(-50%);z-index:28;width:min(435px,calc(100vw - 24px));display:grid;gap:9px;padding:15px;border:1px solid #9dc49e;border-radius:12px;background:#162d33ef;color:#f8ffed;pointer-events:auto;box-shadow:0 8px 30px #041a1ab3}
+.native-ball-burst-hud strong{color:#e3f7a5;font-size:13px;letter-spacing:.06em}
+.native-ball-burst-score{font-size:19px;font-weight:900}
+.native-ball-burst-detail{font-size:12px;color:#c9ddd0;margin:0;line-height:1.5}
+.native-ball-burst-hud progress{width:100%;height:13px;accent-color:#b4e48f}
+.native-ball-burst-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.native-ball-burst-buttons button{flex:1}
+.native-ball-burst :is(select,button):focus-visible,.native-ball-burst-hud button:focus-visible{outline:3px solid #eaffb7;outline-offset:2px}
+@media(max-width:610px){.native-ball-burst{padding:11px}.native-ball-burst-hud{top:64px}.native-ball-burst-history{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.native-ball-burst *, .native-ball-burst-hud *{animation:none!important;transition:none!important}}

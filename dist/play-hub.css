@@ -53,3 +53,9 @@
 }
 @media(prefers-reduced-motion:reduce){.play-hub *{scroll-behavior:auto!important}}
 @media print{.play-hub{display:none!important}}
+
+/* A direct, deliberate human-queue action; configure/view remains separate. */
+.play-hub .play-hub-queue-now{background:#d6f879;color:#153122;border-color:#d6f879;
+ width:100%;font-size:1.04rem;min-height:50px;margin-top:auto}
+.play-hub-human .play-hub-primary{width:100%;margin-top:9px;background:#244b47;color:#dff6dc;border-color:#78a397}
+@media(max-width:600px){.play-hub .play-hub-queue-now{min-height:52px}}

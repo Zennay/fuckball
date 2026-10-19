@@ -80,3 +80,161 @@
  .matchday-control-row-actions button{flex:1 1 45%}}
 @media print{.matchday-control-tools,.matchday-control-row-actions{display:none!important}
  .matchday-control-rows{max-height:none}}
+
+
+/* Device-local organiser-managed availability; never official team presence. */
+.matchday-attendance{margin-top:24px;border:1px solid #6f9580;border-radius:14px;background:#173535;overflow:hidden}
+.matchday-attendance>summary{cursor:pointer;padding:17px 20px;font-weight:800;letter-spacing:.05em;color:#d3f2a7}
+.matchday-attendance>summary:focus-visible{outline:3px solid #ffe28e;outline-offset:-3px}
+.matchday-attendance-body{padding:2px 20px 20px;display:grid;gap:16px}
+.matchday-attendance-body h3{font-size:1.05rem;letter-spacing:.05em;margin:0}
+.matchday-attendance-body>p{margin:0;color:#c8ddd1;max-width:76ch;line-height:1.5}
+.matchday-attendance-picker{display:grid;gap:8px;font-weight:750;font-size:.85rem;letter-spacing:.04em}
+.matchday-attendance :is(input,select){font:inherit;max-width:100%;min-width:0;min-height:43px;box-sizing:border-box;background:#10292e;border:1px solid #7b9b8e;border-radius:9px;color:#f3fcf4;padding:9px 11px}
+.matchday-attendance :is(input,select,button):focus-visible{outline:3px solid #ffe28e;outline-offset:2px}
+.matchday-attendance :is(input,select):disabled{opacity:.65}
+.matchday-attendance-counts{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-attendance-counts span{padding:8px 13px;border:1px solid #507266;border-radius:8px;background:#244744;font-weight:700;font-variant-numeric:tabular-nums}
+.matchday-attendance-rows{display:grid;gap:8px}
+.matchday-attendance-rows>p{color:#bed9c7;line-height:1.5}
+.matchday-attendance-row{display:grid;grid-template-columns:minmax(130px,1fr) 135px minmax(150px,1.4fr) auto auto;gap:9px;align-items:center;padding:10px;background:#20403e;border:1px solid #537a6e;border-radius:10px}
+.matchday-attendance-row strong{overflow-wrap:anywhere}
+.matchday-attendance-form{display:grid;grid-template-columns:minmax(140px,1fr) 135px minmax(160px,1.5fr) auto;gap:10px;padding-top:14px;border-top:1px solid #56796c}
+.matchday-attendance-actions{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-attendance button{min-height:43px}
+.matchday-attendance-message{font-size:.85rem;color:#c9e5d0;margin:0;line-height:1.55}
+@media(max-width:950px){
+ .matchday-attendance-row{grid-template-columns:minmax(140px,1fr) minmax(130px,1fr)}
+ .matchday-attendance-row strong{grid-column:1}
+ .matchday-attendance-row input{grid-column:1/-1}
+ .matchday-attendance-row button{justify-self:start}
+ .matchday-attendance-form{grid-template-columns:1fr 1fr}
+ .matchday-attendance-form input:nth-child(3){grid-column:1/-1}
+}
+@media(max-width:580px){
+ .matchday-attendance-body{padding:4px 12px 16px}
+ .matchday-attendance-row,.matchday-attendance-form{grid-template-columns:1fr}
+ .matchday-attendance-row strong,.matchday-attendance-row input,.matchday-attendance-form input:nth-child(3){grid-column:auto}
+ .matchday-attendance-row button,.matchday-attendance-form button{width:100%}
+ .matchday-attendance-actions button{flex:1 1 135px}
+}
+@media print{
+ .matchday-attendance{background:white;color:#111;border-color:#aaa}
+ .matchday-attendance>summary{color:#111}
+ .matchday-attendance-actions,.matchday-attendance-form,.matchday-attendance-row button{display:none}
+ .matchday-attendance-row{background:white;color:#111;border-color:#aaa}
+}
+
+
+/* Provisional 4v4 private lineup board; these assignments never reach a server. */
+.matchday-lineup-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.matchday-lineup-card{background:#1b3436;border:1px solid #55796d;border-radius:12px;min-width:0;padding:15px}
+.matchday-lineup-card h4{margin:0 0 11px;font-size:.86rem;letter-spacing:.07em;color:#eaf8ef}
+.matchday-lineup-card ul{margin:0;padding-left:19px;display:grid;gap:7px;line-height:1.45;font-size:.9rem}
+.matchday-lineup-card li{overflow-wrap:anywhere;color:#dfede6}
+.matchday-lineup-red{border-top:4px solid #e78b87}
+.matchday-lineup-blue{border-top:4px solid #89bfe9}
+.matchday-lineup-bench{border-top:4px solid #ced7a4}
+.matchday-attendance-row{grid-template-columns:minmax(110px,1fr) 115px 160px minmax(130px,1.3fr) auto auto}
+@media(max-width:1050px){.matchday-attendance-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.matchday-lineup-preview{grid-template-columns:1fr}}
+@media(max-width:580px){.matchday-attendance-row{grid-template-columns:1fr}}
+@media print{
+ .matchday-lineup-preview{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .matchday-lineup-card{background:white;color:#111;border-color:#666}
+ .matchday-lineup-card h4,.matchday-lineup-card li{color:#111}
+}
+
+
+.matchday-lineup-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.matchday-lineup-actions button{flex:0 1 auto}
+@media(max-width:580px){.matchday-lineup-actions button{flex:1 1 100%}}
+@media print{.matchday-lineup-actions{display:none}}
+
+
+/* Copy-only player name reuse; never propagate another event's RSVP or team side. */
+.matchday-squad-reuse{padding:15px 17px;border:1px solid #688d7c;border-radius:12px;background:#244343;display:grid;gap:10px}
+.matchday-squad-reuse h4{margin:0;letter-spacing:.05em;font-size:.9rem;color:#ddf4af}
+.matchday-squad-reuse>p{margin:0;line-height:1.5;color:#c8dbce;font-size:.87rem}
+.matchday-squad-reuse-picker{display:grid;gap:7px;font-weight:750;font-size:.78rem;letter-spacing:.05em}
+.matchday-squad-reuse-picker select{width:100%;max-width:710px}
+.matchday-squad-reuse-filter{display:flex;gap:10px;align-items:center;font-size:.85rem}
+.matchday-squad-reuse-filter input{min-height:20px;width:20px;accent-color:#cdf0a0}
+.matchday-squad-reuse-summary{font-size:.85rem;color:#cbe0d5;margin:0}
+.matchday-squad-reuse button{justify-self:start}
+@media(max-width:580px){
+ .matchday-squad-reuse{padding:12px}
+ .matchday-squad-reuse button{width:100%}
+}
+@media print{.matchday-squad-reuse{display:none}}
+
+/* Upcoming game-night time overlap hints, never automatic fixture rescheduling. */
+.matchday-clashes{margin:16px 0;border:1px solid #718c82;border-radius:14px;padding:18px;
+ background:#193537;color:#eaf4ec}
+.matchday-clashes-header{display:flex;justify-content:space-between;gap:18px;align-items:start}
+.matchday-clashes-header h3{margin:0 0 5px;font-size:.98rem;letter-spacing:.06em;color:#e3f6bb}
+.matchday-clashes-header p{margin:0 0 14px;line-height:1.5;font-size:.84rem;color:#cce0d5;max-width:65ch}
+.matchday-clashes-controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
+.matchday-clashes-filter{display:flex;gap:9px;align-items:center;font-size:.83rem}
+.matchday-clashes-filter input{width:20px;height:20px;accent-color:#cef0a0}
+.matchday-clashes-controls button,.matchday-clash-actions button{border:1px solid #96b6a8;background:#2b524a;
+ border-radius:8px;color:#f0fff0;padding:9px 12px;font:inherit;font-size:.81rem;min-height:44px}
+.matchday-clashes button:disabled{opacity:.55;cursor:default}
+.matchday-clashes :is(button,input):focus-visible{outline:3px solid #ffe18b;outline-offset:2px}
+.matchday-clashes-list{display:grid;gap:10px}
+.matchday-clashes-list>p{margin:8px 0;color:#c7e3d3}
+.matchday-clash-row{display:flex;align-items:center;justify-content:space-between;gap:18px;
+ border:1px solid #5e8171;background:#25483e;border-radius:10px;padding:13px}
+.matchday-clash-detail{display:grid;gap:5px;min-width:0}
+.matchday-clash-detail small{font-size:.75rem;color:#dcf2ac}
+.matchday-clash-detail strong{font-size:.92rem;overflow-wrap:anywhere}
+.matchday-clash-detail span{font-size:.83rem;color:#cde0db;overflow-wrap:anywhere}
+.matchday-clash-actions{display:flex;gap:8px;flex-wrap:wrap}
+.matchday-clashes-status{font-size:.81rem;color:#c6dfd6;line-height:1.5;margin:12px 0 0}
+@media(max-width:850px){.matchday-clashes-header,.matchday-clash-row{flex-direction:column;align-items:stretch}
+ .matchday-clashes-controls{justify-content:flex-start}}
+@media(max-width:500px){.matchday-clashes{padding:12px}
+ .matchday-clash-actions button,.matchday-clashes-controls button{flex:1 1 100%}}
+@media print{.matchday-clashes-controls,.matchday-clash-actions{display:none}}
+
+
+/* Full private kickoff browser, preserving native writer ownership of dates. */
+.matchday-upcoming-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0 18px}
+.matchday-upcoming-controls input,.matchday-upcoming-controls select{font:inherit;min-height:44px;
+ box-sizing:border-box;min-width:0;border:1px solid #83a398;border-radius:9px;background:#14313a;
+ color:#f3fff2;padding:9px 11px}
+.matchday-upcoming-controls input{flex:2 1 220px}.matchday-upcoming-controls select{flex:1 1 180px}
+.matchday-upcoming :is(input,select,button):focus-visible{outline:3px solid #e4f5ad;outline-offset:3px}
+.matchday-upcoming-list{display:grid;gap:8px}
+.matchday-upcoming-day{font-size:.84rem;letter-spacing:.055em;text-transform:uppercase;
+ color:#e4f3bc;margin:15px 0 3px;padding-bottom:6px;border-bottom:1px solid #5e776e}
+.matchday-upcoming-list>p{font-size:.88rem;color:#c5ddce;line-height:1.5}
+.matchday-upcoming-summary{font-size:.81rem;line-height:1.5;color:#d2e8d5;margin:13px 0}
+.matchday-upcoming-more{min-height:44px;padding:10px 15px;border:1px solid #a6c9ab;
+ border-radius:9px;color:#eaffe0;background:#335d4b;font-weight:700;cursor:pointer}
+.matchday-upcoming-more[hidden]{display:none!important}
+@media(max-width:600px){.matchday-upcoming-controls{display:grid;grid-template-columns:1fr}
+ .matchday-upcoming-controls input,.matchday-upcoming-controls select{width:100%}
+ .matchday-upcoming-more{width:100%}}
+@media print{.matchday-upcoming-controls,.matchday-upcoming-more{display:none}}
+
+/* Honest read-only standings derived from manually saved private league scores. */
+.matchday-league-standings{margin-top:13px;padding:9px 11px;border:1px solid #67897b;
+ border-radius:10px;background:#183933;max-width:100%}
+.matchday-league-standings>summary{cursor:pointer;font-size:.87rem;letter-spacing:.015em;
+ color:#d6efbf;font-weight:760;padding:5px 2px}
+.matchday-league-standings>summary:focus-visible{outline:3px solid #f5e5a4;outline-offset:2px}
+.matchday-standings-scroll{max-width:100%;overflow-x:auto;margin:12px 0}
+.matchday-league-standings table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.82rem}
+.matchday-league-standings caption{text-align:left;color:#bcd8c8;font-size:.76rem;line-height:1.4;padding:3px 0 11px}
+.matchday-league-standings th,.matchday-league-standings td{padding:8px 9px;text-align:right;
+ border-bottom:1px solid #587669;white-space:nowrap}
+.matchday-league-standings th:nth-child(2),.matchday-league-standings td:nth-child(2){text-align:left;white-space:normal;min-width:125px;overflow-wrap:anywhere}
+.matchday-league-standings tbody tr:first-child{font-weight:800;color:#e6fab8}
+.matchday-league-standings>p{margin:6px 0 11px;color:#c6e0d0;line-height:1.45;font-size:.78rem}
+.matchday-standings-export{padding:9px 12px;border-radius:8px;border:1px solid #90b4a0;
+ background:#315e51;color:#f2ffe8;min-height:44px;font-size:.85rem}
+.matchday-standings-export:focus-visible{outline:3px solid #fae5a0;outline-offset:3px}
+@media(max-width:570px){.matchday-league-standings{padding:7px}
+ .matchday-league-standings th,.matchday-league-standings td{padding:8px 6px}}
+@media print{.matchday-standings-scroll{overflow:visible}}

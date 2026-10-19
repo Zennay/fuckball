@@ -10,7 +10,7 @@
  card.setAttribute('aria-label','Local goal rush practice');
  const title=document.createElement('h2');title.textContent='GOAL RUSH.';
  const explanation=document.createElement('p');
- explanation.textContent='A timed, offline scoring challenge inside the real 1v1-vs-AI practice match. No rankings, virtual rewards or changed game physics.';
+ explanation.textContent='A timed, offline scoring challenge inside the real 1v1-vs-AI match. The score/time caps are disabled for this drill only, so five real goals are possible; your normal match defaults remain unchanged. No rankings, rewards or changed physics.';
  const fields=document.createElement('div');fields.className='goal-rush-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Drill length';
  const duration=document.createElement('select');duration.setAttribute('aria-label','Goal Rush drill duration');
@@ -125,7 +125,7 @@
  }
  duration.onchange=updateBest;
  updateBest();
- const localReady=()=>!serverLink?.room&&!peerConnected&&!replay&&
+ const localReady=()=>!serverLink&&!peerConnected&&!replay&&
   !!room&&typeof room.currentFrameNo==='number'&&
   !!room.gameState&&Number.isSafeInteger(room.gameState.redScore)&&
   Number.isSafeInteger(room.gameState.blueScore);
@@ -181,9 +181,18 @@
   if(s.frames>=s.duration*60){finish('GOAL RUSH · TIME UP');}
  }
  launch.onclick=()=>{
+  if(serverLink||peerConnected){history.textContent='Leave or cancel your existing online room, connection or human queue before starting Goal Rush.';return;}
+  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
+     document.querySelector('.quick-ready:not([hidden])')||
+     document.getElementById('joinScreen')?.hidden===false){
+   history.textContent='Finish or cancel the active human matchmaking or room invitation first.';return;
+  }
+  if((started||replay)&&!window.confirm('Start Goal Rush in a fresh local 1v1 match? Your current local game or replay will be replaced and unsaved progress may be lost.')){
+   history.textContent='Current local game or replay kept. Goal Rush did not start.';return;
+  }
   if(session)quit();
   try{
-   document.getElementById('quickPractice').click();
+   if(!quickPlay('bot',true,true))throw Error('Original local 1v1 could not start without preserving your session.');
    if(!localReady()||!started)throw Error('Local 1v1 practice could not start.');
    const side=ownSide();
    if(!side)throw Error('Join Red or Blue to start a scoring drill.');
@@ -199,7 +208,7 @@
   }catch(error){history.textContent=error.message||'Practice challenge unavailable.';session=null;hud.hidden=true;}
  };
  stop.onclick=()=>{finish('DRILL STOPPED',false);};
- restart.onclick=()=>{quit();launch.click();};
+ restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
  window.setInterval(tick,150);
  const previousShowView=showView;

@@ -47,3 +47,28 @@
 @media(max-width:540px){.tactical-callouts-fields{grid-template-columns:1fr}
  .tactical-callouts-tray{max-height:33vh;padding:9px}
  .tactical-callouts-favorites button,.tactical-callouts-defaults button{min-height:44px}}
+
+
+/* Role quick-chat packs are user-initiated drafts, never automatic messaging. */
+.tactical-callouts-role-packs{border-top:1px solid #5d877d;padding-top:13px;display:grid;gap:10px}
+.tactical-callouts-role-packs>strong{font-size:12px;letter-spacing:.06em;color:#e2f7b4}
+.tactical-callouts-role-packs p{margin:0;font-size:12px;line-height:1.5;color:#cadfd4}
+.tactical-callouts-role-packs>select{min-height:44px;padding:8px 11px;background:#193741;color:#f5fff0;border:1px solid #88aa9a;border-radius:8px}
+.tactical-callouts-role-packs button{min-height:44px;padding:9px 12px;background:#315449;color:#efffdf;border:1px solid #96b39c;border-radius:8px;font-weight:750}
+.tactical-callouts-role-packs :is(select,button):focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+.tactical-callouts-portable{display:flex;gap:10px;flex-wrap:wrap}
+.tactical-callouts-portable button{flex:1 1 160px}
+@media(max-width:540px){.tactical-callouts-role-packs>button{width:100%}
+ .tactical-callouts-portable button{flex:1 1 100%}}
+/* Local-only incoming room chat focus, never server moderation. */
+.native-chat-focus{display:grid;gap:6px;border:1px solid #567f77;padding:11px;border-radius:9px;background:#223e3c}
+.native-chat-focus label{display:grid;gap:7px;font-size:12px;color:#e4f5d3}
+.native-chat-focus select{min-height:44px;padding:8px;background:#193741;color:#f0ffec;border:1px solid #8cab9b;border-radius:8px}
+.native-chat-focus-note{font-size:11px;line-height:1.5;color:#c9d9cd;margin:0}
+.native-chat-player{flex-wrap:wrap}
+.native-chat-player span{flex:1 1 130px}
+.native-chat-player .native-chat-report{background:#40393a;color:#ffe8df;border-color:#a48c86}
+.tactical-callouts .native-chat-quick-focus{min-height:40px;margin-left:7px;padding:7px 11px;border-radius:7px;border:1px solid #97aea0;background:#2a4145;color:#e1f3db;font-size:11px;font-weight:780}
+.tactical-callouts .native-chat-quick-focus[aria-pressed="true"]{border-color:#c8ae8c;background:#554236;color:#fff1d4}
+.native-chat-focus select:focus-visible,.native-chat-player button:focus-visible,.tactical-callouts .native-chat-quick-focus:focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+@media(max-width:520px){.tactical-callouts .native-chat-quick-focus{margin:7px 0 0;width:100%}.native-chat-player button{flex:0 1 auto}}

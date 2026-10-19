@@ -71,3 +71,29 @@ body.match-active{overflow:hidden}.match-active>.club-header{display:none}#match
 @media(prefers-reduced-transparency:reduce){
  .spectator-camera-toolbar{backdrop-filter:none;background:#14262a}
 }
+
+/* Opt-in visual presentation only. Never modify the actual game canvas. */
+.rm-match-focus-settings{grid-column:1/-1;display:grid;gap:10px;border:1px solid #708e84;border-radius:11px;background:#193239;padding:15px;margin-top:12px}
+.rm-match-focus-settings h3{font-size:15px;font-weight:850;color:#e4f7af;letter-spacing:.07em;margin:0}
+.rm-match-focus-settings>p{font-size:12px;color:#d3e5d6;line-height:1.6;margin:0}
+.rm-match-focus-settings>label:not(.rm-match-focus-check){display:grid;gap:7px;color:#e9f7e1;font-size:12px}
+.rm-match-focus-settings select{width:100%;min-height:43px;padding:8px 12px;background:#294b47;border:1px solid #a5c0a8;color:#f0ffeb;border-radius:8px}
+.rm-match-focus-check{display:flex;gap:12px;align-items:flex-start;font-size:12px;line-height:1.5;color:#d6e8d9}
+.rm-match-focus-check input{width:18px;height:18px;flex:0 0 auto;accent-color:#d9f49d}
+.rm-match-focus-actions{display:flex;gap:9px}
+.rm-match-focus-actions button{min-height:42px;padding:8px 13px;border:1px solid #adc49d;border-radius:8px;background:#315248;color:#edffec;cursor:pointer}
+.rm-match-focus-status{font-size:12px;color:#e1f4bb;line-height:1.5;min-height:19px}
+.match-focus-quick{position:absolute;z-index:6;top:max(86px,calc(env(safe-area-inset-top) + 66px));right:30px;min-height:40px;padding:9px 13px;border-radius:8px;border:1px solid #adbea5;background:#192e35ee;color:#f0f9e4;font-size:11px;font-weight:850;letter-spacing:.04em;cursor:pointer}
+.match-focus-quick[aria-pressed="true"]{background:#e4f7b5;color:#1b312b;border-color:#fcffe1}
+.menu-open .match-focus-quick{display:none}
+.match-hud-focus #matchView .pitch-label,.match-hud-focus #matchView .match-hints{display:none!important}
+.match-hud-contrast #matchView .scoreboard{background:#050e13!important;color:#fff!important;border:2px solid #f3ffd7!important;box-shadow:0 4px 18px #000a!important}
+.match-hud-contrast #matchView .scoreboard .team-name,.match-hud-contrast #matchView .scoreboard .score{color:#fff!important;text-shadow:none!important}
+.match-hud-contrast #matchView .scoreboard #clock{background:#f9fcea!important;color:#101d24!important;font-weight:900!important}
+.match-hud-contrast #matchView .match-menu-trigger{background:#050e13!important;border:2px solid #e2f8c9!important;color:#fff!important}
+.match-hud-contrast #matchView .match-menu-trigger kbd{color:#fff!important}
+.match-hud-contrast #matchView .pitch-label,.match-hud-contrast #matchView .match-hints{color:#fff!important;text-shadow:0 1px 5px #000!important}
+.match-hud-hide-chat #matchView #chatLog{visibility:hidden!important;pointer-events:none!important}
+.rm-match-focus-settings :is(button,select,input):focus-visible,.match-focus-quick:focus-visible{outline:3px solid #d3faa1;outline-offset:3px}
+@media(max-width:650px){.match-focus-quick{top:68px;right:16px;max-width:150px;padding:8px 10px;font-size:10px}}
+@media(prefers-reduced-motion:reduce){.match-focus-quick,.rm-match-focus-settings *{transition:none!important;animation:none!important}}

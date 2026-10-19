@@ -26,24 +26,28 @@
  });
  const healthy=ms=>Number.isFinite(ms)&&ms>=1&&ms<=10000;
  const readings=()=>{
-  // Prefer server-issued challenge/response RTT. Never accept self-reported
-  // roster latency as an authority or fabricate a reading from "online".
-  const native=serverLink?.room&&serverLink.serverPings instanceof Map;
-  const serverSample=native?serverLink.serverPings.get(networkPlayerId):undefined;
-  const ms=healthy(serverSample)?serverSample:healthy(net.rtt)?net.rtt:null;
-  const source=healthy(serverSample)?'server':'connection';
-  const jitter=healthy(net.jitter)?net.jitter:null;
+  // Native server-issued RTT and direct-peer RTT are different instruments.
+  // Never blend peer jitter or stale peer metrics into a native room indicator.
+  const native=!!serverLink?.room;
+  const nativeSample=native&&serverLink.serverPings instanceof Map?
+   serverLink.serverPings.get(networkPlayerId):null;
+  const ms=native?(healthy(nativeSample)?nativeSample:null):
+   (healthy(net.rtt)?net.rtt:null);
+  const source=native?'server':'peer';
+  const jitter=!native&&healthy(net.jitter)?net.jitter:null;
   const recent=net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)
    ?Math.max(0,performance.now()-net.lastSnapshot):null;
   return {ms,source,jitter,recent};
  };
  function refresh(){
-  if(document.hidden||match.hidden||replay||!peerConnected){
+  const native=!!serverLink?.room;
+  if(document.hidden||match.hidden||replay||(!native&&!peerConnected)){
    clear();latestRoom=null;return;
   }
-  const roomId=serverLink?.room||'peer';
+  const roomId=native?'server:'+serverLink.room:'peer';
   if(roomId!==latestRoom){latestRoom=roomId;clear();}
   const {ms,source,jitter,recent}=readings();
+  panel.dataset.transport=native?'native':'peer';
   let severity='clear';
   if(recent!==null&&recent>3500)severity='stalled';
   else if(ms!==null&&(ms>=220||jitter!==null&&jitter>=85))severity='poor';
@@ -67,7 +71,7 @@
   }
   if(severity==='clear'){panel.hidden=true;metric.textContent='';return;}
   const pieces=[];
-  if(ms!==null)pieces.push(Math.round(ms)+' ms '+(source==='server'?'server RTT':'measured RTT'));
+  if(ms!==null)pieces.push(Math.round(ms)+' ms '+(source==='server'?'server-challenge RTT':'direct-peer RTT'));
   if(jitter!==null)pieces.push(Math.round(jitter)+' ms jitter');
   if(recent!==null&&recent>3500)pieces.push('last update '+(recent/1000).toFixed(1)+'s ago');
   metric.textContent=pieces.join(' · ')||'Connection recovering';
