@@ -60,6 +60,47 @@
   a.download='fuckball-personal-career-progress-'+new Date().toISOString().slice(0,10)+'.html';
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
  }
+ async function exportCareerCard(totals,authorized){
+  // Self-owned, explicitly exported unranked account totals. Canvas only;
+  // no server fetch, remote images, username, token or opponent identity.
+  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=675;
+  const ctx=canvas.getContext('2d');
+  if(!ctx)throw Error('Your browser cannot create the image.');
+  const bg=ctx.createLinearGradient(0,0,1200,675);
+  bg.addColorStop(0,'#102b32');bg.addColorStop(1,'#315347');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,1200,675);
+  ctx.strokeStyle='rgba(207,244,183,.15)';ctx.lineWidth=5;
+  ctx.strokeRect(32,32,1136,611);
+  ctx.beginPath();ctx.moveTo(600,32);ctx.lineTo(600,643);ctx.stroke();
+  ctx.beginPath();ctx.arc(600,337,130,0,Math.PI*2);ctx.stroke();
+  ctx.font='bold 24px system-ui,sans-serif';ctx.fillStyle='#bbf29b';
+  ctx.fillText('FUCKBALL  /  MY PERSONAL CAREER',64,99);
+  ctx.font='bold 56px system-ui,sans-serif';ctx.fillStyle='#f0fced';
+  ctx.fillText('THE NUMBERS.',64,171);
+  const data=[
+   ['COMPLETED ROUNDS',totals.matches],
+   ['RECORDED WINS',totals.wins],
+   ['GOALS SCORED',totals.goals],
+   ['ACTIVE MINUTES',totals.minutes]
+  ];
+  data.forEach(([label,value],i)=>{
+   const x=i%2===0?64:630,y=i<2?264:454;
+   ctx.fillStyle='rgba(14,37,42,.9)';ctx.fillRect(x,y,506,150);
+   ctx.font='bold 17px system-ui,sans-serif';ctx.fillStyle='#bce3c2';ctx.fillText(label,x+22,y+38);
+   ctx.font='bold 64px system-ui,sans-serif';ctx.fillStyle='#e8ffbb';
+   ctx.fillText(Number(value).toLocaleString(),x+22,y+115);
+  });
+  ctx.font='19px system-ui,sans-serif';ctx.fillStyle='#d0e4d9';
+  ctx.fillText('Actual account totals on this server only · UNRANKED · Not a global skill rating',64,637);
+  const blob=await new Promise((resolve,reject)=>
+   canvas.toBlob(value=>value?resolve(value):reject(Error('Image rendering failed.')),'image/png'));
+  if(!authorized())throw Error('Account changed during export. Reload your own Profile.');
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='fuckball-personal-career-'+new Date().toISOString().slice(0,10)+'.png';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }
  function mount(host,stats,username,authorized){
   if(!host)return;
   host.replaceChildren();
@@ -90,13 +131,23 @@
    try{printReport(totals,selected);message.textContent='Offline career progress report saved locally. No server data was changed.';}
    catch{message.textContent='Could not create the offline report.';}
   };
+  const imageBtn=dom('button','↓ Export career image PNG');imageBtn.type='button';
+  imageBtn.onclick=async()=>{
+   if(!authorized()){message.textContent='Account changed. Reload Profile before exporting.';return;}
+   imageBtn.disabled=true;
+   try{
+    await exportCareerCard(totals,authorized);
+    message.textContent='Private unranked career card exported locally; no name or ID included.';
+   }catch(error){message.textContent=error?.message||'Could not create the career image.';}
+   finally{imageBtn.disabled=false;}
+  };
   const playBtn=dom('button','Go to Play →');playBtn.type='button';
   playBtn.onclick=()=>{
    if(!authorized()){message.textContent='Account changed. Reload your profile before playing.';return;}
    // Only opens the native Play screen. It never auto-joins matchmaking.
    document.getElementById('tabHome')?.click();
   };
-  buttons.append(exportBtn,playBtn);
+  buttons.append(exportBtn,imageBtn,playBtn);
   section.append(title,intro,picker,focusText,cards,buttons,message);
   host.append(section);
   function render(){
