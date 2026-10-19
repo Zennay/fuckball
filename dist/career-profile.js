@@ -31,6 +31,7 @@
  login.textContent='Sign in / create account';
  identity.append(avatar,who,login);
  const metrics=document.createElement('div');metrics.className='career-metrics';
+ const milestonesHost=document.createElement('div');milestonesHost.className='native-career-milestones-anchor';
  metrics.setAttribute('aria-label','Career match statistics');
  const formSection=document.createElement('section');formSection.className='career-form';
  formSection.setAttribute('aria-label','Recent match form and activity');formSection.hidden=true;
@@ -53,7 +54,7 @@
  recent.append(rh,recentNote,recentRows);
  const footer=document.createElement('p');footer.className='career-profile-footnote';
  footer.textContent='Career totals may outlive the limited list of recent match receipts. Statistics depend on this server retaining its data directory; they are not global, ranked or cross-server.';
- view.append(top,status,identity,metrics,formSection,modes,recent,footer);
+ view.append(top,status,identity,metrics,milestonesHost,formSection,modes,recent,footer);
  const main=document.querySelector('#matchView');
  (main?.parentElement||document.body).insertBefore(view,main||null);
  const open=document.createElement('button');open.type='button';open.className='career-profile-open';
@@ -78,7 +79,7 @@
  const ratio=(a,b)=>b?Math.round(a*100/b)+'%':'—';
  const outcomes={1:'RED',2:'BLUE'};
  function clear(){
-  metrics.replaceChildren();modeRows.replaceChildren();recentRows.replaceChildren();
+  metrics.replaceChildren();milestonesHost.replaceChildren();modeRows.replaceChildren();recentRows.replaceChildren();
   formCards.replaceChildren();formModes.replaceChildren();formActivity.replaceChildren();
   formSection.hidden=true;download.disabled=true;current=null;loadedToken=null;
  }
@@ -266,7 +267,10 @@
    if(!Number.isSafeInteger(stats.matches)||stats.matches<0||!Array.isArray(matchesResponse.items))
     throw Error('Unexpected statistics response.');
    current={stats,items:matchesResponse.items.slice(0,50),account:account.username};loadedToken=token;
-   renderStats(stats);renderForm(current.items);renderRecent(current.items);
+   renderStats(stats);
+   window.FuckballNativeCareerMilestones?.mount(milestonesHost,stats,account.username,()=>
+    !!current&&current.account===account.username&&loadedToken===token&&
+    settings.account?.token===token&&settings.account?.username===account.username&&!view.hidden);renderForm(current.items);renderRecent(current.items);
    download.disabled=false;
    status.textContent='Account data loaded for '+account.username+' · '+fmt(stats.matches)+
     ' server-recorded matches. Not ranked; no fabricated ratings.';
