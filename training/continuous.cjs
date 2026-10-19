@@ -158,7 +158,8 @@ async function main() {
         reasons: tacticalReport.gate.reasons,
         incumbent: tacticalReport.againstIncumbent && {
           scoreRate: tacticalReport.againstIncumbent.scoreRate,
-          goalDifference: tacticalReport.againstIncumbent.goalDifference },
+          goalDifference: tacticalReport.againstIncumbent.goalDifference,
+          football: tacticalReport.againstIncumbent.football },
         default: tacticalReport.againstDefault && {
           scoreRate: tacticalReport.againstDefault.scoreRate,
           goalDifference: tacticalReport.againstDefault.goalDifference } },
@@ -178,6 +179,11 @@ async function main() {
       tacticalGateReasons: tacticalReport.gate.reasons,
       tacticalScoreRate: tacticalReport.againstIncumbent?.scoreRate ?? null,
       tacticalGoalDifference: tacticalReport.againstIncumbent?.goalDifference ?? null,
+      tacticalPassCompletionRate: tacticalReport.againstIncumbent?.football?.passCompletionRate ?? null,
+      tacticalPassAttempts: tacticalReport.againstIncumbent?.football?.passAttempts ?? null,
+      tacticalShotAttempts: tacticalReport.againstIncumbent?.football?.shotAttempts ?? null,
+      tacticalShotConversionRate: tacticalReport.againstIncumbent?.football?.shotConversionRate ?? null,
+      tacticalKeeperTurnovers: tacticalReport.againstIncumbent?.football?.keeperTurnovers ?? null,
       championUpdates: (state.championUpdates || 0) + Number(league.gate.promoted),
       bestGeneration: league.gate.promoted ? cycle : (state.bestGeneration || 0),
       gateReasons: league.gate.reasons, leagueHeadToHead: league.headToHead,
