@@ -54,17 +54,18 @@
  trend.append(trendLabel,trendPills);
  const playlists=document.createElement('div');playlists.className='server-form-explorer-playlists';
  insights.append(insightsHeading,insightsText,insightsStats,trend,playlists);
+ const calendarHost=document.createElement('div');calendarHost.className='native-calendar-anchor';
  const sessionHost=document.createElement('div');sessionHost.className='native-session-anchor';
  const list=document.createElement('div');list.className='server-results-grid';list.setAttribute('aria-label','My online match results');
  const divider=document.createElement('h2');divider.className='server-local-heading';divider.textContent='SAVED REPLAYS ON THIS DEVICE';
  const reviewVault=document.createElement('div');reviewVault.className='server-review-vault-anchor';
  const detail=document.createElement('p');detail.className='server-results-note';
  detail.textContent='Online result receipts do not include HBR2 playback. Your local recordings below stay on this device. Account totals may outlive the 50 most recent server receipts.';
- panel.append(heading,controls,status,summary,form,insights,sessionHost,list,reviewVault,detail);
+ panel.append(heading,controls,status,summary,form,insights,calendarHost,sessionHost,list,reviewVault,detail);
  games.insertBefore(panel,document.getElementById('gamesStatus'));
  games.insertBefore(divider,document.getElementById('gamesStatus'));
  let generation=0,currentToken=null,currentUser=null,items=null,busy=false;
- let selectedSession=null,visibleRows=[];
+ let selectedSession=null,selectedDay=null,visibleRows=[];
  const valid=x=>x&&typeof x==='object'&&
   typeof x.id==='string'&&/^[0-9a-f]{24}$/.test(x.id)&&
   ['bot','1v1','2v2','3v3','4v4'].includes(x.mode)&&
@@ -83,7 +84,7 @@
    typeof username==='string'&&username.length>0?{token,username}:null;
  }
  function reset(message){
-  selectedSession=null;visibleRows=[];sessionHost.replaceChildren();
+  selectedSession=null;selectedDay=null;visibleRows=[];calendarHost.replaceChildren();sessionHost.replaceChildren();
   items=null;currentToken=null;currentUser=null;list.replaceChildren();
   summary.textContent='';form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();status.textContent=message;
   exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;reviewVault.replaceChildren();
@@ -163,6 +164,12 @@
   const scope=items.filter(item=>
    (mode.value==='all'||item.mode===mode.value)&&
    (period.value==='all'||item.at>=Date.now()-Number(period.value)*86400000));
+  const daySet=window.FuckballNativeMatchCalendar?.render(calendarHost,items,scope,selectedDay,day=>{
+   if(!items||!currentToken||authenticated()?.token!==currentToken||
+    authenticated()?.username!==currentUser)return;
+   selectedDay=day;render();
+   if(day)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
+  },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
   const sessionSet=window.FuckballNativePlaySessions?.render(sessionHost,items,scope,selectedSession,session=>{
    if(!items||!currentToken||authenticated()?.token!==currentToken||
     authenticated()?.username!==currentUser)return;
@@ -170,7 +177,7 @@
    if(session)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
   },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
   const filtered=scope.filter(item=>(filter.value==='all'||outcome(item)===filter.value)&&
-   (!sessionSet||sessionSet.has(item.id)));
+   (!sessionSet||sessionSet.has(item.id))&&(!daySet||daySet.has(item.id)));
   visibleRows=filtered;
   summary.textContent=filtered.length+' shown · '+scope.length+' in this period and mode · '+
    items.length+' recent server receipts · unranked';
@@ -255,7 +262,7 @@
       !data.items.every(valid))throw Error('Server results could not be verified.');
    currentToken=account.token;currentUser=account.username;
    items=data.items.slice().sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
-   selectedSession=null;
+   selectedSession=null;selectedDay=null;
    status.textContent='Private results for '+currentUser+'. Stored on this server only; never a ranked rating.';
    exportButton.disabled=false;csvButton.disabled=false;erase.disabled=false;render();
   }catch(e){if(seq===generation)reset(e.message||'Online results unavailable.');}
@@ -350,8 +357,8 @@
  showView=function(next){
   previousShowView(next);
   if(next==='games')load();
-  else{generation++;currentToken=null;currentUser=null;items=null;selectedSession=null;
-   visibleRows=[];sessionHost.replaceChildren();list.replaceChildren();reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
+  else{generation++;currentToken=null;currentUser=null;items=null;selectedSession=null;selectedDay=null;
+   visibleRows=[];calendarHost.replaceChildren();sessionHost.replaceChildren();list.replaceChildren();reviewVault.replaceChildren();form.replaceChildren();insights.hidden=true;insightsStats.replaceChildren();trendPills.replaceChildren();playlists.replaceChildren();exportButton.disabled=true;csvButton.disabled=true;erase.disabled=true;}
  };
  // The native account UI is updated on login, logout and server-forced
  // invalidation. Clear sensitive match cards synchronously on the next DOM
