@@ -7,7 +7,8 @@
   {key:'first',title:'First Touch',selector:'.first-play-card',intro:'Learn movement, kicking and scoring.'},
   {key:'goals',title:'Goal Rush',selector:'.goal-rush-setup',intro:'Beat a local scoring target.'},
   {key:'team',title:'Teamwork',selector:'.teamwork-panel',intro:'Train real teammate kick follow-ups.'},
-  {key:'defense',title:'Clean Sheet',selector:'.clean-sheet-setup',intro:'Protect your own goal against local AI for the full active clock.'}
+  {key:'defense',title:'Clean Sheet',selector:'.clean-sheet-setup',intro:'Protect your own goal against local AI for the full active clock.'},
+  {key:'rockets',title:'Rocket Kick',selector:'.native-ball-burst',intro:'Train real ball speed following your own native kicks.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -90,10 +91,11 @@
   const goals=getLocal('fuckball-local-goal-rush-history-v1');
   const teamwork=getLocal('fuckball.teamwork-native-drill.v1');
   const defending=getLocal('fuckball.clean-sheet-history.v1');
+  const rockets=getLocal('fuckball.native-ball-burst-history.v1');
   const valid=list=>Array.isArray(list)?list.filter(x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000).length:0;
   const parts=[];
   if(completed)parts.push('First Touch complete');
-  const attempts=valid(goals)+valid(teamwork)+valid(defending);
+  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets);
   if(attempts)parts.push(attempts+' local drill attempt'+(attempts===1?'':'s'));
   progress.textContent=parts.length?parts.join(' · '):'No practice history yet';
  }
