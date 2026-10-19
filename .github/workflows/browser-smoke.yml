@@ -9,7 +9,8 @@ permissions:
   contents: read
 jobs:
   app-contracts:
-    runs-on: ubuntu-latest
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
@@ -34,7 +35,8 @@ jobs:
   peer-hosting-chromium:
     # Real Chromium: WebRTC data channels between two pages, the room hosted in a page's Web Worker,
     # handovers server <-> page and failover when the hosting page closes (docs/netcode-plan.md).
-    runs-on: ubuntu-latest
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
