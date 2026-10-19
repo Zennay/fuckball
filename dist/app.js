@@ -39,12 +39,13 @@ let roster=[],rosterPreset='';
 function presetRoster(mode){
  const couch=['local','coop2v2','coop4v4','couchRivals'].includes(mode);
  if(couch)myTeam=1;
- if(mode==='couchRivals')return [
-   {id:1,name:settings.name,team:1,bot:false},
-   {id:2,name:'Player 2',team:1,bot:false},
-   {id:3,name:'Player 3',team:2,bot:false},
-   {id:4,name:'Player 4',team:2,bot:false}
-  ];
+ if(mode==='couchRivals'){
+   const names=window.fuckballCouchRivals?.names?.()||{};
+   return [{id:1,name:settings.name,team:1,bot:false},
+    {id:2,name:names[2]||'Player 2',team:1,bot:false},
+    {id:3,name:names[3]||'Player 3',team:2,bot:false},
+    {id:4,name:names[4]||'Player 4',team:2,bot:false}];
+  }
   if(mode==='coop2v2'||mode==='coop4v4'){
   // Two actual local humans on Red against the native tactical AI.
   const squad=[{id:1,name:settings.name,team:1,bot:false},

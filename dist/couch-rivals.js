@@ -4,6 +4,23 @@
 (function(){
  const neutral=()=>({x:0,y:0,kick:false});
  let assigned=null,last='';
+ const NAME_KEY='fuckball.couch-rivals.names.v1';
+ const defaults={2:'Player 2',3:'Player 3',4:'Player 4'};
+ const clean=(value,fallback)=>String(value??'').replace(/[<>\x00-\x1f\x7f-\x9f]/g,'').trim().slice(0,20)||fallback;
+ let playerNames={...defaults};
+ try{
+  const stored=JSON.parse(localStorage.getItem(NAME_KEY)||'null');
+  if(stored&&typeof stored==='object'&&!Array.isArray(stored)){
+   for(const id of [2,3,4])playerNames[id]=clean(stored[id],defaults[id]);
+  }
+ }catch{}
+ function setNames(input){
+  if(!input||typeof input!=='object')return;
+  for(const id of [2,3,4])playerNames[id]=clean(input[id],defaults[id]);
+  try{localStorage.setItem(NAME_KEY,JSON.stringify(playerNames));}catch{}
+ }
+ function names(){return {...playerNames};}
+
  const isMode=()=>document.getElementById('mode')?.value==='couchRivals';
  function pads(){
   if(typeof navigator.getGamepads!=='function')return [];
@@ -61,6 +78,6 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,read,describe});
+ window.fuckballCouchRivals=Object.freeze({prepare,read,describe,names,setNames});
  requestAnimationFrame(frame);
 })();

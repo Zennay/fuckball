@@ -26,7 +26,25 @@
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  controls.append(launch,coop2,coop4,rivals,configure);
- section.append(title,intro,controls,status);
+ const namesPanel=node('details',null,'couch-rivals-names');
+ const namesTitle=node('summary','Set four-player team names (device only)');
+ const namesRow=node('div',null,'couch-rivals-name-fields');
+ const nameInputs={};
+ const initial=window.fuckballCouchRivals?.names?.()||{};
+ for(const id of [2,3,4]){
+  const label=node('label','Player '+id+' · '+(id===2?'Red':'Blue'));
+  const field=node('input');field.type='text';field.maxLength=20;
+  field.autocomplete='off';field.setAttribute('aria-label','Player '+id+' local nickname');
+  field.value=initial[id]||'Player '+id;
+  nameInputs[id]=field;label.append(field);namesRow.append(label);
+  field.addEventListener('change',()=>{
+   window.fuckballCouchRivals?.setNames?.(Object.fromEntries(
+    [2,3,4].map(i=>[i,nameInputs[i].value])));
+   status.textContent='Team names saved only on this device. They apply at the next four-player kickoff.';
+  });
+ }
+ namesPanel.append(namesTitle,namesRow);
+ section.append(title,intro,controls,namesPanel,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=node('aside',null,'couch-play-hud');
