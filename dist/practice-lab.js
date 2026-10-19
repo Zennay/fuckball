@@ -12,7 +12,7 @@
   {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'},
   {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'},
   {key:'keepaway',title:'Keep Away',selector:'.keep-away-setup',intro:'Build genuine kick streaks before the local AI or a goal breaks control.'},
-  {key:'sudden',title:'Sudden Death',selector:'.sudden-death-setup',intro:'Play a genuine first-goal best-of series against native local AI.'}
+  {key:'sudden',title:'Sudden Death',selector:'.sudden-death-setup',intro:'First-goal best-of versus native AI or a real Couch 1v1 opponent.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -20,7 +20,7 @@
  const KEY='fuckball.practice-lab.display.v1';
  let saved={};try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');if(s&&typeof s==='object'&&!Array.isArray(s))saved=s;}catch{}
  const root=document.createElement('section');root.className='practice-lab';
- root.setAttribute('aria-label','Optional local AI practice lab');
+ root.setAttribute('aria-label','Optional local AI and Couch practice lab');
  const disclosure=document.createElement('details');disclosure.className='practice-lab-disclosure';
  const summary=document.createElement('summary');summary.className='practice-lab-summary';
  const summaryIcon=document.createElement('span');summaryIcon.className='practice-lab-icon';summaryIcon.textContent='↗';
@@ -36,7 +36,7 @@
  const content=document.createElement('div');content.className='practice-lab-content';
  const explanation=document.createElement('p');
  explanation.className='practice-lab-help';
- explanation.textContent='Train against native local AI only. No bots enter human Quick Match, no leaderboard, and no game rules change.';
+ explanation.textContent='Train with native local AI or play the two-human Couch Sudden Death series. Human Quick Match, server results and rankings are separate; physics is unchanged.';
  const tabs=document.createElement('div');tabs.className='practice-lab-tabs';
  tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Choose offline practice');
  const panes=document.createElement('div');panes.className='practice-lab-panes';
@@ -157,7 +157,7 @@
     return (couch||x.opponent===undefined||x.opponent==='ai')&&
      Number.isSafeInteger(a)&&Number.isSafeInteger(b)&&a>=0&&b>=0&&a<=7&&b<=7&&
      a+b+x.draws===x.rounds.length&&
-     x.rounds.every(r=>[first,second,'draw'].includes(r.winner)&&
+     x.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
       Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
      x.rounds.filter(r=>r.winner===first).length===a&&
      x.rounds.filter(r=>r.winner===second).length===b&&
