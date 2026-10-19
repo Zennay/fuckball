@@ -54,7 +54,7 @@ class BallTelemetry {
   this.shot=null;
   if(this.pending)this.finalizePass('missed');
  }
- frame(state,tick){
+ frame(state,tick,plans=null){
   this.tick=tick;
   const b=state.gameState?.physicsState.discs[0];
   if(!b)return;
@@ -84,7 +84,7 @@ class BallTelemetry {
      this.finalizePass(team===q.team?'completed':'intercepted',p.id);
    }
    if(this.shot&&this.shot.team!==team){
-    if(state.players.find(x=>x.id===p.id)?.name&&
+    if(plans?.get(p.id)?.role==='keeper'&&
        this.shot&&tick-this.shot.tick<180) {
      // Only a goalkeeper touching an incoming shot is counted as a save.
      const ownGoal=state.gameState.stadium.goals.find(g=>g.team.id===team);
