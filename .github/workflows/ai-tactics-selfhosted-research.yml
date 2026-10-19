@@ -43,6 +43,7 @@ jobs:
             exit 0
           fi
           echo '### OLD LIVE POLICY VS NEW TACTICS (mirrored, private, no model promotion)'
+          echo "Research source $(git rev-parse HEAD)"
           nice -n 19 timeout 120s node --max-old-space-size=192 training/duel.cjs "$LIVE_POLICY" "$GITHUB_WORKSPACE/dist/ai/policy.js" 8 900 1
           echo '### NEW TRAINING SCENE TELEMETRY (native 4v4, safe, no live rooms)'
           nice -n 19 timeout 120s node --max-old-space-size=192 - <<'NODE'
