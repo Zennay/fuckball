@@ -13,22 +13,24 @@
  };
  const section=node('section',null,'couch-play');
  section.setAttribute('aria-label','Local two-player couch football');
- const title=node('h2','COUCH 1v1.');
- const intro=node('p','Two real people, one screen, the native BFF pitch. Player 1 uses WASD + F or their gamepad. Player 2 uses arrow keys + /, Enter or numpad 0, or a different gamepad. No online room, accounts, bots or leaderboard.');
+ const title=node('h2','COUCH FOOTBALL.');
+ const intro=node('p','Two real players, one native pitch. Play against each other in 1v1, or team up against native AI in 2v2 or 4v4. P1 uses WASD/F or their controller, P2 uses arrows/Enter or a separate controller. No account or leaderboard.');
  const controls=node('div',null,'couch-play-actions');
  const launch=node('button','▶ PLAY LOCAL TWO-PLAYER');launch.className='primary';launch.type='button';
+ const coop2=node('button','▶ TEAM UP 2v2');coop2.type='button';
+ const coop4=node('button','▶ TEAM UP 4v4');coop4.type='button';
  const configure=node('label','Player 2 controller');
  const source=node('select');source.setAttribute('aria-label','Choose a separate gamepad for Player 2');
  configure.append(source);
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- controls.append(launch,configure);
+ controls.append(launch,coop2,coop4,configure);
  section.append(title,intro,controls,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=node('aside',null,'couch-play-hud');
  hud.hidden=true;hud.setAttribute('aria-label','Local couch player controls');
- hud.append(node('strong','COUCH 1v1 · TWO HUMANS'));
+ const hudTitle=node('strong','COUCH · TWO HUMANS');hud.append(hudTitle);
  const activeHint=node('span','P1 WASD + F · P2 arrows + / or Enter');
  hud.append(activeHint);pitch.append(hud);
  let chosen='auto',availableSignature='',lastInput='0:0:false';
@@ -37,7 +39,7 @@
   typeof replay!=='undefined'&&!replay&&
   typeof serverLink!=='undefined'&&!serverLink&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
-  document.getElementById('mode')?.value==='local'&&
+  ['local','coop2v2','coop4v4'].includes(document.getElementById('mode')?.value)&&
   document.getElementById('joinScreen')?.hidden!==false&&
   !pitch.hidden;
  function pads(){
@@ -100,7 +102,9 @@
   }
   hud.hidden=!isLocal();
   if(!hud.hidden){
-   const p2=selected();
+   const p2=selected(),mode=document.getElementById('mode')?.value;
+   hudTitle.textContent=mode==='coop2v2'?'COUCH CO-OP · 2v2':
+    mode==='coop4v4'?'COUCH CO-OP · 4v4':'COUCH 1v1 · TWO HUMANS';
    activeHint.textContent='P1 WASD/F or controller'+(first===null?'':' '+(first+1))+
     ' · P2 arrows/Enter'+(p2?' or controller '+(p2.index+1):' · no separate controller');
   }
@@ -119,20 +123,27 @@
    'Player 2 is assigned to controller port '+(Number(next)+1)+
     '. Disconnecting it will not reassign Player 1’s controller.';
  };
- launch.onclick=()=>{
+ function startMode(mode){
   if(typeof pendingSessionBlock==='function'){
    const reason=pendingSessionBlock();
    if(reason){status.textContent=reason;return;}
   }
-  if((started||replay)&&!window.confirm('Replace your current offline match or replay with local two-player football? Unsaved local progress may be lost.')){
+  const name=mode==='coop2v2'?'Couch Co-op 2v2':
+   mode==='coop4v4'?'Couch Co-op 4v4':'Couch 1v1';
+  if((started||replay)&&!window.confirm('Replace your current offline match or replay with '+
+   name+'? Unsaved local progress may be lost.')){
    status.textContent='Existing local game preserved.';return;
   }
-  if(!quickPlay('local',true,false)){
-   status.textContent='Local 1v1 is currently unavailable.';return;
+  if(!quickPlay(mode,true,false)){
+   status.textContent=name+' is unavailable while another session is active.';return;
   }
-  status.textContent='Two-player native 1v1 started. Shared keyboard and separate controllers are ready.';
+  status.textContent=name+' started with two real native local humans. '+
+   (mode==='local'?'Play against each other.':'Play on Red together against actual local AI.');
   paint();
- };
+ }
+ launch.onclick=()=>startMode('local');
+ coop2.onclick=()=>startMode('coop2v2');
+ coop4.onclick=()=>startMode('coop4v4');
  let lastLive=false;
  function frame(){
   const live=canInput();

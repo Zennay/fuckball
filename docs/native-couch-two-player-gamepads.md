@@ -15,3 +15,15 @@ Player 1 uses existing **WASD + F** controls or the existing controller selected
 ## Release boundary
 
 Static UI, CSS and PWA assets only, with a targeted native P2 controller-input extension. Existing mandatory GitHub exact-head CI, protected review/security gates and authorized production release/drain/rollback remain unchanged. This is **source integration**, not evidence of a live server deploy. No new manual QA, regression or test suites were written, expanded or run.
+
+## Local native Co-op teams (2v2 and 4v4)
+
+The Couch home panel now has two additional **actual playable** choices: **Team Up 2v2** and **Team Up 4v4**. Both original native human IDs 1 and 2 join the same Red team, controlled separately through the existing shared-keyboard or distinct-controller input; the original tactical AI controls the remaining players.
+
+- **2v2:** 2 real Red teammates face 2 native Blue bots, without adding substitute human competitors.
+- **4v4:** 2 real Red teammates plus 2 genuine native AI teammates face 4 genuine native Blue AI opponents. The engine keeps its actual teams, score, match duration and native ball/player physics.
+- Starting either mode uses the existing explicit local quick-play authorization and asks consent before replacing an unsaved local match. Online rooms, human queues and direct peers cannot be silently switched into a co-op lobby.
+- Input ownership, gamepad disconnect safety, neutral handling on pause/blur/menu and the explicit P2 keyboard mapping also apply to both Co-op modes. Player 2 is released to neutral on exit or loss of input, preventing sticky movement.
+- Co-op results are observed in the original local scoreboard only, **not** stored or promoted to ranked matchmaking, Club results, an Elo score, or a fabricated verified AI victory.
+
+No new network protocol, simulated physics or AI algorithm was introduced. Existing native AI tactical policies are reused. Source integration has no authority to cut over a live VPS.
