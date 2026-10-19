@@ -13,17 +13,22 @@
  const panel=make('section',null,'couch-series');
  panel.setAttribute('aria-label','Offline four-player 2v2 series');
  panel.append(make('h2','COUCH RIVALS · SERIES'),
-  make('p','Make it a real game night. First goal wins each round; Red vs Blue play best-of-3, 5 or 7 with the same four human players. All results stay on this device and are never ranked.'));
+  make('p','Make it a real game night. Choose 2v2, 3v3 or 4v4, then play best-of-3, 5 or 7; Red vs Blue use the same four real human players, with native AI filling any extra team slots. All results stay on this device and are never ranked.'));
  const actions=make('div',null,'couch-series-controls');
  const formatLabel=make('label','Series format');
- const format=make('select');format.setAttribute('aria-label','2v2 series length');
+ const format=make('select');format.setAttribute('aria-label','Four-player series length');
  for(const n of [3,5,7])format.add(new Option('Best of '+n,String(n)));
  formatLabel.append(format);
+ const teamLabel=make('label','Native squad size');
+ const teamSize=make('select');teamSize.setAttribute('aria-label','Four-player series team size');
+ for(const n of [2,3,4])teamSize.add(new Option(n+'v'+n+(n===2?' · no bots':
+  ' · '+(n-2)+' AI teammate'+(n===4?'s':'')+' per team'),String(n)));
+ teamLabel.append(teamSize);
  const start=make('button','▶ START FOUR-PLAYER SERIES');start.type='button';start.className='primary';
  const next=make('button','▶ NEXT ROUND');next.type='button';next.hidden=true;
  const end=make('button','End series');end.type='button';end.hidden=true;
  const exportButton=make('button','↓ Save series result');exportButton.type='button';exportButton.hidden=true;
- actions.append(formatLabel,start,next,end,exportButton);
+ actions.append(formatLabel,teamLabel,start,next,end,exportButton);
  const status=make('p','Requires two independent standard gamepads for Blue. Red plays on shared keyboard.','couch-series-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const tally=make('div',null,'couch-series-tally');tally.hidden=true;
@@ -50,7 +55,8 @@
     Number.isInteger(r.red)&&r.red>=0&&r.red<=7&&
     Number.isInteger(r.blue)&&r.blue>=0&&r.blue<=7&&
     Number.isInteger(r.draws)&&r.draws>=0&&r.draws<=50&&
-    ['red','blue'].includes(r.winner));
+    ['red','blue'].includes(r.winner)&&
+    (r.teamSize===undefined||[2,3,4].includes(r.teamSize)));
   }catch{archived=[];}
  }
  const compact=s=>String(s||'').replace(/[\x00-\x1f\x7f-\x9f]/g,'').slice(0,24);
@@ -60,7 +66,7 @@
   return {red:name(1)+' + '+name(2),blue:name(3)+' + '+name(4)};
  }
  function record(){
-  const result={created:series.created,bestOf:series.bestOf,red:series.red,
+  const result={created:series.created,bestOf:series.bestOf,teamSize:series.teamSize,red:series.red,
    blue:series.blue,draws:series.draws,winner:series.red>series.blue?'red':'blue',
    names:series.names,rounds:series.rounds.slice(0,50)};
   archived.unshift(result);archived=archived.slice(0,MAX);
@@ -74,19 +80,21 @@
   for(const r of archived.slice(0,5)){
    const day=new Date(r.created);
    const title=Number.isFinite(day.getTime())?day.toLocaleDateString():'Previous series';
-   history.append(make('p',title+' · Best of '+r.bestOf+' · Red '+r.red+
+   history.append(make('p',title+' · '+(r.teamSize||2)+'v'+(r.teamSize||2)+
+    ' · Best of '+r.bestOf+' · Red '+r.red+
     ' : '+r.blue+' Blue · '+(r.winner==='red'?'Red':'Blue')+' won'+
     (r.draws?' · '+r.draws+' drawn rounds':'')));
   }
  }
  function display(){
   const active=!!series;
-  start.hidden=active;formatLabel.hidden=active;
+  start.hidden=active;formatLabel.hidden=active;teamLabel.hidden=active;
   next.hidden=!active||!series.resolved||series.complete;
   end.hidden=!active;exportButton.hidden=!active||!series.complete;
   tally.hidden=!active;hud.hidden=!active||pitch.hidden;
   if(!active){tally.replaceChildren();hud.replaceChildren();return;}
-  const text='RED '+series.red+' — '+series.blue+' BLUE · Best of '+series.bestOf+
+  const text='RED '+series.red+' — '+series.blue+' BLUE · '+series.teamSize+
+   'v'+series.teamSize+' · Best of '+series.bestOf+
    ' · Round '+series.round+(series.draws?' · Draws '+series.draws:'');
   tally.textContent=text;hud.replaceChildren(make('strong',text));
   if(series.resolved){
@@ -119,7 +127,7 @@
  }
  function watch(){
   if(series&&!series.complete&&!series.resolved){
-   if(document.getElementById('mode')?.value!=='couchRivals'||
+   if(document.getElementById('mode')?.value!==series.mode||
     typeof replay!=='undefined'&&replay||
     typeof peerConnected!=='undefined'&&peerConnected||
     typeof serverLink!=='undefined'&&serverLink){
@@ -148,13 +156,22 @@
   }
   const prepared=window.fuckballCouchRivals?.prepare?.();
   if(!prepared?.ok){announce(prepared?.message||'Two controllers required.');return;}
-  if(!quickPlay('couchRivals',true,false)){
+  const size=Number(teamSize.value);
+  if(![2,3,4].includes(size)){announce('Choose a supported native team size.');return;}
+  const mode=size===2?'couchRivals':size===3?'couchRivals3v3':'couchRivals4v4';
+  // Refuse a not-yet-integrated native mode; never advertise a playable series
+  // if its roster format does not exist on the selected deployed shell.
+  if(!Array.from(document.getElementById('mode')?.options||[]).some(o=>o.value===mode)){
+   announce('Selected native team size is unavailable in this build.');return;
+  }
+  if(!quickPlay(mode,true,false)){
    announce('Finish the current online or local transition before starting.');return;
   }
   const bestOf=Number(format.value);
-  series={created:Date.now(),bestOf,red:0,blue:0,draws:0,round:1,
+  series={created:Date.now(),bestOf,teamSize:size,mode,red:0,blue:0,draws:0,round:1,
    resolved:false,complete:false,seen:false,rounds:[],names:labels(),final:null};
-  announce('Round 1 live · first native goal takes the round. Four real humans, zero bots.');
+  announce('Round 1 live · '+size+'v'+size+' with four real humans and '+
+   (size-2)+' AI teammate(s) per team. First native goal wins.');
   display();
  }
  function nextRound(){
@@ -183,12 +200,14 @@
  // Defer until the engine completes its current physics callback before pausing.
  window.addEventListener('fuckball:local-couch-goal',event=>{
   if(!series||series.resolved||series.complete||
-   document.getElementById('mode')?.value!=='couchRivals'||
+   document.getElementById('mode')?.value!==series.mode||
    event.detail?.room!==room)return;
   const team=event.detail?.team;
   if(team!==1&&team!==2)return;
+  const source=series;
   queueMicrotask(()=>{
-   if(series&&!series.resolved&&!series.complete)resolve(team===1?'red':'blue');
+   if(series===source&&!source.resolved&&!source.complete)
+    resolve(team===1?'red':'blue');
   });
  });
  start.onclick=startSeries;next.onclick=nextRound;exportButton.onclick=exportResult;
