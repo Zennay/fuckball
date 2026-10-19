@@ -2,14 +2,79 @@
 const defaultServer=location.hostname.endsWith('.chatgpt.site')?'':(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';$('serverAddress').value=defaultServer;
 $('preserveGuestSlot').checked=settings.guestReconnect===true;
 $('preserveGuestSlot').onchange=()=>{settings.guestReconnect=$('preserveGuestSlot').checked;savePrefs();};
-const baseDisconnect=disconnect;disconnect=function(){const link=serverLink;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
+// Disconnect recovery is entirely client-side scheduling. Server authority,
+ // account sessions, guest tickets, and any restored team slots remain unchanged.
+const roomRecovery={timer:null,offlineRetry:null,context:null};
+function clearRoomRecovery(){
+ if(roomRecovery.timer!==null)clearTimeout(roomRecovery.timer);
+ roomRecovery.timer=null;roomRecovery.offlineRetry=null;roomRecovery.context=null;
+ window.FuckballRoomRecovery?.hide();
+}
+function cancelRoomRecovery(){
+ if(serverLink?.recoveryAttempt)disconnect();
+ else clearRoomRecovery();
+ showView('home');
+ notify('Room reconnect cancelled.');
+}
+function retryRoomRecovery(info,attempt){
+ if(serverLink)return;
+ clearRoomRecovery();
+ if(navigator.onLine===false){offerRoomRecovery({...info,offline:true,tries:attempt===0?0:info.tries});return;}
+ connectServer(false,info.room,info.name,
+  {ticket:info.ticket,previousId:info.previousId,retries:attempt,roomRecovery:true});
+ if(serverLink?.recoveryAttempt)window.FuckballRoomRecovery?.show({
+  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery
+ });
+ else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
+}
+function offerRoomRecovery(info){
+ if(!/^[A-Z0-9]{6,12}$/.test(info.room||''))return;
+ clearRoomRecovery();roomRecovery.context=info;
+ if(info.tries>=3){
+  window.FuckballRoomRecovery?.show({
+   phase:'failed',attempt:3,max:3,
+   retry:()=>retryRoomRecovery({...info,tries:0},0),cancel:cancelRoomRecovery
+  });return;
+ }
+ if(navigator.onLine===false){
+  roomRecovery.offlineRetry=()=>retryRoomRecovery(info,info.tries+1);
+  window.FuckballRoomRecovery?.show({
+   phase:'offline',attempt:info.tries+1,max:3,
+   retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
+  });return;
+ }
+ const attempt=info.tries+1,delay=1000*2**info.tries;
+ roomRecovery.timer=setTimeout(()=>retryRoomRecovery(info,attempt),delay);
+ window.FuckballRoomRecovery?.show({
+  phase:'waiting',attempt,max:3,delay,
+  retry:()=>retryRoomRecovery(info,attempt),cancel:cancelRoomRecovery
+ });
+}
+window.addEventListener('online',()=>{const next=roomRecovery.offlineRetry;if(next)next();});
+window.addEventListener('offline',()=>{
+ if(roomRecovery.context&&roomRecovery.timer!==null)
+  offerRoomRecovery({...roomRecovery.context,offline:true});
+});
+for(const id of ['tabHome','tabReplay'])
+ document.getElementById(id)?.addEventListener('click',()=>{
+  if(serverLink?.recoveryAttempt)disconnect();
+  else if(roomRecovery.context)clearRoomRecovery();
+ });
+window.addEventListener('pagehide',clearRoomRecovery);
+const originalQuickPlay=quickPlay;
+quickPlay=function(...args){
+ const launched=originalQuickPlay(...args);
+ if(launched&&roomRecovery.context)clearRoomRecovery();
+ return launched;
+};
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();const link=serverLink;serverLink=null;if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
 const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:started?'stop':'start'});return;}baseStartStop();};$('startButton').onclick=startStop;
 const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serverLink.isOwner||!started)return;paused=!paused;releaseInputs();serverLink.send({type:'pause',value:paused});setButtons();return;}baseTogglePause();};
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
-function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');const ws=new WebSocket(url),link={ws,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  $('inviteBox').hidden=true;ws.onopen=()=>link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,token:settings.account?.token||undefined,
@@ -19,9 +84,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
    }
-   if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room,tries=(link.retries||0),previousId=link.previousId??networkPlayerId,ticket=link.resumeTicket;disconnect();if(link.failed)return;
-  // Dropped connection (Wi-Fi switch, proxy hiccup): rejoin the same room a few times.
-  if(room&&tries<3){const delay=1000*2**tries;notify('Connection lost. Reconnecting… ('+(tries+1)+'/3)');setTimeout(()=>{if(serverLink)return;connectServer(false,room,'',{ticket,previousId,retries:tries+1});},delay);}else notify('Disconnected.');};
+   if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room||(!create?roomId:''),tries=(link.retries||0),
+   previousId=link.room?networkPlayerId:(link.previousId??networkPlayerId),ticket=link.resumeTicket,name=link.joinName;
+   disconnect();if(link.failed)return;
+   if(room&&!link.quickMatchMode){notify('Connection lost. Room recovery available.');
+    offerRoomRecovery({room,tries,previousId,ticket,name});}
+   else notify('Disconnected.');};
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
   if(d.type==='quickMatchFound'){link.quickMatchMode=d.mode;link.roomControl={locked:true};}
@@ -70,7 +138,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   return;
  }
  if(d.type==='peering'){if(!link.net)startPeering(link,ws);return;}if(link.net&&link.net.handleServer(d))return;
- if(d.type==='welcome'){if(link.quickMatchMode)showView('play');link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id&&!link.quickMatchMode;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=!!link.quickMatchMode;$('inviteButton').hidden=!!link.quickMatchMode;if(!link.quickMatchMode)setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else if(!link.quickMatchMode)openMatchMenu();else if(menuOpen)closeMatchMenu();if(create)copyInvite(true);else if(!link.reconnect&&!link.quickMatchMode)notify('Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
+ if(d.type==='welcome'){link.recoveryAttempt=false;window.FuckballRoomRecovery?.hide();if(link.quickMatchMode)showView('play');link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id&&!link.quickMatchMode;link.room=d.room;peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=!!link.quickMatchMode;$('inviteButton').hidden=!!link.quickMatchMode;if(!link.quickMatchMode)setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else if(!link.quickMatchMode)openMatchMenu();else if(menuOpen)closeMatchMenu();if(create)copyInvite(true);else if(!link.reconnect&&!link.quickMatchMode)notify('Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
  else if(d.type==='room'){link.roomState=d;link.isOwner=d.owner===networkPlayerId&&!link.quickMatchMode;botIds=new Set(d.botIds||[]);$('mode').value=link.quickMatchMode?(d.mode==='1v1'?'bot':d.mode==='3v3'||d.mode==='club4v4'?'4v4':d.mode):d.mode;settings.difficulty=d.difficulty||'hard';settings.botLevels=d.botLevels||{};$('botDifficulty').value=settings.difficulty;updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
