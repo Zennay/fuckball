@@ -53,7 +53,38 @@ function profile(raw={}){const out={};for(const k of Object.keys(defaultProfile)
 function playerPhysics(s){const pp=s?.playerPhysics||{};const a=Number(pp.VW??pp.acceleration)||.1,d=Number(pp.m??pp.damping)||.96;return{a,d,vmax:a*d/(1-d)};}
 function reach(p,k,tx,ty,ph){const d=p.disc,dx=tx-d.pos.x,dy=ty-d.pos.y,l=Math.hypot(dx,dy)||1,v0=(d.speed.x*dx+d.speed.y*dy)/l,g=ph.d*(1-Math.pow(ph.d,k))/(1-ph.d);return ph.vmax*(k-g)+v0*g;}
 // Earliest frame at which player p can touch the moving ball (walls ignored).
-function intercept(b,p,ph,max=90){if(!p?.disc)return null;let x=b.pos.x,y=b.pos.y,vx=b.speed.x,vy=b.speed.y;const damp=b.damping||.99,r=p.disc.radius+b.radius;for(let k=0;k<=max;k+=2){if(k){for(let i=0;i<2;i++){x+=vx;y+=vy;vx*=damp;vy*=damp;}}if(Math.hypot(x-p.disc.pos.x,y-p.disc.pos.y)-r<=Math.max(0,reach(p,k,x,y,ph)))return{k,x,y};}return null;}
+function intercept(b,p,ph,max=90,stadium=null){
+ if(!p?.disc)return null;
+ let x=b.pos.x,y=b.pos.y,vx=b.speed.x,vy=b.speed.y;
+ const damp=b.damping||.99,r=p.disc.radius+b.radius;
+ const W=stadium?Math.abs(stadium.bgWidth||stadium.width||700)-b.radius:Infinity;
+ const H=stadium?Math.abs(stadium.bgHeight||stadium.height||280)-b.radius:Infinity;
+ for(let k=0;k<=max;k+=2){
+  if(k)for(let i=0;i<2;i++){
+   x+=vx;y+=vy;vx*=damp;vy*=damp;
+   if(Math.abs(y)>H){y=Math.sign(y)*(2*H-Math.abs(y));vy=-vy*.5;}
+   if(Math.abs(x)>W){x=Math.sign(x)*(2*W-Math.abs(x));vx=-vx*.5;}
+  }
+  if(Math.hypot(x-p.disc.pos.x,y-p.disc.pos.y)-r<=Math.max(0,reach(p,k,x,y,ph)))
+   return{k,x,y};
+ }
+ return null;
+}
+// Project an incoming bank shot to the goal line with real damping and wall
+// reflections. A straight-line y estimate misses most dangerous wall rockets.
+function goalLineArrival(F,b,goalX){
+ let x=b.pos.x,y=b.pos.y,vx=b.speed.x,vy=b.speed.y;
+ const H=F.height-F.rb;
+ if((goalX-x)*vx<=0)return null;
+ for(let t=1;t<=160;t++){
+  const prevX=x;x+=vx;y+=vy;
+  if(Math.abs(y)>H){y=Math.sign(y)*(2*H-Math.abs(y));vy=-vy*F.bounce;}
+  if((goalX-prevX)*(goalX-x)<=0)return{t,y};
+  vx*=F.damp;vy*=F.damp;
+  if(Math.abs(vx)+Math.abs(vy)<.12)break;
+ }
+ return null;
+}
 // ---- Ball outcome model shared by passes, shots and clearances ----
 // A kick adds kickStrength*invMass along the player->ball contact normal to
 // the ball's velocity, so aiming means choosing the contact normal.
@@ -171,7 +202,7 @@ function teamPlan(state,teamId,tick=0,raw={}){
 function buildPlan(state,teamId,tick=0,raw={}){
  const g=state.gameState,b=g?.physicsState.discs[0],team=state.players.filter(p=>p.disc&&p.team.id===teamId),ops=state.players.filter(p=>p.disc&&p.team.id===3-teamId),cfg=profile(raw),sign=teamId===1?1:-1;if(!b||!team.length)return {};
  const s=g.stadium,goal=s.goals.find(x=>x.team.id!==teamId),own=s.goals.find(x=>x.team.id===teamId),gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,height=s.bgHeight||s.height-30;
- const physics=playerPhysics(s),F=fieldOf(state,teamId),hits=new Map(),hitOf=p=>{if(!hits.has(p.id))hits.set(p.id,intercept(b,p,physics,120));return hits.get(p.id);};
+ const physics=playerPhysics(s),F=fieldOf(state,teamId),hits=new Map(),hitOf=p=>{if(!hits.has(p.id))hits.set(p.id,intercept(b,p,physics,120,s));return hits.get(p.id);};
  const dist=p=>Math.hypot(p.disc.pos.x-b.pos.x,p.disc.pos.y-b.pos.y);
  // Rank chasers by when they can actually reach the ball, so a pass's
  // receiver takes over at once instead of the passer chasing its own pass.
@@ -241,8 +272,8 @@ if(defending){
     const width=Math.abs(gx),gy=own?Math.abs(own.p0.y-own.p1.y)/2:85,depth=Math.max(0,sign*(b.pos.x-ox));
     const mine=hitOf(p),theirs=theirFirst;
     const mates=team.filter(q=>q!==p&&q.disc).map(hitOf).filter(Boolean).reduce((m,i)=>Math.min(m,i.k),Infinity);
-    const toGoal=b.speed.x*sign<-.6?(ox-b.pos.x)/b.speed.x:Infinity,shotY=b.pos.y+b.speed.y*(Number.isFinite(toGoal)?toGoal:0);
-    const shot=Number.isFinite(toGoal)&&toGoal>0&&toGoal<150&&Math.abs(shotY)<gy+45;
+    const arrival=goalLineArrival(F,b,ox);
+    const shot=arrival&&arrival.t<150&&Math.abs(arrival.y)<gy+45;
     const mineDepth=mine?sign*(mine.x-ox):Infinity;
     const sweep=mine&&mineDepth<width*.9&&mine.k+3<theirs&&(mine.k<=mates+4||theirs<mates);
     if(shot&&mine&&mineDepth>-5){
