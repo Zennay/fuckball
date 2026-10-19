@@ -74,6 +74,10 @@
   panel.hidden=false;
   if(lastRoom!==d.link.room){lastKey='';lastRoom=d.link.room;notice.textContent='';}
   const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused]);
+  // Menu-open state changes independently of room packets; keep the optional
+  // pitch prompt correct even when the authoritative room data is unchanged.
+  pitchPrompt.hidden=!(d.isReferee&&d.request&&d.running&&!d.paused&&
+   document.getElementById('pauseMenu')?.hidden&&!document.hidden&&!pitch.hidden);
   if(key===lastKey)return;
   lastKey=key;
   state.textContent=d.referee>0?'Referee: '+(d.refereeName||'reconnecting / unavailable')+
@@ -100,8 +104,7 @@
    promptNote.textContent=(person?.name||'An active human')+
     ' requested a pause. Only you decide whether to stop the actual clock.';
   }
-  pitchPrompt.hidden=!(d.isReferee&&pending&&document.getElementById('pauseMenu')?.hidden&&
-   !document.hidden&&!pitch.hidden);
+
  }
  choose.onchange=()=>{
   const d=snapshot();
