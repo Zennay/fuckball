@@ -1,5 +1,7 @@
 (function(root){'use strict';
 const AI=root.FuckballAI||(typeof require==='function'?require('./policy.js'):null);
+const Telemetry=(typeof module!=='undefined'&&typeof require==='function')
+ ?require('../../training/ball-telemetry.cjs').BallTelemetry:null;
 function rng(seed){return()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
 // Controlled kickoff variations are ONLY used for data collection, never
 // evolutionary validation or arena scoring. Every split sees every scenario.
@@ -21,10 +23,27 @@ function seedTrainingScene(room,side,scenario){
 }
 function match(makeRoom,candidate,opponent,side,seed,map,frames=2400,collect,actor,sampleStride=12,scenario=null){
  if(!Number.isInteger(sampleStride)||sampleStride<1||sampleStride>60)throw Error('Invalid rollout sample stride');
- let kicks=[0,0,0],territory=0;const env=makeRoom({onPlayerBallKick:id=>{const p=r.state.players.find(p=>p.id===(id?.id??id));if(p)kicks[p.team.id]++;}}),r=env.room,random=rng(seed);
- try{r.setCurrentStadium(env.map(map),0);r.setScoreLimit(0,0);r.setTimeLimit(0,0);for(let i=1;i<=8;i++){r.playerJoin(i,'Bot '+i,'',String(i),'','');r.setPlayerTeam(i,i<=4?1:2,0);}r.startGame(0);env.step(2);for(const p of r.state.players){p.aiControlled=true;r.state.updatePlayer(p.id,{pos:[p.disc.pos.x,p.disc.pos.y+(random()-.5)*40],speed:[0,0]});}if(collect)seedTrainingScene(r,side,scenario);r.onPlayerBallKick=id=>{const p=r.state.players.find(p=>p.id===(id?.id??id));if(p)kicks[p.team.id]++;};
- for(let t=0;t<frames;t++){if(t%4===0)for(const p of r.state.players){const input=AI.tactical(r.state,p.id,t,{difficulty:'hard',profile:p.team.id===side?candidate:opponent});if(collect&&t%sampleStride===0){const f=AI.features(r.state,p.id),a=env.reverse(input),sign=p.team.id===1?1:-1;collect({frame:t,id:p.id,team:p.team.id,x:AI.columns.map(c=>f[c]),dir:(a.dirY+1)*3+sign*a.dirX+1,kick:+a.kick});}let action=input;if(actor&&p.team.id===side){const predicted=AI.infer(actor,r.state,p.id);if(predicted.confidence>.58&&(predicted.input&15))action=(predicted.input&15)|(input&16);}r.playerInput(action,p.id);}env.step(1);const b=r.gameState?.physicsState.discs[0];if(b)territory+=(side===1?1:-1)*Math.max(-1,Math.min(1,b.pos.x/(r.state.stadium.bgWidth||700)));}
- const g=r.gameState,goals=side===1?g.redScore:g.blueScore,conceded=side===1?g.blueScore:g.redScore;return{map,side,seed,goals,conceded,kicks:kicks[side],opponentKicks:kicks[3-side],seconds:g.timeElapsed,fitness:(goals-conceded)*100+territory/frames*2+(Math.min(10,kicks[side])-Math.min(10,kicks[3-side]))*.05};
+ let kicks=[0,0,0],territory=0,frame=0;
+ const telemetry=Telemetry?new Telemetry():null,planned=new Map();
+ const env=makeRoom({onPlayerBallKick:id=>{const p=r.state.players.find(p=>p.id===(id?.id??id));
+  if(p){kicks[p.team.id]++;telemetry?.kick(p,planned.get(p.id),r.state,frame);}}}),r=env.room,random=rng(seed);
+ try{r.setCurrentStadium(env.map(map),0);r.setScoreLimit(0,0);r.setTimeLimit(0,0);for(let i=1;i<=8;i++){r.playerJoin(i,'Bot '+i,'',String(i),'','');r.setPlayerTeam(i,i<=4?1:2,0);}r.startGame(0);env.step(2);for(const p of r.state.players){p.aiControlled=true;r.state.updatePlayer(p.id,{pos:[p.disc.pos.x,p.disc.pos.y+(random()-.5)*40],speed:[0,0]});}if(collect)seedTrainingScene(r,side,scenario);
+ r.onPlayerBallKick=id=>{const p=r.state.players.find(p=>p.id===(id?.id??id));
+  if(p){kicks[p.team.id]++;telemetry?.kick(p,planned.get(p.id),r.state,frame);}};
+ r.onTeamGoal=team=>telemetry?.goal(team?.id??team,frame);
+ for(let t=0;t<frames;t++){frame=t;if(t%4===0)for(const p of r.state.players){const selected=p.team.id===side?candidate:opponent;const input=AI.tactical(r.state,p.id,t,{difficulty:'hard',profile:selected});
+ if(telemetry){const plan=AI.teamPlan(r.state,p.team.id,t,selected);planned.set(p.id,plan[p.id]);}if(collect&&t%sampleStride===0){const f=AI.features(r.state,p.id),a=env.reverse(input),sign=p.team.id===1?1:-1;collect({frame:t,id:p.id,team:p.team.id,x:AI.columns.map(c=>f[c]),dir:(a.dirY+1)*3+sign*a.dirX+1,kick:+a.kick});}let action=input;if(actor&&p.team.id===side){const predicted=AI.infer(actor,r.state,p.id);if(predicted.confidence>.58&&(predicted.input&15))action=(predicted.input&15)|(input&16);}r.playerInput(action,p.id);}env.step(1);telemetry?.frame(r.state,t);const b=r.gameState?.physicsState.discs[0];if(b)territory+=(side===1?1:-1)*Math.max(-1,Math.min(1,b.pos.x/(r.state.stadium.bgWidth||700)));}
+ const g=r.gameState,goals=side===1?g.redScore:g.blueScore,conceded=side===1?g.blueScore:g.redScore;
+ const ours=telemetry?.summary(side),theirs=telemetry?.summary(3-side);
+ // Actual score remains overwhelmingly important. Only verified first-touch
+ // completions and modeled on-target attempts can adjust a tied game.
+ const skill=ours?(Math.min(10,ours.passCompleted)*.3-Math.min(10,ours.passIntercepted)*.5+
+   Math.min(8,ours.shotProjectedOnTarget)*.14-Math.min(8,ours.shotAttempts-ours.shotProjectedOnTarget)*.12-
+   Math.min(10,ours.keeperTurnovers)*.65+Math.min(10,ours.keeperDistributionsCompleted)*.2):0;
+ return{map,side,seed,goals,conceded,kicks:kicks[side],opponentKicks:kicks[3-side],
+  seconds:g.timeElapsed,events:ours,opponentEvents:theirs,
+  fitness:(goals-conceded)*100+territory/frames*2+
+   (Math.min(10,kicks[side])-Math.min(10,kicks[3-side]))*.05+skill};
  }finally{r.destroy();}
 }
 async function train(makeRoom,{generations=6,seed=20261014,frames=2400,initial,validationSeeds=4}={},progress=()=>{}){
