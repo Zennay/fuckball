@@ -156,6 +156,8 @@ const CORE=[
  "./room-chat.css",
  "./player-report.css",
  "./mobile-controls.js",
+ "./mobile-match-session.js",
+ "./mobile-match-session.css",
  "./mobile-controls.css",
  "./match-moments.js",
  "./moments-backup.js",

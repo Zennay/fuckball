@@ -1,0 +1,12 @@
+.mobile-match-session{margin-top:17px;padding:17px;background:rgba(26,50,55,.72);border:1px solid #65887c;border-radius:11px}
+.mobile-match-session h3{margin:0 0 6px;font-size:14px;letter-spacing:.08em;color:#e5f5cb}
+.mobile-match-session p{margin:8px 0;color:#ccded6;font-size:12px;line-height:1.5}
+.mobile-match-session-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.mobile-match-session-actions button{min-height:43px;padding:8px 13px;border:1px solid #86aa91;border-radius:8px;flex:1 1 140px}
+.mobile-match-session-landscape{display:flex;align-items:center;gap:10px;color:#dfede8;font-size:12px}
+.mobile-match-session-landscape input{min-width:19px;min-height:19px;accent-color:#d4f29f}
+.mobile-match-session .mobile-match-session-status{color:#def8b3}
+.mobile-match-session .mobile-match-session-hint{font-size:11px;color:#adc9be}
+.mobile-match-session-quick{white-space:nowrap;max-width:min(30vw,150px);font-size:11px}
+.mobile-match-session button:focus-visible,.mobile-match-session input:focus-visible,.mobile-match-session-quick:focus-visible{outline:3px solid #d8f59c;outline-offset:3px}
+@media(max-width:640px){.mobile-match-session{padding:14px}.mobile-match-session-quick{font-size:10px;letter-spacing:0}}
