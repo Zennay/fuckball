@@ -134,15 +134,30 @@ function createRoomCore(opts){
  function bots(refill=true){const size=r.mode==='4v4'?4:r.mode==='2v2'?2:1;if(refill)for(const p of [...hb._room.state.players])if(r.botIds.has(p.id)){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}for(const team of [1,2]){const list=hb.getPlayerList().filter(p=>p.team===team);for(let i=list.length;i<size;i++)addBot(team);if(!refill)for(const p of list.filter(p=>r.botIds.has(p.id)).slice(0,Math.max(0,list.length-size))){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}}for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);}
  function reset(start=true){r.rematch=null;r.lastResult=null;r.round++;r.pendingSubs.clear();r.benchReady.clear();r.pauseRequest=null;r.pauseCooldowns.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.lobbyReady.clear();r.readyClickAt.clear();r.kickoff=null;r.stadiumBallot.clear();r.stadiumVoteAt.clear();r.formatVotes.clear();r.formatVoteAt.clear();hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
  /* id: unique client/player id, chosen by the server and never reused for a bot. */
- function join(id,{name='Player',netcode=2,account=null}={}){r.rematch=null;if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
+ function join(id,{name='Player',netcode=2,account=null,spectate=false}={}){
+  // A late participant never acquires an active slot during a live match,
+  // countdown or finished-game decision. Only a real owner/captain can later
+  // arrange a team/bench transition through the established control path.
+  const spectatorAdmission=spectate===true||r.started||!!r.kickoff||!!r.lastResult;
+  if(!spectatorAdmission)r.rematch=null;
+  if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
   const red=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===1).length,blue=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
   // Connected clients are unlimited, but only four HUMANS may be active per
   // side. Extra participants start on the spectator/bench slot (team 0).
   // bots(false) below yields a bot slot to an admitted human immediately.
-  const assigned=red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
+  const assigned=spectatorAdmission?0:
+    red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
   hb.addPlayer(id,c.name,assigned);
-  send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
+  send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2,
+    spectatorAdmission:assigned===0,liveAdmission:spectatorAdmission});
+  // Neutral spectators cannot change the format or cause a bot/lineup reset.
+  const activeHumans=red+blue+(assigned?1:0);
+  if(!spectatorAdmission){
+   if(activeHumans>4)r.mode='4v4';else if(activeHumans>2&&r.mode==='bot')r.mode='2v2';
+   bots(false);
+  }
+  if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
  function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.benchReady.delete(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);r.pauseCooldowns.delete(id);
   if(r.pauseRequest?.by===id)r.pauseRequest=null;r.sideFrames.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);
