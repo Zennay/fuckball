@@ -142,7 +142,9 @@
   clock.textContent=complete?(ours-s.firstFor)+'–'+(theirs-s.firstAgainst)+' after '+s.duration+' active seconds':'Interrupted; no round credited';
   score.textContent=won?(s.run.wins.length===3?'Ladder completed!':'Stage cleared. Choose the next opponent manually.'):
    complete?'Outscore the AI over a full clock to advance. Retry this opponent.':'This incomplete game did not change your ladder.';
-  stop.hidden=true;next.hidden=false;dismiss.hidden=false;bar.value=complete?100:bar.value;
+  stop.hidden=true;next.hidden=false;dismiss.hidden=false;
+  next.textContent=won&&s.run.wins.length===3?'View completed ladder':'Next / retry';
+  bar.value=complete?100:bar.value;
   paint();
  }
  function leave(){if(current){restore(current);current=null;}hud.hidden=true;stop.hidden=false;next.hidden=true;dismiss.hidden=true;title.textContent='AI GAUNTLET · LOCAL 1v1';}
@@ -218,7 +220,16 @@
   paint();
  };
  stop.onclick=()=>endStage('STAGE STOPPED');
- next.onclick=()=>{leave();beginStage();};
+ next.onclick=()=>{
+  const done=next.textContent==='View completed ladder';leave();
+  if(done){
+   document.getElementById('tabHome')?.click();
+   const disclosure=document.querySelector('.practice-lab-disclosure');
+   if(disclosure)disclosure.open=true;
+   document.getElementById('practice-lab-tab-ladder')?.click();
+   panel.scrollIntoView({block:'start',behavior:'auto'});
+  }else beginStage();
+ };
  dismiss.onclick=leave;
  exportBtn.onclick=()=>{
   const rows=readHistory();if(!rows.length)return;
