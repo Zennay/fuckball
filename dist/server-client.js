@@ -194,7 +194,7 @@ function renderNextMatchPanel(){
  $('nextMatchTitle').textContent=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
  const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
  $('nextMatchInfo').textContent=request?
-   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' players · '+Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000))+'s left':
+   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' players'+(Number.isSafeInteger(request.expiresAt)?' · '+Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000))+'s left':''):
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
    'Everyone remains connected to this room.';
  const list=$('nextMatchPlayers');list.replaceChildren();
@@ -218,12 +218,14 @@ function renderNextMatchPanel(){
 $('rematchRequest').onclick=()=>serverLink?.send({type:serverLink?.quickMatchMode?'quickRematchRequest':'rematchRequest'});
 $('nextGame').onclick=()=>serverLink?.send({type:'newGame'});
 $('rematchAccept').onclick=()=>{
- const request=serverLink?.roomState?.rematch;
- if(request)serverLink.send({type:serverLink?.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:true});
+ const link=serverLink;
+ const request=link?.quickMatchMode?link.quickRematch:link?.roomState?.rematch;
+ if(link&&request&&Number.isSafeInteger(request.id))link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:true});
 };
 $('rematchDecline').onclick=()=>{
- const request=serverLink?.roomState?.rematch;
- if(request)serverLink.send({type:serverLink?.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:false});
+ const link=serverLink;
+ const request=link?.quickMatchMode?link.quickRematch:link?.roomState?.rematch;
+ if(link&&request&&Number.isSafeInteger(request.id))link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:false});
 };
 setInterval(()=>{if(serverLink?.quickMatchMode&&menuOpen&&serverLink.quickRematch)renderNextMatchPanel();},1000);
 function renderSubPanel(){
