@@ -288,20 +288,53 @@
   setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
  erase.onclick=async()=>{
-  if(busy||!items||!currentToken||authenticated()?.token!==currentToken)return;
+  if(busy||!items||!currentToken)return;
+  const token=currentToken,user=currentUser,sourceItems=items,seq=generation;
+  const ownSession=()=>{
+   const now=authenticated();
+   if(now?.token!==token||now?.username!==user||
+    generation!==seq||items!==sourceItems)return false;
+   // Confirmations can keep this tab blocked while a different browser tab
+   // changes the persisted sign-in. Fail closed before irreversible deletion.
+   try{
+    const saved=JSON.parse(localStorage.getItem('fuckball.settings')||'null')?.account;
+    return saved?.token===token&&saved?.username===user;
+   }catch{return false;}
+  };
+  if(!ownSession()){
+   status.textContent='Account changed. Reload your own results before deleting anything.';return;
+  }
   if(!confirm('Erase your match history AND career totals stored on this server? This cannot be undone. Local replays are kept.'))return;
   if(!confirm('Confirm permanent erasure of all your server-recorded match receipts and career statistics.'))return;
-  const token=currentToken;busy=true;erase.disabled=true;
+  if(!ownSession()){
+   status.textContent='Account changed during confirmation. Nothing was deleted.';return;
+  }
+  // Disable repeated destructive clicks until the one native-server DELETE
+  // resolves. The server retains final authority over account ownership.
+  busy=true;erase.disabled=true;refresh.disabled=true;
+  exportButton.disabled=true;csvButton.disabled=true;
+  status.textContent='Deleting this account’s server history…';
   try{
    const response=await fetch('/api/match-history',{
     method:'DELETE',headers:{Authorization:'Bearer '+token},cache:'no-store'
    });
    const payload=await response.json().catch(()=>({}));
-   if(authenticated()?.token!==token){reset('Account changed. Refresh results.');return;}
+   if(!ownSession()){
+    reset('Account changed during deletion. Refresh the current account to see its state.');return;
+   }
    if(!response.ok||payload.ok!==true)throw Error(payload.error||'Could not erase server history.');
-   await load();status.textContent='Your server history and career totals were erased. Local replays are unaffected.';
-  }catch(e){status.textContent=e.message||'Could not erase server history.';erase.disabled=false;}
-  finally{busy=false;}
+   await load();
+   if(authenticated()?.token===token&&authenticated()?.username===user)
+    status.textContent='Your server history and career totals were erased. Local replays are unaffected.';
+  }catch(e){
+   if(ownSession())status.textContent=e.message||'Could not erase server history.';
+  }finally{
+   busy=false;
+   if(authenticated()?.token===currentToken&&authenticated()?.username===currentUser&&items){
+    erase.disabled=false;exportButton.disabled=false;csvButton.disabled=false;
+   }
+   refresh.disabled=false;
+  }
  };
  // Hook into the existing view router, after app.js/views.js/profile integration.
  const previousShowView=showView;
