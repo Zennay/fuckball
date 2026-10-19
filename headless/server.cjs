@@ -357,7 +357,7 @@ function createServer(options={}){
  const RoomCore=require('../dist/room-core.js'),quickMatch=createQuickMatch({send,start:createMatchedRoom,
   validAccount:ws=>!!ws.account&&accounts.user(ws.accountToken)?.toLowerCase()===ws.account.toLowerCase(),
   canShareMatch:(a,b)=>!social||social.canShareMatch(a,b),
-  clubForUser:user=>clubs?.membership(user)?.id||null}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','chat','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
+  clubForUser:user=>clubs?.membership(user)?.id||null}),XE=.06,RELAY=0x46425231,HOST_OUT=new Set(['status','room','goal','subApplied','playingTime','matchResult','matchRestart','error','recordingStatus','recording']);
  /* Peer hosting (docs/netcode-plan.md): the room can run in a player's browser when that gives everyone a
     better connection. This server stays the coordinator: it measures, elects, hands the room over at an
     exact frame, keeps a standby copy plus every input, and takes the room back instantly when the host
@@ -456,6 +456,7 @@ function createServer(options={}){
     owner:r.owner,banMinutes:10,accountsOnly:r.accountsOnly===true,maxHumans:r.maxHumans,connectedHumans:r.clients.size,
     chatMuteUntil:r.chatMutes.get(client.playerId)||null,
     chatMutes:client.playerId===r.owner?[...r.chatMutes]:[],
+    teamChatSupported:!r.quickMatch,
     spectatorCheerSupported:!r.quickMatch});
   }
  }
@@ -785,12 +786,30 @@ function createServer(options={}){
      return;
     }
     if(mutedUntil){r.chatMutes.delete(ws.playerId);roomControl(r);}
+    // Only the two supported audiences are allowed; an absent audience is
+    // legacy public room chat. Quick Match stays a public human-only channel.
+    if(d.audience!==undefined&&d.audience!=='room'&&d.audience!=='team')
+     throw Error('Unknown chat audience.');
+    if(d.audience==='team'&&r.quickMatch)throw Error('Team chat is for Custom Rooms only.');
     // Room-authoritative chat works with server and peer-hosted simulations;
     // a client cannot impersonate the sender, name, room or player ID.
     if(r.sockets.get(ws.playerId)!==ws||typeof d.text!=='string'||
        d.text.length<1||d.text.length>140||!d.text.trim()||
        /[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/.test(d.text))
      throw Error('Chat message must be 1–140 printable characters.');
+    // Never trust a claimed side or account on the chat packet. Native
+    // active rosters and host-approved bench affiliation are the only sources.
+    const sideFor=pid=>{
+     if(!r.sockets.has(pid)||r.disconnected.has(pid)||r.botIds.has(pid))return 0;
+     const native=r.hb.getPlayer(pid)?.team;
+     if(native===1||native===2)return native;
+     if(native!==0)return 0;
+     const bench=r.benches.get(pid);
+     return bench===1||bench===2?bench:0;
+    };
+    const side=d.audience==='team'?sideFor(ws.playerId):0;
+    if(d.audience==='team'&&!side)
+     throw Error('Join an active team or assigned bench to use team chat.');
     const recent=(ws.chatTimes||[]).filter(t=>now-t<10000);
     if(recent.length>=4)throw Error('Chat is too fast. Try again shortly.');
     recent.push(now);ws.chatTimes=recent;
@@ -800,8 +819,10 @@ function createServer(options={}){
     r.message(ws.playerId,d,r.hostTime(fraction()));
     const name=String(r.hb.getPlayer(ws.playerId)?.name||ws.name||'Player')
      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/g,'').trim().slice(0,25)||'Player';
-    const message={type:'chat',room:r.id,from:ws.playerId,name,text:d.text.trim(),at:now};
-    for(const peer of r.sockets.values())send(peer,message);
+    const message={type:'chat',room:r.id,from:ws.playerId,name,
+     text:d.text.trim(),at:now,channel:side?'team':'room',...(side?{team:side}:{})};
+    for(const [pid,peer] of r.sockets)
+     if(!side||sideFor(pid)===side)send(peer,message);
     return;
    }
    if(d.type==='leave'){ws.intentionalLeave=true;ws.close(1000,'Left room');return;}
