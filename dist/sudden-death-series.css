@@ -1,0 +1,22 @@
+.sudden-death-setup{margin:20px 0;padding:20px 22px;background:#243438;color:#eff7ed;border:1px solid #638c78;border-radius:12px}
+.sudden-death-setup h2{font-size:clamp(23px,3vw,30px);font-style:italic;margin:0 0 8px;letter-spacing:-.03em}
+.sudden-death-setup p{line-height:1.5;max-width:780px;color:#d1dfd7}
+.sudden-death-fields{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:18px 0}
+.sudden-death-fields label{display:grid;gap:6px;font-size:12px;font-weight:700}
+.sudden-death-fields select{min-width:160px;min-height:42px;padding:8px;border:1px solid #7da190;background:#142b2e;color:#f4faef;border-radius:7px}
+.sudden-death-fields button,.sudden-death-actions button,.sudden-death-history button{min-height:42px;border-radius:7px}
+.sudden-death-status{min-height:24px}
+.sudden-death-history{border-top:1px solid #536d60;padding-top:14px}
+.sudden-death-history-header{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sudden-death-history-header h3{margin-right:auto;font-size:13px;letter-spacing:.08em}
+.sudden-death-history-rows{display:grid;gap:8px;margin-top:12px}
+.sudden-death-history-row{padding:11px 13px;display:grid;gap:4px;border:1px solid #4c6c5c;border-radius:8px;background:#1b3031}
+.sudden-death-history-row span{font-size:12px;color:#bcd4c8}
+.sudden-death-hud{position:absolute;z-index:18;top:clamp(70px,12vh,135px);right:clamp(8px,3vw,28px);width:min(360px,calc(100vw - 20px));padding:16px;background:rgba(16,37,41,.95);color:#edf8ee;border:1px solid #c8efaa;border-radius:11px;box-shadow:0 8px 30px #0007}
+.sudden-death-hud strong{display:block;letter-spacing:.07em}
+.sudden-death-clock{display:block;margin-top:8px;font-weight:700;font-size:17px}
+.sudden-death-progress{font-size:13px;color:#ddf0e5}
+.sudden-death-rounds{max-height:145px;overflow:auto;margin:12px 0;padding-left:23px;color:#d5e6db;font-size:12px;line-height:1.7}
+.sudden-death-actions{display:flex;flex-wrap:wrap;gap:8px}
+.sudden-death-setup button:focus-visible,.sudden-death-hud button:focus-visible,.sudden-death-setup select:focus-visible{outline:3px solid #def89e;outline-offset:3px}
+@media(max-width:680px){.sudden-death-hud{top:80px;right:8px}.sudden-death-fields>*{flex:1 1 140px}}
