@@ -34,8 +34,10 @@
  }
  function lookup(id){return read().find(x=>x.id===id)||null;}
  function discard(id){
-  if(!idValid(id))return;
-  persist(read().filter(x=>x.id!==id));refreshControls();
+  if(!idValid(id))return false;
+  const saved=persist(read().filter(x=>x.id!==id));
+  if(!saved)feedback.textContent='Could not forget position: browser storage is unavailable.';
+  refreshControls();return saved;
  }
  const section=mk('section',null,'replay-resume-library');
  section.setAttribute('aria-label','Continue watching saved local HBR2 replays');
@@ -122,7 +124,7 @@
  };
 
  async function openSaved(id){
-  if(busy||!idValid(id))return;
+  if(busy||!idValid(id))return false;
   if(typeof serverLink!=='undefined'&&serverLink||
     typeof peerConnected!=='undefined'&&peerConnected||
     typeof pendingSessionBlock==='function'&&pendingSessionBlock()){
@@ -150,7 +152,8 @@
    if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    feedback.textContent='Resumed '+file.item.name+' at '+format(saved.ms)+' (private local playback).';
    refreshControls();
-  }catch(error){feedback.textContent=error?.message||'Could not resume replay.';}
+   return true;
+  }catch(error){feedback.textContent=error?.message||'Could not resume replay.';return false;}
   finally{busy=false;}
  }
  async function renderLibrary(){
@@ -182,6 +185,7 @@
    if(token===viewToken)feedback.textContent='Could not read saved replays: '+(error?.message||'Unavailable');
   }
  }
+ window.FuckballReplayResume=Object.freeze({get:lookup,open:openSaved});
  reload.type='button';reload.onclick=renderLibrary;
  document.getElementById('tabReplay')?.addEventListener('click',()=>renderLibrary());
  window.addEventListener('storage',event=>{

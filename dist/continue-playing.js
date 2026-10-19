@@ -47,6 +47,13 @@
     [120,180,300].includes(x.seconds)&&[2,4,6].includes(x.target)&&
     Number.isSafeInteger(x.links)&&x.links>=0&&x.links<=99&&typeof x.completed==='boolean',
     title:x=>x.links+' / '+x.target+' teammate kick links'},
+   {key:'fuckball.native-sudden-death.v1',kind:'Sudden Death',valid:x=>
+    [3,5,7].includes(x.bestOf)&&[60,90,120].includes(x.duration)&&
+    ['human','ai','draw'].includes(x.winner)&&
+    Number.isSafeInteger(x.human)&&Number.isSafeInteger(x.ai)&&Number.isSafeInteger(x.draws)&&
+    x.human>=0&&x.ai>=0&&x.draws>=0&&Array.isArray(x.rounds)&&
+    x.rounds.length<=x.bestOf&&x.human+x.ai+x.draws===x.rounds.length,
+    title:x=>'You '+x.human+' · AI '+x.ai+' · '+x.draws+' drawn rounds'},
    {key:'fuckball.local-practice-journal.v1',kind:'Solo Practice',valid:x=>
     ['bot','practice','2v2','4v4'].includes(x.mode)&&[1,2].includes(x.side)&&
     Number.isSafeInteger(x.red)&&x.red>=0&&x.red<=999&&
@@ -102,9 +109,18 @@
    grid.replaceChildren();
    const sorted=all.sort((a,b)=>Number(b.favorite===true)-Number(a.favorite===true)||b.createdAt-a.createdAt);
    // Keep one or two recording shortcuts; no full library duplication on the Play home.
-   for(const item of sorted.slice(0,2))
-    grid.append(card(item.name,duration(item.frames)+' recorded · saved '+date(item.createdAt),
-     item.favorite===true?'★ FAVORITE REPLAY':'LOCAL HBR2 REPLAY','▶ Watch replay',()=>watch(item)));
+   for(const item of sorted.slice(0,2)){
+    const position=window.FuckballReplayResume?.get?.(item.id);
+    const clock=position?Math.floor(position.ms/60000)+'m '+String(Math.floor(position.ms/1000)%60).padStart(2,'0')+'s':'';
+    grid.append(card(item.name,duration(item.frames)+' recorded · saved '+date(item.createdAt)+
+      (position?' · unfinished at '+clock:''),
+     item.favorite===true?'★ FAVORITE REPLAY':'LOCAL HBR2 REPLAY',
+     position?'▶ Continue at '+clock:'▶ Watch replay',async()=>{
+      if(!position)return watch(item);
+      const success=await window.FuckballReplayResume.open(item.id);
+      if(!success)note.textContent='Could not resume. Open My Games to inspect your private saved position.';
+    }));
+   }
    const latest=recentPractice();
    if(latest){
     grid.append(card(latest.kind,latest.title+' · '+date(latest.at),

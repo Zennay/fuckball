@@ -9,3 +9,5 @@ Playback position is recorded **only** while watching a saved local replay from 
 Playback completion removes the old resume point near the end of the recording. The app does not auto-switch to another game or seek without explicit user input. Opening a saved recording refuses active online/peer/Quick Match sessions and asks for consent before replacing local work. A missing or deleted local recording cannot be opened using stale metadata.
 
 New JavaScript/CSS are static PWA assets only. Existing project CI, security, code review and protected production immutable release/rollback gates are unchanged. This source feature is not proof of a VPS live release. No QA or regression suites were added or run during development.
+
+**Home → Continue Playing** also shows a saved resume timestamp on the existing recent recording shortcut and offers an explicit **Continue at mm:ss** action. Sudden Death full-series history is included among recent local practice shortcuts; neither shortcut sends a server request.
