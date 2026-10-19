@@ -194,7 +194,11 @@
    notice.textContent='The room has changed; refresh before exporting.';return;
   }
   if(!window.confirm('Export displayed player names and their currently observed playing time to a private CSV file?'))return;
-  const quote=s=>'"'+String(s).replace(/"/g,'""')+'"';
+  // Spreadsheet programs may execute user-provided cells beginning with an
+  // Excel formula prefix even inside CSV quotes. Force a literal string.
+  const quote=value=>{let cell=String(value);
+   if(/^[\s\uFEFF]*[=+\-@]/u.test(cell))cell="'"+cell;
+   return '"'+cell.replace(/"/g,'""')+'"';};
   const lines=[['Team','Player','Status','Active seconds observed','Available']];
   for(const p of data.people){
    lines.push([p.team===1?'Red':p.team===2?'Blue':p.bench===1?'Red bench':
