@@ -40,7 +40,7 @@ function makeRoom(){
 // and restarts keep it (like a HaxBall room).
 let roster=[],rosterPreset='';
 function presetRoster(mode){
- const couch=['local','coop2v2','coop4v4','couchRivals'].includes(mode);
+ const couch=['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes(mode);
  if(couch)myTeam=1;
  if(mode==='couchRivals'){
    const names=window.fuckballCouchRivals?.names?.()||{};
@@ -49,13 +49,14 @@ function presetRoster(mode){
     {id:3,name:names[3]||'Player 3',team:2,bot:false},
     {id:4,name:names[4]||'Player 4',team:2,bot:false}];
   }
-  if(mode==='coop2v2'||mode==='coop4v4'){
+  if(['coop2v2','coop3v3','coop4v4'].includes(mode)){
   // Two actual local humans on Red against the native tactical AI.
   const squad=[{id:1,name:settings.name,team:1,bot:false},
    {id:2,name:'Player 2',team:1,bot:false}];
-  const count=mode==='coop4v4'?8:4;
+  const teamSize=mode==='coop2v2'?2:mode==='coop3v3'?3:4;
+   const count=teamSize*2;
   for(let id=3;id<=count;id++){
-   const team=mode==='coop4v4'&&id<=4?1:2;
+   const team=id<=teamSize?1:2;
    squad.push({id,name:'Bot '+(id-2),team,bot:true});
   }
   return squad;
@@ -95,8 +96,8 @@ function updateScore(){const g=(replay||room)?.gameState;if(typeof menuOpen!=='u
 function sendInput(id,input){if(inputCache.get(id)===input)return;inputCache.set(id,input);frameStats.inputVersion++;if(peerConnected&&peerRole==='guest')sendGuestInput(input);else room.playerInput(input,id);}
 function sendGuestInput(input){const seq=++net.inputSeq,frame=predictor.input(seq,networkPlayerId,input,performance.now());send(net.v3?{type:'in',c:[[seq,frame,input]]}:{type:'input',value:input,seq});}
 function bound(action){return settings.keys[action].filter(Boolean);}
-function refreshInput(){if($('mode').value==='watch')return;if(!started||paused||replay)return;const local=['local','coop2v2','coop4v4','couchRivals'].includes($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),b=a=>k(...bound(a));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(k('KeyD')||touch.x>0||pad.x>0)-+(k('KeyA')||touch.x<0||pad.x<0);y=+(k('KeyS')||touch.y>0||pad.y>0)-+(k('KeyW')||touch.y<0||pad.y<0);kick=touch.kick||k('KeyF')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if($('mode').value==='couchRivals'){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
-function releaseInputs(){keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop4v4','couchRivals'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if($('mode').value==='couchRivals'){room.playerInput(0,3);room.playerInput(0,4);}}$('stick').style.transform='';}
+function refreshInput(){if($('mode').value==='watch')return;if(!started||paused||replay)return;const local=['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),b=a=>k(...bound(a));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(k('KeyD')||touch.x>0||pad.x>0)-+(k('KeyA')||touch.x<0||pad.x<0);y=+(k('KeyS')||touch.y>0||pad.y>0)-+(k('KeyW')||touch.y<0||pad.y<0);kick=touch.kick||k('KeyF')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if($('mode').value==='couchRivals'){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
+function releaseInputs(){keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if($('mode').value==='couchRivals'){room.playerInput(0,3);room.playerInput(0,4);}}$('stick').style.transform='';}
 function gameTick(){frameStats.lastTick=performance.now();tick++;if(replay||!started||paused)return;if(peerConnected&&peerRole==='guest')return;if(!room.gameState)return;if(guestTimeline&&peerConnected&&peerRole==='host'){const v=guestTimeline.valueAt(room.currentFrameNo),g=room.state.players.find(p=>p.id===2);if(g&&g.input!==v)room.playerInput(v,2);}if(tick%2===0){for(const p of room.state.players){if(!botIds.has(p.id)||!p.disc)continue;const mode='tactical';let input=FuckballAI.tactical(room.state,p.id,tick,{difficulty:settings.botLevels?.[p.id]||settings.difficulty,profile:settings.teamProfile});if(aiModel&&mode!=='tactical'){if(aiModel.w2&&tick%6!==0)continue;const prediction=FuckballAI.infer(aiModel,room.state,p.id,['gk','dm','am','st'][room.state.players.filter(q=>q.team.id===p.team.id).findIndex(q=>q.id===p.id)%4]);if(mode==='model')input=prediction.input;else if(prediction.confidence>.58&&(prediction.input&15)!==0)input=(prediction.input&15)|(input&16);}sendInput(p.id,input);}}if(peerConnected&&peerRole==='host'&&tick%2===0)sendSnapshot();}
 function isOnlineGuest(){return peerConnected&&peerRole==='guest';}
 // HaxBall-equivalent prediction (see render-timing.js): frames ahead of the confirmed state.
@@ -201,8 +202,8 @@ commands.extrap=commands.extrapolation;
 function runCommand(line){const [name,...args]=line.slice(1).trim().split(/\s+/),cmd=commands[(name||'').toLowerCase()];if(!cmd){log('Unknown command /'+name+'. Type /help');return;}try{const out=cmd.run(args);if(out)log(out);}catch(err){log(err.message);}}
 $('chatInput').addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();e.stopPropagation?.();closeChat();}});
 const localKeys=new Set(['KeyW','KeyA','KeyS','KeyD','KeyF','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Numpad0','Enter']);
-function isPlayKey(code){if(['local','coop2v2','coop4v4','couchRivals'].includes($('mode').value))return localKeys.has(code);return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));}
-function isChatKey(code){if(['local','coop2v2','coop4v4','couchRivals'].includes($('mode').value)&&localKeys.has(code))return false;return settings.keys.chat.includes(code);}
+function isPlayKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes($('mode').value))return localKeys.has(code);return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));}
+function isChatKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals'].includes($('mode').value)&&localKeys.has(code))return false;return settings.keys.chat.includes(code);}
 document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;if(e.code==='KeyP'&&!e.repeat&&!isPlayKey('KeyP')){e.preventDefault();togglePause();return;}if(isChatKey(e.code)&&!isPlayKey(e.code)&&!$('matchView').hidden){e.preventDefault();openChat();return;}if(isPlayKey(e.code)){e.preventDefault();keys.add(e.code);refreshInput();}});
 document.addEventListener('keyup',e=>{if(keys.has(e.code)||isPlayKey(e.code)){keys.delete(e.code);refreshInput();}});window.addEventListener('blur',releaseInputs);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseInputs();});$('gameCanvas').addEventListener('pointerdown',()=>{$('gameCanvas').focus();});
 let stickPointer=null;function moveStick(e){if(stickPointer!==e.pointerId)return;const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,d=Math.hypot(dx,dy);const layout=window.touchControlSettings||{scale:1,deadzone:10},scale=Number.isFinite(layout.scale)?Math.max(.75,Math.min(1.5,layout.scale)):1,reach=27*scale,deadzone=Math.max(4,Math.min(24,Number(layout.deadzone)||10))*scale,f=d>reach?reach/d:1;$('stick').style.transform=`translate(${dx*f}px,${dy*f}px)`;touch.x=Math.abs(dx)>deadzone?Math.sign(dx):0;touch.y=Math.abs(dy)>deadzone?Math.sign(dy):0;refreshInput();}
