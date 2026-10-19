@@ -19,3 +19,7 @@
 .couch-series-hud strong{display:block}
 .couch-series-hud .couch-series-hud-action{display:block;margin:9px 0 0 auto;padding:9px 13px;min-height:40px;pointer-events:auto;cursor:pointer;background:#d4f0aa;color:#1c3231;border:0;border-radius:7px;font-weight:800}
 .couch-series-hud .couch-series-hud-action:focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+.couch-series-history-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #436059;padding:4px 0}
+.couch-series-history-row button{padding:7px 12px;min-height:36px;background:#d8efb7;border:0;border-radius:7px;color:#163534;font-weight:800;cursor:pointer}
+.couch-series-history-row button:focus-visible{outline:3px solid #fff;outline-offset:2px}
