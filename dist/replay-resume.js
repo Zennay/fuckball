@@ -39,6 +39,11 @@
   if(!saved)feedback.textContent='Could not forget position: browser storage is unavailable.';
   refreshControls();return saved;
  }
+ function forgetPosition(id){
+  const live=current();
+  if(live?.id===id)forgottenReplay=live.instance;
+  return discard(id);
+ }
  const section=mk('section',null,'replay-resume-library');
  section.setAttribute('aria-label','Continue watching saved local HBR2 replays');
  const heading=mk('div',null,'replay-resume-heading');
@@ -62,7 +67,7 @@
  const forget=mk('button','Forget saved position');forget.type='button';
  panel.append(label,resume,forget);controls.append(panel);
 
- let activeReplay=null,activeId=null,lastSaved=0,lastObserved=0;
+ let activeReplay=null,activeId=null,lastSaved=0,lastObserved=0,forgottenReplay=null;
  let viewToken=0,busy=false,painted='';
  const current=()=>{
   const id=typeof activeLocalReplayId==='string'?activeLocalReplayId:'';
@@ -73,7 +78,7 @@
  };
  function savePlayhead(){
   const s=current();
-  if(!s)return;
+  if(!s||s.instance===forgottenReplay)return;
   if(activeReplay!==s.instance||activeId!==s.id){
    activeReplay=s.instance;activeId=s.id;lastSaved=0;lastObserved=s.ms;return;
   }
@@ -120,7 +125,7 @@
  };
  forget.onclick=()=>{
   const s=current();if(!s)return;
-  discard(s.id);renderLibrary();
+  forgetPosition(s.id);renderLibrary();
  };
 
  async function openSaved(id){
@@ -178,7 +183,7 @@
     const action=mk('button','▶ Continue');
     action.type='button';action.onclick=()=>openSaved(item.id);
     const remove=mk('button','Forget');remove.type='button';
-    remove.onclick=()=>{discard(item.id);renderLibrary();};
+    remove.onclick=()=>{forgetPosition(item.id);renderLibrary();};
     row.append(details,action,remove);list.append(row);
    }
   }catch(error){

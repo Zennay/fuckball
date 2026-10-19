@@ -13,3 +13,5 @@ New JavaScript/CSS are static PWA assets only. Existing project CI, security, co
 **Home → Continue Playing** also shows a saved resume timestamp on the existing recent recording shortcut and offers an explicit **Continue at mm:ss** action. Sudden Death full-series history is included among recent local practice shortcuts; neither shortcut sends a server request.
 
 An old resume marker remains intact when the ordinary viewer autoplays from zero. Watching or seeking past that stored timestamp updates it; players who want to replace the marker from the beginning can use **Forget** first.
+
+Selecting **Forget** while watching a recording suppresses progress tracking for that current replay playback instance, so its deleted marker cannot immediately reappear. Playing the recording again opens a new session and makes progress tracking available again.
