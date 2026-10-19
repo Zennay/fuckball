@@ -138,7 +138,16 @@ function createRoomCore(opts){
   // A late participant never acquires an active slot during a live match,
   // countdown or finished-game decision. Only a real owner/captain can later
   // arrange a team/bench transition through the established control path.
-  const spectatorAdmission=spectate===true||r.started||!!r.kickoff||!!r.lastResult;
+  // A genuinely solo Custom Room keeps its historical ability to admit a
+  // first human opponent mid-game. This affects no ongoing human-v-human
+  // roster: there is exactly one connected playing human and no spectator.
+  // A deliberate WATCH request always overrides this narrow exception.
+  const activeBefore=hb.getPlayerList().filter(p=>r.clients.has(p.id)&&
+    !r.botIds.has(p.id)&&!r.disconnected.has(p.id)&&[1,2].includes(p.team));
+  const soloOpponentJoin=r.started&&!r.kickoff&&!r.lastResult&&
+    r.clients.size===1&&activeBefore.length===1&&!r.disconnected.size;
+  const spectatorAdmission=spectate===true||!!r.kickoff||!!r.lastResult||
+    (r.started&&!soloOpponentJoin);
   if(!spectatorAdmission)r.rematch=null;
   if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;

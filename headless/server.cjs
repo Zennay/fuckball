@@ -432,7 +432,7 @@ function createServer(options={}){
   for(const id of [...r.clients.keys()])if(!r.sockets.has(id)&&!r.parked.has(id))r.leave(id);
   for(const id of r.parked.keys())if(r.clients.has(id))r.disconnected.add(id);
   for(const [id,ws]of r.sockets)if(!r.clients.has(id))try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account,
-   spectate:!r.quickMatch&&(ws.spectateOnJoin===true||r.started||!!r.kickoff||!!r.lastResult)});}catch{}
+   spectate:!r.quickMatch&&ws.spectateOnJoin===true});}catch{}
   r.migration=null;r.standby=null;r.lastMigration=Date.now();r.status();
   for(const ws of r.pendingJoins.splice(0))if(ws.readyState===1)try{join(ws,r);}catch(e){ws.room=null;ws.pendingResumeToken=null;send(ws,{type:'error',message:e?.message||'Unable to rejoin.'});}}
  function failover(r,reason){if(r.authority==='server'||!r.standby)return;const old=hostSocket(r);r.penalty.set(r.authority,Date.now()+60000);r.epoch++;resume(r,r.standby,{failover:true});r.migration={frame:r.frame};announce(r,'server');r.migration=null;if(old)send(old,{type:'stopHost'});}
@@ -572,7 +572,7 @@ function createServer(options={}){
   if(r.authority!=='server'){if(!r.pendingJoins.includes(ws))r.pendingJoins.push(ws);ws.room=r;if(!r.migration)migrate(r,'server','join');return;}
   if(ws.pendingResumeToken){const ticket=ws.pendingResumeToken;ws.pendingResumeToken=null;rejoin(ws,r,ticket);return;}
   while(r.botIds.has(r.nextId)||r.clients.has(r.nextId))r.nextId++;const id=r.nextId;ws.room=r;ws.playerId=id;r.sockets.set(id,ws);try{r.join(id,{name:ws.name,netcode:ws.netcode,account:ws.account,
-   spectate:!r.quickMatch&&(ws.spectateOnJoin===true||r.started||!!r.kickoff||!!r.lastResult)});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
+   spectate:!r.quickMatch&&ws.spectateOnJoin===true});}catch(e){r.sockets.delete(id);ws.room=null;if(!r.clients.size){r.destroy();rooms.delete(r.id);}throw e;}
   if(ws.resumeEnabled)issueTicket(ws,r,id);if(ws.mesh)send(ws,{type:'peering',enabled:true});meshUpdate(r);roomControl(r);}
  // RoomCore also powers public custom rooms, whose bots fill empty sides.
  // Competitive-looking Quick Match rooms must never run or display those bots.
