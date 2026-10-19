@@ -349,7 +349,11 @@ function playBall(state,p,b,intent,level,team,plan){const d=p.disc,sign=p.team.i
    const v0=dist?{x:dx/dist,y:dy/dist}:{x:ux/ul,y:uy/ul};
    const result=rollout(F,b.pos.x,b.pos.y,b.speed.x+v0.x*F.K,b.speed.y+v0.y*F.K,p.id);
    const margin=(result.theirs?.t??999)-(result.ours?.t??999);
-   const dangerous=result.goal<0||result.theirs&&(!result.ours||margin<5);
+   const interceptor=result.theirs&&F.players.find(q=>q.id===result.theirs.id);
+   // An opponent already behind the ball cannot intercept a forward exit
+   // just because the conservative reach approximation places them close.
+   const inLane=interceptor&&sign*(interceptor.x-b.pos.x)>-5;
+   const dangerous=result.goal<0||result.theirs&&inLane&&(!result.ours||margin<5);
    const emergency=sign*b.speed.x<-.5&&Math.hypot(b.pos.x-ox,b.pos.y)<175;
    kick=!dangerous||emergency&&result.goal>=0;
   }
