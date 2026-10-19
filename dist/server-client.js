@@ -149,7 +149,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    if(typeof select.add==='function'&&typeof Option==='function'&&
     ![...(select.options||[])].some(option=>Number(option.value)===d.scoreLimit)){
     const option=new Option(String(d.scoreLimit),String(d.scoreLimit));
-    option.dataset.onlineLimit='true';select.add(option);
+    if(option.dataset)option.dataset.onlineLimit='true';else option.setAttribute?.('data-online-limit','true');select.add(option);
    }
    select.value=String(d.scoreLimit);
   }
