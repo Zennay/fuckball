@@ -29,6 +29,52 @@
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  controls.append(launch,coop2,coop3,coop4,rivals,rivals3,rivals4,configure);
+ // Apply match rules only on an explicitly approved native offline kickoff.
+ // The original native score/time inputs remain the authoritative source.
+ const rulePresets=Object.freeze({
+  native:null,golden:{goals:1,minutes:0},quick:{goals:3,minutes:5},
+  classic:{goals:5,minutes:7},endurance:{goals:10,minutes:20}
+ });
+ const rulesRow=node('div',null,'couch-play-rules');
+ const rulesLabel=node('label','Offline match rules');
+ const rulesSelect=node('select');rulesSelect.setAttribute('aria-label','Couch native match rules');
+ for(const [key,label] of [
+  ['native','Keep current native match settings'],
+  ['golden','Golden goal · first goal wins · no time cap'],
+  ['quick','Quick match · first to 3 or 5 minutes'],
+  ['classic','Classic · first to 5 or 7 minutes'],
+  ['endurance','Endurance · first to 10 or 20 minutes']
+ ])rulesSelect.add(new Option(label,key));
+ rulesLabel.append(rulesSelect);
+ const rulesHint=node('p','Applied at the next local kickoff using the existing native rules. Existing games and online rooms are never changed by selecting a preset.');
+ rulesRow.append(rulesLabel,rulesHint);
+ const RULE_KEY='fuckball.couch.rules.v1';
+ try{const saved=localStorage.getItem(RULE_KEY);
+  if(Object.prototype.hasOwnProperty.call(rulePresets,saved))rulesSelect.value=saved;
+ }catch{}
+ rulesSelect.onchange=()=>{
+  if(!Object.prototype.hasOwnProperty.call(rulePresets,rulesSelect.value))return;
+  try{localStorage.setItem(RULE_KEY,rulesSelect.value);}catch{}
+  const r=rulePresets[rulesSelect.value];
+  rulesHint.textContent=r?'Next local kickoff: first to '+r.goals+
+   (r.minutes?' goals or '+r.minutes+' minutes.':' goal, unlimited time.'):
+   'Next local kickoff keeps the current native match settings.';
+ };
+ rulesSelect.onchange();
+ function applyRules(){
+  const r=rulePresets[rulesSelect.value];
+  if(!r)return ()=>{};
+  const goals=document.getElementById('scoreLimit'),time=document.getElementById('timeLimit');
+  if(!goals||!time)return ()=>{};
+  const previousGoals=goals.value,previousTime=time.value;
+  let added=null;
+  if(!Array.from(goals.options).some(o=>o.value===String(r.goals))){
+   added=new Option(String(r.goals),String(r.goals));goals.add(added);
+  }
+  goals.value=String(r.goals);time.value=String(r.minutes);
+  return ()=>{goals.value=previousGoals;time.value=previousTime;
+   if(added)added.remove();};
+ }
  const namesPanel=node('details',null,'couch-rivals-names');
  const namesTitle=node('summary','Four-player names and Blue controllers');
  const namesRow=node('div',null,'couch-rivals-name-fields');
@@ -79,7 +125,7 @@
   for(const id of [3,4])blueSources[id].disabled=locked;
  }
  namesPanel.append(namesTitle,namesRow,node('strong','Blue · two separate gamepads'),blueRow);
- section.append(title,intro,controls,namesPanel,status);
+ section.append(title,intro,controls,rulesRow,namesPanel,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=node('aside',null,'couch-play-hud');
@@ -206,14 +252,19 @@
    const prepared=window.fuckballCouchRivals?.prepare?.();
    if(!prepared?.ok){status.textContent=prepared?.message||'Four-player controllers unavailable.';return;}
   }
+  // Do not mutate a live match until every online/peer/active-session gate
+  // and all four-human controller requirements have passed.
+  const revertRules=applyRules();
   if(!quickPlay(mode,true,false)){
+   revertRules();
    status.textContent=name+' is unavailable while another session is active.';return;
   }
   status.textContent=name+' started with '+(['couchRivals','couchRivals3v3','couchRivals4v4'].includes(mode)?'four':'two')+
    ' real native local humans. '+
    (mode==='local'?'Play against each other.':['couchRivals','couchRivals3v3','couchRivals4v4'].includes(mode)?
     'Red is shared keyboard; Blue uses two exclusive gamepads. AI fills only remaining team slots.':
-    'Play on Red together against actual local AI.');
+    'Play on Red together against actual local AI.')+
+   (rulePresets[rulesSelect.value]?' · '+rulesHint.textContent:'');
   paint();
  }
  launch.onclick=()=>startMode('local');
