@@ -23,3 +23,8 @@
 @media(max-width:650px){.challenge-exchange{padding:11px}.challenge-exchange-row>div{width:100%}.challenge-exchange-row button{flex:1}}
 @media(prefers-reduced-motion:reduce){.challenge-exchange *{scroll-behavior:auto!important}}
 .challenge-exchange-history-note{font-size:11px;color:#bfdbc9;flex:1 1 190px;line-height:1.45}
+
+.challenge-exchange-qr{padding:12px;margin:12px 0;border:1px solid #7d9f88;border-radius:12px;background:#203d38}
+.challenge-exchange-qr[hidden]{display:none}
+.challenge-exchange-qr-canvas{display:block;max-width:100%;width:max-content;background:#fff;padding:12px;border-radius:8px;margin:10px 0}
+.challenge-exchange-qr-canvas :is(canvas,img){max-width:100%;height:auto}
