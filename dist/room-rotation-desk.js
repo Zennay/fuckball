@@ -51,6 +51,7 @@
    !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
   const benches=new Map(Array.isArray(state.benches)?state.benches:[]);
+  const willing=new Set(Array.isArray(state.benchReadyIds)?state.benchReadyIds:[]);
   const frames=new Map(Array.isArray(state.activeFrames)?state.activeFrames:[]);
   const captains=new Map(Array.isArray(state.captains)?state.captains:[]);
   const pending=Array.isArray(state.pendingSubs)?state.pendingSubs:[];
@@ -66,7 +67,8 @@
    const name=typeof p.name==='string'?
     p.name.replace(/[\u0000-\u001f\u007f-\u009f]/g,'').trim().slice(0,25)||'Player':'Player';
    people.push({id,team,name,seconds,available:!disconnected.has(id),
-    bench:team===0&&[1,2].includes(preferred)?preferred:null});
+    bench:team===0&&[1,2].includes(preferred)?preferred:null,
+    willing:team===0&&[1,2].includes(preferred)&&willing.has(id)&&!disconnected.has(id)});
   }
   const desired=Number(side.value)===2?2:1;
   const active=people.filter(p=>p.team===desired);
@@ -82,7 +84,8 @@
  const elapsed=s=>s===null?'not measured':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';
  function rankedCandidate(items,descending){
   const available=items.filter(p=>p.available&&p.seconds!==null);
-  available.sort((a,b)=>(descending?b.seconds-a.seconds:a.seconds-b.seconds)||a.id-b.id);
+  available.sort((a,b)=>(descending?0:Number(b.willing)-Number(a.willing))||
+   (descending?b.seconds-a.seconds:a.seconds-b.seconds)||a.id-b.id);
   return available[0]||null;
  }
  function display(list,title){
@@ -92,7 +95,8 @@
   const ol=mk('ol');
   for(const p of [...list].sort((a,b)=>(b.available-a.available)||((b.seconds??-1)-(a.seconds??-1))||a.id-b.id)){
    const row=mk('li');
-   row.append(mk('span',p.name+(p.id===networkPlayerId?' · YOU':'')+(p.available?'':' · RECONNECTING')),
+   row.append(mk('span',p.name+(p.id===networkPlayerId?' · YOU':'')+(p.willing?' · READY TO BE ASKED':'')+
+    (p.available?'':' · RECONNECTING')),
     mk('small',elapsed(p.seconds)));
    ol.append(row);
   }
@@ -171,7 +175,8 @@
    const title=mk('strong','SUGGESTED FAIR ROTATION');
    const reason=mk('p','Longest measured active time: '+outgoing.name+' ('+elapsed(outgoing.seconds)+
     '). Shortest recorded bench-player active time: '+incoming.name+' ('+elapsed(incoming.seconds)+
-    '). This is an optional playing-time suggestion, not an automatic coaching or skill judgment.');
+    ') · '+(incoming.willing?'bench player indicated AVAILABLE':'availability not confirmed')+
+    '. This is an optional playing-time suggestion, not an automatic coaching or skill judgment.');
    const fill=mk('button','Prepare '+outgoing.name+' → '+incoming.name);
    fill.type='button';fill.disabled=!data.mayPropose||data.pendingTeam;
    fill.onclick=()=>nativePrepare(outgoing,incoming);
