@@ -11,6 +11,8 @@
  section.hidden=true;
  section.append(make('h3','MATCH FORMAT VOTE.'));
  section.append(make('p','Choose how long to play and the native score limit. Every connected human has one server-recorded vote. Only the host can apply a clear winner before kickoff.'));
+ const currentRules=make('p',null,'native-match-format-current');
+ section.append(currentRules);
  const choices=make('div',null,'native-match-format-choices');
  const actions=make('div',null,'native-match-format-actions');
  const cast=make('button','VOTE FOR THIS FORMAT');cast.className='primary';
@@ -38,6 +40,11 @@
  function render(){
   const d=source();section.hidden=!d;if(!d){signature='';return;}
   const {link,state,list}=d;
+  const limits=Number.isSafeInteger(state.scoreLimit)&&state.scoreLimit>=0&&
+   Number.isSafeInteger(state.timeLimit)&&state.timeLimit>=0;
+  currentRules.textContent=limits?
+   'CURRENT NATIVE RULES · '+state.timeLimit+' minutes · '+state.scoreLimit+' goals':
+   'Current server match rules are not available from this room version.';
   const counts=list.map(()=>0),votes=new Map(state.matchFormatVotes.filter(row=>
    Array.isArray(row)&&row.length===2&&Number.isSafeInteger(row[0])&&
    Number.isSafeInteger(row[1])&&row[1]>=0&&row[1]<list.length));
