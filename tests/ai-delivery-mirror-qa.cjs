@@ -42,7 +42,7 @@ const shot=[
 const cases=[
   {label:'open moving receiver',ball:[-350,0],positions:open,id:1,
     check:d=>{assert.equal(d.type,'pass');assert.equal(d.receiverId,3);
-      assert(d.y>105,'lead receiver ahead of old location');}},
+      assert(d.margin>=10,'receiver gets the pass clearly before any opponent');}},
   {label:'blocked central pass lane',ball:[-350,0],
     positions:open.map(p=>p[0]===5?[5,-245,50]:p),id:1,
     check:d=>assert.notEqual(d.receiverId,3,'opponent blocks original passing lane')},
