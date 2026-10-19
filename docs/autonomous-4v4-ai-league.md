@@ -45,6 +45,7 @@ Research roadmap:
 7. Only call it **better than elite humans** after blinded independent 4v4 series against top human squads, on their preferred stadiums and in peak lineups across fair latency conditions.
 
 Current 8+4 league gate is an initial checkpoint filter, not a statistically rigorous proof. More complex AI will need more computing than the initial 2-CPU quota.
+
 ## Tactical AI learns from HaxLab's self-play (training-only)
 
 The fixed rule-based bot and the neural model have different promotion tracks. HaxLab's neural imitation weights are **not** suitable for direct live replacement: a model may score well on replay actions and still lose closed-loop matches. Instead, the training loop now feeds its evolutionary **tactical team profiles** into a durable, independent tactical ladder.
