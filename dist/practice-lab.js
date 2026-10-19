@@ -195,10 +195,18 @@
     snapshot.push({key:metric.key,name:metric.name,attempts:counts.attempts,goalsMet:counts.met});
    }
    const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
-   const completed=Array.isArray(ladders)&&ladders.length<=12?ladders.filter(x=>x&&x.version===1&&
-    ['standard','elite'].includes(x.route)&&[60,120].includes(x.duration)&&
-    Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&
-    x.finishedAt>0&&x.finishedAt<=now+DAY&&x.finishedAt>=cutoff).length:0;
+   const levels={standard:['easy','normal','hard'],elite:['normal','hard','elite']};
+   const completed=Array.isArray(ladders)&&ladders.length<=12?ladders.filter(x=>x&&
+    x.version===1&&Object.hasOwn(levels,x.route)&&[60,120].includes(x.duration)&&
+    Number.isSafeInteger(x.startedAt)&&x.startedAt>0&&x.startedAt<=now+DAY&&
+    Number.isSafeInteger(x.finishedAt)&&x.finishedAt>=x.startedAt&&
+    x.finishedAt<=now+DAY&&x.finishedAt>=cutoff&&
+    Number.isSafeInteger(x.retries)&&x.retries>=0&&x.retries<=999&&
+    Array.isArray(x.wins)&&x.wins.length===3&&x.wins.every((w,i)=>w&&
+     w.level===levels[x.route][i]&&w.duration===x.duration&&
+     Number.isSafeInteger(w.for)&&Number.isSafeInteger(w.against)&&
+     w.against>=0&&w.for>w.against&&w.for<=999&&
+     Number.isSafeInteger(w.at)&&w.at>=x.startedAt&&w.at<=x.finishedAt)).length:0;
    const note=document.createElement('p');note.className='practice-insights-gauntlet';
    note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
    board.append(note);
