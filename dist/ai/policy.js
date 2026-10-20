@@ -162,7 +162,7 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
  const dirs=[];if(keep)dirs.push([keep[0],keep[1],'keep']);for(let i=0;i<24;i++){const a=i*Math.PI/12;dirs.push([Math.cos(a),Math.sin(a),'space']);}
  const add=(tx,ty,kind)=>{const dx=tx-x,dy=ty-y,l=Math.hypot(dx,dy);if(l>20)dirs.push([dx/l,dy/l,kind]);};
  for(const p of F.players)if(p.mine&&p.id!==kicker){add(p.x+p.vx*14,p.y+p.vy*14,'pass');add(p.x+F.sign*45,p.y,'pass');}
- for(const f of [-.8,-.5,-.2,.2,.5,.8])add(F.gx,f*F.gy,'shot');
+ for(const f of [-.8,-.5,-.2,0,.2,.5,.8])add(F.gx,f*F.gy,'shot');
 // Deliberate one-wall bank candidates (including rocket-style follow-ups).
 // Mirror the target across the side wall, then let the real ball rollout
 // decide whether the ricochet is actually safer than a direct attempt.
@@ -202,7 +202,7 @@ function chooseDelivery(state,p,options={}){
  const F=fieldOf(state,p.team.id);F.keeper=options.keeper?null:keeperOf(state,p.team.id);Object.assign(F,characterOf(p.name)?.traits);
  const k=bestKick(F,b.pos.x,b.pos.y,b.speed.x,b.speed.y,p.id,0),o=k.roll,to=o.ours?o.ours.t:Infinity,tt=o.theirs?o.theirs.t:Infinity;
  const hit=o.ours&&o.ours.id!==p.id?o.ours:null;
- if(k.kind==='shot'&&F.sign*b.pos.x>0){const t=(F.gx-b.pos.x)/(k.dx||1e-9);return{type:'shot',x:F.gx,y:b.pos.y+k.dy*t,receiverId:null,margin:tt-(o.shotT||o.t||0),value:k.value,dx:k.dx,dy:k.dy};}
+ if((o.goal>0||o.shotT)&&F.sign*b.pos.x>0){return{type:'shot',x:F.gx,y:o.y,receiverId:null,margin:tt-(o.shotT||o.t||0),value:k.value,dx:k.dx,dy:k.dy};}
  if(hit&&to<tt)return{type:'pass',x:hit.x,y:hit.y,receiverId:hit.id,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
  const end=o.theirs||o;return{type:'clear',x:end.x,y:end.y,receiverId:null,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
 }
@@ -252,11 +252,17 @@ function buildPlan(state,teamId,tick=0,raw={}){
  const carrier=team.filter(p=>p!==keeper&&dist(p)<40&&sign*(b.pos.x-p.disc.pos.x)>-5).sort((a,c)=>dist(a)-dist(c))[0];
  const leader=carrier||chaser;const remaining=bots.filter(p=>p.id!==leader.id);
  const nearest=ops.slice().sort((a,c)=>dist(a)-dist(c))[0],underPressure=nearest&&dist(nearest)<cfg.press,ownDanger=sign*b.pos.x<-Math.abs(gx)*.55,attacking=carrier&&!ownDanger;
+ // Predict physical first touch before switching two potential receivers to
+ // marking. Ball location is not possession; give our chaser an outlet.
+ const ourFirst=team.reduce((best,q)=>{const h=hitOf(q);return h?Math.min(best,h.k):best;},Infinity);
+ const theirFirst=ops.reduce((best,q)=>{const h=hitOf(q);return h?Math.min(best,h.k):best;},Infinity);
  const free=remaining.filter(p=>p!==keeper).sort((a,c)=>a.id-c.id),plan={};
 // When defending, one outfielder presses while the other two mark different
 // threats goal-side. The goalkeeper remains the fourth, last-line defender.
-const opponentCarrier=nearest&&dist(nearest)<nearest.disc.radius+b.radius+30;
-const defending=!carrier&&(sign*b.pos.x<F.width*.18||opponentCarrier);
+const opponentCarrier=nearest&&dist(nearest)<nearest.disc.radius+b.radius+6;
+ // Only sacrifice two passing lanes if the opponent is more likely to win
+ // the next touch. A loose ball in our half is not automatically defence.
+ const defending=!carrier&&theirFirst+5<ourFirst&&(opponentCarrier||sign*b.pos.x<F.width*.25);
 const marking=new Map();
 if(defending){
  const markers=remaining.filter(p=>p!==keeper).sort((a,c)=>
@@ -267,7 +273,6 @@ if(defending){
    Math.hypot(c.disc.pos.x-ox,c.disc.pos.y));
  for(let i=0;i<markers.length&&i<threats.length;i++)marking.set(markers[i].id,threats[i]);
 }
- const theirFirst=ops.reduce((m,o)=>{const h=hitOf(o);return h?Math.min(m,h.k):m;},Infinity);
  // Decide what the player who plays the ball next should do with it.
  const base={passBonus:F.passBonus,shotWindow:F.shotWindow,holdCost:F.holdCost};
  const decide=(p,keeperMode)=>{Object.assign(F,base,characterOf(p.name)?.traits);
@@ -279,8 +284,15 @@ if(defending){
   // Holding the ball (dribbling) is only worth it with time and space; the
   // team prefers to move the ball quickly.
   let dribble=null;if(!keeperMode){let bestD=-Infinity;for(let i=0;i<16;i++){const a=i*Math.PI/8,tx=x+Math.cos(a)*80,ty=y+Math.sin(a)*80;if(Math.abs(tx)>F.width-20||Math.abs(ty)>height-20)continue;const crowd=ops.reduce((m,o)=>Math.min(m,Math.hypot(o.disc.pos.x-tx,o.disc.pos.y-ty)),999),v=spot(F,tx,ty)-.7*Math.exp(-crowd/45);if(v>bestD){bestD=v;dribble={dx:Math.cos(a),dy:Math.sin(a)};}}}
-  const hold=keeperMode?-9:spot(F,x,y)+.35*Math.min(1,Math.max(0,margin)/24)-F.holdCost-(pressure?.4:0);
-  Object.assign(F,base);return{...kick,hold,pressure,margin,dribble,kickNow:kick.value>hold};
+  // Do not recycle forever waiting for a perfect shot. Remember forward
+  // progress, and favour a safe advance when attack stops moving.
+  const forward=F.sign*x,last=memory['advance'+p.id];
+  if(!last||tick<last.tick||tick-last.tick>420||forward>last.position+Math.max(32,F.width*.07)||forward<last.position-F.width*.75)
+   memory['advance'+p.id]={tick,position:forward};
+  const progress=memory['advance'+p.id];
+  const stalled=!keeperMode&&forward>0&&tick-progress.tick>105;
+  const hold=keeperMode?-9:spot(F,x,y)+.35*Math.min(1,Math.max(0,margin)/24)-F.holdCost-(pressure?.4:0)-(stalled?.32:0);
+  Object.assign(F,base);return{...kick,hold,pressure,margin,dribble,stalled,kickNow:kick.value>hold};
  };
  // Back passes to the keeper are not a plan: it does not come out for them.
  F.keeper=keeper?keeper.id:null;
@@ -324,7 +336,7 @@ if(defending){
   else if(p.id!==leader.id&&slots[p.id]){
    // Position play: each outfield bot keeps its line (DM, AM, striker)
    // instead of everyone drifting toward the ball.
-   role=slots[p.id];const bu=sign*b.pos.x/F.width,ours=leaderOption&&leaderOption.margin>0,side=b.pos.y>=0?1:-1,W=F.width,H=height;
+   role=slots[p.id];const bu=sign*b.pos.x/F.width,ours=!defending&&((leaderOption&&leaderOption.margin>0)||ourFirst+6<theirFirst),side=b.pos.y>=0?1:-1,W=F.width,H=height;
    let u,yy;
    if(role==='dm'){u=Math.max(-.8,Math.min(.2,bu-(ours?.3:.25)));yy=b.pos.y*.45;}
    else if(role==='am'){u=Math.max(-.55,Math.min(.7,bu+(ours?.14:-.1)));yy=ours?b.pos.y-side*125:b.pos.y*.55;}
@@ -420,8 +432,12 @@ function playBall(state,p,b,intent,level,team,plan){const d=p.disc,sign=p.team.i
  if(kick){
   // Check the kick that will really happen: contact normal at the frame of contact.
   let bx=b.pos.x,by=b.pos.y,qx=d.pos.x,qy=d.pos.y;for(let f=0;f<3;f++){if(Math.hypot(bx-qx,by-qy)-d.radius-b.radius<4)break;bx+=b.speed.x;by+=b.speed.y;qx+=d.speed.x;qy+=d.speed.y;}
-  const l=Math.hypot(bx-qx,by-qy)||1,vx=b.speed.x+(bx-qx)/l*F.K,vy=b.speed.y+(by-qy)/l*F.K,v=outcome(F,rollout(F,bx,by,vx,vy,p.id,0)),shot=o.kind==='shot'||o.value>1;
-  kick=v>-3&&(shot&&!o.pressure?v>=Math.min(o.value-.35,1.2):v>=o.value-level.slack||v>=o.hold+F.hoof||(o.pressure&&v>-.45));}
+  const l=Math.hypot(bx-qx,by-qy)||1,vx=b.speed.x+(bx-qx)/l*F.K,vy=b.speed.y+(by-qy)/l*F.K,actual=rollout(F,bx,by,vx,vy,p.id,0),v=outcome(F,actual),shot=o.kind==='shot'||o.value>1;
+  // The ideal best-kick estimate assumes perfect approach geometry. If
+  // actual contact advances safely under pressure or after a long stall,
+  // release rather than waiting; never deliberately allow an own goal.
+  const safeAdvance=actual.goal>=0&&sign*vx>.35&&v>-.25&&(o.pressure||o.stalled);
+  kick=v>-3&&(safeAdvance||(shot&&!o.pressure?v>=Math.min(o.value-.35,1.2):v>=o.value-level.slack||v>=o.hold+F.hoof||(o.pressure&&v>-.45)));}
  const [sx,sy]=steer(d,x,y,5,2);return key(sx,sy,kick);}
 function tactical(state,id,tick=0,options={}){
  const p=state.players.find(p=>p.id===id),b=state.gameState?.physicsState.discs[0];if(!p?.disc||!b)return 0;const level=levels[options.difficulty]||levels.hard;
