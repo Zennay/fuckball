@@ -162,7 +162,7 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
  const dirs=[];if(keep)dirs.push([keep[0],keep[1],'keep']);for(let i=0;i<24;i++){const a=i*Math.PI/12;dirs.push([Math.cos(a),Math.sin(a),'space']);}
  const add=(tx,ty,kind)=>{const dx=tx-x,dy=ty-y,l=Math.hypot(dx,dy);if(l>20)dirs.push([dx/l,dy/l,kind]);};
  for(const p of F.players)if(p.mine&&p.id!==kicker){add(p.x+p.vx*14,p.y+p.vy*14,'pass');add(p.x+F.sign*45,p.y,'pass');}
- for(const f of [-.8,-.5,-.2,.2,.5,.8])add(F.gx,f*F.gy,'shot');
+ for(const f of [-.8,-.5,-.2,0,.2,.5,.8])add(F.gx,f*F.gy,'shot');
 // Deliberate one-wall bank candidates (including rocket-style follow-ups).
 // Mirror the target across the side wall, then let the real ball rollout
 // decide whether the ricochet is actually safer than a direct attempt.
@@ -202,7 +202,7 @@ function chooseDelivery(state,p,options={}){
  const F=fieldOf(state,p.team.id);F.keeper=options.keeper?null:keeperOf(state,p.team.id);Object.assign(F,characterOf(p.name)?.traits);
  const k=bestKick(F,b.pos.x,b.pos.y,b.speed.x,b.speed.y,p.id,0),o=k.roll,to=o.ours?o.ours.t:Infinity,tt=o.theirs?o.theirs.t:Infinity;
  const hit=o.ours&&o.ours.id!==p.id?o.ours:null;
- if(k.kind==='shot'&&F.sign*b.pos.x>0){const t=(F.gx-b.pos.x)/(k.dx||1e-9);return{type:'shot',x:F.gx,y:b.pos.y+k.dy*t,receiverId:null,margin:tt-(o.shotT||o.t||0),value:k.value,dx:k.dx,dy:k.dy};}
+ if((o.goal>0||o.shotT)&&F.sign*b.pos.x>0){return{type:'shot',x:F.gx,y:o.y,receiverId:null,margin:tt-(o.shotT||o.t||0),value:k.value,dx:k.dx,dy:k.dy};}
  if(hit&&to<tt)return{type:'pass',x:hit.x,y:hit.y,receiverId:hit.id,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
  const end=o.theirs||o;return{type:'clear',x:end.x,y:end.y,receiverId:null,margin:tt-to,value:k.value,dx:k.dx,dy:k.dy};
 }
