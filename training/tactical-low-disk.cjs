@@ -34,7 +34,7 @@ async function evolve({root,seed,save,run,shouldStop}){
   // so no concurrent worker may overwrite it. Preserve reports after each cycle.
   const teamFile=path.join(cycleDir,'candidate-team.json');
   const reportFile=path.join(cycleDir,'latest-ladder.json');
-  save({status:'tactical-training',activeStage:'new 10-parameter tactical evolution',
+  save({status:'tactical-training',activeStage:'frozen-live '+PARAMETER_KEYS.length+'-parameter tactical evolution',
     reason:'neural training waiting for 10 GiB disk reserve',
     tacticalParameterKeys:PARAMETER_KEYS,
     tacticalEvolutionUpdatedAt:new Date().toISOString()});

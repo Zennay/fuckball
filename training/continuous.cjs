@@ -5,8 +5,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, createHash } = require('node:crypto');
 const {evolve: evolveTactics, PARAMETER_KEYS} = require('./tactical-low-disk.cjs');
+// Fail closed if the frozen live baseline is accidentally overwritten by an experimental policy.
+const liveBaselineSha256 = 'ff4694172a891c787fd6e4f5222803bd4731c409afbea6a98cdc4fbc3e85f933';
+const actualBaselineSha256 = createHash('sha256')
+  .update(fs.readFileSync(path.resolve(__dirname, '../dist/ai/policy.js'))).digest('hex');
+if (actualBaselineSha256 !== liveBaselineSha256)
+  throw Error('Frozen Oct 19 live tactical baseline changed; refusing to train on unproven policy');
 const root = path.resolve(process.argv[2] || 'training/output/continuous');
 const rawWindow = process.argv[3] || '12';
 const forever = rawWindow === 'forever';
