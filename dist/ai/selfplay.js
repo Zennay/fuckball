@@ -49,9 +49,15 @@ function match(makeRoom,candidate,opponent,side,seed,map,frames=2400,collect,act
  const ours=telemetry?.summary(side),theirs=telemetry?.summary(3-side);
  // Actual score remains overwhelmingly important. Only verified first-touch
  // completions and modeled on-target attempts can adjust a tied game.
- const skill=ours?(Math.min(10,ours.passCompleted)*.3-Math.min(10,ours.passIntercepted)*.5+
-   Math.min(8,ours.shotProjectedOnTarget)*.14-Math.min(8,ours.shotAttempts-ours.shotProjectedOnTarget)*.12-
-   Math.min(10,ours.keeperTurnovers)*.65+Math.min(10,ours.keeperDistributionsCompleted)*.2):0;
+ // Auxiliary football quality is zero-sum. Otherwise *identical* policies
+ // both collect positive bonuses, falsely creating a training advantage.
+ const teamSkill=e=>e?(Math.min(10,e.passCompleted)*.3-
+   Math.min(10,e.passIntercepted)*.5+
+   Math.min(8,e.shotProjectedOnTarget)*.14-
+   Math.min(8,e.shotAttempts-e.shotProjectedOnTarget)*.12-
+   Math.min(10,e.keeperTurnovers)*.65+
+   Math.min(10,e.keeperDistributionsCompleted)*.2):0;
+ const skill=teamSkill(ours)-teamSkill(theirs);
  return{map,side,seed,scenario,goals,conceded,kicks:kicks[side],opponentKicks:kicks[3-side],
   seconds:g.timeElapsed,events:ours,opponentEvents:theirs,
   fitness:(goals-conceded)*100+territory/frames*2+
