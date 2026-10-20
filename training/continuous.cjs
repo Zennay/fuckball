@@ -87,6 +87,8 @@ async function main() {
     deadline: forever ? null : new Date(deadline).toISOString(),
     episodesPerCycle: episodes, generationsPerCycle: generations,
     tacticalParameterKeys: PARAMETER_KEYS,
+    tacticalBaseline: 'live-2026-10-19:84f819633fad77ccdbeac1f5fe6b69374ce421d7',
+    tacticalBaselineMode: 'frozen-strong-live-policy',
     livePromoted: false, note: 'Selected training champion is NOT live game AI.' });
   if (fs.existsSync(stopFile)) return save({ status: 'stopped', reason: 'STOP file' });
   while (!stop && Date.now() < deadline && !fs.existsSync(stopFile)) {
