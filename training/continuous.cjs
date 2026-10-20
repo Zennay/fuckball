@@ -100,7 +100,7 @@ async function main() {
   while (!stop && Date.now() < deadline && !fs.existsSync(stopFile)) {
     const disk = fs.statfsSync(root);
     if (disk.bavail * disk.bsize < lowDiskGiB * 1024 ** 3) {
-      // Neural rollout datasets need the 10 GiB reserve. New tactical
+      // Neural rollout datasets need the configured free-disk reserve. New tactical
       // parameters can still be evolved with tiny, independently-gated
       // research checkpoints provided at least 5 GiB remains.
       try {

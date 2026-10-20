@@ -35,7 +35,7 @@ async function evolve({root,seed,save,run,shouldStop}){
   const teamFile=path.join(cycleDir,'candidate-team.json');
   const reportFile=path.join(cycleDir,'latest-ladder.json');
   save({status:'tactical-training',activeStage:'frozen-live '+PARAMETER_KEYS.length+'-parameter tactical evolution',
-    reason:'neural training waiting for 10 GiB disk reserve',
+    reason:'neural training waiting for configured disk reserve',
     tacticalParameterKeys:PARAMETER_KEYS,
     tacticalEvolutionUpdatedAt:new Date().toISOString()});
   const team=await SP.train(makeRoom,{
@@ -56,7 +56,7 @@ async function evolve({root,seed,save,run,shouldStop}){
   if(report.schema!=='fuckball-tactical-ladder-v1'||
      typeof report.gate?.selectedForTraining!=='boolean')throw Error('Malformed tactical research gate');
   save({status:'paused',activeStage:'tactical cycle checkpointed',
-    reason:'neural training waiting for 10 GiB disk reserve; tactical evolution operating',
+    reason:'neural training waiting for configured disk reserve; tactical evolution operating',
     tacticalParameterKeys:PARAMETER_KEYS,
     lastTacticalCandidateAccepted:report.gate.selectedForTraining,
     tacticalGateReasons:report.gate.reasons,

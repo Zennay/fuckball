@@ -63,7 +63,7 @@ PY
   echo "$(date -Is) verified remote copy SHA256=$local_hash; removing only completed local ${base}"
   rm -rf --one-file-system -- "$dir"
   rm -f -- "$tmp"
-  printf '%s\t%s\t%s\n' "$(date -Is)" "$base" "$target" >> "$ROOT/archived-cycles.tsv"
+  printf '%s\t%s\t%s\t%s\n' "$(date -Is)" "$base" "$target" "$local_hash" >> "$ROOT/archived-cycles.tsv"
 done
 echo "$(date -Is) archive scan finished"
 df -h "$ROOT" | tail -1
