@@ -14,8 +14,8 @@ const modelBytes = fs.readFileSync(checkpoint);
 const model = AI.validateModel(JSON.parse(modelBytes.toString('utf8')));
 const checkpointSha256 = crypto.createHash('sha256').update(modelBytes).digest('hex');
 const ROLES = ['gk','dm','am','st'];
-const SEEDS = [8091, 42103, 103951, 282811];
-const FRAMES = 1800;
+const SEEDS = [8091, 42103, 103951, 282811, 509917, 610933, 702833, 877211];
+const FRAMES = 3600;
 function rng(seed) {
   let s=seed>>>0;
   return ()=>(s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296;
@@ -67,7 +67,7 @@ function summary(rows){
 const total=summary(matches);
 const byStadium=Object.fromEntries(['BFF Big v4','Classic'].map(map=>
   [map,summary(matches.filter(x=>x.map===map))]));
-const exploratoryPass=total.matches===16 && total.scoreRate>=.625
+const exploratoryPass=total.matches===32 && total.scoreRate>=.625
   && total.goalDifference>=6
   && Object.values(byStadium).every(x=>x.scoreRate>=.5 && x.goalDifference>=0);
 console.log(JSON.stringify({
