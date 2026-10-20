@@ -58,7 +58,6 @@ async function evolve({root,seed,save,run,shouldStop}){
   save({status:'paused',activeStage:'tactical cycle checkpointed',
     reason:'neural training waiting for 10 GiB disk reserve; tactical evolution operating',
     tacticalParameterKeys:PARAMETER_KEYS,
-    tacticalEvolutionCycles:1, // parent adds cumulative counter after callback
     lastTacticalCandidateAccepted:report.gate.selectedForTraining,
     tacticalGateReasons:report.gate.reasons,
     tacticalScoreRate:report.againstIncumbent?.scoreRate??null,
