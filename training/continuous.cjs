@@ -221,10 +221,9 @@ async function main() {
       leagueUnfamiliarPartners: league.unfamiliarPartners,
       directionAccuracy: metrics.direction_accuracy, kickF1: metrics.kick_f1,
       activeStage: 'idle', livePromoted: false });
-    // Checkpoints/reports/champion history survive; keep last two rollout datasets.
-    for (const name of fs.readdirSync(root))
-      if (/^cycle-\d{5}$/.test(name) && Number(name.slice(6)) < cycle - 1)
-        fs.rmSync(path.join(root, name), { recursive: true, force: true });
+    // Completed training data stays local until the separate external archiver
+    // verifies the encrypted cold copy by SHA256 readback. That process keeps
+    // the newest completed cycle and never touches active jobs/champions.
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   save({ status: 'stopped', reason: stop ? 'signal' : fs.existsSync(stopFile) ? 'STOP file' : 'window completed',
