@@ -1,0 +1,34 @@
+name: AI live neural versus tactical matchup
+on:
+  push:
+    branches:
+      - research/live-neural-vs-tactical-20261020
+permissions:
+  contents: read
+concurrency:
+  group: fuckball-neural-vs-live-tactical-research
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
+        with:
+          persist-credentials: false
+      - name: Verify exact branch source
+        env:
+          EXPECTED: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test -z "$(git status --porcelain)"
+      - name: Pinned live AI vs accepted neural champion (read-only)
+        env:
+          FUCKBALL_RELEASE_DIR: /opt/fuckball-releases/84f819633fad77ccdbeac1f5fe6b69374ce421d7-39214993688
+          FUCKBALL_RELEASE_SHA: 84f819633fad77ccdbeac1f5fe6b69374ce421d7
+          FUCKBALL_NEURAL_CHECKPOINT: /opt/fuckball-training/latest-model.json
+        run: |
+          test -f "$FUCKBALL_RELEASE_DIR/dist/ai/policy.js"
+          test -r "$FUCKBALL_NEURAL_CHECKPOINT"
+          curl -fsS --max-time 5 http://127.0.0.1:3417/health | grep -Fq "\"release\":\"$FUCKBALL_RELEASE_SHA\""
+          timeout 600s nice -n 15 node scripts/ai-live-head-to-head.cjs
