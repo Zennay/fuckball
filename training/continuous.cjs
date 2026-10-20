@@ -5,7 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { randomBytes } = require('node:crypto');
+const { randomBytes, createHash } = require('node:crypto');
 const {evolve: evolveTactics, PARAMETER_KEYS} = require('./tactical-low-disk.cjs');
 const root = path.resolve(process.argv[2] || 'training/output/continuous');
 const rawWindow = process.argv[3] || '12';
@@ -25,6 +25,39 @@ function boundEnv(name, defaultValue, min, max) {
   return n;
 }
 fs.mkdirSync(root, { recursive: true });
+// Prefer proven, separately mounted archival storage for disposable neural
+// episodes. Never mistake an unmounted archive directory on / for a 5 TB disk.
+const externalMount = process.env.HAXLAB_EXTERNAL_MOUNT || '/home/ubuntu/VPS-Archief';
+function scratchDirectory() {
+  const override = process.env.HAXLAB_CYCLE_SCRATCH;
+  let mount;
+  try {
+    const host = fs.statSync(root);
+    const archive = fs.statSync(externalMount);
+    if (!archive.isDirectory() || archive.dev === host.dev) return override
+      ? (() => { throw Error('External training mount is absent or on the root filesystem'); })() : root;
+    mount = path.resolve(externalMount);
+  } catch (error) {
+    if (override) throw Error('Configured external training mount is unavailable: ' + error.message);
+    return root;
+  }
+  const location = path.resolve(override || path.join(mount, 'fuckball-training',
+    createHash('sha256').update(root).digest('hex').slice(0, 12), 'cycles'));
+  if (location !== mount && !location.startsWith(mount + path.sep))
+    throw Error('Cycle scratch must stay within the verified external mount');
+  try {
+    fs.mkdirSync(location, { recursive: true });
+    fs.accessSync(location, fs.constants.R_OK | fs.constants.W_OK);
+    if (fs.statSync(location).dev === fs.statSync(root).dev)
+      throw Error('Cycle scratch resolves to the root filesystem');
+    return location;
+  } catch (error) {
+    if (override) throw error;
+    // If archive is not writable, use the original conservative disk gate.
+    return root;
+  }
+}
+const scratchRoot = scratchDirectory();
 const stateFile = path.join(root, 'status.json');
 const lock = path.join(root, 'trainer.lock');
 const stopFile = path.join(root, 'STOP');
@@ -86,12 +119,18 @@ async function main() {
   save({ status: 'starting', mode: forever ? 'forever' : 'bounded',
     deadline: forever ? null : new Date(deadline).toISOString(),
     episodesPerCycle: episodes, generationsPerCycle: generations,
-    tacticalParameterKeys: PARAMETER_KEYS,
+    tacticalParameterKeys: PARAMETER_KEYS, cycleScratch: scratchRoot,
+    externalCycleStorage: scratchRoot !== root,
     livePromoted: false, note: 'Selected training champion is NOT live game AI.' });
   if (fs.existsSync(stopFile)) return save({ status: 'stopped', reason: 'STOP file' });
   while (!stop && Date.now() < deadline && !fs.existsSync(stopFile)) {
-    const disk = fs.statfsSync(root);
-    if (disk.bavail * disk.bsize < lowDiskGiB * 1024 ** 3) {
+    const disk = fs.statfsSync(scratchRoot), hostDisk = fs.statfsSync(root);
+    // Large rollouts require the cycle filesystem's full 10 GiB reserve.
+    // Even with external episodes, preserve 2 GiB locally for status, latest
+    // champions, service logs and other VPS workloads.
+    const scratchLow = disk.bavail * disk.bsize < lowDiskGiB * 1024 ** 3;
+    const hostLow = scratchRoot !== root && hostDisk.bavail * hostDisk.bsize < 2 * 1024 ** 3;
+    if (scratchLow || hostLow) {
       // Neural rollout datasets need the 10 GiB reserve. New tactical
       // parameters can still be evolved with tiny, independently-gated
       // research checkpoints provided at least 5 GiB remains.
@@ -118,7 +157,7 @@ async function main() {
       continue;
     }
     const cycle = (state.cycles || 0) + 1;
-    const dir = path.join(root, 'cycle-' + String(cycle).padStart(5, '0'));
+    const dir = path.join(scratchRoot, 'cycle-' + String(cycle).padStart(5, '0'));
     const seed = randomBytes(4).readUInt32LE(0);
     const champion = path.join(root, 'latest-model.json');
     const weights = path.join(root, 'latest-weights.npz');
@@ -213,10 +252,13 @@ async function main() {
       leagueUnfamiliarPartners: league.unfamiliarPartners,
       directionAccuracy: metrics.direction_accuracy, kickF1: metrics.kick_f1,
       activeStage: 'idle', livePromoted: false });
-    // Checkpoints/reports/champion history survive; keep last two rollout datasets.
-    for (const name of fs.readdirSync(root))
-      if (/^cycle-\d{5}$/.test(name) && Number(name.slice(6)) < cycle - 1)
-        fs.rmSync(path.join(root, name), { recursive: true, force: true });
+    // Long-lived champion/checkpoint evidence remains on the original root.
+    // Only completed older per-cycle scratch is removed. Also retire legacy
+    // local cycle folders after migration to a separately mounted archive.
+    for (const parent of scratchRoot === root ? [root] : [root, scratchRoot])
+      for (const name of fs.readdirSync(parent))
+        if (/^cycle-\d{5}$/.test(name) && Number(name.slice(6)) < cycle - 1)
+          fs.rmSync(path.join(parent, name), { recursive: true, force: true });
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   save({ status: 'stopped', reason: stop ? 'signal' : fs.existsSync(stopFile) ? 'STOP file' : 'window completed',
