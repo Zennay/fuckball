@@ -1,4 +1,4 @@
-name: AI live neural versus tactical matchup
+name: Compare evening tactical AI with live 4v4 AI
 on:
   push:
     branches:
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: fuckball-neural-vs-live-tactical-research
+  group: fuckball-evening-tactical-research
   cancel-in-progress: false
 jobs:
   compare:
@@ -16,19 +16,21 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
         with:
           persist-credentials: false
-      - name: Verify exact branch source
+      - name: Verify exact research source
         env:
           EXPECTED: ${{ github.sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED"
           test -z "$(git status --porcelain)"
-      - name: Pinned live AI vs accepted neural champion (read-only)
+      - name: Compare Oct-19 evening candidate with live (read-only)
         env:
           FUCKBALL_RELEASE_DIR: /opt/fuckball-releases/84f819633fad77ccdbeac1f5fe6b69374ce421d7-39214993688
           FUCKBALL_RELEASE_SHA: 84f819633fad77ccdbeac1f5fe6b69374ce421d7
-          FUCKBALL_NEURAL_CHECKPOINT: /opt/fuckball-training/latest-model.json
+          FUCKBALL_CHALLENGER_SHA: b2df772c437c11d392973924e124c9a963e8fd29
         run: |
           test -f "$FUCKBALL_RELEASE_DIR/dist/ai/policy.js"
-          test -r "$FUCKBALL_NEURAL_CHECKPOINT"
           curl -fsS --max-time 5 http://127.0.0.1:3417/health | grep -Fq "\"release\":\"$FUCKBALL_RELEASE_SHA\""
-          timeout 600s nice -n 15 node scripts/ai-live-head-to-head.cjs
+          export FUCKBALL_TACTICAL_CHALLENGER="$RUNNER_TEMP/fuckball-evening-policy.js"
+          curl -fsSL --retry 2 --max-time 25 "https://raw.githubusercontent.com/Zennay/fuckball/$FUCKBALL_CHALLENGER_SHA/dist/ai/policy.js" -o "$FUCKBALL_TACTICAL_CHALLENGER"
+          test "$(git hash-object "$FUCKBALL_TACTICAL_CHALLENGER")" = "a9d26614409680bab65938416fbca33e1bbc6f76"
+          timeout 660s nice -n 15 node scripts/ai-evening-tactical-vs-live.cjs
