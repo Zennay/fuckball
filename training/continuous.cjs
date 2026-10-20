@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
+const {evolve: evolveTactics, PARAMETER_KEYS} = require('./tactical-low-disk.cjs');
 const root = path.resolve(process.argv[2] || 'training/output/continuous');
 const rawWindow = process.argv[3] || '12';
 const forever = rawWindow === 'forever';
@@ -85,12 +86,34 @@ async function main() {
   save({ status: 'starting', mode: forever ? 'forever' : 'bounded',
     deadline: forever ? null : new Date(deadline).toISOString(),
     episodesPerCycle: episodes, generationsPerCycle: generations,
+    tacticalParameterKeys: PARAMETER_KEYS,
     livePromoted: false, note: 'Selected training champion is NOT live game AI.' });
   if (fs.existsSync(stopFile)) return save({ status: 'stopped', reason: 'STOP file' });
   while (!stop && Date.now() < deadline && !fs.existsSync(stopFile)) {
     const disk = fs.statfsSync(root);
     if (disk.bavail * disk.bsize < lowDiskGiB * 1024 ** 3) {
-      save({ status: 'paused', reason: 'low disk space' });
+      // Neural rollout datasets need the 10 GiB reserve. New tactical
+      // parameters can still be evolved with tiny, independently-gated
+      // research checkpoints provided at least 5 GiB remains.
+      try {
+        const tacticalReport = await evolveTactics({
+          root, seed: randomBytes(4).readUInt32LE(0), save, run,
+          shouldStop: () => stop || fs.existsSync(stopFile)
+        });
+        if (tacticalReport) save({
+          tacticalEvolutionCycles: (state.tacticalEvolutionCycles || 0) + 1,
+          tacticalChampionUpdates: (state.tacticalChampionUpdates || 0) +
+            Number(tacticalReport.gate.selectedForTraining),
+          tacticalParameterKeys: PARAMETER_KEYS,
+          livePromoted: false
+        });
+      } catch (error) {
+        console.error('Tactical evolution failed; neural reserve preserved:', error);
+        save({ status: 'paused', activeStage: 'tactical evolution blocked',
+          reason: 'neural disk reserve; tactical evolution error',
+          tacticalError: String(error.message || error),
+          tacticalParameterKeys: PARAMETER_KEYS, livePromoted: false });
+      }
       await new Promise(resolve => setTimeout(resolve, 60000));
       continue;
     }
