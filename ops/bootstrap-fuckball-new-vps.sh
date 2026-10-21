@@ -84,7 +84,9 @@ WantedBy=multi-user.target
 UNITFILE
 install -m 0644 "$STAGE/$UNIT" "/etc/systemd/system/$UNIT"
 systemctl daemon-reload
-systemctl enable --now "$UNIT"
+systemctl enable "$UNIT"
+# Restart is required even if a previous revision was already active.
+systemctl restart "$UNIT"
 sleep 2
 if ! systemctl is-active --quiet "$UNIT"; then
   echo 'Fuckball failed, HaxLab untouched' >&2
