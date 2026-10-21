@@ -16,6 +16,9 @@ const episodes = boundEnv('HAXLAB_EPISODES', 192, 6, 200);
 const generations = boundEnv('HAXLAB_GENERATIONS', 10, 1, 20);
 const leagueFrames = boundEnv('HAXLAB_LEAGUE_FRAMES', 2400, 300, 18000);
 const lowDiskGiB = boundEnv('HAXLAB_DISK_RESERVE_GIB', 10, 2, 1000);
+const plateauStep = boundEnv('HAXLAB_PLATEAU_STEP', 24, 4, 512);
+const retainedDatasets = boundEnv('HAXLAB_KEEP_DATASETS', 1, 0, 4);
+const CURRICULA = Object.freeze(['balanced', 'defense', 'transition', 'press']);
 function boundEnv(name, defaultValue, min, max) {
   const value = process.env[name] === undefined ? String(defaultValue) : process.env[name];
   if (!/^[0-9]+$/.test(value)) throw Error(name + ' must be an unsigned integer');
@@ -47,7 +50,7 @@ try {
     throw Error('Recovered stale training lock; restart to continue');
   }
 }
-let state = { cycles: 0, matches: 0, bestGeneration: 0, championUpdates: 0 };
+let state = { cycles: 0, matches: 0, bestGeneration: 0, championUpdates: 0, rejectedStreak: 0 };
 try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; } catch {}
 const start = Date.now();
 const deadline = forever ? Infinity : start + hours * 3600000;
@@ -97,16 +100,25 @@ async function main() {
     const cycle = (state.cycles || 0) + 1;
     const dir = path.join(root, 'cycle-' + String(cycle).padStart(5, '0'));
     const seed = randomBytes(4).readUInt32LE(0);
+    // Plateau-aware training: rotate real native 4v4 situations instead of
+    // retrying an unchanged curriculum indefinitely. Promotion gate is unchanged.
+    const rejectedStreak = Number.isSafeInteger(state.rejectedStreak) && state.rejectedStreak >= 0
+      ? state.rejectedStreak : 0;
+    const phase = Math.floor(rejectedStreak / plateauStep) % CURRICULA.length;
+    const curriculumPhase = CURRICULA[phase];
+    const cycleEpisodes = Math.min(episodes, [48, 72, 96, 64][phase]);
     const champion = path.join(root, 'latest-model.json');
     const weights = path.join(root, 'latest-weights.npz');
     const incumbent = fs.existsSync(champion) ? champion : path.join(__dirname, '../dist/ai/trained-model.json');
     const env = { ...process.env, OPENBLAS_NUM_THREADS: '2', OMP_NUM_THREADS: '2',
-      HAXLAB_SOURCE_MODEL: incumbent };
+      HAXLAB_SOURCE_MODEL: incumbent, HAXLAB_CURRICULUM_PHASE: curriculumPhase };
     if (fs.existsSync(champion) && fs.existsSync(weights)) env.HAXLAB_INITIAL_WEIGHTS = weights;
     else delete env.HAXLAB_INITIAL_WEIGHTS;
-    save({ status: 'training', activeCycle: cycle, seed, incumbent, activeStage: 'self-play generation' });
+    save({ status: 'training', activeCycle: cycle, seed, incumbent,
+      curriculumPhase, rejectedStreak, episodesPerCycle: cycleEpisodes,
+      activeStage: 'self-play generation' });
     const trained = await run(process.execPath,
-      ['training/haxlab_selfplay.cjs', dir, String(episodes), String(generations), String(seed)], env);
+      ['training/haxlab_selfplay.cjs', dir, String(cycleEpisodes), String(generations), String(seed)], env);
     if (stop || fs.existsSync(stopFile)) break;
     if (trained.code !== 0) throw Error('Training subprocess exited ' + trained.code + '/' + trained.signal);
     save({ status: 'evaluating', activeStage: 'side-swapped 4v4 neural league' });
@@ -133,7 +145,7 @@ async function main() {
       copyAtomic(path.join(dir, 'weights/model.npz'), weights);
       copyAtomic(path.join(dir, 'candidate.json'), champion);
     }
-    const report = { cycle, seed, metrics, arena, teamPromoted: team.promoted,
+    const report = { cycle, seed, curriculumPhase, cycleEpisodes, metrics, arena, teamPromoted: team.promoted,
       league: { candidateHash: league.candidateHash, incumbentHash: league.incumbentHash,
         headToHead: league.headToHead, unfamiliarPartners: league.unfamiliarPartners,
         gate: league.gate }, selectedForTraining: league.gate.promoted, livePromoted: false };
@@ -141,20 +153,23 @@ async function main() {
     fs.writeFileSync(reportFile + '.tmp', JSON.stringify(report, null, 2));
     fs.renameSync(reportFile + '.tmp', reportFile);
     save({ status: 'checkpointed', cycles: cycle, matches: (state.matches || 0) +
-      episodes + league.games.length, generatedMatches: (state.generatedMatches || 0) + episodes,
+      cycleEpisodes + league.games.length, generatedMatches: (state.generatedMatches || 0) + cycleEpisodes,
       leagueMatches: (state.leagueMatches || 0) + league.games.length,
       lastCandidateAccepted: league.gate.promoted,
+      rejectedStreak: league.gate.promoted ? 0 : rejectedStreak + 1,
       championUpdates: (state.championUpdates || 0) + Number(league.gate.promoted),
       bestGeneration: league.gate.promoted ? cycle : (state.bestGeneration || 0),
       gateReasons: league.gate.reasons, leagueHeadToHead: league.headToHead,
       leagueUnfamiliarPartners: league.unfamiliarPartners,
       directionAccuracy: metrics.direction_accuracy, kickF1: metrics.kick_f1,
       activeStage: 'idle', livePromoted: false });
-    // Checkpoints/reports/champion history survive; keep last two rollout datasets.
+    // Keep immutable decisions and accepted model history; discard heavy replay
+    // datasets from rejected generations after their compact reports are sealed.
     for (const name of fs.readdirSync(root))
-      if (/^cycle-\d{5}$/.test(name) && Number(name.slice(6)) < cycle - 1)
+      if (/^cycle-\d{5}$/.test(name) && Number(name.slice(6)) <= cycle - retainedDatasets)
         fs.rmSync(path.join(root, name), { recursive: true, force: true });
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // After a long plateau spend less CPU on near-identical, failed updates.
+    await new Promise(resolve => setTimeout(resolve, rejectedStreak >= 96 ? 60000 : 1000));
   }
   save({ status: 'stopped', reason: stop ? 'signal' : fs.existsSync(stopFile) ? 'STOP file' : 'window completed',
     activeStage: null, livePromoted: false });
