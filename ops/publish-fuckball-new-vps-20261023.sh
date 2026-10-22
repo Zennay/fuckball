@@ -36,8 +36,20 @@ dns_ready() {
   local a
   a="$(getent ahostsv4 "$DOMAIN" | awk '{print $1}' | sort -u || true)"
   [[ "$a" == "$TARGET_IP" ]] || return 1
-  # No known new-host IPv6 address; a stale AAAA would misroute players.
-  ! getent ahostsv6 "$DOMAIN" >/dev/null 2>&1
+  # No known new-host IPv6 address; refuse a real AAAA record.
+  # getent ahostsv6 may synthesize IPv4-mapped IPv6, so query AF_INET6
+  # explicitly without AI_V4MAPPED and fail closed on DNS errors.
+  python3 - "$DOMAIN" <<'PY'
+import socket, sys
+try:
+    entries = socket.getaddrinfo(sys.argv[1], None, socket.AF_INET6,
+                                  socket.SOCK_STREAM, flags=0)
+except socket.gaierror as exc:
+    if exc.errno in (socket.EAI_NONAME, getattr(socket, 'EAI_ADDRFAMILY', -999)):
+        raise SystemExit(0)
+    raise SystemExit(1)
+raise SystemExit(1 if entries else 0)
+PY
 }
 
 caddy_import_ready() {
