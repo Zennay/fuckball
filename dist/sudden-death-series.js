@@ -65,6 +65,10 @@
  controls.append(next,stop,retry,dismiss);
  hud.append(title,clock,result,roundList,controls);pitch.append(hud);
  let session=null;
+ // Each native restart owns a distinct epoch even though the room object is reused.
+ // A later manual kickoff must never be stopped by a superseded series.
+ let nativeEpoch=0;
+ window.addEventListener('fuckball:local-match-kickoff',()=>{nativeEpoch++;});
  const validHistory=x=>{
   if(!x||!Number.isSafeInteger(x.at)||x.at<=0||x.at>Date.now()+86400000||
    !LENGTHS.includes(x.bestOf)||!DURATIONS.includes(x.duration)||
@@ -200,8 +204,15 @@
   stop.hidden=finished;
   retry.hidden=dismiss.hidden=!finished;
  }
+ function stopOwnedNative(s){
+  if(s.room!==room||s.kickoffEpoch!==nativeEpoch||
+   serverLink||peerConnected||replay||!started)return false;
+  // Only stop a native kickoff launched by this series, never a replacement match.
+  try{startStop();return !started;}catch{return false;}
+ }
  function finalize(s,complete){
   if(session!==s)return;
+  if(!complete)stopOwnedNative(s);
   s.phase=complete?'complete':'stopped';
   if(complete){
    const stored=save(s);
@@ -223,20 +234,61 @@
   s.phase='between';
   // Stop the real local native game at the declared end of this round.
   // The next native round still requires an explicit player action.
-  if(room===s.room&&!serverLink&&!peerConnected&&!replay&&!paused){
-   room.setGamePaused(true,0);paused=true;releaseInputs();setButtons();
+  if(room===s.room&&nativeEpoch===s.kickoffEpoch&&
+   !serverLink&&!peerConnected&&!replay&&!paused){
+   try{
+    room.setGamePaused(true,0);paused=true;releaseInputs();setButtons();
+   }catch{
+    // A goal still counts even if the native pause fails. Do not leave a
+    // live, uncontrolled offline match playing behind the between-round UI.
+    const stopped=stopOwnedNative(s);
+    status.textContent=stopped?
+     'Round recorded. Native pause failed, so the local match was stopped.':
+     'Round recorded, but native pause/stop failed. Stop that match before another round.';
+   }
   }
   const majority=Math.floor(s.bestOf/2)+1;
   if(s.human>=majority||s.other>=majority||s.rounds.length>=s.bestOf)
    finalize(s,true);
   else render(s);
  }
+ function acceptBoot(s){
+  if(session!==s||s.phase!=='starting'||nativeEpoch!==s.kickoffEpoch||
+   room!==s.room||!ready(s.opponent))return false;
+  s.side=own().team.id;
+  // Keep the score captured at native kickoff: a goal during the short
+  // player-spawn grace period must still decide this first-goal round.
+  if(!s.score)s.score=score();
+  s.frame=room.currentFrameNo;s.elapsed=0;s.phase='running';
+  render(s);
+  status.textContent='Native match running. The next goal or complete active clock decides this round.';
+  return true;
+ }
  function tick(){
   const s=session;
-  if(!s||s.phase!=='running')return;
+  if(!s)return;
+  if(s.phase==='starting'){
+   if(document.hidden||nativeEpoch!==s.kickoffEpoch||room!==s.room||
+    !started||blocked()){finalize(s,false);return;}
+   if(!acceptBoot(s)&&performance.now()-s.bootAt>=1200){
+    finalize(s,false);
+    status.textContent='Native offline players did not become ready. The attempted match was stopped.';
+   }
+   return;
+  }
+  if(s.phase!=='running')return;
   if(document.hidden){finalize(s,false);return;}
-  if(!ready(s.opponent)||room!==s.room||own()?.team?.id!==s.side||
-   room.currentFrameNo<s.frame){finalize(s,false);return;}
+  // Disc objects can disappear briefly during the native goal/reset animation.
+  // Check stable match authority here, and let the real score settle the round.
+  if(serverLink||peerConnected||replay||!started||pitch.hidden||
+   nativeEpoch!==s.kickoffEpoch||room!==s.room||
+   document.getElementById('mode')?.value!==(s.opponent==='human'?'local':'bot')||
+   !room?.gameState||!Number.isSafeInteger(room.currentFrameNo)||
+   !Number.isSafeInteger(room.gameState.redScore)||
+   !Number.isSafeInteger(room.gameState.blueScore)||
+   room.currentFrameNo<s.frame){
+   finalize(s,false);return;
+  }
   const now=room.currentFrameNo;
   if(!paused)s.elapsed+=Math.max(0,now-s.frame);
   s.frame=now;
@@ -244,12 +296,20 @@
   if(current[0]<s.score[0]||current[1]<s.score[1]){
    finalize(s,false);return;
   }
+  const localTeam=own()?.team?.id;
+  // A real team switch is not a goal-reset animation. Never attribute a
+  // score from that changed player context to the previous series round.
+  if(localTeam!=null&&localTeam!==s.side){finalize(s,false);return;}
   const ownPoints=current[s.side===1?0:1]-s.score[s.side===1?0:1];
   const aiPoints=current[s.side===1?1:0]-s.score[s.side===1?1:0];
   if(ownPoints>0||aiPoints>0){
    roundOver(ownPoints>0&&aiPoints===0?'human':aiPoints>0&&ownPoints===0?'other':'draw');
    return;
   }
+  // The scorer's disc or team may be detached for a goal/reset frame.
+  // A verified score delta is authoritative; otherwise reject a truly
+  // changed team before the round continues.
+  if(localTeam!==s.side){finalize(s,false);return;}
   if(s.elapsed>=s.duration*60){roundOver('draw');return;}
   render(s);
  }
@@ -257,14 +317,22 @@
   if(session!==s)return;
   const msg=blocked();
   if(msg){status.textContent=msg;return;}
+  const before=nativeEpoch;
   try{
-   if(!quickPlay(s.opponent==='human'?'local':'bot',true,true)||!ready(s.opponent))
+   if(!quickPlay(s.opponent==='human'?'local':'bot',true,true))
     throw Error('Native offline 1v1 is unavailable.');
-   s.room=room;s.side=own().team.id;s.score=score();
-   s.frame=room.currentFrameNo;s.elapsed=0;s.phase='running';
-   hud.hidden=false;render(s);
-   status.textContent='Native match running. The next goal or complete active clock decides this round.';
+   if(nativeEpoch===before||!started||serverLink||peerConnected||replay)
+    throw Error('Native offline kickoff was not confirmed.');
+   s.room=room;s.kickoffEpoch=nativeEpoch;s.bootAt=performance.now();
+   s.score=Number.isSafeInteger(room?.gameState?.redScore)&&
+    Number.isSafeInteger(room?.gameState?.blueScore)?score():null;
+   s.phase='starting';hud.hidden=false;render(s);
+   status.textContent='Native kickoff sent. Waiting briefly for both players to spawn…';
+   acceptBoot(s);
   }catch(error){
+   // The native engine may have started before a later startup step failed.
+   // Capture that specific kickoff so finalize can stop only our orphan match.
+   if(nativeEpoch!==before){s.room=room;s.kickoffEpoch=nativeEpoch;}
    finalize(s,false);
    status.textContent=error?.message||'Unable to start native local match.';
   }
@@ -286,13 +354,13 @@
   const s=session;if(!s||s.phase!=='between')return;
   bootRound(s);
  };
- stop.onclick=()=>{if(session&&['running','between'].includes(session.phase))finalize(session,false);};
+ stop.onclick=()=>{if(session&&['starting','running','between'].includes(session.phase))finalize(session,false);};
  retry.onclick=()=>start.click();
  dismiss.onclick=()=>{session=null;hud.hidden=true;};
  window.setInterval(tick,120);
  const previousShowView=showView;
  showView=function(view){
-  if(view!=='play'&&session&&['running','between'].includes(session.phase))
+  if(view!=='play'&&session&&['starting','running','between'].includes(session.phase))
    finalize(session,false);
   previousShowView(view);
  };

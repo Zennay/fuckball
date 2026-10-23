@@ -169,18 +169,80 @@
   if(!target||nativeStadium.querySelector('option[value="'+draft.stadium+'"]')===null){
    status.textContent='This stadium is unavailable. Select another native stadium.';return;
   }
-  // The original native launcher enforces session authority again. Do not fire
-  // any change handlers while online or create our own game/physics instance.
-  nativeStadium.value=String(draft.stadium);stadium=target;
-  document.getElementById('stadiumLabel').textContent=target.name.toUpperCase();
-  document.getElementById('scoreLimit').value=String(draft.scoreLimit);
-  document.getElementById('timeLimit').value=String(draft.timeLimit);
-  document.getElementById('botDifficulty').value=draft.difficulty;
-  settings.difficulty=draft.difficulty;settings.botLevels={};settings.timeLimit=draft.timeLimit;
-  savePrefs();
-  if(quickPlay(draft.mode,true)){
-   status.textContent='Native '+draft.mode+' practice started with "'+draft.name+'". No online server joined.';
-  }else status.textContent='Native game rejected the new session. No multiplayer authority was changed.';
+  const goals=document.getElementById('scoreLimit'),
+   minutes=document.getElementById('timeLimit'),
+   difficultyControl=document.getElementById('botDifficulty'),
+   stadiumLabel=document.getElementById('stadiumLabel'),
+   nativeMode=document.getElementById('mode');
+  if(!goals||!minutes||!difficultyControl||!stadiumLabel||!nativeMode){
+   status.textContent='Native match controls are unavailable. Your settings were not changed.';return;
+  }
+  // The native launcher snapshots these controls synchronously into the
+  // offline room. Preserve their previous values if its own session gate
+  // rejects kickoff, and do not persist a rejected loadout to player prefs.
+  const previous={
+   stadiumValue:nativeStadium.value,stadium,stadiumLabel:stadiumLabel.textContent,
+   goals:goals.value,minutes:minutes.value,difficultyControl:difficultyControl.value,
+   difficulty:settings.difficulty,botLevels:settings.botLevels,timeLimit:settings.timeLimit,
+   mode:nativeMode.value
+  };
+  const restore=()=>{
+   nativeStadium.value=previous.stadiumValue;stadium=previous.stadium;
+   stadiumLabel.textContent=previous.stadiumLabel;
+   goals.value=previous.goals;minutes.value=previous.minutes;
+   difficultyControl.value=previous.difficultyControl;
+   settings.difficulty=previous.difficulty;settings.botLevels=previous.botLevels;
+   settings.timeLimit=previous.timeLimit;
+   // A failed native reset can change quickPlay's mode select before kickoff.
+   // Restore only the UI choice when there is no active match to mislabel;
+   // never claim to resurrect a prior native room or its roster.
+   if(!started&&!serverLink&&!peerConnected&&!replay)nativeMode.value=previous.mode;
+  };
+  const recoverHome=()=>{
+   // Keep failed local launches actionable, never strand the player on a
+   // Play screen without a running game. This is not a match rollback.
+   if(!started&&!serverLink&&!peerConnected&&!replay&&typeof showView==='function'){
+    try{showView('home');}catch{}
+   }
+  };
+  let launched=false,kickoffObserved=false;
+  const observeKickoff=()=>{kickoffObserved=true;};
+  window.addEventListener('fuckball:local-match-kickoff',observeKickoff);
+  try{
+   // The original native launcher enforces authority once more. Never fire
+   // change handlers or create our own physics/game instance.
+   nativeStadium.value=String(draft.stadium);stadium=target;
+   stadiumLabel.textContent=target.name.toUpperCase();
+   goals.value=String(draft.scoreLimit);minutes.value=String(draft.timeLimit);
+   difficultyControl.value=draft.difficulty;
+   settings.difficulty=draft.difficulty;settings.botLevels={};settings.timeLimit=draft.timeLimit;
+   launched=quickPlay(draft.mode,true);
+  }catch(error){
+   if(kickoffObserved&&!serverLink&&!peerConnected&&!replay&&started){
+    try{startStop();}catch{}
+   }
+   restore();
+   recoverHome();
+   status.textContent='Native kickoff failed. Preferences restored; check the current match before restarting.';
+   return;
+  }finally{
+   window.removeEventListener('fuckball:local-match-kickoff',observeKickoff);
+  }
+  if(!launched||!kickoffObserved){
+   if(kickoffObserved&&!serverLink&&!peerConnected&&!replay&&started){
+    try{startStop();}catch{}
+   }
+   restore();
+   recoverHome();
+   status.textContent='Native game rejected the session. Original match settings restored.';
+   return;
+  }
+  try{savePrefs();}
+  catch{
+   status.textContent='Native '+draft.mode+' practice started with "'+draft.name+
+    '", but its settings could not be saved for next time.';return;
+  }
+  status.textContent='Native '+draft.mode+' practice started with "'+draft.name+'". No online server joined.';
  }
  function download(payload,filename){
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));

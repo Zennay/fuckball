@@ -132,7 +132,16 @@
  hud.hidden=true;hud.setAttribute('aria-label','Local couch player controls');
  const hudTitle=node('strong','COUCH · TWO HUMANS');hud.append(hudTitle);
  const activeHint=node('span','P1 WASD + F · P2 arrows + / or Enter');
- hud.append(activeHint);pitch.append(hud);
+ const liveRuleHint=node('span');liveRuleHint.hidden=true;
+ hud.append(activeHint,liveRuleHint);pitch.append(hud);
+ let pendingKickoffRules=null,kickoffObserved=false;
+ // Only the native kickoff event confirms which rules the new room captured.
+ // Any other local launcher clears this receipt, so it never mislabels a match.
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  if(pendingKickoffRules)kickoffObserved=true;
+  liveRuleHint.textContent=pendingKickoffRules||'';
+  liveRuleHint.hidden=!pendingKickoffRules;
+ });
  let chosen='auto',availableSignature='',lastInput='0:0:false';
  const neutral=()=>({x:0,y:0,kick:false});
  const isLocal=()=>typeof started!=='undefined'&&started&&
@@ -254,10 +263,52 @@
   }
   // Do not mutate a live match until every online/peer/active-session gate
   // and all four-human controller requirements have passed.
+  const nativeMode=document.getElementById('mode'),previousMode=nativeMode?.value;
   const revertRules=applyRules();
-  if(!quickPlay(mode,true,false)){
+  const goalsField=document.getElementById('scoreLimit'),
+   minutesField=document.getElementById('timeLimit');
+  if(goalsField&&minutesField){
+   const goals=Number(goalsField.value),minutes=Number(minutesField.value);
+   pendingKickoffRules='MATCH RULES · '+(goals>0?'first to '+goals+' goals':'no goal limit')+
+    ' · '+(minutes>0?minutes+' min':'no time limit');
+  }
+  let launched=false;
+  kickoffObserved=false;
+  const recoverHome=()=>{
+   if(!started&&!serverLink&&!peerConnected&&!replay&&typeof showView==='function'){
+    try{showView('home');}catch{}
+   }
+  };
+  try{
+   // quickPlay snapshots the native score/time controls synchronously into
+   // the new offline room. Never leave a one-shot preset in shared room inputs.
+   launched=quickPlay(mode,true,false);
+  }catch{
+   // An exception after native kickoff must not leave a running orphan.
+   if(kickoffObserved&&!serverLink&&!peerConnected&&!replay&&started){
+    try{startStop();}catch{}
+   }
+   // A rejected launch before kickoff must preserve the existing match HUD.
+   if(kickoffObserved){liveRuleHint.textContent='';liveRuleHint.hidden=true;}
+   recoverHome();
+   status.textContent='Native couch kickoff failed; your previous match controls were restored.';
+   return;
+  }finally{
+   pendingKickoffRules=null;
    revertRules();
-   status.textContent=name+' is unavailable while another session is active.';return;
+   // quickPlay can set its mode before resetMatch throws. Recover the Home
+   // selection only if the failed kickoff left no active native session.
+   if((!launched||!kickoffObserved)&&nativeMode&&previousMode!=null&&
+    !started&&!serverLink&&!peerConnected&&!replay)nativeMode.value=previousMode;
+  }
+  if(!launched||!kickoffObserved){
+   if(kickoffObserved&&!serverLink&&!peerConnected&&!replay&&started){
+    try{startStop();}catch{}
+    liveRuleHint.textContent='';liveRuleHint.hidden=true;
+   }
+   recoverHome();
+   status.textContent=kickoffObserved?'Native couch kickoff could not be completed.':
+    name+' is unavailable while another session is active.';return;
   }
   status.textContent=name+' started with '+(['couchRivals','couchRivals3v3','couchRivals4v4'].includes(mode)?'four':'two')+
    ' real native local humans. '+
