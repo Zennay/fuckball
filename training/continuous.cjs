@@ -99,11 +99,16 @@ async function main() {
     const seed = randomBytes(4).readUInt32LE(0);
     const champion = path.join(root, 'latest-model.json');
     const weights = path.join(root, 'latest-weights.npz');
+    const tacticalChampion = path.join(root, 'latest-team-profile.json');
     const incumbent = fs.existsSync(champion) ? champion : path.join(__dirname, '../dist/ai/trained-model.json');
     const env = { ...process.env, OPENBLAS_NUM_THREADS: '2', OMP_NUM_THREADS: '2',
       HAXLAB_SOURCE_MODEL: incumbent };
     if (fs.existsSync(champion) && fs.existsSync(weights)) env.HAXLAB_INITIAL_WEIGHTS = weights;
     else delete env.HAXLAB_INITIAL_WEIGHTS;
+    // Separate persistent tactical learning from neural champion selection.
+    // This is training-only: no source, public bundle or live policy changes.
+    if (fs.existsSync(tacticalChampion)) env.HAXLAB_TACTICAL_PROFILE = tacticalChampion;
+    else delete env.HAXLAB_TACTICAL_PROFILE;
     save({ status: 'training', activeCycle: cycle, seed, incumbent, activeStage: 'self-play generation' });
     const trained = await run(process.execPath,
       ['training/haxlab_selfplay.cjs', dir, String(episodes), String(generations), String(seed)], env);
@@ -121,7 +126,22 @@ async function main() {
     const metrics = read(path.join(dir, 'weights/metrics.json')).untouched_test;
     const arena = read(path.join(dir, 'arena.json'));
     const team = read(path.join(dir, 'team-policy.json'));
-    // The trusted league module is solely responsible for the promotion gate.
+    // Carry useful tactical self-play adjustments into future HaxLab cycles,
+    // but only if they beat the retained tactics in independent mirrored 4v4.
+    const tacticalReportPath = path.join(dir, 'tactical-league.json');
+    save({ status: 'evaluating', activeStage: 'tactical self-play champion ladder' });
+    const tacticalEvaluated = await run(process.execPath,
+      ['training/tactical-champion.cjs', path.join(dir, 'team-policy.json'),
+        tacticalChampion, tacticalReportPath, String((seed + 13579) >>> 0),
+        String(Math.max(600, Math.min(7200, leagueFrames)))], env);
+    if (stop || fs.existsSync(stopFile)) break;
+    if (tacticalEvaluated.code !== 0)
+      throw Error('Tactical ladder exited ' + tacticalEvaluated.code + '/' + tacticalEvaluated.signal);
+    const tacticalReport = read(tacticalReportPath);
+    if (tacticalReport.schema !== 'fuckball-tactical-ladder-v1' ||
+        typeof tacticalReport.gate?.selectedForTraining !== 'boolean')
+      throw Error('Malformed tactical ladder evidence');
+    // The trusted neural league module is solely responsible for neural model promotion.
     if (league.schema !== 'fuckball-neural-league-v1' || typeof league.gate?.promoted !== 'boolean' ||
         !league.headToHead || !league.unfamiliarPartners) throw Error('Malformed league evaluation');
     if (league.gate.promoted) {
@@ -134,6 +154,15 @@ async function main() {
       copyAtomic(path.join(dir, 'candidate.json'), champion);
     }
     const report = { cycle, seed, metrics, arena, teamPromoted: team.promoted,
+      tactical: { selectedForTraining: tacticalReport.gate.selectedForTraining,
+        reasons: tacticalReport.gate.reasons,
+        incumbent: tacticalReport.againstIncumbent && {
+          scoreRate: tacticalReport.againstIncumbent.scoreRate,
+          goalDifference: tacticalReport.againstIncumbent.goalDifference,
+          football: tacticalReport.againstIncumbent.football },
+        default: tacticalReport.againstDefault && {
+          scoreRate: tacticalReport.againstDefault.scoreRate,
+          goalDifference: tacticalReport.againstDefault.goalDifference } },
       league: { candidateHash: league.candidateHash, incumbentHash: league.incumbentHash,
         headToHead: league.headToHead, unfamiliarPartners: league.unfamiliarPartners,
         gate: league.gate }, selectedForTraining: league.gate.promoted, livePromoted: false };
@@ -144,6 +173,17 @@ async function main() {
       episodes + league.games.length, generatedMatches: (state.generatedMatches || 0) + episodes,
       leagueMatches: (state.leagueMatches || 0) + league.games.length,
       lastCandidateAccepted: league.gate.promoted,
+      tacticalChampionUpdates: (state.tacticalChampionUpdates || 0) +
+        Number(tacticalReport.gate.selectedForTraining),
+      lastTacticalCandidateAccepted: tacticalReport.gate.selectedForTraining,
+      tacticalGateReasons: tacticalReport.gate.reasons,
+      tacticalScoreRate: tacticalReport.againstIncumbent?.scoreRate ?? null,
+      tacticalGoalDifference: tacticalReport.againstIncumbent?.goalDifference ?? null,
+      tacticalPassCompletionRate: tacticalReport.againstIncumbent?.football?.passCompletionRate ?? null,
+      tacticalPassAttempts: tacticalReport.againstIncumbent?.football?.passAttempts ?? null,
+      tacticalShotAttempts: tacticalReport.againstIncumbent?.football?.shotAttempts ?? null,
+      tacticalShotConversionRate: tacticalReport.againstIncumbent?.football?.shotConversionRate ?? null,
+      tacticalKeeperTurnovers: tacticalReport.againstIncumbent?.football?.keeperTurnovers ?? null,
       championUpdates: (state.championUpdates || 0) + Number(league.gate.promoted),
       bestGeneration: league.gate.promoted ? cycle : (state.bestGeneration || 0),
       gateReasons: league.gate.reasons, leagueHeadToHead: league.headToHead,
