@@ -8,7 +8,7 @@
  const heading=document.createElement('summary');heading.textContent='⌨ Replay navigation · frame / goal / speed';
  const help=document.createElement('div');help.className='replay-navigation-content';
  const description=document.createElement('p');
- description.textContent='Recorded HBR2 playback only. Space or K pauses, ←/→ seeks 5 seconds, Shift+←/→ steps one frame, [ / ] changes speed, G / Shift+G jumps to a recorded goal.';
+ description.textContent='Recorded HBR2 playback only. Space or K pauses, ←/→ seeks 5 seconds, Shift+←/→ steps one frame, [ / ] changes speed, G / Shift+G jumps to a recorded goal. Mark A/B for a repeatable study clip (Shift+A/B/L).';
  const actions=document.createElement('div');actions.className='replay-navigation-actions';
  const status=document.createElement('span');status.className='replay-navigation-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -74,6 +74,80 @@
  button('5s ▶','Seek forward five seconds',()=>seek(5000));
  button('‹ Goal','Jump to previous recorded goal',()=>jumpGoal(-1));
  button('Goal ›','Jump to next recorded goal',()=>jumpGoal(1));
+ // Player-owned rehearsal loop for actual HBR2 playback. Never affects live gameplay.
+ const loop=document.createElement('section');loop.className='replay-navigation-loop';
+ loop.setAttribute('aria-label','Replay A to B loop');
+ const loopTitle=document.createElement('strong');loopTitle.textContent='REPLAY STUDY LOOP · A / B';
+ const loopIntro=document.createElement('p');
+ loopIntro.textContent='Mark the start and end of a recorded moment, then repeat only that section. This stays in the current replay and does not modify HBR2 data.';
+ const loopActions=document.createElement('div');loopActions.className='replay-navigation-loop-actions';
+ const loopStart=document.createElement('button');loopStart.type='button';loopStart.textContent='A · Mark start';
+ const loopEnd=document.createElement('button');loopEnd.type='button';loopEnd.textContent='B · Mark end';
+ const loopToggle=document.createElement('button');loopToggle.type='button';loopToggle.textContent='▶ Repeat A–B';
+ const loopClear=document.createElement('button');loopClear.type='button';loopClear.textContent='Clear loop';
+ const loopState=document.createElement('p');loopState.className='replay-navigation-loop-state';
+ loopState.setAttribute('role','status');loopState.setAttribute('aria-live','polite');
+ let loopReplay=null,loopA=null,loopB=null,loopEnabled=false;
+ const clock=n=>n===null?'not set':(n/1000).toFixed(2)+'s';
+ function renderLoop(message){
+  const valid=loopA!==null&&loopB!==null&&loopB-loopA>=250;
+  loopToggle.disabled=!valid;loopToggle.textContent=loopEnabled?'Ⅱ Stop repeating':'▶ Repeat A–B';
+  loopToggle.setAttribute('aria-pressed',String(loopEnabled));
+  loopState.textContent=(message?message+' · ':'')+'A '+clock(loopA)+' / B '+clock(loopB)+
+   (valid?' · '+((loopB-loopA)/1000).toFixed(2)+'s clip':' · Set A and B at least 0.25 seconds apart')+
+   (loopEnabled?' · REPEATING':'');
+ }
+ function resetLoop(why){
+  loopReplay=available()?replay:null;
+  loopA=loopB=null;loopEnabled=false;
+  renderLoop(why||'Loop cleared');
+ }
+ function mark(which){
+  if(!available())return;
+  if(loopReplay!==replay)resetLoop('Recording changed');
+  const time=replay.getTime(),duration=replay.length();
+  if(!Number.isFinite(time)||!Number.isFinite(duration)||duration<=0)return;
+  const value=Math.max(0,Math.min(time,duration));
+  if(which==='A'){
+   loopA=value;
+   if(loopB!==null&&loopB-loopA<250){loopB=null;loopEnabled=false;}
+  }else{
+   loopB=value;
+   if(loopA!==null&&loopB-loopA<250)loopEnabled=false;
+  }
+  renderLoop((which==='A'?'Start':'End')+' marked from recorded HBR2');
+ }
+ loopStart.onclick=()=>mark('A');
+ loopEnd.onclick=()=>mark('B');
+ loopToggle.onclick=()=>{
+  if(!available()||loopReplay!==replay)return resetLoop('Recording changed');
+  if(loopA===null||loopB===null||loopB-loopA<250)return renderLoop('Set valid A and B points first');
+  loopEnabled=!loopEnabled;
+  if(loopEnabled){
+   if(replay.getTime()<loopA||replay.getTime()>=loopB)replay.setTime(loopA);
+   if(replay.getSpeed()===0){
+    const rate=Number(speed.value)||1;
+    replay.setSpeed(rate);toggle.textContent='Ⅱ';
+   }
+  }
+  renderLoop(loopEnabled?'Loop enabled':'Loop paused');
+ };
+ loopClear.onclick=()=>resetLoop('Loop disabled');
+ loopActions.append(loopStart,loopEnd,loopToggle,loopClear);
+ loop.append(loopTitle,loopIntro,loopActions,loopState);
+ renderLoop();
+ function maintainLoop(){
+  if(!available()){
+   if(loopReplay!==null)resetLoop('Replay closed');
+   return;
+  }
+  if(loopReplay!==replay)return resetLoop('New replay selected');
+  if(!loopEnabled)return;
+  const time=replay.getTime();
+  if(Number.isFinite(time)&&replay.getSpeed()!==0&&time>=loopB&&loopB!==null)
+   replay.setTime(loopA);
+ }
+ window.setInterval(()=>{if(!document.hidden)maintainLoop();},120);
  const rates=document.createElement('div');rates.className='replay-navigation-rates';
  const slower=document.createElement('button');slower.type='button';slower.textContent='− Speed';
  const faster=document.createElement('button');faster.type='button';faster.textContent='+ Speed';
@@ -121,7 +195,7 @@
   follow=candidate;renderer.followPlayerId=candidate;
   show(candidate===-1?'Camera: full recorded pitch.':'Camera: following recorded player '+cameraSelect.selectedOptions[0].textContent+'.');
  };
- help.append(description,actions,rates,cameraRow,status);pane.append(heading,help);controls.append(pane);
+ help.append(description,actions,rates,loop,cameraRow,status);pane.append(heading,help);controls.append(pane);
  window.setInterval(()=>{if(!document.hidden&&available())refreshCamera();},700);
  window.addEventListener('keydown',event=>{
   if(!available()||event.defaultPrevented||document.hidden||event.altKey||
@@ -140,6 +214,9 @@
   else if(hotkey==='BracketLeft'&&!event.shiftKey)handler=()=>speedChange(-1);
   else if(hotkey==='BracketRight'&&!event.shiftKey)handler=()=>speedChange(1);
   else if(hotkey==='KeyG')handler=()=>jumpGoal(event.shiftKey?-1:1);
+  else if(event.shiftKey&&hotkey==='KeyA')handler=()=>mark('A');
+  else if(event.shiftKey&&hotkey==='KeyB')handler=()=>mark('B');
+  else if(event.shiftKey&&hotkey==='KeyL')handler=()=>loopToggle.click();
   if(!handler)return;
   event.preventDefault();event.stopImmediatePropagation();handler();
  },true);

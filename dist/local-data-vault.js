@@ -19,8 +19,15 @@
   {id:'loadouts',key:'fuckball.local-match-loadouts.v1',name:'Local match loadouts',limit:8,chars:12000},
   {id:'academy',key:'fuckball.solo-academy.v1',name:'Solo Academy progress',limit:1,chars:12000},
   {id:'gauntlet',key:'fuckball.ai-gauntlet-history.v1',name:'Completed native AI Gauntlets',limit:12,chars:24000},
-  {id:'comeback',key:'fuckball.native-comeback-arena.v1',name:'Native Comeback Arena history',limit:20,chars:24000}
+  {id:'comeback',key:'fuckball.native-comeback-arena.v1',name:'Native Comeback Arena history',limit:20,chars:24000},
+  {id:'goals',key:'fuckball-local-goal-rush-history-v1',name:'Native Goal Rush attempts',limit:20,chars:24000},
+  {id:'teamwork',key:'fuckball.teamwork-native-drill.v1',name:'Native Teamwork kick links',limit:20,chars:24000},
+  {id:'defense',key:'fuckball.clean-sheet-history.v1',name:'Native Clean Sheet attempts',limit:20,chars:24000},
+  {id:'rockets',key:'fuckball.native-ball-burst-history.v1',name:'Native Rocket Kick attempts',limit:20,chars:24000},
+  {id:'keepaway',key:'fuckball.native-keep-away.v1',name:'Native Keep Away kick streaks',limit:20,chars:24000},
+  {id:'sudden',key:'fuckball.native-sudden-death.v1',name:'Native Sudden Death series',limit:20,chars:40000}
  ];
+ const NATIVE_SCOPES=new Set(['goals','teamwork','defense','rockets','keepaway','sudden']);
  const known=new Map(SCOPES.map(scope=>[scope.id,scope]));
  const format='fuckball-local-data-vault',version=1,MAX_FILE=1536*1024;
  const itemValid=(scope,item)=>{
@@ -67,6 +74,53 @@
    Number.isSafeInteger(item.elapsed)&&item.elapsed>=item.duration&&
    item.elapsed<=item.duration+1&&typeof item.completed==='boolean'&&
    item.completed===(item.scored>item.conceded+item.deficit);
+  if(NATIVE_SCOPES.has(scope.id)){
+   if(!item||typeof item!=='object'||Array.isArray(item)||
+    !Number.isSafeInteger(item.at)||item.at<=0||item.at>Date.now()+86400000)return false;
+   const int=(v,upper)=>Number.isSafeInteger(v)&&v>=0&&v<=upper;
+   if(scope.id==='goals')return [60,120,180].includes(item.duration)&&
+    [1,3,5].includes(item.target)&&int(item.goals,999)&&int(item.elapsed,180)&&
+    typeof item.completed==='boolean'&&item.completed===(item.goals>=item.target);
+   if(scope.id==='teamwork')return [120,180,300].includes(item.seconds)&&
+    [2,4,6].includes(item.target)&&int(item.links,99)&&
+    int(item.attempts,9999)&&int(item.elapsed,300)&&
+    typeof item.completed==='boolean'&&item.completed===(item.links>=item.target);
+   if(scope.id==='defense')return [60,120,180].includes(item.duration)&&
+    [0,1,2].includes(item.allowance)&&int(item.conceded,999)&&
+    int(item.scored,999)&&int(item.elapsed,item.duration+1)&&
+    item.elapsed>=item.duration&&typeof item.completed==='boolean'&&
+    item.completed===(item.conceded<=item.allowance);
+   if(scope.id==='rockets')return [60,120,180].includes(item.duration)&&
+    [3,5,7].includes(item.threshold)&&[1,3,5].includes(item.target)&&
+    int(item.hits,999)&&int(item.kicks,9999)&&item.kicks>=item.hits&&
+    Number.isFinite(item.peak)&&item.peak>=0&&item.peak<=1000&&
+    int(item.elapsed,item.duration+1)&&typeof item.completed==='boolean'&&
+    item.completed===(item.hits>=item.target);
+   if(scope.id==='keepaway')return [60,120,180].includes(item.duration)&&
+    [3,5,8].includes(item.target)&&int(item.best,999)&&
+    int(item.kicks,9999)&&item.kicks>=item.best&&int(item.breaks,9999)&&
+    int(item.elapsed,item.duration+1)&&item.elapsed>=item.duration&&
+    typeof item.completed==='boolean'&&item.completed===(item.best>=item.target);
+   if(scope.id==='sudden'){
+    if(![3,5,7].includes(item.bestOf)||![60,90,120].includes(item.duration)||
+     !Array.isArray(item.rounds)||item.rounds.length<1||
+     item.rounds.length>item.bestOf||!int(item.draws,7))return false;
+    const couch=item.opponent==='human',first=couch?'player1':'human',
+     second=couch?'player2':'ai',a=couch?item.player1:item.human,
+     b=couch?item.player2:item.ai;
+    if(!couch&&item.opponent!==undefined&&item.opponent!=='ai')return false;
+    if(!int(a,7)||!int(b,7)||a+b+item.draws!==item.rounds.length||
+     !item.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
+      int(r.frames,item.duration*60+120))||
+     item.rounds.filter(r=>r.winner===first).length!==a||
+     item.rounds.filter(r=>r.winner===second).length!==b||
+     item.rounds.filter(r=>r.winner==='draw').length!==item.draws)return false;
+    return item.winner===(a>b?first:b>a?second:'draw')&&
+     (item.rounds.length===item.bestOf||
+      a>=Math.floor(item.bestOf/2)+1||
+      b>=Math.floor(item.bestOf/2)+1);
+   }
+  }
   if(scope.id==='attendance')return !!item&&typeof item==='object'&&
    typeof item.key==='string'&&Array.isArray(item.people)&&item.people.length<=24;
   return !!item&&typeof item==='object'&&!Array.isArray(item)&&item.version===1&&
@@ -78,7 +132,8 @@
    throw Error(scope.name+': unexpected source data. Use the original editor for recovery.');
   if(JSON.stringify(items).length>scope.chars)
    throw Error(scope.name+': source exceeds the supported size.');
-  const ids=items.map(item=>scope.id==='pins'?item:
+  const ids=items.map((item,index)=>NATIVE_SCOPES.has(scope.id)?'local-'+index:
+   scope.id==='pins'?item:
    scope.id==='attendance'?item.key:
     scope.id==='loadouts'?item.name.toLocaleLowerCase():
    scope.id==='gauntlet'?item.startedAt+':'+item.finishedAt+':'+item.route:
@@ -109,7 +164,7 @@
  panel.setAttribute('aria-label','Device-local data vault');
  const title=make('h2','MY LOCAL DATA VAULT.');
  const intro=make('p','Review and archive private competitions, match attendance, saved public room codes and native solo training progress and loadouts on this device. These are NOT your online account, HBR2 replay files or authenticated match results.');
- const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. Comeback, Gauntlet and Academy proof summaries are reference-only; importing archives cannot award progression. No data is uploaded or deleted by this vault.','local-vault-warning');
+ const warning=make('p','Exports can reveal private friend names, schedules, notes and bookmarked room codes. Keep downloaded files private. All native AI drill and series proof summaries are reference-only; importing archives cannot award progression or verified results. No data is uploaded or deleted by this vault.','local-vault-warning');
  const top=make('div',null,'local-vault-actions');
  const downloadAll=click('↓ Export selected archive',()=>downloadArchive());
  const browse=click('Browse native backup files',()=>{
@@ -204,7 +259,7 @@
  function showArchive(datasets){
   extractList.replaceChildren();
   extractInfo.textContent='Preview only: '+datasets.length+
-   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. Comeback, Academy and AI Gauntlet proof summaries are read-only, never restorable as earned milestones.';
+   ' categories. Nothing has been written to browser storage. Download individual native-format files where supported. All native practice summaries are read-only and cannot restore earned milestones or competitive results.';
   for(const {scope,items}of datasets){
    const group=make('div',null,'local-vault-extract-group');
    group.append(make('strong',scope.name+' · '+items.length+' records'));
@@ -231,6 +286,16 @@
     actions.append(click('↓ Native local match loadouts',()=>save('fuckball-local-match-loadouts.json',
      {format:'fuckball-local-match-loadouts',version:1,source:'private-device-only',
       exportedAt:new Date().toISOString(),presets:items})));
+   }else if(NATIVE_SCOPES.has(scope.id)){
+    if(items.length)actions.append(click('↓ '+scope.name+' (read-only)',()=>{
+     save('fuckball-native-'+scope.id+'-practice-history.json',{
+      format:'fuckball-native-local-'+scope.id,version:1,
+      source:'device-only native practice observations',
+      disclaimer:'Not server-verified match results, rankings or transferable achievements.',
+      exportedAt:new Date().toISOString(),attempts:items
+     });
+     message.textContent='Private '+scope.name+' proof saved. No milestones or match results restored.';
+    }));
    }else if(scope.id==='comeback'){
     actions.append(click('↓ Comeback Arena native training history (read-only)',()=>{
      save('fuckball-comeback-arena-proof.json',{

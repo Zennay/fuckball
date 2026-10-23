@@ -15,3 +15,17 @@
 .replay-navigation-camera select{min-height:42px;border:1px solid #7da493;background:#1d3a3e;border-radius:7px;color:#f3f8ec;padding:10px;font-size:13px}
 .replay-navigation-camera small{font-size:11px;line-height:1.5;color:#bad2c5;flex:2 1 210px}
 .replay-navigation-camera select:focus-visible{outline:3px solid #e2f8ae;outline-offset:3px}
+
+/* HBR2-only A/B rehearsal controls, with explicit user-set clip boundaries. */
+.replay-navigation-loop{border:1px solid #88a88f;background:#102b31;border-radius:10px;
+ padding:12px;display:grid;gap:9px;min-width:0}
+.replay-navigation-loop>strong{font-size:12px;letter-spacing:.07em;color:#d2f5ac}
+.replay-navigation-loop>p{margin:0;color:#c7ded1;font-size:11px;line-height:1.5}
+.replay-navigation-loop-actions{display:flex;flex-wrap:wrap;gap:8px}
+.replay-navigation-loop-actions button{min-height:44px;flex:1 1 115px}
+.replay-navigation-loop-actions button[aria-pressed=true]{background:#b8f18f;color:#17332b;border-color:#b8f18f}
+.replay-navigation-loop-actions button:disabled{opacity:.48;cursor:not-allowed}
+.replay-navigation-loop-state{color:#e4f6c3!important;min-height:18px}
+@media(max-width:640px){.replay-navigation-loop{padding:9px}
+ .replay-navigation-loop-actions button{flex:1 1 42%}}
+@media print{.replay-navigation-loop{display:none!important}}

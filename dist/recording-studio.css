@@ -1,0 +1,16 @@
+.recording-studio{margin:15px 0;padding:16px 17px;background:#183437;border:1px solid #60867b;border-radius:10px;color:#e7f7ed}
+.recording-studio>strong{display:block;letter-spacing:.09em;font-size:13px}
+.recording-studio p{font-size:12px;line-height:1.5;color:#cee2d8;margin:9px 0}
+.recording-studio-choices{display:grid;gap:10px;margin:13px 0}
+.recording-studio-choices label{display:flex;align-items:flex-start;gap:10px;line-height:1.5;font-size:13px;cursor:pointer}
+.recording-studio-choices input{margin:3px 0 0;min-width:18px;min-height:18px;accent-color:#c7eca0}
+.recording-studio-actions{display:flex;flex-wrap:wrap;gap:9px}
+.recording-studio-actions button{min-height:40px}
+.recording-studio-status{min-height:20px}
+.recording-studio[data-active=yes]{border-color:#edaa8f}
+.recording-studio-hud{position:absolute;bottom:clamp(80px,12vh,140px);right:clamp(7px,3vw,26px);z-index:16;display:grid;gap:3px;min-width:175px;max-width:calc(100vw - 20px);padding:11px 13px;border:1px solid #f2a9a6;border-radius:9px;background:rgba(34,20,24,.9);color:#fff6ef;pointer-events:none;box-shadow:0 5px 20px #0006}
+.recording-studio-hud[hidden]{display:none}
+.recording-studio-hud strong{font-size:12px;letter-spacing:.08em}
+.recording-studio-hud span{font-size:11px}
+.recording-studio :focus-visible{outline:3px solid #d4f3a4;outline-offset:3px}
+@media(max-width:650px){.recording-studio-hud{right:8px;bottom:95px}.recording-studio-actions button{flex:1 1 130px}}

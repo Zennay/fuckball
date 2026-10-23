@@ -1,0 +1,29 @@
+.couch-series{margin:18px 0;padding:19px 22px;border:1px solid #aac79a;border-radius:12px;background:#1a3034;color:#f2f9ed}
+.couch-series h2{font-size:clamp(21px,2.8vw,29px);margin:0 0 8px;font-style:italic}
+.couch-series>p{max-width:760px;font-size:14px;color:#c3dacf;line-height:1.5}
+.couch-series-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:14px 0}
+.couch-series-controls label{display:grid;gap:5px;font-size:12px;font-weight:700}
+.couch-series-controls select,.couch-series-controls button{min-height:42px;box-sizing:border-box}
+.couch-series-controls select{padding:8px;border-radius:8px;background:#12272d;color:#e8f6ec;border:1px solid #80a890}
+.couch-series-controls button{border-radius:8px}
+.couch-series-status{min-height:24px;margin:10px 0;font-size:13px}
+.couch-series-tally{font-size:clamp(14px,2.1vw,21px);font-weight:800;letter-spacing:.04em;padding:13px;background:#10272a;border:1px solid #557669;border-radius:8px}
+.couch-series-history{border-top:1px solid #476b66;padding-top:10px;margin-top:14px}
+.couch-series-history strong{font-size:12px;letter-spacing:.09em}
+.couch-series-history p{font-size:12px;margin:7px 0;color:#d7e7d9}
+.couch-series-hud{position:absolute;right:clamp(6px,2vw,22px);bottom:clamp(76px,12vh,132px);z-index:16;max-width:min(330px,calc(100vw - 18px));padding:11px 14px;background:rgba(15,39,43,.95);border:1px solid #b3d5a3;border-radius:9px;color:#eff8ed;font-size:12px;font-weight:800;line-height:1.4;text-align:right;pointer-events:none}
+.couch-series-hud[hidden],.couch-series-tally[hidden]{display:none}
+.couch-series button:focus-visible,.couch-series select:focus-visible{outline:3px solid #daf6bb;outline-offset:3px}
+@media(max-width:640px){.couch-series{padding:14px}.couch-series-controls>*{flex:1 1 100%}.couch-series-hud{right:8px;bottom:88px;max-width:46vw}}
+
+.couch-series-hud strong{display:block}
+.couch-series-hud .couch-series-hud-action{display:block;margin:9px 0 0 auto;padding:9px 13px;min-height:40px;pointer-events:auto;cursor:pointer;background:#d4f0aa;color:#1c3231;border:0;border-radius:7px;font-weight:800}
+.couch-series-hud .couch-series-hud-action:focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+.couch-series-history-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #436059;padding:4px 0}
+.couch-series-history-row button{padding:7px 12px;min-height:36px;background:#d8efb7;border:0;border-radius:7px;color:#163534;font-weight:800;cursor:pointer}
+.couch-series-history-row button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.couch-series-archive-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
+.couch-series-archive-tools button,.couch-series-history-row .danger{min-height:38px;padding:8px 12px;background:#d4e9c1;color:#183431;border:1px solid transparent;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer}
+.couch-series-archive-tools .danger,.couch-series-history-row .danger{background:transparent;border-color:#edb2b2;color:#ffe1e1}
+.couch-series-archive-tools button:focus-visible,.couch-series-history-row .danger:focus-visible{outline:3px solid #fff;outline-offset:2px}

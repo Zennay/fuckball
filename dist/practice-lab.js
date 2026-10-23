@@ -10,7 +10,9 @@
   {key:'defense',title:'Clean Sheet',selector:'.clean-sheet-setup',intro:'Protect your own goal against local AI for the full active clock.'},
   {key:'rockets',title:'Rocket Kick',selector:'.native-ball-burst',intro:'Train real ball speed following your own native kicks.'},
   {key:'ladder',title:'AI Gauntlet',selector:'.ai-gauntlet-setup',intro:'Win three genuine timed local 1v1 AI rounds to climb the ladder.'},
-  {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'}
+  {key:'comeback',title:'Comeback Arena',selector:'.comeback-arena',intro:'Recover from a virtual goal deficit in a complete real offline 1v1.'},
+  {key:'keepaway',title:'Keep Away',selector:'.keep-away-setup',intro:'Build genuine kick streaks before the local AI or a goal breaks control.'},
+  {key:'sudden',title:'Sudden Death',selector:'.sudden-death-setup',intro:'First-goal best-of versus native AI or a real Couch 1v1 opponent.'}
  ];
  if(!home)return;
  const existing=modules.map(m=>({...m,element:home.querySelector(m.selector)})).filter(m=>m.element);
@@ -18,7 +20,7 @@
  const KEY='fuckball.practice-lab.display.v1';
  let saved={};try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');if(s&&typeof s==='object'&&!Array.isArray(s))saved=s;}catch{}
  const root=document.createElement('section');root.className='practice-lab';
- root.setAttribute('aria-label','Optional local AI practice lab');
+ root.setAttribute('aria-label','Optional local AI and Couch practice lab');
  const disclosure=document.createElement('details');disclosure.className='practice-lab-disclosure';
  const summary=document.createElement('summary');summary.className='practice-lab-summary';
  const summaryIcon=document.createElement('span');summaryIcon.className='practice-lab-icon';summaryIcon.textContent='↗';
@@ -34,7 +36,7 @@
  const content=document.createElement('div');content.className='practice-lab-content';
  const explanation=document.createElement('p');
  explanation.className='practice-lab-help';
- explanation.textContent='Train against native local AI only. No bots enter human Quick Match, no leaderboard, and no game rules change.';
+ explanation.textContent='Train with native local AI or play the two-human Couch Sudden Death series. Human Quick Match, server results and rankings are separate; physics is unchanged.';
  const tabs=document.createElement('div');tabs.className='practice-lab-tabs';
  tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','Choose offline practice');
  const panes=document.createElement('div');panes.className='practice-lab-panes';
@@ -96,10 +98,12 @@
   const rockets=getLocal('fuckball.native-ball-burst-history.v1');
   const ladders=getLocal('fuckball.ai-gauntlet-history.v1');
   const comebacks=getLocal('fuckball.native-comeback-arena.v1');
+  const keepaway=getLocal('fuckball.native-keep-away.v1');
+  const sudden=getLocal('fuckball.native-sudden-death.v1');
   const valid=list=>Array.isArray(list)?list.filter(x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=Date.now()+86400000).length:0;
   const parts=[];
   if(completed)parts.push('First Touch complete');
-  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets)+valid(comebacks);
+  const attempts=valid(goals)+valid(teamwork)+valid(defending)+valid(rockets)+valid(comebacks)+valid(keepaway)+valid(sudden);
   const ladderWins=Array.isArray(ladders)?ladders.filter(x=>x?.version===1&&Array.isArray(x.wins)&&x.wins.length===3&&Number.isSafeInteger(x.finishedAt)&&x.finishedAt>0&&x.finishedAt<=Date.now()+86400000).length:0;
   if(attempts)parts.push(attempts+' local drill attempt'+(attempts===1?'':'s'));
   if(ladderWins)parts.push(ladderWins+' completed local AI ladder'+(ladderWins===1?'':'s'));
@@ -136,7 +140,33 @@
     Number.isSafeInteger(x.scored)&&x.scored>=0&&x.scored<=999&&
     Number.isSafeInteger(x.conceded)&&x.conceded>=0&&x.conceded<=999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
-    typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit)}
+    typeof x.completed==='boolean'&&x.completed===(x.scored>x.conceded+x.deficit)},
+   {key:'keepaway',name:'Keep Away',store:'fuckball.native-keep-away.v1',valid:x=>
+    [60,120,180].includes(x.duration)&&[3,5,8].includes(x.target)&&
+    Number.isSafeInteger(x.best)&&x.best>=0&&x.best<=999&&
+    Number.isSafeInteger(x.kicks)&&x.kicks>=x.best&&x.kicks<=9999&&
+    Number.isSafeInteger(x.breaks)&&x.breaks>=0&&x.breaks<=9999&&
+    Number.isSafeInteger(x.elapsed)&&x.elapsed>=x.duration&&x.elapsed<=x.duration+1&&
+    typeof x.completed==='boolean'&&x.completed===(x.best>=x.target)},
+   {key:'sudden',name:'Sudden Death',store:'fuckball.native-sudden-death.v1',valid:x=>{
+    if(![3,5,7].includes(x.bestOf)||![60,90,120].includes(x.duration)||
+     !Array.isArray(x.rounds)||x.rounds.length<1||x.rounds.length>x.bestOf||
+     !Number.isSafeInteger(x.draws)||x.draws<0||x.draws>7)return false;
+    const couch=x.opponent==='human',first=couch?'player1':'human',
+     second=couch?'player2':'ai',a=couch?x.player1:x.human,b=couch?x.player2:x.ai;
+    return (couch||x.opponent===undefined||x.opponent==='ai')&&
+     Number.isSafeInteger(a)&&Number.isSafeInteger(b)&&a>=0&&b>=0&&a<=7&&b<=7&&
+     a+b+x.draws===x.rounds.length&&
+     x.rounds.every(r=>r&&[first,second,'draw'].includes(r.winner)&&
+      Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=x.duration*60+120)&&
+     x.rounds.filter(r=>r.winner===first).length===a&&
+     x.rounds.filter(r=>r.winner===second).length===b&&
+     x.rounds.filter(r=>r.winner==='draw').length===x.draws&&
+     x.winner===(a>b?first:b>a?second:'draw')&&
+     (x.rounds.length===x.bestOf||a>=Math.floor(x.bestOf/2)+1||
+      b>=Math.floor(x.bestOf/2)+1)&&
+     typeof x.completed==='boolean'&&x.completed===(a>b);
+   }}
   ];
   const part=document.createElement('details');part.className='practice-insights';
   const sum=document.createElement('summary');sum.textContent='PRACTICE INSIGHTS · MY NATIVE RESULTS';
@@ -169,7 +199,7 @@
    if(!Array.isArray(rows)||rows.length>20)return[];
    return rows.filter(x=>x&&typeof x==='object'&&
     Number.isSafeInteger(x.at)&&x.at>0&&x.at<=now+DAY&&
-    metric.valid(x));
+    (metric.key==='sudden'?metric.valid({...x,completed:(x.winner==='human'||x.winner==='player1')}):metric.valid(x)));
   }
   function aggregate(rows){return{
    attempts:rows.length,met:rows.filter(x=>x.completed===true).length
@@ -180,7 +210,7 @@
    board.replaceChildren();snapshot=[];
    for(const metric of metrics){
     const rows=savedRows(metric,now).filter(x=>x.at>=cutoff);
-    const counts=aggregate(rows);
+    const counts=metric.key==='sudden'?{attempts:rows.length,met:rows.filter(x=>x.winner==='human'||x.winner==='player1').length}:aggregate(rows);
     const card=document.createElement('article');card.className='practice-insights-card';
     const title=document.createElement('strong');title.textContent=metric.name;
     const outcome=document.createElement('p');
@@ -219,7 +249,7 @@
    note.textContent=completed+' complete AI Gauntlet ladder(s) in the selected retained period (only full three-win completions saved).';
    board.append(note);
    snapshot.push({key:'ladder',name:'AI Gauntlet',completedLadders:completed});
-   const target=[...snapshot.slice(0,5)].sort((a,b)=>a.attempts-b.attempts)[0];
+   const target=snapshot.filter(x=>Number.isSafeInteger(x.attempts)).sort((a,b)=>a.attempts-b.attempts)[0];
    advice.textContent=target?
     'Explore '+target.name+': '+target.attempts+' recorded attempts in this lookback. This is a coverage suggestion, not a diagnosis of your skill.':
     'Play a native drill to build your own private history.';

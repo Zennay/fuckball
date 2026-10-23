@@ -10,14 +10,59 @@ function b64(bytes){if(typeof Buffer!=='undefined')return Buffer.from(bytes).toS
 /* opts: {hb, id, AI, Netcode, v3=true, send(clientId, objectOrUint8Array), canSend(clientId)} */
 function createRoomCore(opts){
  const {hb,AI,Netcode}=opts,send=opts.send,canSend=opts.canSend||(()=>true),API=hb._runtime.API;
- const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),pendingSubs:new Map(),subSeq:0,captains:new Map(),activeFrames:new Map(),sideFrames:new Map(),subEvents:[],disconnected:new Set(),round:0,lastResult:null,rematch:null,rematchSeq:0};
+ const r={id:opts.id,hb,clients:new Map(),owner:0,nextId:1,botIds:new Set(),mode:'4v4',difficulty:'hard',botLevels:{},teamProfile:{},started:false,paused:false,seq:0,tick:0,frame:0,v3:opts.v3!==false,benches:new Map(),benchReady:new Set(),pendingSubs:new Map(),subSeq:0,captains:new Map(),refereeId:0,lastRefereePauseAt:0,activeFrames:new Map(),sideFrames:new Map(),subEvents:[],disconnected:new Set(),round:0,lastResult:null,rematch:null,rematchSeq:0,pauseRequest:null,pauseCooldowns:new Map(),lobbyReady:new Map(),readyClickAt:new Map(),kickoff:null,stadiumBallot:new Map(),stadiumVoteAt:new Map(),formatVotes:new Map(),formatVoteAt:new Map()};
  const broadcast=data=>{for(const id of r.clients.keys())send(id,data);};
+ // The authoritative engine defines the candidate list. Ballots never carry
+ // stadium JSON, filesystem paths, scripts, or client-chosen map parameters.
+ const defaultMaps=typeof API.Utils.getDefaultStadiums==='function'?
+  API.Utils.getDefaultStadiums().filter(v=>v&&typeof v.name==='string'&&
+    v.name.length>0&&v.name.length<=48).slice(0,8):[];
+ const ballotOptions=[{id:0,name:'KEEP CURRENT PITCH'},
+  ...defaultMaps.map((map,i)=>({id:i+1,name:map.name}))];
+ const ballotNames=ballotOptions.map(o=>o.name);
+ function eligibleVoter(id){
+  return r.clients.has(id)&&!r.disconnected.has(id)&&!r.botIds.has(id)&&
+   !!hb.getPlayer(id)&&!r.started&&!r.lastResult&&!r.kickoff;
+ }
+ // Built-in formats have fixed harmless native score/time parameters.
+ // A vote never supplies arbitrary game rules or executes a configuration.
+ const matchFormats=Object.freeze([
+  {id:0,name:'FAST BREAK · 3 minutes / 3 goals',minutes:3,goals:3},
+  {id:1,name:'STANDARD · 5 minutes / 5 goals',minutes:5,goals:5},
+  {id:2,name:'CLASSIC · 7 minutes / 3 goals',minutes:7,goals:3},
+  {id:3,name:'LONG MATCH · 10 minutes / 10 goals',minutes:10,goals:10}
+ ]);
+ function formatTally(){
+  const tally=matchFormats.map(()=>0);
+  for(const [id,choice]of r.formatVotes)if(eligibleVoter(id)&&
+   Number.isSafeInteger(choice)&&choice>=0&&choice<matchFormats.length)tally[choice]++;
+  return tally;
+ }
+ function formatWinner(){
+  const tally=formatTally(),total=tally.reduce((a,b)=>a+b,0);
+  if(total<2)return null;
+  const high=Math.max(...tally);
+  return high>=2&&tally.filter(n=>n===high).length===1?tally.indexOf(high):null;
+ }
+ function ballotCounts(){
+  const tally=Array.from({length:ballotOptions.length},()=>0);
+  for(const [pid,choice]of r.stadiumBallot)if(eligibleVoter(pid)&&
+   Number.isSafeInteger(choice)&&choice>=0&&choice<tally.length)tally[choice]++;
+  return tally;
+ }
+ function topBallotChoice(){
+  const tally=ballotCounts(),total=tally.reduce((a,b)=>a+b,0);
+  if(total<2)return null;
+  const high=Math.max(...tally);
+  if(high<2||tally.filter(n=>n===high).length!==1)return null;
+  return tally.indexOf(high);
+ }
  // Expired consent requests must never hold a side's substitution slot forever.
  // This cleanup also applies to accepted requests waiting for a later pause.
  function expireSubs(now=Date.now()){let changed=false;for(const [team,p]of r.pendingSubs)if(!Number.isFinite(p.expiresAt)||now>p.expiresAt){r.pendingSubs.delete(team);changed=true;}return changed;}
  hb.onGameTick=()=>{r.tick++;if(!r.started||r.paused)return;if(r.tick%2===0)for(const p of hb._room.state.players)if(r.botIds.has(p.id))hb.setPlayerInput(p.id,AI.tactical(hb._room.state,p.id,r.tick,{difficulty:r.botLevels[p.id]||r.difficulty,profile:r.teamProfile}));};
  hb.onTeamGoal=team=>broadcast({type:'goal',team});
- hb.onTeamVictory=()=>{if(!r.started)return;r.started=false;
+ hb.onTeamVictory=()=>{if(!r.started)return;r.started=false;r.pauseRequest=null;
   const g=hb._room.gameState;
   const red=Number.isFinite(g?.redScore)?g.redScore:0,blue=Number.isFinite(g?.blueScore)?g.blueScore:0;
   r.lastResult={round:r.round,red,blue,winner:red>blue?1:blue>red?2:0,activeFrames:[...r.activeFrames],finalPlayers:[...r.clients].map(([id,c])=>({id,name:c.name,finalTeam:hb.getPlayer(id)?.team||0,playedFrames:r.activeFrames.get(id)||0,sideFrames:r.sideFrames.get(id)||[0,0]})).filter(p=>p.playedFrames>0),frame:r.frame};
@@ -25,7 +70,44 @@ function createRoomCore(opts){
   try{opts.onCompleted?.(r.lastResult,r);}catch{}
   broadcast({type:'matchResult',...r.lastResult});status();snapshot();
  };
- function status(){expireSubs();if(r.rematch&&Date.now()>r.rematch.expiresAt)r.rematch=null;broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size-r.disconnected.size,reserved:r.disconnected.size,map:hb._room.state.stadium.name,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),round:r.round,lastResult:r.lastResult,rematch:r.rematch?{id:r.rematch.id,required:[...r.rematch.required],accepted:[...r.rematch.accepted],expiresAt:r.rematch.expiresAt}:null,disconnectedIds:[...r.disconnected],pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
+ function humansOnPitch(){
+  return hb.getPlayerList().filter(p=>r.clients.has(p.id)&&!r.botIds.has(p.id)&&
+   !r.disconnected.has(p.id)&&[1,2].includes(p.team))
+   .map(p=>[p.id,p.team]).sort((a,b)=>a[0]-b[0]);
+ }
+ function readyKickoffRoster(){
+  const humans=humansOnPitch();
+  return humans.length>=2&&humans.length<=8&&humans.some(x=>x[1]===1)&&
+   humans.some(x=>x[1]===2)&&humans.every(([pid,side])=>r.lobbyReady.get(pid)===side)?
+   humans:null;
+ }
+ function kickoffStillValid(){
+  if(!r.kickoff||r.started||r.lastResult||r.owner!==r.kickoff.host||r.rematch)return false;
+  const actual=readyKickoffRoster();
+  return !!actual&&JSON.stringify(actual)===JSON.stringify(r.kickoff.humans);
+ }
+ function status(){expireSubs();
+  if(r.started||r.lastResult||r.kickoff){
+   r.stadiumBallot.clear();r.formatVotes.clear();
+  }else for(const id of r.formatVotes.keys())if(!eligibleVoter(id))r.formatVotes.delete(id);
+  else for(const id of r.stadiumBallot.keys())
+   if(!eligibleVoter(id))r.stadiumBallot.delete(id);
+  // Lobby confirmations belong to the player's actual active side and expire
+  // on disconnect, substitution, team move or match start.
+  for(const [pid,side]of r.lobbyReady)
+   if(r.started||!r.clients.has(pid)||r.disconnected.has(pid)||
+     r.botIds.has(pid)||hb.getPlayer(pid)?.team!==side)
+    r.lobbyReady.delete(pid);
+  if(r.kickoff&&!kickoffStillValid())r.kickoff=null;
+  if(r.rematch&&Date.now()>r.rematch.expiresAt)r.rematch=null;
+  // Native spectator occupancy changes on team moves and substitutions, not
+  // just when a socket joins or leaves. Broadcast fresh occupancy with every
+  // authoritative room-roster update, including reserved disconnected slots.
+  const spectatorCount=hb.getPlayerList().filter(p=>
+   p.team===0&&r.clients.has(p.id)&&!r.botIds.has(p.id)).length;
+  if(r.pauseRequest&&Date.now()>r.pauseRequest.expiresAt)r.pauseRequest=null;const limits=hb.getScores?.();broadcast({type:'status',started:r.started,paused:r.paused});broadcast({type:'room',room:r.id,owner:r.owner,scoreLimit:Number.isSafeInteger(limits?.scoreLimit)&&limits.scoreLimit>=0&&limits.scoreLimit<=99?limits.scoreLimit:null,timeLimit:Number.isSafeInteger(limits?.timeLimit)&&limits.timeLimit>=0&&limits.timeLimit<=99?limits.timeLimit:null,mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,botIds:[...r.botIds],players:r.clients.size-r.disconnected.size,reserved:r.disconnected.size,spectatorCount,map:hb._room.state.stadium.name,benches:[...r.benches],benchReadyIds:[...r.benchReady],pauseRequest:r.pauseRequest?{...r.pauseRequest}:null,refereeId:r.refereeId,captains:[...r.captains],activeFrames:[...r.activeFrames],recentSubs:r.subEvents.slice(-8),round:r.round,lastResult:r.lastResult,rematch:r.rematch?{id:r.rematch.id,required:[...r.rematch.required],accepted:[...r.rematch.accepted],expiresAt:r.rematch.expiresAt}:null,disconnectedIds:[...r.disconnected],lobbyReadyIds:[...r.lobbyReady.keys()],stadiumBallotOptions:ballotOptions,stadiumBallotVotes:[...r.stadiumBallot],stadiumBallotWinner:topBallotChoice(),matchFormatOptions:matchFormats,matchFormatVotes:[...r.formatVotes],matchFormatWinner:formatWinner(),kickoff:r.kickoff?{
+    host:r.kickoff.host,seconds:r.kickoff.seconds,
+    framesLeft:Math.max(0,r.kickoff.endFrame-r.frame)}:null,pendingSubs:[...r.pendingSubs.values()].map(s=>({team:s.team,outId:s.outId,inId:s.inId,requestedBy:s.requestedBy,requestId:s.requestId,expiresAt:s.expiresAt,accepted:s.accepted}))});}
  // The same preflight is required for BOTH match configuration and live
  // difficulty changes. Never mutate a running room before reading user data.
  function normalizeProfile(raw){
@@ -55,23 +137,57 @@ function createRoomCore(opts){
  // host arranged by dragging survive restarts.
  function addBot(team){let id=100;const used=new Set(hb._room.state.players.map(p=>p.id));while(used.has(id))id++;hb.addPlayer(id,'AI '+(id-99),team);r.botIds.add(id);hb._room.state.players.find(p=>p.id===id).aiControlled=true;}
  function bots(refill=true){const size=r.mode==='4v4'?4:r.mode==='2v2'?2:1;if(refill)for(const p of [...hb._room.state.players])if(r.botIds.has(p.id)){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}for(const team of [1,2]){const list=hb.getPlayerList().filter(p=>p.team===team);for(let i=list.length;i<size;i++)addBot(team);if(!refill)for(const p of list.filter(p=>r.botIds.has(p.id)).slice(0,Math.max(0,list.length-size))){hb._room.playerLeave(p.id);r.botIds.delete(p.id);}}for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);}
- function reset(start=true){r.rematch=null;r.lastResult=null;r.round++;r.pendingSubs.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
+ function reset(start=true){r.rematch=null;r.lastResult=null;r.round++;r.pendingSubs.clear();r.benchReady.clear();r.pauseRequest=null;r.pauseCooldowns.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.lobbyReady.clear();r.readyClickAt.clear();r.kickoff=null;r.stadiumBallot.clear();r.stadiumVoteAt.clear();r.formatVotes.clear();r.formatVoteAt.clear();hb.stopGame();hb.startGame();r.started=start;r.paused=false;hb.pauseGame(!start);status();snapshot();}
  /* id: unique client/player id, chosen by the server and never reused for a bot. */
- function join(id,{name='Player',netcode=2,account=null}={}){r.rematch=null;if(r.botIds.has(id))throw Error('Player ID already in use.');if(r.clients.has(id))throw Error('Already in this room.');
+ function join(id,{name='Player',netcode=2,account=null,spectate=false}={}){
+  // A late participant never acquires an active slot during a live match,
+  // countdown or finished-game decision. Only a real owner/captain can later
+  // arrange a team/bench transition through the established control path.
+  // A genuinely solo Custom Room keeps its historical ability to admit a
+  // first human opponent mid-game. This affects no ongoing human-v-human
+  // roster: there is exactly one connected playing human and no spectator.
+  // A deliberate WATCH request always overrides this narrow exception.
+  const activeBefore=hb.getPlayerList().filter(p=>r.clients.has(p.id)&&
+    !r.botIds.has(p.id)&&!r.disconnected.has(p.id)&&[1,2].includes(p.team));
+  const soloOpponentJoin=r.started&&!r.kickoff&&!r.lastResult&&
+    r.clients.size===1&&activeBefore.length===1&&!r.disconnected.size;
+  const spectatorAdmission=spectate===true||!!r.kickoff||!!r.lastResult||
+    (r.started&&!soloOpponentJoin);
+  if(r.botIds.has(id))throw Error('Player ID already in use.');
+  if(r.clients.has(id))throw Error('Already in this room.');
+  // Preflight projected native neutral slot before touching any client,
+  // owner, match result, rematch or physics state. Reserved reconnects never
+  // use this fresh-admission path, but their places still consume capacity.
+  const players=hb.getPlayerList();
+  const red=players.filter(p=>!r.botIds.has(p.id)&&p.team===1).length;
+  const blue=players.filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
+  const assigned=spectatorAdmission?0:
+    red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
+  const neutral=players.filter(p=>p.team===0&&r.clients.has(p.id)&&!r.botIds.has(p.id)).length;
+  const spectatorLimit=[0,4,8,16,64].includes(r.spectatorLimit)?r.spectatorLimit:64;
+  if(assigned===0&&neutral>=spectatorLimit)
+   throw Error('This room is not accepting new spectators or bench participants.');
+  if(!spectatorAdmission)r.rematch=null;
   const c={name:String(name||'Player').slice(0,25),timeline:r.v3&&netcode===3?Netcode.createInputTimeline():null,lastInputSeq:0};r.clients.set(id,c);r.nextId=Math.max(r.nextId,id+1);if(!r.owner)r.owner=id;
-  const red=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===1).length,blue=hb.getPlayerList().filter(p=>!r.botIds.has(p.id)&&p.team===2).length;
-  // Connected clients are unlimited, but only four HUMANS may be active per
-  // side. Extra participants start on the spectator/bench slot (team 0).
-  // bots(false) below yields a bot slot to an admitted human immediately.
-  const assigned=red>=4&&blue>=4?0:red>=4?2:blue>=4?1:red<=blue?1:2;
+  // The assigned native position was preflighted above.
   hb.addPlayer(id,c.name,assigned);
-  send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2});if(r.clients.size>4)r.mode='4v4';else if(r.clients.size>2&&r.mode==='bot')r.mode='2v2';bots(false);if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
+  send(id,{type:'welcome',id,room:r.id,owner:r.owner,name:c.name,account:account||null,netcode:c.timeline?3:2,
+    spectatorAdmission:assigned===0,liveAdmission:spectatorAdmission});
+  // Neutral spectators cannot change the format or cause a bot/lineup reset.
+  const activeHumans=red+blue+(assigned?1:0);
+  if(!spectatorAdmission){
+   if(activeHumans>4)r.mode='4v4';else if(activeHumans>2&&r.mode==='bot')r.mode='2v2';
+   bots(false);
+  }
+  if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
- function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.sideFrames.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id)r.owner=r.clients.keys().next().value;bots(false);status();snapshot();return false;}
+ function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.benchReady.delete(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);r.pauseCooldowns.delete(id);
+  if(r.pauseRequest?.by===id)r.pauseRequest=null;r.sideFrames.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);
+  if(r.refereeId===id)r.refereeId=0;for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id){r.owner=r.clients.keys().next().value;r.refereeId=0;}bots(false);status();snapshot();return false;}
  // A disconnected participant retains their reserved team slot during a short reconnection window.
  // No buffered/previous input or disconnected time may affect the live match.
  function setConnected(id,connected){if(!r.clients.has(id))return false;r.rematch=null;
-  if(connected)r.disconnected.delete(id);else{r.disconnected.add(id);hb.setPlayerInput(id,0);for(const [team,p]of r.pendingSubs)if([p.inId,p.outId,p.requestedBy].includes(id))r.pendingSubs.delete(team);}
+  if(connected)r.disconnected.delete(id);else{r.disconnected.add(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);if(r.refereeId===id)r.refereeId=0;r.benchReady.delete(id);if(r.pauseRequest?.by===id)r.pauseRequest=null;hb.setPlayerInput(id,0);for(const [team,p]of r.pendingSubs)if([p.inId,p.outId,p.requestedBy].includes(id))r.pendingSubs.delete(team);}
   status();snapshot();return true;
  }
  // An approved substitute executes only while the game is stopped/paused.
@@ -87,11 +203,18 @@ function createRoomCore(opts){
   if(!valid)return false;
   hb.setPlayerTeam(p.outId,0);hb.setPlayerTeam(p.inId,team);
   if(r.captains.get(team)===p.outId)r.captains.delete(team);
-  r.benches.delete(p.inId);r.benches.set(p.outId,team);
+  r.benches.delete(p.inId);r.benches.set(p.outId,team);r.benchReady.delete(p.inId);r.benchReady.delete(p.outId);
   const event={team,outId:p.outId,inId:p.inId,requestedBy:p.requestedBy,requestId:p.requestId,frame:r.frame};
   r.subEvents.push(event);if(r.subEvents.length>128)r.subEvents.shift();
   broadcast({type:'subApplied',...event});
   return true;
+ }
+ function applyNativePause(value){
+  r.paused=value;
+  if(r.paused)r.pauseRequest=null;
+  hb.pauseGame(r.paused);
+  if(r.paused)for(const side of [...r.pendingSubs.keys()])completeSub(side);
+  status();snapshot();
  }
  // The initiating owner is not permitted to silently restart someone else's match.
  // Every currently playing connected human accepts the same one-time proposal.
@@ -105,6 +228,19 @@ function createRoomCore(opts){
   if(d.type==='in'){if(!c.timeline||!Array.isArray(d.c)||d.c.length>64)throw Error('Invalid input.');c.timeline.receive(d.c,r.frame,hostTime);return;}
   if(d.type==='input'){if(c.timeline)throw Error('Invalid input.');if(!Number.isInteger(d.value)||d.value<0||d.value>31)throw Error('Invalid input.');hb.setPlayerInput(id,d.value);if(Number.isInteger(d.seq)&&d.seq>=0&&d.seq<=0xffffffff)c.lastInputSeq=d.seq;return;}
   if(d.type==='chat'){const name=hb.getPlayer(id)?.name||'Player';for(const peer of r.clients.keys())if(peer!==id)send(peer,{type:'chat',text:name+': '+String(d.text||'').replace(/^.*?: /,'').slice(0,140)});return;}
+  if(d.type==='lobbyReady'){
+   if(r.started||r.disconnected.has(id)||r.botIds.has(id)||
+     ![1,2].includes(hb.getPlayer(id)?.team))
+    throw Error('Only a connected active human may ready up before kickoff.');
+   if(typeof d.ready!=='boolean'||Object.keys(d).some(k=>!['type','ready'].includes(k)))
+    throw Error('Invalid ready status.');
+   const now=Date.now(),previous=r.readyClickAt.get(id)||0;
+   if(now-previous<500)throw Error('Ready status changed too quickly.');
+   r.readyClickAt.set(id,now);
+   if(d.ready)r.lobbyReady.set(id,hb.getPlayer(id).team);
+   else r.lobbyReady.delete(id);
+   status();return;
+  }
   if(d.type==='rematchVote'){
    if(!Number.isSafeInteger(d.id)||typeof d.accept!=='boolean')throw Error('Invalid rematch vote.');
    const p=r.rematch;
@@ -133,6 +269,163 @@ function createRoomCore(opts){
    if(!Number.isSafeInteger(r.subSeq+1))throw Error('Substitution request sequence exhausted.');
    r.pendingSubs.set(team,{team,outId:d.outId,inId:d.inId,requestedBy:id,requestId:++r.subSeq,accepted:false,expiresAt:Date.now()+60000});
    status();return;
+  }
+  // A connected room owner delegates only the narrow referee permission.
+  if(d.type==='appointReferee'){
+   if(r.owner!==id)throw Error('Only the room host appoints or removes a referee.');
+   if(!Number.isSafeInteger(d.id)||d.id<0||
+    (d.id!==0&&(!r.clients.has(d.id)||r.disconnected.has(d.id)||r.botIds.has(d.id)||!hb.getPlayer(d.id))))
+    throw Error('Referee must be a connected human from this room.');
+   r.refereeId=d.id;r.lastRefereePauseAt=0;status();return;
+  }
+  // The referee cannot start/stop rounds, moderate, reassign teams or
+  // alter the signed outcome. Only the original native pause gate applies.
+  if(d.type==='refereePause'){
+   if(r.refereeId!==id||r.disconnected.has(id)||!r.started||typeof d.value!=='boolean')
+    throw Error('Only the current connected referee may pause a running game.');
+   const now=Date.now();
+   if(now-r.lastRefereePauseAt<1200)throw Error('Please wait before changing the pause state again.');
+   r.lastRefereePauseAt=now;
+   applyNativePause(d.value);return;
+  }
+  // An active human asks the real host for a safe pause, never pauses the
+  // game themself. No freeform text, impersonated ID, or auto-approval.
+  if(d.type==='selfPauseRequest'){
+   if(r.disconnected.has(id)||r.botIds.has(id)||r.owner===id||
+    !r.started||r.paused||![1,2].includes(hb.getPlayer(id)?.team))
+    throw Error('Only connected active guests may ask the host to pause.');
+   const now=Date.now(),last=r.pauseCooldowns.get(id)||0;
+   if(now-last<45000)throw Error('Pause request cooldown: ask again later.');
+   if(r.pauseRequest&&now<=r.pauseRequest.expiresAt)
+    throw Error('A teammate has already requested a pause.');
+   r.pauseCooldowns.set(id,now);
+   r.pauseRequest={by:id,team:hb.getPlayer(id).team,expiresAt:now+30000};
+   status();return;
+  }
+  // A connected human may place ONLY their own inactive player on the Red
+  // or Blue bench, or revert to neutral spectator. No team/disc is assigned.
+  if(d.type==='selfBench'){
+   if(!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team))
+    throw Error('Choose Red bench, Blue bench or spectator.');
+   if(r.disconnected.has(id)||r.botIds.has(id)||hb.getPlayer(id)?.team!==0)
+    throw Error('Only connected inactive humans can choose a bench.');
+   expireSubs();
+   if([...r.pendingSubs.values()].some(p=>p.inId===id||p.outId===id))
+    throw Error('Finish your current substitution request before switching bench.');
+   const old=r.benches.get(id)||0;
+   if(old!==d.team){
+    if(d.team===0)r.benches.delete(id);else r.benches.set(id,d.team);
+    r.benchReady.delete(id);
+    status();
+   }
+   return;
+  }
+  // Ready-to-be-invited is advisory, never a substitute for the recipient's
+  // separate native signed-in socket consent to a particular outId/requestId.
+  if(d.type==='selfBenchReady'){
+   if(typeof d.ready!=='boolean')throw Error('Choose ready or not ready.');
+   if(r.disconnected.has(id)||r.botIds.has(id)||hb.getPlayer(id)?.team!==0||
+    ![1,2].includes(r.benches.get(id)))
+    throw Error('Only connected, assigned human bench players can set readiness.');
+   expireSubs();
+   if([...r.pendingSubs.values()].some(p=>p.inId===id||p.outId===id))
+    throw Error('Resolve your pending substitution before changing readiness.');
+   if(d.ready!==r.benchReady.has(id)){
+    if(d.ready)r.benchReady.add(id);else r.benchReady.delete(id);
+    status();
+   }
+   return;
+  }
+  // A human can voluntarily relinquish only their own active side, and
+  // only at a genuine stoppage. Native clock, score and authority persist.
+  if(d.type==='selfSitOut'){
+   if(r.disconnected.has(id)||r.botIds.has(id))
+    throw Error('Only connected human players can sit out.');
+   const side=hb.getPlayer(id)?.team;
+   if(![1,2].includes(side))throw Error('You are not currently on the pitch.');
+   if(r.started&&!r.paused)throw Error('Ask the host to pause before sitting out.');
+   expireSubs();
+   if([...r.pendingSubs.values()].some(p=>[p.inId,p.outId,p.requestedBy].includes(id)))
+    throw Error('Resolve your current substitution request before sitting out.');
+   r.rematch=null;
+   if(r.pauseRequest?.by===id)r.pauseRequest=null;
+   if(r.captains.get(side)===id)r.captains.delete(side);
+   hb.setPlayerInput(id,0);
+   hb.setPlayerTeam(id,0);
+   r.benches.set(id,side);r.benchReady.delete(id);
+   status();snapshot();return;
+  }
+  if(d.type==='matchFormatVote'){
+   if(!eligibleVoter(id))throw Error('Only connected human players can vote on an idle match format.');
+   if(Object.keys(d).some(key=>!['type','choice'].includes(key))||
+    !(d.choice===null||Number.isSafeInteger(d.choice)&&d.choice>=0&&
+      d.choice<matchFormats.length))throw Error('Choose an approved match format.');
+   const now=Date.now(),last=r.formatVoteAt.get(id)||0;
+   if(now-last<600)throw Error('Match format vote cooldown: try again later.');
+   r.formatVoteAt.set(id,now);
+   if(d.choice===null)r.formatVotes.delete(id);else r.formatVotes.set(id,d.choice);
+   status();return;
+  }
+  if(d.type==='stadiumBallot'){
+   if(!eligibleVoter(id))throw Error('Only connected humans in an idle custom room may vote.');
+   if(Object.keys(d).some(key=>!['type','choice'].includes(key))||
+    !(d.choice===null||Number.isSafeInteger(d.choice)&&
+      d.choice>=0&&d.choice<ballotOptions.length))
+    throw Error('Choose a genuine stadium option.');
+   const now=Date.now(),last=r.stadiumVoteAt.get(id)||0;
+   if(now-last<600)throw Error('Wait before changing your stadium vote again.');
+   r.stadiumVoteAt.set(id,now);
+   if(d.choice===null)r.stadiumBallot.delete(id);
+   else r.stadiumBallot.set(id,d.choice);
+   status();return;
+  }
+  if(d.type==='kickoffCountdown'){
+   if(r.owner!==id||r.disconnected.has(id)||r.started||r.lastResult||r.rematch)
+    throw Error('Only the connected host may schedule a fresh custom room kickoff.');
+   if(d.cancel===true){
+    if(Object.keys(d).some(key=>!['type','cancel'].includes(key)))throw Error('Invalid kickoff action.');
+    if(r.kickoff){r.kickoff=null;status();}return;
+   }
+   if(Object.keys(d).some(key=>!['type','seconds'].includes(key))||
+    ![3,5,10].includes(d.seconds)||r.kickoff)
+    throw Error('Choose a new 3, 5 or 10-second kickoff countdown.');
+   const humans=readyKickoffRoster();
+   if(!humans)throw Error('Both sides need a connected human and all active humans must be ready.');
+   r.kickoff={host:id,seconds:d.seconds,endFrame:r.frame+d.seconds*60,humans};
+   status();return;
+  }
+  if(d.type==='matchFormatApply'){
+   if(r.owner!==id||r.disconnected.has(id)||r.started||r.lastResult||r.kickoff||
+    Object.keys(d).some(k=>k!=='type'))
+    throw Error('Only a connected pre-match host may apply a voted format.');
+   const winner=formatWinner();
+   if(winner===null)throw Error('Two player votes and one clear format leader are required.');
+   const choice=matchFormats[winner];
+   // Reuse the same fully validated native host configure contract. Apply
+   // never starts a game and clears old ready flags exactly as a normal edit.
+   message(id,{type:'configure',scoreLimit:choice.goals,timeLimit:choice.minutes,started:false},hostTime);
+   r.formatVotes.clear();r.formatVoteAt.clear();
+   return;
+  }
+  if(d.type==='stadiumBallotApply'){
+   if(r.owner!==id||r.disconnected.has(id)||r.started||r.lastResult||r.kickoff||
+     Object.keys(d).some(key=>key!=='type'))
+    throw Error('Only the connected host can apply a pre-match stadium result.');
+   const winner=topBallotChoice();
+   if(winner===null)throw Error('At least two votes and one clear winner are required.');
+   // Keeping the existing pitch is itself a valid collective decision.
+   if(winner===0){r.stadiumBallot.clear();r.stadiumVoteAt.clear();status();return;}
+   const stadium=defaultMaps[winner-1];
+   if(!stadium)throw Error('The voted stadium is unavailable on this engine.');
+   const data=API.Utils.exportStadium(stadium);
+   if(typeof data!=='string'||!data||data.length>2*1024*1024)
+    throw Error('The selected native stadium cannot be loaded.');
+   // Reuse the EXISTING host-authorized validation and configure lifecycle.
+   // This preserves approved physics, native room resets, time/score settings
+   // and all the legacy permission checks. No client-supplied stadium JSON.
+   message(id,{type:'configure',stadium:data,started:false},hostTime);
+   r.stadiumBallot.clear();r.stadiumVoteAt.clear();
+   return;
   }
   if(r.owner!==id)throw Error('Only the host can change the match.');
   if(d.type==='rematchRequest'){
@@ -163,6 +456,7 @@ function createRoomCore(opts){
    if(!Number.isSafeInteger(d.id)||!Number.isSafeInteger(d.team)||![0,1,2].includes(d.team)||!r.clients.has(d.id)||r.disconnected.has(d.id)||hb.getPlayer(d.id)?.team!==0)throw Error('Only inactive connected humans may join a bench.');
    for(const [team,p]of r.pendingSubs)if(p.inId===d.id||p.outId===d.id)r.pendingSubs.delete(team);
    if(d.team===0)r.benches.delete(d.id);else r.benches.set(d.id,d.team);
+   r.benchReady.delete(d.id);
    status();return;
   }
   if(d.type==='difficulty'){if(typeof d.difficulty!=='string'||!Object.hasOwn(AI.levels,d.difficulty))throw Error('Invalid difficulty.');const profile=normalizeProfile(d.teamProfile);const levels=normalizeBotLevels(d.botLevels);r.difficulty=d.difficulty;r.botLevels=levels;r.teamProfile=profile;status();return;}
@@ -173,14 +467,15 @@ function createRoomCore(opts){
    hb.setPlayerTeam(pid,team);
    if(team===0&&[1,2].includes(previous)&&r.clients.has(pid))r.benches.set(pid,previous);
    else if(team!==0)r.benches.delete(pid);
+   r.benchReady.delete(pid);
    status();snapshot();return;}
-  if(d.type==='swap'){r.pendingSubs.clear();for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);for(const [pid,team]of r.benches)r.benches.set(pid,3-team);r.captains=new Map([...r.captains].map(([team,cid])=>[3-team,cid]));status();snapshot();return;}
-  if(d.type==='specAll'){r.pendingSubs.clear();r.captains.clear();for(const p of hb.getPlayerList())if(p.team){if(r.clients.has(p.id))r.benches.set(p.id,p.team);hb.setPlayerTeam(p.id,0);}status();snapshot();return;}
+  if(d.type==='swap'){r.pendingSubs.clear();r.benchReady.clear();for(const p of hb.getPlayerList())if(p.team)hb.setPlayerTeam(p.id,3-p.team);for(const [pid,team]of r.benches)r.benches.set(pid,3-team);r.captains=new Map([...r.captains].map(([team,cid])=>[3-team,cid]));status();snapshot();return;}
+  if(d.type==='specAll'){r.pendingSubs.clear();r.benchReady.clear();r.captains.clear();for(const p of hb.getPlayerList())if(p.team){if(r.clients.has(p.id))r.benches.set(p.id,p.team);hb.setPlayerTeam(p.id,0);}status();snapshot();return;}
   if(d.type==='addBot'){const team=Number(d.team);if(![0,1,2].includes(team))throw Error('Invalid team.');
    if(team!==0&&hb.getPlayerList().filter(p=>p.team===team).length>=4)throw Error('Team is full; add this bot to spectators instead.');
    addBot(team);status();snapshot();return;}
   if(d.type==='removeBot'){const bid=Number(d.id);if(!r.botIds.has(bid)||!hb.getPlayer(bid))throw Error('Invalid bot.');hb._room.playerLeave(bid);r.botIds.delete(bid);status();snapshot();return;}
-  if(d.type==='start')reset(true);else if(d.type==='stop'){r.pendingSubs.clear();r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){r.paused=!!d.value;hb.pauseGame(r.paused);if(r.paused)for(const side of [...r.pendingSubs.keys()])completeSub(side);status();snapshot();}else if(d.type==='configure'){
+  if(d.type==='start')reset(true);else if(d.type==='stop'){r.pendingSubs.clear();r.pauseRequest=null;r.started=false;r.paused=false;hb.pauseGame(true);status();snapshot();}else if(d.type==='pause'){applyNativePause(!!d.value);}else if(d.type==='configure'){
    const mode=d.mode==null?r.mode:d.mode;if(!['bot','2v2','4v4'].includes(mode))throw Error('Choose 1v1, 2v2 or 4v4.');let parsed=null;if(d.stadium!=null){if(typeof d.stadium!=='string'||!d.stadium.trim()||d.stadium.length>2*1024*1024)throw Error('Invalid stadium.');
     // Native parser failures can be strings, null or implementation details.
     // Fail closed with a fixed message, before touching any live match state.
@@ -202,13 +497,19 @@ function createRoomCore(opts){
    r.activeFrames.set(p.id,(r.activeFrames.get(p.id)||0)+1);
    const sides=r.sideFrames.get(p.id)||[0,0];sides[p.team-1]++;r.sideFrames.set(p.id,sides);
   }
-  hb.step(1);r.frame++;if(r.frame%60===0){if(expireSubs())status();if(r.started&&!r.paused)broadcast({type:'playingTime',frame:r.frame,activeFrames:[...r.activeFrames]});}if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
+  hb.step(1);r.frame++;
+  if(r.kickoff){
+   if(!kickoffStillValid()){r.kickoff=null;status();}
+   else if(r.frame>=r.kickoff.endFrame){reset(true);broadcast({type:'matchRestart',round:r.round,kickoff:true});}
+   else if(r.frame%60===0)status();
+  }
+  if(r.frame%60===0){if(expireSubs()||(r.pauseRequest&&Date.now()>r.pauseRequest.expiresAt))status();if(r.started&&!r.paused)broadcast({type:'playingTime',frame:r.frame,activeFrames:[...r.activeFrames]});}if(r.frame%2===0&&r.started&&!r.paused)snapshot();}
  /* final: the room really moves (a recording cannot move with it); standby copies leave it running. */
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
-  return{v:1,recording:!final&&recording,round:r.round,lastResult:r.lastResult,rematchSeq:r.rematchSeq,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,benches:[...r.benches],captains:[...r.captains],activeFrames:[...r.activeFrames],sideFrames:[...r.sideFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
+  return{v:1,recording:!final&&recording,round:r.round,lastResult:r.lastResult,rematchSeq:r.rematchSeq,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,refereeId:r.refereeId,lobbyReady:[...r.lobbyReady],stadiumBallot:[...r.stadiumBallot],stadiumBallotNames:ballotNames,formatVotes:[...r.formatVotes],formatVersion:1,kickoff:r.kickoff?{...r.kickoff,humans:r.kickoff.humans.map(x=>[...x])}:null,benches:[...r.benches],benchReadyIds:[...r.benchReady],captains:[...r.captains],activeFrames:[...r.activeFrames],sideFrames:[...r.sideFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
  function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
-  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.round=Number.isSafeInteger(s.round)&&s.round>=0?s.round:0;r.lastResult=s.lastResult&&s.lastResult.round===r.round?s.lastResult:null;r.rematchSeq=Number.isSafeInteger(s.rematchSeq)&&s.rematchSeq>=0?s.rematchSeq:0;r.rematch=null;r.clients.clear();r.disconnected.clear();r.benches.clear();r.captains.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
+  for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.round=Number.isSafeInteger(s.round)&&s.round>=0?s.round:0;r.lastResult=s.lastResult&&s.lastResult.round===r.round?s.lastResult:null;r.rematchSeq=Number.isSafeInteger(s.rematchSeq)&&s.rematchSeq>=0?s.rematchSeq:0;r.rematch=null;r.pauseRequest=null;r.pauseCooldowns.clear();r.refereeId=0;r.lastRefereePauseAt=0;r.clients.clear();r.disconnected.clear();r.benches.clear();r.benchReady.clear();r.lobbyReady.clear();r.readyClickAt.clear();r.stadiumBallot.clear();r.stadiumVoteAt.clear();r.formatVotes.clear();r.formatVoteAt.clear();r.captains.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.kickoff=null;r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
   // Legacy states can omit botIds; their connected client roster still proves
   // which high numeric IDs are people. New exports carry explicit bot IDs.
   r.botIds=new Set(Array.isArray(s.botIds)?s.botIds:hb._room.state.players.filter(p=>p.id>=100&&!humanIds.has(p.id)).map(p=>p.id));
@@ -216,7 +517,32 @@ function createRoomCore(opts){
   // real humans with IDs >= 100. Restore only the authoritative bot membership
   // from the exported room, never infer it from an id threshold.
   for(const p of hb._room.state.players)p.aiControlled=r.botIds.has(p.id);AI.setMemory?.(hb._room.state,s.ai);
-  for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);for(const entry of s.captains||[])if(Array.isArray(entry)&&entry.length===2&&[1,2].includes(entry[0])&&r.clients.has(entry[1])&&hb.getPlayer(entry[1])?.team===entry[0])r.captains.set(entry[0],entry[1]);for(const entry of s.activeFrames||[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&entry[0]>0&&Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<=r.frame)r.activeFrames.set(entry[0],entry[1]);
+  for(const [id,c]of s.clients){const timeline=c.timeline?Netcode.createInputTimeline():null;if(timeline)timeline.import(c.timeline);r.clients.set(id,{name:c.name,lastInputSeq:c.lastInputSeq|0,timeline});}for(const entry of Array.isArray(s.lobbyReady)?s.lobbyReady.slice(0,128):[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&[1,2].includes(entry[1])&&!r.started&&r.clients.has(entry[0])&&!r.botIds.has(entry[0])&&hb.getPlayer(entry[0])?.team===entry[1])r.lobbyReady.set(entry[0],entry[1]);  if(!r.started&&!r.lastResult&&!s.kickoff&&s.formatVersion===1&&
+   Array.isArray(s.formatVotes)&&s.formatVotes.length<=128)
+   for(const entry of s.formatVotes)
+    if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&
+     r.clients.has(entry[0])&&!r.botIds.has(entry[0])&&
+     Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<matchFormats.length)
+      r.formatVotes.set(entry[0],entry[1]);
+  // Ballots are ephemeral, advisory, and retained across host migration only
+  // for exact same engine candidate names and currently connected humans.
+  if(!r.started&&!r.lastResult&&!s.kickoff&&
+   JSON.stringify(s.stadiumBallotNames)===JSON.stringify(ballotNames)&&
+   Array.isArray(s.stadiumBallot)&&s.stadiumBallot.length<=128)
+   for(const entry of s.stadiumBallot)
+    if(Array.isArray(entry)&&entry.length===2&&
+     Number.isSafeInteger(entry[0])&&r.clients.has(entry[0])&&!r.botIds.has(entry[0])&&
+     Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<ballotOptions.length)
+     r.stadiumBallot.set(entry[0],entry[1]);
+  if(s.kickoff&&typeof s.kickoff==='object'&&!r.started&&!r.lastResult&&
+   s.kickoff.host===r.owner&&[3,5,10].includes(s.kickoff.seconds)&&
+   Number.isSafeInteger(s.kickoff.endFrame)&&s.kickoff.endFrame>r.frame&&
+   s.kickoff.endFrame<=r.frame+600&&
+   Array.isArray(s.kickoff.humans)&&
+   JSON.stringify(s.kickoff.humans)===JSON.stringify(readyKickoffRoster()))
+   r.kickoff={host:r.owner,seconds:s.kickoff.seconds,
+    endFrame:s.kickoff.endFrame,humans:s.kickoff.humans.map(x=>[...x])};
+  r.refereeId=Number.isSafeInteger(s.refereeId)&&r.clients.has(s.refereeId)&&!r.botIds.has(s.refereeId)?s.refereeId:0;for(const entry of s.benches||[])if(Array.isArray(entry)&&entry.length===2&&r.clients.has(entry[0])&&[1,2].includes(entry[1])&&hb.getPlayer(entry[0])?.team===0)r.benches.set(entry[0],entry[1]);for(const pid of Array.isArray(s.benchReadyIds)?s.benchReadyIds:[])if(Number.isSafeInteger(pid)&&r.clients.has(pid)&&r.benches.has(pid)&&hb.getPlayer(pid)?.team===0)r.benchReady.add(pid);for(const entry of s.captains||[])if(Array.isArray(entry)&&entry.length===2&&[1,2].includes(entry[0])&&r.clients.has(entry[1])&&hb.getPlayer(entry[1])?.team===entry[0])r.captains.set(entry[0],entry[1]);for(const entry of s.activeFrames||[])if(Array.isArray(entry)&&entry.length===2&&Number.isSafeInteger(entry[0])&&entry[0]>0&&Number.isSafeInteger(entry[1])&&entry[1]>=0&&entry[1]<=r.frame)r.activeFrames.set(entry[0],entry[1]);
   for(const [id,sides] of s.sideFrames||[])if(r.clients.has(id)&&Array.isArray(sides)&&sides.length===2&&sides.every(v=>Number.isSafeInteger(v)&&v>=0)&&sides[0]+sides[1]===(r.activeFrames.get(id)||0))r.sideFrames.set(id,sides);
   // Completed swap receipts are bounded match history, not pending authority.
   // Never restore consent grants from another browser's handover payload.

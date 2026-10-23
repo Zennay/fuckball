@@ -187,3 +187,9 @@ body.lobby .scoreboard{opacity:.35}
 .rm-next-actions button[hidden]{display:none!important}
 .rm-next-actions button:disabled{opacity:.4;cursor:not-allowed}
 @media(max-width:520px){.rm-next-actions button{flex:1 1 140px}}
+
+/* Opt-in spectator admission on Custom Room invite links; private and explicit. */
+.join-spectator-option{display:flex!important;align-items:center;gap:9px;padding:8px 3px;color:#e7f8e4;font-size:12px;font-weight:750}
+.join-spectator-option input{width:19px;height:19px;accent-color:#c6ff42;flex:none}
+.join-spectator-help{margin:2px 0 11px;color:#bfd4cf;font-size:11px;line-height:1.5}
+.join-spectator-option:focus-within{outline:2px solid #c6ff42;outline-offset:3px}

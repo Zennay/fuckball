@@ -1,0 +1,10 @@
+.couch-seat-manager{border-top:1px solid #55786b;margin:12px 0 2px;padding-top:12px}
+.couch-seat-manager h3{font-size:13px;letter-spacing:.1em;margin:0 0 5px;color:#c7f29e}
+.couch-seat-manager>p{font-size:12px;line-height:1.45;color:#d5e9dc}
+.couch-seat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}
+.couch-seat{display:grid;gap:6px;min-width:0;padding:12px;border-radius:9px;border:1px solid #805d60;background:#3b282d;color:#fce8dd}
+.couch-seat.ready{border-color:#8abf98;background:#163d34;color:#e2f6e6}
+.couch-seat strong{font-size:12px;letter-spacing:.08em}
+.couch-seat-location{font-size:11px;overflow-wrap:anywhere;line-height:1.45}
+.couch-seat-input{font-family:ui-monospace,monospace;font-size:12px;font-weight:750;letter-spacing:.04em}
+.couch-seat-readiness{font-size:12px;font-weight:750;color:#ecf8ed}

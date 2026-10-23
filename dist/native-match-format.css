@@ -1,0 +1,17 @@
+.native-match-format{margin:16px 0;padding:18px;background:#253438;border:1px solid #77978c;border-radius:11px;color:#edf7e9}
+.native-match-format[hidden]{display:none!important}
+.native-match-format h3{font-size:15px;margin:0 0 9px;letter-spacing:.09em}
+.native-match-format p{font-size:12px;line-height:1.5;color:#cbddd6}
+.native-match-format-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:9px;margin:12px 0}
+.native-match-format-choice{display:flex;align-items:center;gap:9px;padding:11px;border-radius:8px;background:#192b2c;border:1px solid #58786e;min-height:48px;font-size:12px}
+.native-match-format-choice input{width:18px;height:18px;flex:0 0 18px;accent-color:#d4f49d}
+.native-match-format-choice span{flex:1}
+.native-match-format-choice strong{font-size:11px;white-space:nowrap;color:#d1e6dc}
+.native-match-format-winning{border-color:#d8f1a4;background:#2f4338}
+.native-match-format-actions{display:flex;flex-wrap:wrap;gap:8px}
+.native-match-format-actions button{min-height:44px;border:1px solid #a7c3b3;border-radius:8px;padding:9px 12px;flex:1 1 145px}
+.native-match-format-status{min-height:22px;color:#daf3ad!important;font-weight:700}
+.native-match-format small{display:block;color:#b0c8be;line-height:1.55;margin-top:12px}
+.native-match-format button:focus-visible,.native-match-format input:focus-visible{outline:3px solid #dcf49e;outline-offset:3px}
+
+.native-match-format-current{color:#def4a9!important;font-weight:800;letter-spacing:.015em}

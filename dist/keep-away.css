@@ -1,0 +1,22 @@
+.keep-away-setup{padding:20px 22px;margin:20px 0;background:#20363b;border:1px solid #58756a;border-radius:12px;color:#e9f8eb}
+.keep-away-setup h2{margin:0 0 8px;font-size:clamp(22px,3vw,30px);font-style:italic;letter-spacing:-.03em}
+.keep-away-setup p{max-width:780px;line-height:1.5;color:#c2d6d1}
+.keep-away-fields{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin:18px 0}
+.keep-away-fields label{display:grid;gap:6px;font-size:12px;font-weight:700}
+.keep-away-fields select{min-width:166px;min-height:42px;padding:8px;border-radius:7px;background:#14282c;color:#f2faf3;border:1px solid #6f8e88}
+.keep-away-fields button,.keep-away-actions button,.keep-away-history-head button{min-height:42px;border-radius:7px}
+.keep-away-message{min-height:22px}
+.keep-away-history{border-top:1px solid #47635e;padding-top:15px}
+.keep-away-history-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.keep-away-history-head h3{margin:0 auto 0 0;font-size:13px;letter-spacing:.08em}
+.keep-away-history-rows{display:grid;gap:8px;margin-top:12px}
+.keep-away-history-row{display:grid;gap:4px;background:#182b30;border:1px solid #3e5e56;padding:11px 13px;border-radius:8px}
+.keep-away-history-row span,.keep-away-history-note{font-size:12px;color:#b8ccc4}
+.keep-away-hud{position:absolute;right:clamp(8px,3vw,28px);top:clamp(70px,12vh,135px);z-index:17;width:min(340px,calc(100vw - 20px));padding:15px;background:rgba(18,39,44,.94);border:1px solid #b0d6a0;border-radius:10px;color:#ecf9ee;box-shadow:0 8px 30px #0006}
+.keep-away-hud strong{display:block;letter-spacing:.1em}
+.keep-away-clock{display:block;margin-top:8px;font-size:17px;font-weight:700}
+.keep-away-progress{font-size:12px;color:#c2ddd4}
+.keep-away-hud progress{display:block;width:100%;height:10px;accent-color:#c8ee8e}
+.keep-away-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.keep-away-setup button:focus-visible,.keep-away-hud button:focus-visible,.keep-away-setup select:focus-visible{outline:3px solid #dcf49a;outline-offset:3px}
+@media(max-width:680px){.keep-away-hud{right:8px;top:78px}.keep-away-fields>*{flex:1 1 140px}}

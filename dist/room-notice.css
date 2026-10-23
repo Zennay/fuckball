@@ -1,0 +1,38 @@
+/* Native server-authoritative pinned room briefing; no client-side faux messages. */
+.room-notice-panel[hidden],.room-notice-editor[hidden],.room-notice-hud[hidden],
+.room-notice-show[hidden]{display:none!important}
+.room-notice-panel{display:grid;gap:8px;margin:0 0 16px;padding:15px;
+ background:#173733;color:#e9ffed;border:1px solid #8db5a1;border-radius:12px}
+.room-notice-panel h3{margin:0;font-weight:900;font-size:14px;letter-spacing:.075em}
+.room-notice-body{margin:0;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.room-notice-by{font-size:11px;color:#bcd5c8}
+.room-notice-editor{display:grid;gap:9px;border-top:1px solid #638679;padding-top:10px}
+.room-notice-editor label{display:grid;gap:7px;font-size:12px;color:#d6eedb;font-weight:700}
+.room-notice-editor textarea{width:100%;min-height:58px;resize:vertical;
+ border:1px solid #86aca0;border-radius:8px;padding:10px;
+ background:#122b30;color:#f2fff3;font:inherit;font-size:13px}
+.room-notice-actions{display:flex;gap:9px;flex-wrap:wrap}
+.room-notice-actions button{min-height:40px;padding:8px 12px;border-radius:7px;
+ border:1px solid #8cae9e;color:#ecfff0;background:#2d4f41;font-weight:750}
+.room-notice-actions button:disabled{opacity:.45}
+.room-notice-status{min-height:15px;margin:0;font-size:11px;color:#d4edd9}
+.room-notice-hud{position:absolute;z-index:7;top:clamp(74px,12vh,120px);
+ left:50%;transform:translateX(-50%);width:min(490px,calc(100vw - 44px));
+ display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+ border:1px solid #9fc5a1;border-radius:10px;
+ background:#193833ee;box-shadow:0 9px 25px #0008;backdrop-filter:blur(8px);
+ color:#f3fff1;padding:9px 11px;pointer-events:auto}
+.room-notice-hud strong{white-space:nowrap;font-size:10px;letter-spacing:.1em;color:#d9f3b7}
+.room-notice-hud span{flex:1 1 220px;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.room-notice-hud button,.room-notice-show{padding:7px 9px;min-height:32px;
+ border:1px solid #8fac9a;background:#25463d;border-radius:7px;color:#f1fff2}
+.room-notice-show{position:absolute;top:clamp(74px,12vh,120px);
+ right:14px;z-index:7;pointer-events:auto;font-size:11px}
+.room-notice-panel :is(button,textarea):focus-visible,
+.room-notice-hud button:focus-visible,.room-notice-show:focus-visible{
+ outline:3px solid #d4ff9e;outline-offset:3px}
+@media(max-width:520px){
+ .room-notice-hud{top:70px;width:calc(100vw - 20px);padding:7px}
+ .room-notice-hud span{font-size:11px}
+ .room-notice-show{top:70px}
+}

@@ -34,17 +34,26 @@
  const flipYLabel=document.createElement('label');const flipY=document.createElement('input');
  flipY.type='checkbox';flipYLabel.append(flipY,document.createTextNode('Reverse vertical stick'));
  axisRow.append(flipXLabel,flipYLabel);
- options.append(kickLabel,deadzoneLabel,stickLabel,axisRow);
+ const pulseRow=document.createElement('div');pulseRow.className='gamepad-haptic-options';
+ const kickPulseLabel=document.createElement('label');const kickPulse=document.createElement('input');
+ kickPulse.type='checkbox';kickPulseLabel.append(kickPulse,document.createTextNode('Gentle kick vibration'));
+ const goalPulseLabel=document.createElement('label');const goalPulse=document.createElement('input');
+ goalPulse.type='checkbox';goalPulseLabel.append(goalPulse,document.createTextNode('Goal vibration'));
+ pulseRow.append(kickPulseLabel,goalPulseLabel);
+ options.append(kickLabel,deadzoneLabel,stickLabel,axisRow,pulseRow);
  info.append(title,label,options);settingsPanel.append(info);
  const KEY='fuckball.gamepad.v1';
  const kickValid=k=>['default','face','trigger','shoulder'].includes(k)||/^button:(?:[0-8]|10|11)$/.test(k);
- let preferences={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false};
+ let preferences={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
+  kickPulse:false,goalPulse:false};
  try{
   const saved=JSON.parse(localStorage.getItem(KEY)||'{}');
   if(kickValid(saved.kick))preferences.kick=saved.kick;
   if(['left','right'].includes(saved.stick))preferences.stick=saved.stick;
   if(typeof saved.invertX==='boolean')preferences.invertX=saved.invertX;
   if(typeof saved.invertY==='boolean')preferences.invertY=saved.invertY;
+  if(typeof saved.kickPulse==='boolean')preferences.kickPulse=saved.kickPulse;
+  if(typeof saved.goalPulse==='boolean')preferences.goalPulse=saved.goalPulse;
   if(Number.isFinite(saved.deadzone)&&saved.deadzone>=.15&&saved.deadzone<=.65)
    preferences.deadzone=saved.deadzone;
  }catch{}
@@ -52,6 +61,7 @@
  deadzone.value=String(preferences.deadzone);
  deadzoneValue.textContent=Math.round(preferences.deadzone*100)+'%';
  stickSelect.value=preferences.stick;flipX.checked=preferences.invertX;flipY.checked=preferences.invertY;
+ kickPulse.checked=preferences.kickPulse;goalPulse.checked=preferences.goalPulse;
  function save(){
   try{localStorage.setItem(KEY,JSON.stringify(preferences));}catch{}
   window.dispatchEvent(new CustomEvent('fuckball-gamepad-config',{detail:{...preferences}}));
@@ -61,6 +71,8 @@
   preferences.stick=stickSelect.value;save();lastSignature='';};
  flipX.onchange=()=>{preferences.invertX=flipX.checked;save();lastSignature='';};
  flipY.onchange=()=>{preferences.invertY=flipY.checked;save();lastSignature='';};
+ kickPulse.onchange=()=>{preferences.kickPulse=kickPulse.checked;save();};
+ goalPulse.onchange=()=>{preferences.goalPulse=goalPulse.checked;save();};
  deadzone.oninput=()=>{
   preferences.deadzone=Number(deadzone.value);
   deadzoneValue.textContent=Math.round(preferences.deadzone*100)+'%';
@@ -68,6 +80,7 @@
  };
  const neutral=()=>({x:0,y:0,kick:false});
  let active=null,chosenIndex=null,lastSignature='',wasStart=false,connected='';
+ let lastHeldKick=false,lastScore=null,lastHapticAt=0;
  const isHeld=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const magnitude=axis=>Number.isFinite(axis)&&Math.abs(axis)>=preferences.deadzone?Math.sign(axis):0;
@@ -110,22 +123,53 @@
   return !document.hidden&&!$('matchView').hidden&&$('joinScreen').hidden&&
    !menuOpen&&started&&!paused&&!replay&&$('mode').value!=='watch';
  }
- function read(){return playable()?sample(controller()):neutral();}
+ function read(){return playable()&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)?sample(controller()):neutral();}
  function describe(pad){
   const next=pad?'Connected: '+String(pad.id||'Controller').slice(0,70)+
    ' · stick / D-pad move · configured buttons kick · Start menu.':
    'No controller active. Connect a gamepad and press a button. Keyboard and touch still work.';
   if(next!==connected){connected=next;label.textContent=next;}
  }
+ // Haptics are optional local physical feedback, not a gameplay command.
+ // Unsupported browsers/controllers silently continue with normal controls.
+ function pulse(pad,kind){
+  if(!pad||!playable())return;
+  const actuator=pad.vibrationActuator;
+  if(!actuator||typeof actuator.playEffect!=='function')return;
+  const now=performance.now();
+  if(now-lastHapticAt<(kind==='goal'?300:100))return;
+  lastHapticAt=now;
+  const goal=kind==='goal';
+  try{
+   const pending=actuator.playEffect('dual-rumble',{duration:goal?155:36,
+    startDelay:0,weakMagnitude:goal?.5:.18,strongMagnitude:goal?.26:0});
+   if(pending&&typeof pending.catch==='function')pending.catch(()=>{});
+  }catch{/* No supported rumble actuator; continue the normal input path. */}
+ }
+ function updateHaptics(pad){
+  const allowed=playable();
+  const pressed=!!pad&&kicking(pad);
+  if(allowed&&preferences.kickPulse&&pressed&&!lastHeldKick)pulse(pad,'kick');
+  lastHeldKick=pressed;
+  const state=allowed&&typeof room!=='undefined'?room?.gameState:null;
+  const red=state?.redScore,blue=state?.blueScore;
+  if(!allowed||!Number.isSafeInteger(red)||!Number.isSafeInteger(blue)){
+   lastScore=null;return;
+  }
+  if(lastScore&&lastScore.room===room&&red>=lastScore.red&&blue>=lastScore.blue&&
+   (red>lastScore.red||blue>lastScore.blue)&&preferences.goalPulse)pulse(pad,'goal');
+  lastScore={room,red,blue};
+ }
  function frame(){
   const pad=controller();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
-  if(start&&!wasStart&&!$('matchView').hidden&&$('joinScreen').hidden){
+  if(start&&!wasStart&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&!$('matchView').hidden&&$('joinScreen').hidden){
    // Menu control is edge-triggered, never fires repeatedly while held.
    toggleMatchMenu();
   }
   wasStart=start;
+  updateHaptics(pad);
   const state=read(),signature=[state.x,state.y,state.kick,playable()].join(':');
   if(signature!==lastSignature){
    lastSignature=signature;
@@ -143,14 +187,18 @@
    !Number.isFinite(next.deadzone)||next.deadzone<.15||next.deadzone>.65||
    (next.stick!==undefined&&!['left','right'].includes(next.stick))||
    (next.invertX!==undefined&&typeof next.invertX!=='boolean')||
-   (next.invertY!==undefined&&typeof next.invertY!=='boolean'))return;
+   (next.invertY!==undefined&&typeof next.invertY!=='boolean')||
+   (next.kickPulse!==undefined&&typeof next.kickPulse!=='boolean')||
+   (next.goalPulse!==undefined&&typeof next.goalPulse!=='boolean'))return;
   preferences.kick=next.kick;
   preferences.deadzone=next.deadzone;
   preferences.stick=next.stick||'left';
   preferences.invertX=next.invertX??false;preferences.invertY=next.invertY??false;
+  preferences.kickPulse=next.kickPulse??false;preferences.goalPulse=next.goalPulse??false;
   kickSelect.value=next.kick;deadzone.value=String(next.deadzone);
   stickSelect.value=preferences.stick;flipX.checked=preferences.invertX;
   flipY.checked=preferences.invertY;
+  kickPulse.checked=preferences.kickPulse;goalPulse.checked=preferences.goalPulse;
   deadzoneValue.textContent=Math.round(next.deadzone*100)+'%';
   lastSignature=''; // Reapply a held input on the next native animation frame.
  });
@@ -164,7 +212,7 @@
   // the in-game menu just because Start was held during the switch.
   wasStart=true;
  });
- window.fuckballGamepad={read};
+ window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null};
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
  window.addEventListener('focus',()=>{lastSignature='';});
