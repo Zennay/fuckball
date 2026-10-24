@@ -101,13 +101,14 @@
   node('p','Browse host-published rooms or explicitly create your own. Existing room permissions, login rules and private invitations are enforced by the server.'));
  const roomActions=node('div',null,'play-hub-actions');
  roomActions.append(
-  action('Browse rooms',()=>openSection('.room-browser','No public room browser is available here.','Public room browser opened.'),'play-hub-secondary'),
+  action('Browse rooms',openPublicRooms,'play-hub-secondary'),
   action('Join by invite',()=>{
    const state=activeState();
    if(state.server||state.pending||state.peer||state.inQueue||state.ready)
     return announce('Leave your active room or cancel your human matchmaking queue before joining another room.');
    openSection('.direct-invite-join','The invitation form is unavailable.',
-    'Paste an invite URL or room code, then confirm the join. Only the server can admit you.');
+    'Enter your invitation, then choose Join room. The server decides access.',
+    'input[aria-label="Paste same-site room invitation URL or code"]');
   },'play-hub-secondary'),
   action('Create a room',()=>{
    if(!canSwitch('create a room'))return;
@@ -183,17 +184,31 @@
   }
   announce('Opened '+name+' via the original local game controls.');
  }
- function reveal(target){
+ function reveal(target,focusSelector){
   const details=target.matches('details')?target:target.querySelector('details');
   if(details)details.open=true;
   target.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
-  const control=target.querySelector('button:not([disabled]):not([hidden]),summary,input,select');
-  if(control)control.focus({preventScroll:true});
+  const control=focusSelector?target.querySelector(focusSelector):
+   target.querySelector('button:not([disabled]):not([hidden]),summary,input,select');
+  if(control&&!control.disabled&&!control.hidden)control.focus({preventScroll:true});
  }
- function openSection(selector,error,success){
+ function openSection(selector,error,success,focusSelector){
   const target=home.querySelector(selector);
   if(!target)return announce(error);
-  reveal(target);announce(success);
+  reveal(target,focusSelector);announce(success);
+ }
+ function openPublicRooms(){
+  const browser=home.querySelector('.room-browser');
+  const toggle=browser?.querySelector('.room-browser-tools button[aria-expanded]');
+  if(!browser||!toggle||toggle.disabled)
+   return announce('The host-published room directory is unavailable. You can still join using an invite.');
+  // The original browser owns public-room eligibility, refresh and server
+  // admission. One explicit click expands it once; never close an open list.
+  if(toggle.getAttribute('aria-expanded')!=='true')toggle.click();
+  if(toggle.getAttribute('aria-expanded')!=='true')
+   return announce('Could not open the room directory. You can still join by invite.');
+  reveal(browser,'.room-browser-filters input[aria-label="Find a public room"]');
+  announce('Showing the host-published directory from this website. Choose a room to request entry; listings do not grant access.');
  }
  function openQueue(){
   const state=activeState();
@@ -243,15 +258,28 @@
   // Never synthesize a network request, bypass the server-owned queue, or accept ready.
   if(!native||!preferred||!start||start.disabled)
    return openQueue();
-  if(!settings.account?.token||!document.getElementById('serverAddress')?.value.trim()){
-   openQueue();
-   return announce('Sign in and choose a live multiplayer server before starting. The native Quick Match controls are open.');
-  }
   preferred.value=playlist;
   preferred.dispatchEvent(new Event('change',{bubbles:true}));
+  if(!settings.account?.token){
+   // Forward the same deliberate click to the native sign-in gate. It opens
+   // the real account UI without starting a queue or inventing credentials.
+   start.click();
+   announce('Sign in or create a Fuckball account to find real players. Searching will require a new click after login.');
+   return;
+  }
+  const address=document.getElementById('serverAddress')?.value.trim();
+  if(!address){
+   openQueue();
+   if(typeof openDialog==='function'&&document.getElementById('networkDialog')?.open!==true)
+    openDialog('networkDialog');
+   announce('Choose a game server first. Connecting or searching never starts automatically.');
+   return;
+  }
+  // Native start still validates URL, server authentication and account
+  // permissions. This UI never opens its own socket or accepts ready checks.
   start.click();
-  reveal(native);
-  announce('Requested a real '+playlist+' human search through the native server queue. Every human must still accept the ready check.');
+  reveal(native,'.quick-queue-status');
+  announce('Asked the native server queue to find real '+playlist+' players. Follow its status below; every human must still accept.');
  }
  function chooseMode(mode){
   if(!playlists.includes(mode))return;
