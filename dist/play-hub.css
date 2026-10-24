@@ -81,3 +81,10 @@
 @media(max-width:940px){.play-hub-extras-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.play-hub-extras>summary{padding:13px 15px}
  .play-hub-extras-grid{padding:0 10px 10px}}
+
+/* Reserve full heading/description height across the legacy global header
+   typography: the first mode card must never overlap the introduction. */
+.play-hub-header{height:auto;min-height:118px;align-items:flex-start;margin-bottom:22px}
+.play-hub-heading{height:auto;min-height:0}
+.play-hub-heading>p{position:static;line-height:1.5;margin:8px 0 0}
+@media(max-width:600px){.play-hub-header{min-height:0;gap:12px;margin-bottom:18px}}
