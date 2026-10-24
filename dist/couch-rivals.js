@@ -82,10 +82,8 @@
   typeof paused!=='undefined'&&!paused&&typeof replay!=='undefined'&&!replay&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
   typeof serverLink!=='undefined'&&!serverLink&&
-  !document.hidden&&!document.getElementById('matchView')?.hidden&&
-  document.getElementById('joinScreen')?.hidden!==false&&
-  (typeof menuOpen==='undefined'||!menuOpen)&&
-  !document.querySelector('dialog[open]');}
+  // P3/P4 cannot move or kick while chat, a dialog or another view owns focus.
+  gameplayInputSurfaceActive();}
  const held=(p,i)=>p.buttons?.[i]?.pressed===true||
   (Number(p.buttons?.[i]?.value)||0)>.6;
  const axis=n=>Number.isFinite(n)&&Math.abs(n)>=.30?Math.sign(n):0;
