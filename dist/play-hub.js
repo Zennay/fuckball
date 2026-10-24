@@ -24,7 +24,7 @@
   }catch{return '1v1';}
  };
  let playlist=chooseFromStorage();
- let nativeQueue={searching:false,ready:false,accepted:false,mode:null,waiting:0,needed:0,expiresAt:null,recovery:null};
+ let nativeQueue={searching:false,ready:false,accepted:false,confirming:false,mode:null,waiting:0,needed:0,expiresAt:null,recovery:null};
  let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null;
  let dismissedMatchKey=null;
  function verifiedResult(){
@@ -302,11 +302,12 @@
    if(!nativeQueue.accepted&&accept&&!accept.disabled&&
       Number.isSafeInteger(nativeQueue.expiresAt)&&Date.now()<nativeQueue.expiresAt){
     accept.click();reveal(box);
-    announce('You confirmed the '+nativeQueue.mode+' match using the server-owned ready check. Waiting for all real players.');
+    announce('Ready confirmation sent for '+nativeQueue.mode+'. Waiting for the server receipt; no acceptance is assumed.');
    }else if(box){
     reveal(box);
-    announce(nativeQueue.accepted?'You are ready. The other human players still need to confirm.':
-     'This ready check has expired. Follow the native match status to retry.');
+    announce(nativeQueue.accepted?'The server confirmed your readiness. Waiting for other humans.':
+     nativeQueue.confirming?'Your confirmation is still awaiting the server receipt.':
+     'Check the native ready deadline or retry explicitly if no receipt arrived.');
    }else announce('The ready check is no longer available.');
    return;
   }
@@ -393,8 +394,9 @@
   }else if(nativeQueue.ready){
    const remaining=Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000));
    queueNow.textContent=nativeQueue.accepted?'✓ Ready · waiting for players':
+    nativeQueue.confirming?'… Waiting for server receipt · '+remaining+'s':
     '✓ Accept '+nativeQueue.mode+' match · '+remaining+'s';
-   queueNow.disabled=nativeQueue.accepted||remaining===0;
+   queueNow.disabled=nativeQueue.accepted||nativeQueue.confirming||remaining===0;
   }else if(nativeQueue.searching||state.inQueue){
    queueNow.textContent='↗ View current human search';queueNow.disabled=false;
   }else if(state.server||state.peer||state.local||state.playingReplay){
@@ -406,13 +408,14 @@
   }
   if(heroFind){
    const label=state.pending?'VIEW ROOM CONNECTION':
-    nativeQueue.ready?(nativeQueue.accepted?'WAITING FOR PLAYERS':
+    nativeQueue.ready?(nativeQueue.accepted?'SERVER CONFIRMED · WAITING FOR PLAYERS':
+     nativeQueue.confirming?'SENDING READY CONFIRMATION':
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
     recovery?'RETRY HUMAN MATCH':'FIND A QUICK MATCH';
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
-   heroFind.disabled=nativeQueue.ready&&nativeQueue.accepted;
+   heroFind.disabled=nativeQueue.ready&&(nativeQueue.accepted||nativeQueue.confirming);
   }
   current.hidden=!(state.pending||state.server||state.peer||state.local||state.playingReplay);
   if(state.pending){
@@ -422,7 +425,8 @@
    current.textContent=postGame?'↗ Review result / rematch':'↗ Return to online room';
    network.textContent='● ONLINE ROOM ACTIVE';
   }else if(nativeQueue.ready){
-   network.textContent=nativeQueue.accepted?'● READY · WAITING FOR OTHER PLAYERS':
+   network.textContent=nativeQueue.accepted?'● SERVER CONFIRMED · WAITING FOR OTHERS':
+    nativeQueue.confirming?'● READY SENT · WAITING FOR SERVER RECEIPT':
     '● ACTION NEEDED · CONFIRM HUMAN MATCH';
   }else if(nativeQueue.searching||state.inQueue){
    network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
