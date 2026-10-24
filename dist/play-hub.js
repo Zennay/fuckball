@@ -24,6 +24,8 @@
   }catch{return '1v1';}
  };
  let playlist=chooseFromStorage();
+ let nativeQueue={searching:false,ready:false,accepted:false,mode:null,waiting:0,needed:0,expiresAt:null};
+ const heroFind=document.getElementById('heroFindMatch');
  const section=node('section',null,'play-hub');
  section.setAttribute('aria-label','Choose how to play Fuckball');
  const intro=node('header',null,'play-hub-header');
@@ -35,6 +37,12 @@
  current.type='button';current.hidden=true;
  current.addEventListener('click',()=>{
   document.getElementById('tabPlay')?.click();
+  const end=document.getElementById('nextMatchPanel');
+  if(end&&!end.hidden&&typeof serverLink!=='undefined'&&serverLink?.roomState?.lastResult){
+   end.scrollIntoView({block:'nearest',behavior:'auto'});
+   const resume=end.querySelector('button:not([hidden]):not([disabled])');
+   if(resume)resume.focus({preventScroll:true});
+  }
  });
  intro.append(heading,current);
  const grid=node('div',null,'play-hub-grid');
@@ -100,12 +108,17 @@
   action('Practice Lab',()=>openSection('.practice-lab','Practice Lab is unavailable.','Practice Lab opened.'),'play-hub-secondary')
  );
  library.append(libraryActions);
- grid.append(human,rooms,practice,library);
+ const extras=node('details',null,'play-hub-extras');
+ const extrasToggle=node('summary','More ways to play · practice and replays');
+ extrasToggle.setAttribute('aria-label','Show local practice and replay options');
+ const extrasGrid=node('div',null,'play-hub-extras-grid');
+ extrasGrid.append(practice,library);extras.append(extrasToggle,extrasGrid);
+ grid.append(human,rooms);
  const footer=node('div',null,'play-hub-footer');
  const hint=node('span','Online matchmaking needs a live server and human consent. Training is local.','play-hub-hint');
  const network=node('span',null,'play-hub-network');
  footer.append(hint,network);
- section.append(intro,grid,status,footer);
+ section.append(intro,grid,extras,status,footer);
  hero.insertAdjacentElement('afterend',section);
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
@@ -170,11 +183,30 @@
  }
  function findHumanNow(){
   const state=activeState();
-  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
-   return announce('Finish or cancel your connecting room, game or replay before starting human Quick Match.');
-  if(state.inQueue||state.ready)
+  // This is a real, deliberate click from the player: forward it to the
+  // existing native consent button, with exactly the same expiry/disabled gate.
+  if(nativeQueue.ready){
+   const box=home.querySelector('.quick-ready:not([hidden])');
+   const accept=box?.querySelector('.quick-ready-actions button.primary');
+   if(!nativeQueue.accepted&&accept&&!accept.disabled&&
+      Number.isSafeInteger(nativeQueue.expiresAt)&&Date.now()<nativeQueue.expiresAt){
+    accept.click();reveal(box);
+    announce('You confirmed the '+nativeQueue.mode+' match using the server-owned ready check. Waiting for all real players.');
+   }else if(box){
+    reveal(box);
+    announce(nativeQueue.accepted?'You are ready. The other human players still need to confirm.':
+     'This ready check has expired. Follow the native match status to retry.');
+   }else announce('The ready check is no longer available.');
+   return;
+  }
+  if(state.server||state.peer||state.local||state.playingReplay){
+   current.click();return;
+  }
+  if(state.pending)
+   return announce('Your room is connecting. Keep it or cancel through the native online controls.');
+  if(state.inQueue||state.ready||nativeQueue.searching)
    return openSection('.quick-queue-panel','The human queue is unavailable.',
-    'An existing search or ready check is active. Finish or cancel it first.');
+    'An existing search is active. You can cancel it there; no duplicate search was started.');
   const native=home.querySelector('.quick-queue-panel');
   const preferred=native?.querySelector('select[aria-label="Preferred human Quick Match format"]');
   const start=native?.querySelector('.quick-queue-shortcut-actions button.primary');
@@ -210,14 +242,41 @@
  }
  function refresh(){
   const state=activeState();
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
+   !document.getElementById('nextMatchPanel')?.hidden;
+  if(nativeQueue.ready){
+   const remaining=Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000));
+   queueNow.textContent=nativeQueue.accepted?'✓ Ready · waiting for players':
+    '✓ Accept '+nativeQueue.mode+' match · '+remaining+'s';
+   queueNow.disabled=nativeQueue.accepted||remaining===0;
+  }else if(nativeQueue.searching||state.inQueue){
+   queueNow.textContent='↗ View current human search';queueNow.disabled=false;
+  }else if(state.server||state.peer||state.local||state.playingReplay){
+   queueNow.textContent='↗ Return to current game';queueNow.disabled=false;
+  }else{
+   queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
+  }
+  if(heroFind){
+   const label=nativeQueue.ready?(nativeQueue.accepted?'WAITING FOR PLAYERS':
+     'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
+    nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
+    state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
+    'FIND A QUICK MATCH';
+   if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
+   heroFind.disabled=nativeQueue.ready&&nativeQueue.accepted;
+  }
   current.hidden=!(state.server||state.peer||state.local||state.playingReplay);
   if(state.server||state.peer){
-   current.textContent='↗ Return to online room';
+   current.textContent=postGame?'↗ Review result / rematch':'↗ Return to online room';
    network.textContent='● ONLINE ROOM ACTIVE';
   }else if(state.pending){
    network.textContent='● CONNECTING TO ONLINE ROOM';
-  }else if(state.inQueue||state.ready){
-   network.textContent='● HUMAN QUEUE / READY CHECK';
+  }else if(nativeQueue.ready){
+   network.textContent=nativeQueue.accepted?'● READY · WAITING FOR OTHER PLAYERS':
+    '● ACTION NEEDED · CONFIRM HUMAN MATCH';
+  }else if(nativeQueue.searching||state.inQueue){
+   network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
@@ -225,6 +284,39 @@
    network.textContent=navigator.onLine?'● ONLINE CONNECTION REPORTED':'● BROWSER REPORTS OFFLINE';
   }
  }
+ // Keep one obvious, context-aware action at the very top. During a game
+ // or an active search it cannot start another queue or silently abandon play.
+ // Idle clicks still go through the original hero control unchanged.
+ heroFind?.addEventListener('click',event=>{
+  const state=activeState();
+  if(nativeQueue.ready||nativeQueue.searching||state.inQueue||
+     state.server||state.pending||state.peer||state.local||state.playingReplay){
+   event.preventDefault();event.stopImmediatePropagation();
+   if(state.server||state.peer||state.local||state.playingReplay){
+    current.click();
+   }else if(state.pending){
+    announce('Connecting to the server. Keep this connection or cancel it in the native online controls.');
+   }else findHumanNow();
+  }
+ },true);
+ window.addEventListener('fuckball:quick-match-state',event=>{
+  const data=event.detail;
+  if(!data||typeof data.searching!=='boolean'||typeof data.ready!=='boolean')return;
+  const newlyReady=data.ready&&!nativeQueue.ready;
+  const newlyAccepted=data.accepted&&!nativeQueue.accepted;
+  nativeQueue=data;
+  if(newlyReady){
+   announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
+   if(!document.hidden&&!home.hidden){
+    const box=home.querySelector('.quick-ready:not([hidden])');
+    if(box){
+     box.scrollIntoView({block:'center',behavior:'auto'});
+     box.querySelector('.quick-ready-actions button.primary:not([disabled])')?.focus({preventScroll:true});
+    }
+   }
+  }else if(newlyAccepted)announce('Ready confirmed. Waiting for every other real player to accept.');
+  refresh();
+ });
  const observer=new MutationObserver(()=>refresh());
  const match=document.getElementById('matchView');
  if(match)observer.observe(match,{attributes:true,attributeFilter:['hidden']});

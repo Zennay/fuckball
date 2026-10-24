@@ -59,3 +59,47 @@
  width:100%;font-size:1.04rem;min-height:50px;margin-top:auto}
 .play-hub-human .play-hub-primary{width:100%;margin-top:9px;background:#244b47;color:#dff6dc;border-color:#78a397}
 @media(max-width:600px){.play-hub .play-hub-queue-now{min-height:52px}}
+
+/* Match-first lobby: the two immediate online paths stay above the fold.
+   Offline training and replay tools remain accessible via progressive disclosure. */
+.play-hub-extras{margin-top:12px;border:1px solid rgba(211,241,229,.22);
+ border-radius:13px;background:rgba(9,23,29,.33)}
+.play-hub-extras>summary{cursor:pointer;list-style-position:inside;padding:14px 18px;
+ font-size:.88rem;font-weight:850;color:#d5eccf;min-height:46px}
+.play-hub-extras>summary:hover{color:#e6ffa9;background:rgba(215,248,121,.06)}
+.play-hub-extras>summary:focus-visible{outline:3px solid #deff85;outline-offset:2px}
+.play-hub-extras-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ padding:0 13px 13px;gap:13px}
+.play-hub-extras-grid>.play-hub-card{min-width:0}
+.play-hub .play-hub-queue-now:disabled{opacity:.77;cursor:default}
+.home-view #heroFindMatch[data-play-state-label^="ACCEPT MATCH"]{
+ background:#e3ff8a;color:#102921;outline:2px solid #f2ffd0;outline-offset:4px}
+.home-view #heroFindMatch[data-play-state-label^="RETURN TO GAME"],
+.home-view #heroFindMatch[data-play-state-label^="VIEW CURRENT SEARCH"]{
+ background:#b8e7d3;color:#0c2d28}
+.home-view #heroFindMatch:focus-visible{outline:3px solid #e1ff8d;outline-offset:5px}
+@media(max-width:940px){.play-hub-extras-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.play-hub-extras>summary{padding:13px 15px}
+ .play-hub-extras-grid{padding:0 10px 10px}}
+
+/* Reserve full heading/description height across the legacy global header
+   typography: the first mode card must never overlap the introduction. */
+.play-hub-header{height:auto;min-height:118px;align-items:flex-start;margin-bottom:22px}
+.play-hub-heading{height:auto;min-height:0}
+.play-hub-heading>p{position:static;line-height:1.5;margin:8px 0 0}
+@media(max-width:600px){.play-hub-header{min-height:0;gap:12px;margin-bottom:18px}}
+
+/* P0 small-screen kickoff: prioritize real actions over decorative pitch art. */
+@media(max-width:650px){
+ .home-view .hero-grid{display:block;min-height:0;padding-top:20px}
+ .home-view .hero-art{display:none}
+ .home-view .hero-copy{max-width:100%}
+ .home-view .hero-copy p{max-width:44ch;line-height:1.6}
+ .home-view .hero-actions{display:grid;grid-template-columns:1fr;gap:9px;max-width:440px}
+ .home-view .hero-button,.home-view .hero-solo{
+  width:100%;min-width:0;margin:0;min-height:48px;text-align:center;transform:none}
+ .home-view .hero-meta{margin:17px 0 21px;gap:14px;flex-wrap:wrap}
+ .play-hub-heading h2{font-size:1.35rem}
+ .play-hub-heading>p{font-size:.82rem;line-height:1.45}
+ .play-hub-header{margin-bottom:12px}
+}
