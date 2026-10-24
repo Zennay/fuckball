@@ -68,6 +68,7 @@
  const current=node('button','↗ Return to current game','play-hub-resume');
  current.type='button';current.hidden=true;
  current.addEventListener('click',()=>{
+  if(activeState().pending){viewPendingConnection();return;}
   if(verifiedResult()){
    if(!showNativeRematch())announce('The final result is available, but the room menu could not open.');
    return;
