@@ -93,10 +93,36 @@ function showQuickRematchAlert(link){
   link.quickRematchTimer=setTimeout(()=>clearQuickRematchAlert(link),45000);
  }catch{}
 }
-function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false,spectate=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');disconnect();if(replay)closeReplay();showView(quickMode?'home':'play');if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};const accessKey=!create&&!resumeContext&&!quickMode&&roomId?
+// One fail-closed admission gate for every native online entry point: Quick
+// Match, invite joins, host creation and public-room admission. Only explicit
+// Leave/Cancel may destroy an existing human session or reconnect plan.
+function onlineSessionConflict(resumeContext=null){
+ if(roomRecovery.context&&!resumeContext?.roomRecovery)
+  return 'Your original room is reconnecting. Choose Stop reconnecting before starting another online session.';
+ if(serverLink)
+  return serverLink.room?
+   'Leave your current online room explicitly before joining or creating another.':
+   'Cancel the existing online connection or human search before starting another.';
+ if(typeof peerConnected!=='undefined'&&peerConnected||
+    typeof peer!=='undefined'&&peer)
+  return 'Disconnect your direct-peer game or pending connection before starting an online room.';
+ if(document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])'))
+  return 'Cancel the active human queue or ready check before starting another online room.';
+ return '';
+}
+function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false,spectate=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');
+ // Validate room credentials and current-session ownership BEFORE any
+ // destructive disconnect, view change, replay close or local HUD mutation.
+ const blocked=onlineSessionConflict(resumeContext);
+ if(blocked)throw Error(blocked);
+ const accessKey=!create&&!resumeContext&&!quickMode&&roomId?
  (document.getElementById('joinRoomAccessKey')?.value||''):'';
  if(accessKey&&url.protocol!=='wss:'&&!['localhost','127.0.0.1','::1'].includes(url.hostname))
   throw Error('Room access keys require a secure WSS connection.');
+ disconnect();
+ if(replay)closeReplay();
+ showView(quickMode?'home':'play');
+ if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};
  const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
@@ -285,7 +311,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  else if(d.type==='spectatorCheer'){window.FuckballSpectatorCheer?.receive(d);}
  else channel?.onmessage?.(event);
  };
- }catch(e){$('serverRoomStatus').textContent=e.message;notify(e.message);}}
+ }catch(e){$('serverRoomStatus').textContent=e.message;notify(e.message);return false;}}
 function inviteUrl(room){const origin=location.origin&&location.origin!=='null'?location.origin:location.protocol+'//'+location.host;return origin+(location.pathname||'/')+'?room='+encodeURIComponent(room);}
 function setRoomParam(room){try{if(typeof history==='undefined'||!history.replaceState||!location.href)return;const url=new URL(location.href);if(room)url.searchParams.set('room',room);else url.searchParams.delete('room');history.replaceState(null,'',url.pathname+url.search+url.hash);}catch{}}
 function inviteError(message){if(message==='Room not found.')return'This invite link has expired: the room was closed. Create a new room to play.';return message;}
@@ -325,8 +351,14 @@ function showJoinScreen(room,error=''){joinRoomId=room;
  if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;$('joinRoomCode').textContent=room||'';$('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
 function hideJoinScreen(){$('joinScreen').hidden=true;$('joinError').textContent='';}
 function renderAccount(){const a=settings.account;$('joinAccount').textContent=a?'Logged in as '+a.username+'.':'';$('joinShowLogin').hidden=!!a;$('joinName').disabled=!!a;$('accountStatus').textContent=a?'Logged in as '+a.username:'Not logged in · nickname only';$('accountButton').textContent=a?'Log out':'Log in / create account';}
-function joinRoom(name){if(!joinRoomId)return;const watch=$('joinSpectator').checked;hideJoinScreen();
- connectServer(false,joinRoomId,name,null,null,false,false,watch);}
+function joinRoom(name){
+ if(!joinRoomId)return;
+ const blocked=onlineSessionConflict();
+ if(blocked){$('joinError').textContent=blocked;return;}
+ const watch=$('joinSpectator').checked;
+ hideJoinScreen();
+ connectServer(false,joinRoomId,name,null,null,false,false,watch);
+}
 $('joinWithName').onclick=()=>{if(settings.account){joinRoom(settings.account.username);return;}const n=$('joinName').value.trim();if(!n){$('joinError').textContent='Enter a nickname or join as guest.';return;}setName(n);joinRoom(settings.name);};
 $('joinName').addEventListener('keydown',e=>{if(e.key==='Enter'||e.code==='Enter'){e.preventDefault();$('joinWithName').onclick();}});
 $('joinGuest').onclick=()=>joinRoom('Guest '+String(Math.floor(1000+Math.random()*9000)));
