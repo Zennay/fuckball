@@ -183,6 +183,8 @@ function closeReplay(){
 // multiplayer connection, an in-progress handshake or a human ready-check
 // without the player explicitly leaving through its original controls.
 function replaySessionConflict(){
+ if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+  return 'Stop the active room reconnect before opening a replay.';
  if(serverLink?.room)return 'Leave your current online room explicitly before opening a replay.';
  if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
  if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
