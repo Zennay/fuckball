@@ -127,7 +127,7 @@
    openDialog('networkDialog');document.getElementById('serverAddress')?.focus();
   }else recoveryReason.textContent='Open Online Rooms to configure the server.';
  };
- dismissRecovery.onclick=hideRecovery;
+ dismissRecovery.onclick=()=>{hideRecovery();refresh();};
  let ready=null,readyAccepted=false;
  let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
  function clearReadyAlert(){
@@ -204,15 +204,22 @@
   if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
    window.dispatchEvent(new CustomEvent('fuckball:quick-match-state',{detail:{
     searching,mode:matchMode,ready:!!ready,accepted:readyAccepted,
-    waiting,needed,expiresAt:ready?ready.expiresAt:null
+    waiting,needed,expiresAt:ready?ready.expiresAt:null,
+    recovery:!recovery.hidden&&lastAttempt&&!lastAttempt.party&&
+     standardModes.includes(lastAttempt.mode)?{
+      mode:lastAttempt.mode,reason:recoveryReason.textContent.slice(0,180)
+     }:null
    }}));
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
  function done(message,offerRetry=false){
   const wasSearching=searching;
   clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;
-  stopClock();refresh();notice.textContent=String(message||'Search ended.').slice(0,240);
+  stopClock();notice.textContent=String(message||'Search ended.').slice(0,240);
   if(offerRetry&&wasSearching)showRecovery(message);else hideRecovery();
+  // Publish the *final* state after the native recovery choice exists.
+  // Previously the landing page saw only an idle queue and could not offer retry.
+  refresh();
  }
  function start(mode,party=false){
   if(searching)return;
