@@ -223,6 +223,7 @@
    Math.max(500,Math.min(15000,expiresAt-Date.now())));
  }
  window.addEventListener('focus',clearReadyAlert);
+ readyProgress.tabIndex=-1;
  // Navigation does not create a new match proposal or reset its countdown:
  // the dock merely follows the same state when the view is changed.
  for(const id of ['tabHome','tabPlay','tabGames'])
@@ -246,8 +247,11 @@
     (readyAccepted?' · your acceptance was sent.':'');
    if(readyDockProgress.textContent!==dockText)readyDockProgress.textContent=dockText;
    dockAccept.textContent=readyAccepted?'✓ Accepted':'✓ I’m ready';
-   dockAccept.disabled=readyAccepted||seconds===0||acceptReady.disabled;
-   dockDecline.disabled=seconds===0||declineReady.disabled;
+   // The mirror has its own expiry/accepted guard. Native buttons perform
+   // the last validation on click; do not carry a stale disabled state from
+   // the previous proposal while the new ready-check is rendering.
+   dockAccept.disabled=readyAccepted||seconds===0;
+   dockDecline.disabled=seconds===0;
   }
   if(ready){
    const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
