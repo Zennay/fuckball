@@ -223,6 +223,10 @@
  }
  function start(mode,party=false){
   if(searching)return;
+  // A reconnect countdown and a pending/custom/native/direct-peer connection
+  // must never be destroyed merely by pressing Find Match.
+  const conflict=typeof onlineSessionConflict==='function'?onlineSessionConflict():null;
+  if(conflict){notice.textContent=conflict;return;}
   if(serverLink?.room){notice.textContent='Leave your current room before starting another match.';return;}
   if(!settings.account?.token){
    notice.textContent='Log in or create a free account, then select a playlist.';
@@ -244,7 +248,11 @@
   hideRecovery();lastAttempt={mode,party};
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
-  connectServer(false,'','',null,mode,party);
+  if(connectServer(false,'','',null,mode,party)===false){
+   // Reject invalid server setup without leaving a fictitious active search
+   // on the landing page. No duplicate socket or ready consent is created.
+   done('Could not connect to the game server. Check Online Rooms and retry.');
+  }
  }
  for(const mode of ['1v1','2v2','3v3','4v4']){
   const b=document.createElement('button');b.type='button';b.className='quick-queue-mode';b.dataset.playlist=mode;
