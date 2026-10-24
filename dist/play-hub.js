@@ -24,7 +24,7 @@
   }catch{return '1v1';}
  };
  let playlist=chooseFromStorage();
- let nativeQueue={searching:false,ready:false,accepted:false,mode:null,waiting:0,needed:0,expiresAt:null};
+ let nativeQueue={searching:false,ready:false,accepted:false,mode:null,waiting:0,needed:0,expiresAt:null,recovery:null};
  let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null;
  let dismissedMatchKey=null;
  function verifiedResult(){
@@ -89,12 +89,39 @@
  const primary=action('Configure human Quick Match →',openQueue,'play-hub-primary');
  const queueNow=action('▶ Find 1v1 now',findHumanNow,'play-hub-queue-now');
  queueNow.title='Start the real human matchmaking queue with one deliberate click. Every player still has to accept the ready check.';
+ const queueCancel=action('× Cancel current search',()=>{
+  const native=home.querySelector('.quick-queue-actions button:not([hidden])');
+  if(!native||native.disabled||!nativeQueue.searching||nativeQueue.ready)
+   return announce('The human search is no longer active. No cancellation was sent.');
+  native.click();
+  announce('Cancelled the search using the existing server-owned queue controls.');
+ },'play-hub-cancel');
+ queueCancel.hidden=true;
+ const recoveryCard=node('section',null,'play-hub-recovery');
+ recoveryCard.setAttribute('aria-label','Recover interrupted human search');
+ recoveryCard.hidden=true;
+ const recoveryHead=node('strong','SEARCH INTERRUPTED');
+ const recoveryDetail=node('p','','play-hub-recovery-detail');
+ const recoveryActions=node('div',null,'play-hub-recovery-actions');
+ function nativeRecoveryAction(index){
+  if(nativeQueue.searching||nativeQueue.ready||!nativeQueue.recovery)
+   return announce('Search status changed. Review the current server-owned queue first.');
+  const box=home.querySelector('.quick-queue-recovery:not([hidden])');
+  const control=box?.querySelectorAll('.quick-queue-recovery-actions button')?.[index];
+  if(!control||control.disabled)return announce('That recovery action is no longer available.');
+  control.click();
+ }
+ const retrySearch=action('↻ Retry human match',()=>nativeRecoveryAction(0),'play-hub-retry');
+ const recoveryServer=action('Change server',()=>nativeRecoveryAction(1),'play-hub-secondary');
+ const recoveryDismiss=action('Dismiss',()=>nativeRecoveryAction(2),'play-hub-secondary');
+ recoveryActions.append(retrySearch,recoveryServer,recoveryDismiss);
+ recoveryCard.append(recoveryHead,recoveryDetail,recoveryActions);
  for(const mode of playlists){
   const b=action(mode,()=>chooseMode(mode),'play-hub-format');
   b.setAttribute('aria-label',mode+' human Quick Match, '+(2*Number(mode[0]))+' total real players');
   modes.append(b);modeButtons.set(mode,b);
  }
- human.append(humanCopy,modes,queueNow,primary);
+ human.append(humanCopy,modes,queueNow,queueCancel,recoveryCard,primary);
  const rooms=node('article',null,'play-hub-card');
  rooms.append(node('span','02 · ONLINE · CUSTOM ROOM','play-hub-label'),
   node('h3','PLAY WITH FRIENDS'),
@@ -228,6 +255,9 @@
  }
  function findHumanNow(){
   const state=activeState();
+  if(nativeQueue.recovery&&!nativeQueue.searching&&!nativeQueue.ready){
+   nativeRecoveryAction(0);return;
+  }
   // This is a real, deliberate click from the player: forward it to the
   // existing native consent button, with exactly the same expiry/disabled gate.
   if(nativeQueue.ready){
@@ -303,6 +333,16 @@
  function refresh(){
   const state=activeState();
   refreshPostMatch();
+  const canCancel=nativeQueue.searching&&!nativeQueue.ready;
+  queueCancel.hidden=!canCancel;
+  queueCancel.disabled=!canCancel;
+  const recovery=nativeQueue.recovery;
+  recoveryCard.hidden=!recovery||nativeQueue.searching||nativeQueue.ready;
+  if(!recoveryCard.hidden){
+   const text=String(recovery.reason||'The human queue ended. Try again or choose another server.').slice(0,180);
+   if(recoveryDetail.textContent!==text)recoveryDetail.textContent=text;
+   retrySearch.textContent='↻ Retry '+recovery.mode+' human match';
+  }
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
    !document.getElementById('nextMatchPanel')?.hidden;
@@ -315,6 +355,8 @@
    queueNow.textContent='↗ View current human search';queueNow.disabled=false;
   }else if(state.server||state.peer||state.local||state.playingReplay){
    queueNow.textContent='↗ Return to current game';queueNow.disabled=false;
+  }else if(recovery){
+   queueNow.textContent='↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
   }else{
    queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
   }
@@ -323,7 +365,7 @@
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
-    'FIND A QUICK MATCH';
+    recovery?'RETRY HUMAN MATCH':'FIND A QUICK MATCH';
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
    heroFind.disabled=nativeQueue.ready&&nativeQueue.accepted;
   }
@@ -338,6 +380,8 @@
     '● ACTION NEEDED · CONFIRM HUMAN MATCH';
   }else if(nativeQueue.searching||state.inQueue){
    network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
+  }else if(recovery){
+   network.textContent='● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
@@ -370,7 +414,10 @@
   if(!data||typeof data.searching!=='boolean'||typeof data.ready!=='boolean')return;
   const newlyReady=data.ready&&!nativeQueue.ready;
   const newlyAccepted=data.accepted&&!nativeQueue.accepted;
-  nativeQueue=data;
+  const safeRecovery=data.recovery&&typeof data.recovery==='object'&&
+   playlists.includes(data.recovery.mode)&&typeof data.recovery.reason==='string'?
+   {mode:data.recovery.mode,reason:data.recovery.reason.slice(0,180)}:null;
+  nativeQueue={...data,recovery:safeRecovery};
   if(newlyReady){
    announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
    if(!document.hidden&&!home.hidden){

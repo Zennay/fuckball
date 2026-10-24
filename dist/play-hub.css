@@ -136,3 +136,23 @@ body.menu-open .play-postmatch-ribbon{display:none!important}
  .play-postmatch-dismiss{flex:1 1 28%}
 }
 @media(prefers-reduced-motion:reduce){.play-postmatch-ribbon{scroll-behavior:auto}}
+
+/* Human queue recovery: two deliberate paths, no automatic reconnect, retry,
+   ready-check consent or synthetic server activity. */
+.play-hub .play-hub-cancel[hidden],.play-hub .play-hub-recovery[hidden]{display:none!important}
+.play-hub .play-hub-cancel{background:transparent;border-color:#e0ba8e;color:#ffe5bd;
+ margin-top:9px;font-size:.84rem;width:100%;text-align:center}
+.play-hub-recovery{width:100%;box-sizing:border-box;padding:14px 16px;margin-top:12px;
+ background:#352b24;border:1px solid #dfa05c;border-radius:12px;
+ display:grid;gap:8px}
+.play-hub-recovery>strong{font-size:.73rem;letter-spacing:.09em;color:#ffdcaa}
+.play-hub-recovery .play-hub-recovery-detail{color:#f5dec6;font-size:.84rem;
+ line-height:1.45;margin:0;overflow-wrap:anywhere;max-width:80ch}
+.play-hub-recovery-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.play-hub .play-hub-retry{background:#d5ff88;color:#1d3021;border-color:#d5ff88}
+.play-hub-recovery-actions button{flex:1 1 auto}
+@media(max-width:600px){
+ .play-hub-recovery{padding:12px}
+ .play-hub-recovery-actions{display:grid;grid-template-columns:1fr 1fr}
+ .play-hub-recovery-actions .play-hub-retry{grid-column:1/-1}
+}
