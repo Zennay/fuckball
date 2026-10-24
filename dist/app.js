@@ -293,11 +293,13 @@ function setupChannel(dc){channel=dc;dc.binaryType='arraybuffer';dc.onopen=()=>{
  if(net.statusStarted&&!d.started&&typeof openMatchMenu==='function'&&!$('matchView').hidden)
   setTimeout(()=>{if(!started)openMatchMenu();},1500);
  net.statusStarted=!!d.started;started=!!d.started;paused=!!d.paused;lockGuest();
- // Native online room owner/guests should return to playable pitch only
- // after the authoritative server confirms kickoff, not merely after
- // pressing Start. Closing the overlay restores normal keyboard/gamepad
- // input without bypassing match ownership or server consent.
- if(!wasStarted&&started&&menuOpen&&serverLink?.room)closeMatchMenu();
+ // Return active field players to the pitch on an authoritative
+ // server kickoff. Spectators/benched humans keep their open room menu:
+ // they need live playing-time and substitution consent controls.
+ if(!wasStarted&&started&&menuOpen&&serverLink?.room){
+  const me=room?.state?.players?.find(p=>p.id===networkPlayerId);
+  if(me&&[1,2].includes(me.team?.id))closeMatchMenu();
+ }
 }}catch{notify('Invalid connection message.');}};
  dc.onclose=()=>{if(peerConnected){disconnect();notify('Disconnected. Local match restored.');}};dc.onerror=()=>{$('networkStatus').textContent='Could not connect.';};}
 function disconnect(){predictor.reset();enableV3(false);guestTimeline=null;stateChannel?.close();stateChannel=null;net.sequence=net.receivedSequence=net.lastSnapshot=net.rtt=net.jitter=net.ack=net.remoteAck=net.inputSeq=0;const pc=peer;peer=null;peerConnected=false;peerRole=null;if(channel){channel.onclose=null;channel.close();channel=null;}pc?.close();$('connectionText').replaceChildren(document.createTextNode('Local match'));if(room&&!replay){room.setSimulationSpeed(1);resetMatch(false);}setButtons();}
