@@ -38,7 +38,7 @@
  current.addEventListener('click',()=>{
   document.getElementById('tabPlay')?.click();
   const end=document.getElementById('nextMatchPanel');
-  if(end&&!end.hidden){
+  if(end&&!end.hidden&&typeof serverLink!=='undefined'&&serverLink?.roomState?.lastResult){
    end.scrollIntoView({block:'nearest',behavior:'auto'});
    const resume=end.querySelector('button:not([hidden]):not([disabled])');
    if(resume)resume.focus({preventScroll:true});
@@ -242,7 +242,9 @@
  }
  function refresh(){
   const state=activeState();
-  const postGame=!!document.getElementById('nextMatchPanel')&&!document.getElementById('nextMatchPanel').hidden;
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
+   !document.getElementById('nextMatchPanel')?.hidden;
   if(nativeQueue.ready){
    const remaining=Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000));
    queueNow.textContent=nativeQueue.accepted?'✓ Ready · waiting for players':
