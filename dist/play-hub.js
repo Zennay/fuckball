@@ -278,8 +278,10 @@
   // Native start still validates URL, server authentication and account
   // permissions. This UI never opens its own socket or accepts ready checks.
   start.click();
+  const feedback=native.querySelector('.quick-queue-status');
+  if(feedback)feedback.tabIndex=-1;
   reveal(native,'.quick-queue-status');
-  announce('Asked the native server queue to find real '+playlist+' players. Follow its status below; every human must still accept.');
+  announce('Requested the native '+playlist+' human queue. Check its live status below; every player still must accept.');
  }
  function chooseMode(mode){
   if(!playlists.includes(mode))return;
@@ -339,24 +341,29 @@
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
+  }else if(navigator.onLine===false){
+   network.textContent='● OFFLINE · ONLINE MATCHES UNAVAILABLE';
+  }else if(!settings.account?.token){
+   network.textContent='● SIGN IN REQUIRED FOR HUMAN QUICK MATCH';
+  }else if(!document.getElementById('serverAddress')?.value.trim()){
+   network.textContent='● SELECT A SERVER BEFORE HUMAN QUICK MATCH';
   }else{
-   network.textContent=navigator.onLine?'● ONLINE CONNECTION REPORTED':'● BROWSER REPORTS OFFLINE';
+   network.textContent='● SERVER SELECTED · CONNECTION NOT VERIFIED';
   }
  }
  // Keep one obvious, context-aware action at the very top. During a game
  // or an active search it cannot start another queue or silently abandon play.
  // Idle clicks still go through the original hero control unchanged.
  heroFind?.addEventListener('click',event=>{
+  // The hero button now directly performs its advertised action for a guest,
+  // an idle signed-in player, active queue and an ongoing native match.
+  // The existing native Quick Match/ready gates always remain authoritative.
+  event.preventDefault();
+  event.stopImmediatePropagation();
   const state=activeState();
-  if(nativeQueue.ready||nativeQueue.searching||state.inQueue||
-     state.server||state.pending||state.peer||state.local||state.playingReplay){
-   event.preventDefault();event.stopImmediatePropagation();
-   if(state.server||state.peer||state.local||state.playingReplay){
-    current.click();
-   }else if(state.pending){
-    announce('Connecting to the server. Keep this connection or cancel it in the native online controls.');
-   }else findHumanNow();
-  }
+  if(state.server||state.peer||state.local||state.playingReplay)current.click();
+  else if(state.pending)announce('A room is still connecting. Keep or cancel that connection in native online controls.');
+  else findHumanNow();
  },true);
  window.addEventListener('fuckball:quick-match-state',event=>{
   const data=event.detail;
@@ -426,5 +433,9 @@
  document.getElementById('tabHome')?.addEventListener('click',refresh);
  document.getElementById('tabPlay')?.addEventListener('click',refresh);
  window.addEventListener('focus',refresh);
+ document.getElementById('serverAddress')?.addEventListener('change',refresh);
+ document.getElementById('accountButton')?.addEventListener('click',refresh);
+ const accountStatus=document.getElementById('accountStatus');
+ if(accountStatus)observer.observe(accountStatus,{subtree:true,characterData:true,childList:true});
  chooseMode(playlist);refresh();
 })();
