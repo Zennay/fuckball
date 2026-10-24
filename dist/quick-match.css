@@ -104,3 +104,33 @@
 .quick-queue-recovery-actions button.primary{background:#cff1ae;color:#18392b}
 .quick-queue-recovery-actions button:focus-visible{outline:3px solid #ffe5a2;outline-offset:3px}
 @media(max-width:550px){.quick-queue-recovery-actions button{flex:1 1 100%}}
+
+/* Authentic human ready check follows the player across My Games and pitch.
+   This mirror never issues its own socket action or auto-confirms consent. */
+.quick-ready-dock[hidden]{display:none!important}
+.quick-ready-dock{box-sizing:border-box;position:fixed;left:50%;
+ transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom));
+ z-index:115;display:flex;align-items:center;justify-content:space-between;
+ gap:18px;width:min(940px,calc(100vw - 24px));padding:16px 19px;
+ border-radius:16px;border:2px solid #c8fa9a;background:#17302d;
+ box-shadow:0 15px 45px #000d;color:#f1ffed}
+.quick-ready-dock-copy{min-width:0}
+.quick-ready-dock-copy strong{font-size:.95rem;letter-spacing:.055em;color:#deffac}
+.quick-ready-dock-progress{margin:6px 0 0;color:#d1e3db;font-size:.83rem;
+ line-height:1.45;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.quick-ready-dock-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.quick-ready-dock-actions button{font:inherit;font-size:.84rem;font-weight:800;
+ min-height:48px;border-radius:9px;padding:10px 14px;cursor:pointer;
+ border:1px solid #8fa59a;color:#eef9ec;background:#25433b}
+.quick-ready-dock-actions button.primary{background:#d3ff8b;color:#172b1c;
+ border-color:#d3ff8b}
+.quick-ready-dock-actions button:disabled{opacity:.56;cursor:not-allowed}
+.quick-ready-dock-actions button:focus-visible{outline:3px solid #f5ffa6;outline-offset:3px}
+@media(max-width:740px){
+ .quick-ready-dock{flex-direction:column;align-items:stretch;padding:14px;gap:12px;
+  bottom:max(10px,env(safe-area-inset-bottom))}
+ .quick-ready-dock-actions{display:grid;grid-template-columns:1fr 1fr}
+ .quick-ready-dock-actions button.primary{grid-column:1/-1}
+}
+@media(max-width:370px){.quick-ready-dock-actions{grid-template-columns:1fr}
+ .quick-ready-dock-actions button.primary{grid-column:auto}}

@@ -56,6 +56,50 @@
  readyActions.append(acceptReady,declineReady);
  readyBox.append(readyTitle,readyText,readyProgress,readyActions);
  panel.append(heading,description,modes,availability,alertControls,notice,recovery,readyBox,actions);
+ // The authentic server ready-check has a short deadline. If the player
+ // navigated to My Games or the pitch, the original Home-only card is hidden.
+ // Reflect it across views, forwarding explicit clicks to native consent only.
+ const readyDock=document.createElement('aside');
+ readyDock.className='quick-ready-dock';readyDock.hidden=true;
+ readyDock.setAttribute('role','region');
+ readyDock.setAttribute('aria-label','Human match ready confirmation');
+ const readyDockCopy=document.createElement('div');
+ readyDockCopy.className='quick-ready-dock-copy';
+ const readyDockTitle=document.createElement('strong');
+ readyDockTitle.textContent='REAL MATCH FOUND';
+ const readyDockProgress=document.createElement('p');
+ readyDockProgress.className='quick-ready-dock-progress';
+ readyDockProgress.setAttribute('role','status');
+ readyDockProgress.setAttribute('aria-live','polite');
+ readyDockCopy.append(readyDockTitle,readyDockProgress);
+ const readyDockActions=document.createElement('div');
+ readyDockActions.className='quick-ready-dock-actions';
+ const dockAccept=document.createElement('button');
+ dockAccept.type='button';dockAccept.className='primary';
+ const dockDecline=document.createElement('button');
+ dockDecline.type='button';dockDecline.textContent='Decline';
+ const dockReview=document.createElement('button');
+ dockReview.type='button';dockReview.textContent='View in Play';
+ readyDockActions.append(dockAccept,dockDecline,dockReview);
+ readyDock.append(readyDockCopy,readyDockActions);
+ document.body.append(readyDock);
+ const canRespond=()=>!!ready&&Date.now()<ready.expiresAt&&!readyDock.hidden;
+ dockAccept.addEventListener('click',()=>{
+  if(!canRespond()||readyAccepted||acceptReady.disabled)return;
+  // The one original server-owned ready response (including proposal ID,
+  // expiry and consent state) remains the only authority for acceptance.
+  acceptReady.click();
+ });
+ dockDecline.addEventListener('click',()=>{
+  if(!canRespond()||declineReady.disabled)return;
+  declineReady.click();
+ });
+ dockReview.addEventListener('click',()=>{
+  if(!ready)return;
+  document.getElementById('tabHome')?.click();
+  readyBox.scrollIntoView({behavior:'auto',block:'center'});
+  (readyAccepted?readyProgress:acceptReady).focus?.({preventScroll:true});
+ });
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
  // The chosen format is a private device preference. Queueing always requires
@@ -179,12 +223,36 @@
    Math.max(500,Math.min(15000,expiresAt-Date.now())));
  }
  window.addEventListener('focus',clearReadyAlert);
+ readyProgress.tabIndex=-1;
+ // Navigation does not create a new match proposal or reset its countdown:
+ // the dock merely follows the same state when the view is changed.
+ for(const id of ['tabHome','tabPlay','tabGames'])
+  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(refresh));
  function refresh(){
   modeButtons.forEach(b=>b.disabled=searching);
   preferredSelect.disabled=quickStart.disabled=searching;
   if(typeof pulseAction!=='undefined')pulseAction.disabled=searching||!pulseMode;
   cancel.hidden=!searching;
   readyBox.hidden=!ready;
+  // A floating read-only mirror is only needed when Home's native
+  // controls are hidden behind another app view. The native buttons remain
+  // the sole sender of ready / decline messages to the server.
+  readyDock.hidden=!ready||!home.hidden;
+  if(ready){
+   const seconds=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
+   readyDockTitle.textContent=readyAccepted?'YOU ARE READY · WAITING FOR HUMANS':
+    seconds>0?'MATCH FOUND · CONFIRM TO PLAY':'READY CHECK EXPIRED';
+   const dockText=playlistLabel(ready.mode)+' · '+ready.ready+' of '+ready.players+
+    ' real players confirmed · '+seconds+'s left'+
+    (readyAccepted?' · your acceptance was sent.':'');
+   if(readyDockProgress.textContent!==dockText)readyDockProgress.textContent=dockText;
+   dockAccept.textContent=readyAccepted?'✓ Accepted':'✓ I’m ready';
+   // The mirror has its own expiry/accepted guard. Native buttons perform
+   // the last validation on click; do not carry a stale disabled state from
+   // the previous proposal while the new ready-check is rendering.
+   dockAccept.disabled=readyAccepted||seconds===0;
+   dockDecline.disabled=seconds===0;
+  }
   if(ready){
    const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
    readyText.textContent='All '+ready.players+' human players must confirm. Casual '+playlistLabel(ready.mode)+', no ranked rating.';
