@@ -293,10 +293,10 @@ function setupChannel(dc){channel=dc;dc.binaryType='arraybuffer';dc.onopen=()=>{
  if(net.statusStarted&&!d.started&&typeof openMatchMenu==='function'&&!$('matchView').hidden)
   setTimeout(()=>{if(!started)openMatchMenu();},1500);
  net.statusStarted=!!d.started;started=!!d.started;paused=!!d.paused;lockGuest();
- // Return active field players to the pitch on an authoritative
- // server kickoff. Spectators/benched humans keep their open room menu:
- // they need live playing-time and substitution consent controls.
- if(!wasStarted&&started&&menuOpen&&serverLink?.room){
+ // After confirmed kickoff, return the field-playing room owner to the pitch.
+ // Remote humans may intentionally keep their menu open for live playing-time,
+ // bench and substitution consent; do not close their overlays remotely.
+ if(!wasStarted&&started&&menuOpen&&serverLink?.room&&serverLink.isOwner){
   const me=room?.state?.players?.find(p=>p.id===networkPlayerId);
   if(me&&[1,2].includes(me.team?.id))closeMatchMenu();
  }
