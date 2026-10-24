@@ -88,3 +88,18 @@
 .play-hub-heading{height:auto;min-height:0}
 .play-hub-heading>p{position:static;line-height:1.5;margin:8px 0 0}
 @media(max-width:600px){.play-hub-header{min-height:0;gap:12px;margin-bottom:18px}}
+
+/* P0 small-screen kickoff: prioritize real actions over decorative pitch art. */
+@media(max-width:650px){
+ .home-view .hero-grid{display:block;min-height:0;padding-top:20px}
+ .home-view .hero-art{display:none}
+ .home-view .hero-copy{max-width:100%}
+ .home-view .hero-copy p{max-width:44ch;line-height:1.6}
+ .home-view .hero-actions{display:grid;grid-template-columns:1fr;gap:9px;max-width:440px}
+ .home-view .hero-button,.home-view .hero-solo{
+  width:100%;min-width:0;margin:0;min-height:48px;text-align:center;transform:none}
+ .home-view .hero-meta{margin:17px 0 21px;gap:14px;flex-wrap:wrap}
+ .play-hub-heading h2{font-size:1.35rem}
+ .play-hub-heading>p{font-size:.82rem;line-height:1.45}
+ .play-hub-header{margin-bottom:12px}
+}
