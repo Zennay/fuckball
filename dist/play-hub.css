@@ -103,3 +103,36 @@
  .play-hub-heading>p{font-size:.82rem;line-height:1.45}
  .play-hub-header{margin-bottom:12px}
 }
+
+/* An actual finished online round gets one clear next action, without changing
+   rendering or room authority. Hidden during live play and while the native
+   result/consent menu is open. */
+.play-postmatch-ribbon[hidden]{display:none!important}
+.play-postmatch-ribbon{
+ position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));
+ transform:translateX(-50%);z-index:85;box-sizing:border-box;
+ display:flex;align-items:center;justify-content:space-between;gap:18px;
+ width:min(920px,calc(100vw - 30px));padding:16px 20px;
+ border:1px solid #c2ef91;border-radius:17px;
+ background:linear-gradient(120deg,#142e2c 15%,#1d3430 100%);
+ color:#f4ffee;box-shadow:0 17px 45px #000b;
+}
+body.menu-open .play-postmatch-ribbon{display:none!important}
+.play-postmatch-content{display:grid;gap:4px;min-width:0}
+.play-postmatch-eyebrow{color:#c6ef9b;font-weight:900;font-size:.64rem;letter-spacing:.12em}
+.play-postmatch-score{font-size:clamp(1.18rem,2vw,1.7rem);font-weight:900;line-height:1.25}
+.play-postmatch-info{font-size:.78rem;color:#b9d3c8;line-height:1.4}
+.play-postmatch-actions{display:flex;gap:8px;flex-shrink:0}
+.play-postmatch-actions button{font:inherit;border-radius:9px;min-height:44px;padding:10px 12px;
+ font-weight:800;cursor:pointer;border:1px solid #829b88}
+.play-postmatch-open{background:#cfff7e;color:#162a1b;border-color:#cfff7e!important}
+.play-postmatch-dismiss{background:transparent;color:#e7eee5}
+.play-postmatch-actions button:focus-visible{outline:3px solid #e4ffa8;outline-offset:3px}
+@media(max-width:650px){
+ .play-postmatch-ribbon{flex-direction:column;align-items:stretch;gap:12px;
+  width:calc(100vw - 20px);padding:14px;bottom:max(12px,env(safe-area-inset-bottom))}
+ .play-postmatch-actions{flex-wrap:wrap}
+ .play-postmatch-open{flex:1 1 60%}
+ .play-postmatch-dismiss{flex:1 1 28%}
+}
+@media(prefers-reduced-motion:reduce){.play-postmatch-ribbon{scroll-behavior:auto}}

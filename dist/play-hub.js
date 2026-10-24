@@ -25,6 +25,38 @@
  };
  let playlist=chooseFromStorage();
  let nativeQueue={searching:false,ready:false,accepted:false,mode:null,waiting:0,needed:0,expiresAt:null};
+ let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null;
+ let dismissedMatchKey=null;
+ function verifiedResult(){
+  // A client never fabricates a final score or grants an online rematch.
+  // These values are only displayed after the native server reports the round.
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const state=link?.roomState,result=state?.lastResult;
+  if(!link?.room||!state||state.started||!result||
+     !Number.isSafeInteger(result.red)||!Number.isSafeInteger(result.blue)||
+     result.red<0||result.blue<0||result.red>99||result.blue>99)return null;
+  const round=Number.isSafeInteger(result.round)&&result.round>0?result.round:0;
+  const key=[link.room,round,result.red,result.blue,result.winner].join(':');
+  return{link,state,result,key};
+ }
+ function showNativeRematch(){
+  const receipt=verifiedResult();
+  if(!receipt)return false;
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  else document.getElementById('matchMenuButton')?.click();
+  if(typeof renderNextMatchPanel==='function')renderNextMatchPanel();
+  const end=document.getElementById('nextMatchPanel');
+  if(!end||end.hidden||document.getElementById('pauseMenu')?.hidden!==false)return false;
+  end.scrollIntoView({block:'nearest',behavior:'auto'});
+  // Consent, request and new-game authority remain exactly the native buttons.
+  const preferred=['rematchAccept','rematchRequest','nextGame']
+   .map(id=>document.getElementById(id))
+   .find(button=>button&&!button.hidden&&!button.disabled);
+  if(preferred)preferred.focus({preventScroll:true});
+  else{end.tabIndex=-1;end.focus({preventScroll:true});}
+  return true;
+ }
  const heroFind=document.getElementById('heroFindMatch');
  const section=node('section',null,'play-hub');
  section.setAttribute('aria-label','Choose how to play Fuckball');
@@ -36,13 +68,11 @@
  const current=node('button','↗ Return to current game','play-hub-resume');
  current.type='button';current.hidden=true;
  current.addEventListener('click',()=>{
-  document.getElementById('tabPlay')?.click();
-  const end=document.getElementById('nextMatchPanel');
-  if(end&&!end.hidden&&typeof serverLink!=='undefined'&&serverLink?.roomState?.lastResult){
-   end.scrollIntoView({block:'nearest',behavior:'auto'});
-   const resume=end.querySelector('button:not([hidden]):not([disabled])');
-   if(resume)resume.focus({preventScroll:true});
+  if(verifiedResult()){
+   if(!showNativeRematch())announce('The final result is available, but the room menu could not open.');
+   return;
   }
+  document.getElementById('tabPlay')?.click();
  });
  intro.append(heading,current);
  const grid=node('div',null,'play-hub-grid');
@@ -242,6 +272,7 @@
  }
  function refresh(){
   const state=activeState();
+  refreshPostMatch();
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
    !document.getElementById('nextMatchPanel')?.hidden;
@@ -317,9 +348,50 @@
   }else if(newlyAccepted)announce('Ready confirmed. Waiting for every other real player to accept.');
   refresh();
  });
+ function refreshPostMatch(){
+  if(!postMatch)return;
+  const receipt=verifiedResult();
+  postMatch.hidden=!receipt||dismissedMatchKey===receipt.key;
+  if(!receipt)return;
+  const {link,state,result}=receipt;
+  const winner=result.winner===1?'RED WIN':result.winner===2?'BLUE WIN':'DRAW';
+  const round=Number.isSafeInteger(result.round)&&result.round>0?'ROUND '+result.round+' · ':'';
+  const score=round+winner+' · '+result.red+' : '+result.blue;
+  if(postMatchScore.textContent!==score)postMatchScore.textContent=score;
+  const vote=link.quickMatchMode?link.quickRematch:state.rematch;
+  const waiting=Array.isArray(vote?.required)?vote.required.length:0;
+  const accepted=Array.isArray(vote?.accepted)?vote.accepted.length:0;
+  const detail=vote&&waiting>0?
+   'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.' :
+   'Official room result · next match remains server-controlled.';
+  if(postMatchInfo.textContent!==detail)postMatchInfo.textContent=detail;
+  postMatchOpen.textContent=vote?'Review rematch consent →':'Review result & rematch →';
+ }
  const observer=new MutationObserver(()=>refresh());
  const match=document.getElementById('matchView');
- if(match)observer.observe(match,{attributes:true,attributeFilter:['hidden']});
+ if(match){
+  postMatch=node('section',null,'play-postmatch-ribbon');
+  postMatch.setAttribute('aria-label','Finished online match · next action');
+  postMatch.hidden=true;
+  const contents=node('div',null,'play-postmatch-content');
+  contents.append(node('span','FULL TIME · NATIVE ONLINE RESULT','play-postmatch-eyebrow'));
+  postMatchScore=node('strong','','play-postmatch-score');
+  postMatchInfo=node('span','','play-postmatch-info');
+  contents.append(postMatchScore,postMatchInfo);
+  const controls=node('div',null,'play-postmatch-actions');
+  postMatchOpen=action('Review result & rematch →',()=>{
+   if(!showNativeRematch())postMatchInfo.textContent='Open the room menu to review this result.';
+  },'play-postmatch-open');
+  const dismiss=action('Watch pitch',()=>{
+   const receipt=verifiedResult();
+   if(receipt){dismissedMatchKey=receipt.key;refreshPostMatch();}
+  },'play-postmatch-dismiss');
+  controls.append(postMatchOpen,dismiss);postMatch.append(contents,controls);
+  match.append(postMatch);
+  observer.observe(match,{attributes:true,attributeFilter:['hidden']});
+ }
+ const next=document.getElementById('nextMatchPanel');
+ if(next)observer.observe(next,{subtree:true,attributes:true,childList:true,characterData:true,attributeFilter:['hidden']});
  const q=home.querySelector('.quick-queue-panel');
  if(q)observer.observe(q,{subtree:true,attributes:true,attributeFilter:['hidden']});
  window.addEventListener('online',refresh);window.addEventListener('offline',refresh);
