@@ -53,7 +53,16 @@ const gamesSessionPoll=setInterval(()=>{
 gamesSessionPoll?.unref?.();
 window.addEventListener('focus',refreshGamesSession);
 document.addEventListener('visibilitychange',refreshGamesSession);
+// Keep offline replay decode/render work off-screen only while visible.
+// A viewer can browse My Games without silently advancing past goal moments.
+let parkedReplay=null;
 function showView(view){
+ const wasWatchingReplay=view!=='play'&&!$('matchView').hidden&&!!replay;
+ if(wasWatchingReplay){
+  const speed=replay.getSpeed();
+  parkedReplay={instance:replay,speed:Number.isFinite(speed)?speed:0};
+  if(speed>0){replay.setSpeed(0);$('replayToggle').textContent='▶';}
+ }
  const leavingOnline=view!=='play'&&!$('matchView').hidden&&!!serverLink?.room;
  releaseInputs();
  for(const [key,id]of [['home','homeView'],['play','matchView'],['games','gamesView']])
@@ -62,6 +71,15 @@ function showView(view){
   $(id).classList.toggle('active',key===view);
  if(view==='games')refreshGamesSession();
  if(view==='play'){
+  // Resume only the exact same replay the viewer parked. New recordings
+  // opened from the library must not inherit a previous replay's speed.
+  if(parkedReplay){
+   const parked=parkedReplay;parkedReplay=null;
+   if(replay===parked.instance&&parked.speed>0){
+    replay.setSpeed(parked.speed);
+    $('replayToggle').textContent='Ⅱ';
+   }
+  }
   $('gameCanvas').focus();renderer.render();
  }else{
   if(view==='games'&&typeof renderMyGames==='function')renderMyGames();
