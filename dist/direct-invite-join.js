@@ -53,10 +53,8 @@
  }
  form.onsubmit=event=>{
   event.preventDefault();
-  if(serverLink){
-   status.textContent='Leave or cancel the current online room, connection or human queue before joining another room.';
-   return;
-  }
+  const conflict=typeof onlineSessionConflict==='function'?onlineSessionConflict():'';
+  if(conflict){status.textContent=conflict;return;}
   try{
    const code=parseInvite(input.value);
    if(!defaultServer)throw Error('Connect to a Fuckball multiplayer server to join rooms.');

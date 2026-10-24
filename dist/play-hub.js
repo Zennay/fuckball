@@ -191,6 +191,8 @@
  }
  function announce(message){status.textContent=message;}
  function canSwitch(what){
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return void announce('Your room is reconnecting. Choose Stop reconnecting first before you '+what+'.');
   const state=activeState();
   if(state.pending)return void announce('An online room is still connecting. Cancel that connection explicitly before you '+what+'.');
   if(state.server||state.peer)

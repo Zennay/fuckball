@@ -152,9 +152,10 @@
   }catch(error){status.textContent='Import refused: '+(error.message||'Invalid bookmark file.');}
  };
  function busyWithMatch(){
-  return !!serverLink?.room||!!peerConnected||
-   !!document.querySelector('.quick-queue-actions button:not([hidden])')||
-   !!document.querySelector('.quick-ready:not([hidden])');
+  // The same native session admission rule protects saved/private/public
+  // room shortcuts, including a timed room reconnect with no active socket.
+  return typeof onlineSessionConflict==='function'?
+   !!onlineSessionConflict():!!serverLink||!!peerConnected;
  }
  function openSavedRoom(code){
   if(busyWithMatch()){
