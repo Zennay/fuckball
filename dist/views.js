@@ -94,6 +94,8 @@ $('tabHome').onclick=()=>showView('home');$('tabPlay').onclick=()=>showView('pla
 // Central safety boundary for ALL original Home and practice entry points.
 // Native WebSocket host/match authority cannot be replaced by a local-mode click.
 function pendingSessionBlock(){
+ if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+  return 'Room recovery is still active. Choose Stop reconnecting before starting another game.';
  if(serverLink)return serverLink.room?
   'Leave your current native online room explicitly before changing game modes.':
   'Cancel your current native online connection or human search before changing game modes.';

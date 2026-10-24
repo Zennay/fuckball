@@ -8,6 +8,8 @@
  panel.className='native-room-recovery';
  panel.hidden=true;
  panel.setAttribute('aria-label','Room connection recovery');
+ panel.setAttribute('role','region');
+ panel.tabIndex=-1;
  const tag=document.createElement('span');tag.className='native-room-recovery-tag';tag.textContent='ROOM CONNECTION';
  const title=document.createElement('h2');title.textContent='Connection interrupted';
  const description=document.createElement('p');description.className='native-room-recovery-description';
@@ -20,7 +22,10 @@
  const note=document.createElement('p');note.className='native-room-recovery-note';
  note.textContent='Existing room and player identity are requested from the server. A restored slot is never guaranteed; no bot is substituted for you.';
  panel.append(tag,title,description,progress,actions,note);
- match.append(panel);
+ // Keep recovery visible while the player browses Home or My Games. The
+ // original matchView is frequently hidden at the moment the socket drops.
+ // This panel is strictly a view onto the existing reconnect/cancel callbacks.
+ document.body.append(panel);
  let refreshTimer=null,deadline=0,handlers=null;
  function hide(){
   if(refreshTimer!==null){clearInterval(refreshTimer);refreshTimer=null;}
@@ -29,7 +34,9 @@
  }
  function show(info){
   if(!info||!['waiting','connecting','offline','failed'].includes(info.phase))return;
+  const firstAppearance=panel.hidden;
   hide();handlers=info;panel.hidden=false;
+  if(firstAppearance)panel.focus({preventScroll:true});
   title.textContent=info.phase==='failed'?'Could not rejoin your room':
    info.phase==='offline'?'Your device is offline':
    info.phase==='connecting'?'Joining your room again…':'Connection interrupted';
