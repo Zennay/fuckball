@@ -96,7 +96,7 @@ function showQuickRematchAlert(link){
 // One fail-closed admission gate for every native online entry point: Quick
 // Match, invite joins, host creation and public-room admission. Only explicit
 // Leave/Cancel may destroy an existing human session or reconnect plan.
-function onlineSessionConflict(resumeContext=null){
+function onlineSessionConflict(resumeContext=null,startingNewQueue=false){
  if(roomRecovery.context&&!resumeContext?.roomRecovery)
   return 'Your original room is reconnecting. Choose Stop reconnecting before starting another online session.';
  if(serverLink)
@@ -106,14 +106,18 @@ function onlineSessionConflict(resumeContext=null){
  if(typeof peerConnected!=='undefined'&&peerConnected||
     typeof peer!=='undefined'&&peer)
   return 'Disconnect your direct-peer game or pending connection before starting an online room.';
- if(document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])'))
+ // Quick Match exposes its own Cancel button just before connecting. Do
+ // not mistake that freshly initiated user action for a previous session.
+ // All other entry points and existing ready checks remain blocked.
+ if(document.querySelector('.quick-ready:not([hidden])')||
+    !startingNewQueue&&document.querySelector('.quick-queue-actions button:not([hidden])'))
   return 'Cancel the active human queue or ready check before starting another online room.';
  return '';
 }
 function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false,spectate=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');
  // Validate room credentials and current-session ownership BEFORE any
  // destructive disconnect, view change, replay close or local HUD mutation.
- const blocked=onlineSessionConflict(resumeContext);
+ const blocked=onlineSessionConflict(resumeContext,!!quickMode);
  if(blocked)throw Error(blocked);
  const accessKey=!create&&!resumeContext&&!quickMode&&roomId?
  (document.getElementById('joinRoomAccessKey')?.value||''):'';
