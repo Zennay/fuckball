@@ -198,6 +198,14 @@
    notice.textContent='Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
     ' human players available · '+duration+'s elapsed. No bots will be added.';
   }
+  // A read-only reflection of the real human queue. The Play landing page may
+  // display it or forward an *explicit* player click to native ready controls.
+  // No queue ownership, ready consent or server authority is transferred.
+  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+   window.dispatchEvent(new CustomEvent('fuckball:quick-match-state',{detail:{
+    searching,mode:matchMode,ready:!!ready,accepted:readyAccepted,
+    waiting,needed,expiresAt:ready?ready.expiresAt:null
+   }}));
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
  function done(message,offerRetry=false){
