@@ -1,4 +1,5 @@
 'use strict';
+const NATIVE_ROOM_CODE=/^[A-HJ-NP-Z2-9]{8}$/; // Same alphabet as server-issued room IDs
 const defaultServer=location.hostname.endsWith('.chatgpt.site')?'':(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';$('serverAddress').value=defaultServer;
 $('preserveGuestSlot').checked=settings.guestReconnect===true;
 $('preserveGuestSlot').onchange=()=>{settings.guestReconnect=$('preserveGuestSlot').checked;savePrefs();};
@@ -28,7 +29,7 @@ function retryRoomRecovery(info,attempt){
  else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
 }
 function offerRoomRecovery(info){
- if(!/^[A-Z0-9]{6,12}$/.test(info.room||''))return;
+ if(!NATIVE_ROOM_CODE.test(info.room||''))return;
  clearRoomRecovery();roomRecovery.context=info;
  if(info.tries>=3){
   window.FuckballRoomRecovery?.show({
@@ -164,12 +165,31 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
    }
-   if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}const room=link.room||(!create?roomId:''),tries=(link.retries||0),
-   previousId=link.room?networkPlayerId:(link.previousId??networkPlayerId),ticket=link.resumeTicket,name=link.joinName;
+   if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}
+   // A requested invite code is not proof of admission. Only a native
+   // welcome-assigned room (or an already-authorized recovery attempt) may
+   // trigger room recovery; otherwise the player stays in an explicit join
+   // workflow and never claims to be reconnecting to an unjoined slot.
+   const admitted=!!link.room;
+   const retryingOriginal=link.recoveryAttempt===true&&resumeContext?.roomRecovery===true;
+   const room=link.room||(retryingOriginal?roomId:'');
+   const tries=link.retries||0,previousId=admitted?networkPlayerId:
+    (link.previousId??networkPlayerId),ticket=link.resumeTicket,name=link.joinName;
+   const retryJoin=!create&&!link.quickMatchMode&&!admitted&&!retryingOriginal&&
+    NATIVE_ROOM_CODE.test(roomId);
+   const retrySpectator=link.requestedSpectate;
    disconnect();if(link.failed)return;
-   if(room&&!link.quickMatchMode){notify('Connection lost. Room recovery available.');
-    offerRoomRecovery({room,tries,previousId,ticket,name});}
-   else notify('Disconnected.');};
+   if(room&&!link.quickMatchMode){
+    notify('Connection lost. Room recovery available.');
+    offerRoomRecovery({room,tries,previousId,ticket,name});
+   }else if(retryJoin){
+    // No slot was ever admitted, so show a normal (manual) join retry. No
+    // ticket is fabricated and no background reconnect is scheduled.
+    showView('play');
+    showJoinScreen(roomId,'The server connection ended before joining. Review the room and retry explicitly.');
+    if(retrySpectator)$('joinSpectator').checked=true;
+   }else notify('Disconnected.');
+  };
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(link.spectatorJoinAwaiting){
   if(d.type==='spectatorAdmissionInfo'&&d.supported===true){
@@ -337,8 +357,24 @@ async function copyInvite(silent){const value=$('inviteLink').value;if(!value)re
 $('createServerRoom').onclick=()=>connectServer(true);$('copyInvite').onclick=()=>copyInvite(false);$('inviteButton').onclick=$('menuCopyLink').onclick=()=>copyInvite(false);
 $('shareInvite').onclick=async()=>{const url=$('inviteLink').value;if(!url)return;if(navigator.share){try{await navigator.share({title:'Fuckball',text:'Join my Fuckball room',url});}catch{}}else copyInvite(false);};
 const baseDisconnectPeer=$('disconnectPeer').onclick;$('disconnectPeer').onclick=e=>{const leaving=!!serverLink;baseDisconnectPeer?.(e);if(leaving){setRoomParam(null);$('inviteBox').hidden=true;$('inviteLink').value='';$('serverRoomStatus').textContent='Left the room.';}};
-const inviteRoom=(()=>{try{const m=/[?&]room=([^&#]*)/.exec(location.search||'');return m?decodeURIComponent(m[1].replace(/\+/g,' ')):'';}catch{return'';}})().trim().toUpperCase();
-if(inviteRoom){if(!/^[A-Z0-9]{6,12}$/.test(inviteRoom)){setRoomParam(null);notify('Invalid invite link.');}else if(!defaultServer){notify('Invite links need the Fuckball online server.');}else{showView('play');showJoinScreen(inviteRoom);}}
+// Match the same canonical 8-character code and one-parameter link format
+// accepted by manual paste / local QR scanners. A duplicate `room` key or
+// extra query parameter must not silently choose one of several invites.
+const inviteQuery=(()=>{
+ try{
+  const params=new URLSearchParams(location.search||'');
+  if(!params.has('room'))return{room:'',invalid:false};
+  const rooms=params.getAll('room');
+  if(params.size!==1||rooms.length!==1)return{room:'',invalid:true};
+  const room=String(rooms[0]||'').trim().toUpperCase();
+  return NATIVE_ROOM_CODE.test(room)?{room,invalid:false}:{room:'',invalid:true};
+ }catch{return{room:'',invalid:true};}
+})();
+if(inviteQuery.invalid){setRoomParam(null);notify('Invalid or ambiguous room invitation. Paste a valid eight-character code.');}
+else if(inviteQuery.room){
+ if(!defaultServer)notify('Invite links need the Fuckball online server.');
+ else{showView('play');showJoinScreen(inviteQuery.room);}
+}
 
 
 /* Peer hosting (dist/peer-net.js, docs/netcode-plan.md): the room server may move the simulation to the
@@ -371,8 +407,17 @@ function joinRoom(name){
  const blocked=onlineSessionConflict();
  if(blocked){$('joinError').textContent=blocked;return;}
  const watch=$('joinSpectator').checked;
+ // Keep the join form and its room code/nickname/spectator choice if native
+ // validation rejects this request synchronously. It must never vanish before
+ // a WebSocket was actually created.
+ const outcome=connectServer(false,joinRoomId,name,null,null,false,false,watch);
+ if(outcome===false){
+  $('joinError').textContent=$('serverRoomStatus').textContent||
+   'Could not start the room connection. Check your server and retry.';
+  $('joinName').focus({preventScroll:true});
+  return;
+ }
  hideJoinScreen();
- connectServer(false,joinRoomId,name,null,null,false,false,watch);
 }
 $('joinWithName').onclick=()=>{if(settings.account){joinRoom(settings.account.username);return;}const n=$('joinName').value.trim();if(!n){$('joinError').textContent='Enter a nickname or join as guest.';return;}setName(n);joinRoom(settings.name);};
 $('joinName').addEventListener('keydown',e=>{if(e.key==='Enter'||e.code==='Enter'){e.preventDefault();$('joinWithName').onclick();}});
