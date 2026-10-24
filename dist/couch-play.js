@@ -184,10 +184,8 @@
   return {x,y,kick:held(pad,0)||held(pad,2)||held(pad,7)};
  }
  function canInput(){
-  return isLocal()&&!document.hidden&&
-   typeof paused!=='undefined'&&!paused&&
-   (typeof menuOpen==='undefined'||!menuOpen)&&
-   !document.querySelector('dialog[open]');
+  // P2's controller must obey the same visible-pitch gate as P1.
+  return isLocal()&&canControlLiveMatch();
  }
  function read(){
   return canInput()?sample(selected()):neutral();

@@ -120,8 +120,9 @@
   return{x,y,kick:kicking(pad)};
  }
  function playable(){
-  return !document.hidden&&!$('matchView').hidden&&$('joinScreen').hidden&&
-   !menuOpen&&started&&!paused&&!replay&&$('mode').value!=='watch';
+  // Same input boundary as keyboard and touch: dialogs/chat, hidden views and
+  // lost window focus must never reapply a held controller direction.
+  return canControlLiveMatch();
  }
  function read(){return playable()&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)?sample(controller()):neutral();}
  function describe(pad){
@@ -164,7 +165,10 @@
   const pad=controller();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
-  if(start&&!wasStart&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&!$('matchView').hidden&&$('joinScreen').hidden){
+  if(start&&!wasStart&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
+     windowInputFocused&&!document.hidden&&!$('matchView').hidden&&
+     $('joinScreen').hidden&&$('chatForm').hidden&&
+     !document.querySelector('dialog[open]')){
    // Menu control is edge-triggered, never fires repeatedly while held.
    toggleMatchMenu();
   }
