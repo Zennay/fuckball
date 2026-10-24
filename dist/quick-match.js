@@ -172,7 +172,11 @@
   }else recoveryReason.textContent='Open Online Rooms to configure the server.';
  };
  dismissRecovery.onclick=()=>{hideRecovery();refresh();};
- let ready=null,readyAccepted=false;
+ let ready=null,readyAccepted=false,readyConfirming=false,readyNoReceipt=false,readyReceiptTimer=null;
+ function clearReadyReceipt(){
+  if(readyReceiptTimer!==null){clearTimeout(readyReceiptTimer);readyReceiptTimer=null;}
+  readyConfirming=false;readyNoReceipt=false;
+ }
  let readyNotification=null,titleFlash=null,titleBeforeAlert=null,readyNotificationTimer=null;
  function clearReadyAlert(){
   if(titleFlash){clearInterval(titleFlash);titleFlash=null;}
@@ -240,27 +244,39 @@
   readyDock.hidden=!ready||!home.hidden;
   if(ready){
    const seconds=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
-   readyDockTitle.textContent=readyAccepted?'YOU ARE READY · WAITING FOR HUMANS':
-    seconds>0?'MATCH FOUND · CONFIRM TO PLAY':'READY CHECK EXPIRED';
+   readyDockTitle.textContent=readyAccepted?'SERVER CONFIRMED · WAITING FOR HUMANS':
+    readyConfirming?'SENDING READY · WAIT FOR SERVER':
+    seconds===0?'READY CHECK EXPIRED':
+    readyNoReceipt?'NO SERVER RECEIPT · TRY AGAIN':'MATCH FOUND · CONFIRM TO PLAY';
    const dockText=playlistLabel(ready.mode)+' · '+ready.ready+' of '+ready.players+
     ' real players confirmed · '+seconds+'s left'+
-    (readyAccepted?' · your acceptance was sent.':'');
+    (readyAccepted?' · the server confirmed your acceptance.':
+     readyConfirming?' · awaiting server receipt.':
+     readyNoReceipt?' · no receipt yet; explicitly retry if time remains.':'');
    if(readyDockProgress.textContent!==dockText)readyDockProgress.textContent=dockText;
-   dockAccept.textContent=readyAccepted?'✓ Accepted':'✓ I’m ready';
+   dockAccept.textContent=readyAccepted?'✓ Server confirmed':
+    readyConfirming?'… Sending':'✓ I’m ready';
    // The mirror has its own expiry/accepted guard. Native buttons perform
    // the last validation on click; do not carry a stale disabled state from
    // the previous proposal while the new ready-check is rendering.
-   dockAccept.disabled=readyAccepted||seconds===0;
+   dockAccept.disabled=readyAccepted||readyConfirming||seconds===0;
    dockDecline.disabled=seconds===0;
   }
   if(ready){
    const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
    readyText.textContent='All '+ready.players+' human players must confirm. Casual '+playlistLabel(ready.mode)+', no ranked rating.';
    readyProgress.textContent=ready.ready+' / '+ready.players+' confirmed · '+remain+
-    's left'+(readyAccepted?' · You’re ready. Waiting for others.':'');
-   acceptReady.disabled=readyAccepted||remain===0;
+    's left'+(readyAccepted?' · Server received your acceptance; waiting for others.':
+     readyConfirming?' · Sending your confirmation to the server…':
+     readyNoReceipt?' · No server receipt; you may retry.':'');
+   acceptReady.textContent=readyAccepted?'✓ Server confirmed':
+    readyConfirming?'… Waiting for server':'✓ I’m ready';
+   acceptReady.disabled=readyAccepted||readyConfirming||remain===0;
    declineReady.disabled=remain===0;
-   notice.textContent='Your proposed match is waiting for every player to accept.';
+   notice.textContent=readyAccepted?'Your acceptance was confirmed by the server. Waiting for other humans.':
+    readyConfirming?'Waiting for the server to acknowledge your ready confirmation…':
+    readyNoReceipt?'The server has not acknowledged your confirmation. Try again before time runs out.':
+    'Your proposed match is waiting for every player to accept.';
   }else if(searching&&queuedAt){
    const duration=Math.max(0,Math.floor((Date.now()-queuedAt)/1000));
    notice.textContent='Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
@@ -272,6 +288,7 @@
   if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
    window.dispatchEvent(new CustomEvent('fuckball:quick-match-state',{detail:{
     searching,mode:matchMode,ready:!!ready,accepted:readyAccepted,
+    confirming:readyConfirming,
     waiting,needed,expiresAt:ready?ready.expiresAt:null,
     recovery:!recovery.hidden&&lastAttempt&&!lastAttempt.party&&
      standardModes.includes(lastAttempt.mode)?{
@@ -282,7 +299,7 @@
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
  function done(message,offerRetry=false){
   const wasSearching=searching;
-  clearReadyAlert();searching=false;matchMode=null;ready=null;readyAccepted=false;
+  clearReadyAlert();clearReadyReceipt();searching=false;matchMode=null;ready=null;readyAccepted=false;
   stopClock();notice.textContent=String(message||'Search ended.').slice(0,240);
   if(offerRetry&&wasSearching)showRecovery(message);else hideRecovery();
   // Publish the *final* state after the native recovery choice exists.
@@ -314,6 +331,7 @@
   }
   if(!party&&standardModes.includes(mode))setPreferred(mode);
   hideRecovery();lastAttempt={mode,party};
+  clearReadyReceipt();
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   if(connectServer(false,'','',null,mode,party)===false){
@@ -464,14 +482,30 @@
  window.addEventListener('offline',loadAvailability);
  loadAvailability();
  acceptReady.onclick=()=>{
-  if(!ready||readyAccepted||Date.now()>=ready.expiresAt)return;
+  if(!ready||readyAccepted||readyConfirming||Date.now()>=ready.expiresAt)return;
+  // serverLink.send is deliberately a no-op on an unopened WebSocket.
+  // Never treat a local click or that no-op as human consent acknowledged.
+  if(!serverLink?.ws||serverLink.ws.readyState!==1){
+   readyNoReceipt=true;refresh();return;
+  }
+  const id=ready.id;
   try{
-   serverLink?.send({type:'queueReadyResponse',id:ready.id,accept:true});
-   readyAccepted=true;clearReadyAlert();ready.ready=Math.max(1,ready.ready);refresh();
-  }catch{done('Could not confirm this match. Start another search.');}
+   serverLink.send({type:'queueReadyResponse',id,accept:true});
+   readyConfirming=true;readyNoReceipt=false;clearReadyAlert();refresh();
+   // No automatic retry, auto-consent, or guessed receipt. Another explicit
+   // click is allowed if the server has not acknowledged before the deadline.
+   readyReceiptTimer=setTimeout(()=>{
+    readyReceiptTimer=null;
+    if(!ready||ready.id!==id||readyAccepted)return;
+    readyConfirming=false;readyNoReceipt=true;refresh();
+   },2300);
+  }catch{
+   readyConfirming=false;readyNoReceipt=true;refresh();
+  }
  };
  declineReady.onclick=()=>{
   if(!ready)return;
+  clearReadyReceipt();
   try{serverLink?.send({type:'queueReadyResponse',id:ready.id,accept:false});}catch{}
   disconnect();done('You declined the match. Search again when ready.');
  };
@@ -489,6 +523,7 @@
   if(d.type==='queueReady'){
    if(!searching||!Number.isSafeInteger(d.expiresAt)||typeof d.id!=='string'||
       d.mode!==matchMode||d.players!==needed||d.humanOnly!==true)return;
+   clearReadyReceipt();
    ready={id:d.id,mode:d.mode,players:d.players,expiresAt:d.expiresAt,ready:0};
    readyAccepted=false;refresh();alertReady(d.mode,d.expiresAt);
   }else if(d.type==='queueReadyProgress'){
@@ -497,10 +532,15 @@
     ready.ready=d.ready;
    refresh();
   }else if(d.type==='queueReadyAccepted'){
-   if(ready&&ready.id===d.id){readyAccepted=true;refresh();}
+   if(ready&&ready.id===d.id){
+    clearReadyReceipt();readyAccepted=true;clearReadyAlert();
+    if(Number.isSafeInteger(d.ready)&&d.ready>=0&&d.ready<=ready.players)
+     ready.ready=d.ready;
+    refresh();
+   }
   }else if(d.type==='queueReadyAborted'){
    if(!ready||ready.id!==d.id)return;
-   ready=null;readyAccepted=false;clearReadyAlert();
+   ready=null;readyAccepted=false;clearReadyAlert();clearReadyReceipt();
    if(d.requeued===true){
     refresh();notice.textContent=(d.reason||'Not everyone accepted.')+' Searching again…';
    }else{
