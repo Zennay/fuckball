@@ -55,11 +55,11 @@ window.addEventListener('offline',()=>{
  if(roomRecovery.context&&roomRecovery.timer!==null)
   offerRoomRecovery({...roomRecovery.context,offline:true});
 });
-for(const id of ['tabHome','tabReplay'])
- document.getElementById(id)?.addEventListener('click',()=>{
-  if(serverLink?.recoveryAttempt)disconnect();
-  else if(roomRecovery.context)clearRoomRecovery();
- });
+// Switching visible tabs is not an instruction to abandon a human room.
+// Recovery remains active and its cancel action remains explicit/visible
+// across Match, Home and My Games (including during a connection attempt).
+// Real disconnect, pagehide, or deliberately joining another room still
+// clears timers, preventing stale retry requests after a session change.
 window.addEventListener('pagehide',clearRoomRecovery);
 const originalQuickPlay=quickPlay;
 quickPlay=function(...args){
