@@ -170,7 +170,15 @@ function safeName(name){return String(name).replace(/[^a-z0-9._-]/gi,'_').slice(
 function applyMap(text){if(text.length>2*1024*1024)throw Error('Stadium exceeds 2 MB.');const parsed=Utils.parseStadium(text);if(!parsed)throw Error('Invalid stadium.');stadium=parsed;let option=$('stadium').querySelector('[value="custom"]');if(!option){option=new Option(parsed.name,'custom');$('stadium').append(option);}option.textContent=parsed.name;$('stadium').value='custom';$('stadiumLabel').textContent=parsed.name.toUpperCase();resetMatch(started);log('Stadium loaded: '+parsed.name);notify('Stadium loaded: '+parsed.name);}
 function finishRecording(){const bytes=room.stopRecording();$('recordIndicator').hidden=true;$('recordButton').textContent='● Record';if(bytes){const name='fuckball-'+new Date().toISOString().replace(/[:.]/g,'-')+'.hbr2';saveBlob(bytes,name,'application/octet-stream');if(typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new window.CustomEvent('fuckball:native-hbr2-finished',{detail:{bytes,name,local:!serverLink&&!peerConnected}}));log('Replay downloaded.');}}
 function record(){if(!started||replay)return;if(room.isRecording())finishRecording();else if(room.startRecording()){$('recordIndicator').hidden=false;$('recordButton').textContent='■ Save recording';log('Opname gestart.');}}
-function closeReplay(){if(!replay)return;replay.destroy();replay=null;renderer.room=room;renderer.initialize();renderer.followPlayerId=1;renderer.zoomCoeff=settings.zoom;room.setSimulationSpeed(1);$('replayControls').hidden=true;resetMatch(false);}
+let replayOpenedFromGames=false;
+function closeReplay(){
+ if(!replay)return;
+ replay.destroy();replay=null;
+ replayOpenedFromGames=false;
+ $('replayClose').textContent='Close';
+ renderer.room=room;renderer.initialize();renderer.followPlayerId=1;renderer.zoomCoeff=settings.zoom;
+ room.setSimulationSpeed(1);$('replayControls').hidden=true;resetMatch(false);
+}
 // Replays use the same engine/renderer as the live pitch. Never replace a
 // multiplayer connection, an in-progress handshake or a human ready-check
 // without the player explicitly leaving through its original controls.
@@ -184,11 +192,24 @@ function replaySessionConflict(){
  return '';
 }
 function loadReplay(bytes,name){
+ const fromGames=!$('gamesView').hidden;
  const sessionBlock=replaySessionConflict();
  if(sessionBlock)throw Error(sessionBlock);
  if(bytes.length>32*1024*1024)throw Error('Replay exceeds 32 MB.');
  Replay.readAll(bytes);
- if(room.isRecording())finishRecording();if(replay)replay.destroy();releaseInputs();room.setSimulationSpeed(0);replay=Replay.read(bytes,{render:()=>{updatePrediction();renderer.render();updateScore();},onTeamGoal:(...a)=>renderer.onTeamGoal?.(...a),onGameStart:(...a)=>renderer.onGameStart?.(...a)},{requestAnimationFrame:window.requestAnimationFrame.bind(window),cancelAnimationFrame:window.cancelAnimationFrame.bind(window)});renderer.room=replay;renderer.initialize();renderer.followPlayerId=-1;renderer.zoomCoeff=settings.zoom;replay.onEnd=()=>{$('replayToggle').textContent='▶';replay.setSpeed(0);};replay.setSpeed(1);$('replaySpeed').value='1';$('replayToggle').textContent='Ⅱ';$('replayControls').hidden=false;setButtons();updateRoster();log('Replay loaded: '+name);}
+ if(room.isRecording())finishRecording();if(replay)replay.destroy();releaseInputs();room.setSimulationSpeed(0);replay=Replay.read(bytes,{render:()=>{updatePrediction();renderer.render();updateScore();},onTeamGoal:(...a)=>renderer.onTeamGoal?.(...a),onGameStart:(...a)=>renderer.onGameStart?.(...a)},{requestAnimationFrame:window.requestAnimationFrame.bind(window),cancelAnimationFrame:window.cancelAnimationFrame.bind(window)});renderer.room=replay;renderer.initialize();renderer.followPlayerId=-1;renderer.zoomCoeff=settings.zoom;
+ replay.onEnd=()=>{$('replayToggle').textContent='▶';replay.setSpeed(0);};
+ replay.setSpeed(1);$('replaySpeed').value='1';$('replayToggle').textContent='Ⅱ';
+ $('replayControls').hidden=false;setButtons();updateRoster();
+ replayOpenedFromGames=fromGames;
+ $('replayClose').textContent=fromGames?'↗ My Games':'Close';
+ // Replay sources (My Games, saved moments, gallery and local uploads) all
+ // use this one playback path. Loading in a hidden canvas used to advance
+ // the replay with no video visible or usable seek/pause controls.
+ if(typeof closeMatchMenu==='function'&&typeof menuOpen!=='undefined'&&menuOpen)closeMatchMenu();
+ if(typeof showView==='function'&&$('matchView').hidden)showView('play');
+ log('Replay loaded: '+name);
+}
 for(const [i,s]of defaults.entries())$('stadium').add(new Option(s.name,i));
 $('startButton').onclick=startStop;$('resetButton').onclick=()=>resetMatch(true);$('pauseButton').onclick=togglePause;$('recordButton').onclick=record;
 $('mode').onchange=()=>{if(peerConnected)disconnect();rosterPreset='';resetMatch(started);};$('stadium').onchange=()=>{if($('stadium').value==='custom')return;stadium=defaults[+$('stadium').value];$('stadiumLabel').textContent=stadium.name.toUpperCase();resetMatch(started);};
@@ -221,7 +242,11 @@ $('replayFile').onchange=async e=>{
  }catch(err){notify('Could not open replay: '+(err.message||'Invalid or unsupported HBR2 recording.'));}
  e.target.value='';
 };
-$('replayClose').onclick=closeReplay;$('replayToggle').onclick=()=>{if(!replay)return;const s=replay.getSpeed();replay.setSpeed(s?0:+$('replaySpeed').value);$('replayToggle').textContent=s?'▶':'Ⅱ';};$('replaySeek').onchange=()=>replay?.setTime(replay.length()*$('replaySeek').value/1000);$('replaySpeed').onchange=()=>{replay?.setSpeed(+$('replaySpeed').value);$('replayToggle').textContent='Ⅱ';};
+$('replayClose').onclick=()=>{
+ const backToGames=replayOpenedFromGames;
+ closeReplay();
+ if(backToGames&&typeof showView==='function')showView('games');
+};$('replayToggle').onclick=()=>{if(!replay)return;const s=replay.getSpeed();replay.setSpeed(s?0:+$('replaySpeed').value);$('replayToggle').textContent=s?'▶':'Ⅱ';};$('replaySeek').onchange=()=>replay?.setTime(replay.length()*$('replaySeek').value/1000);$('replaySpeed').onchange=()=>{replay?.setSpeed(+$('replaySpeed').value);$('replayToggle').textContent='Ⅱ';};
 function openDialog(id){releaseInputs();$(id).showModal();}
 $('compatButton').onclick=()=>openDialog('compatDialog');$('settingsButton').onclick=()=>{$('nickname').value=settings.name;$('zoom').value=settings.zoom;$('soundEnabled').checked=settings.sound;openDialog('settingsDialog');};
 function setName(name){settings.name=String(name).trim().slice(0,25)||'Player';savePrefs();const own=roster.find(p=>p.id===1&&!p.bot);if(own)own.name=settings.name;if(!replay && !(peerConnected&&peerRole==='guest')){const p=room.state.players.find(p=>p.id===1&&!botIds.has(1));if(p)p.name=settings.name;rosterKey='';updateRoster();}$('profileName').textContent=settings.name;}
