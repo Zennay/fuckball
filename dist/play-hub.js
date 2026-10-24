@@ -108,12 +108,17 @@
   action('Practice Lab',()=>openSection('.practice-lab','Practice Lab is unavailable.','Practice Lab opened.'),'play-hub-secondary')
  );
  library.append(libraryActions);
- grid.append(human,rooms,practice,library);
+ const extras=node('details',null,'play-hub-extras');
+ const extrasToggle=node('summary','More ways to play · practice and replays');
+ extrasToggle.setAttribute('aria-label','Show local practice and replay options');
+ const extrasGrid=node('div',null,'play-hub-extras-grid');
+ extrasGrid.append(practice,library);extras.append(extrasToggle,extrasGrid);
+ grid.append(human,rooms);
  const footer=node('div',null,'play-hub-footer');
  const hint=node('span','Online matchmaking needs a live server and human consent. Training is local.','play-hub-hint');
  const network=node('span',null,'play-hub-network');
  footer.append(hint,network);
- section.append(intro,grid,status,footer);
+ section.append(intro,grid,extras,status,footer);
  hero.insertAdjacentElement('afterend',section);
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
@@ -194,8 +199,11 @@
    }else announce('The ready check is no longer available.');
    return;
   }
-  if(state.server||state.pending||state.peer||state.local||state.playingReplay)
-   return announce('Finish or cancel your connecting room, game or replay before starting human Quick Match.');
+  if(state.server||state.peer||state.local||state.playingReplay){
+   current.click();return;
+  }
+  if(state.pending)
+   return announce('Your room is connecting. Keep it or cancel through the native online controls.');
   if(state.inQueue||state.ready||nativeQueue.searching)
    return openSection('.quick-queue-panel','The human queue is unavailable.',
     'An existing search is active. You can cancel it there; no duplicate search was started.');
