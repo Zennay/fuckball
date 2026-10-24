@@ -68,6 +68,7 @@
  const current=node('button','↗ Return to current game','play-hub-resume');
  current.type='button';current.hidden=true;
  current.addEventListener('click',()=>{
+  if(activeState().pending){viewPendingConnection();return;}
   if(verifiedResult()){
    if(!showNativeRematch())announce('The final result is available, but the room menu could not open.');
    return;
@@ -75,6 +76,39 @@
   document.getElementById('tabPlay')?.click();
  });
  intro.append(heading,current);
+ // Native room joins may take time. Keep the in-flight connection observable
+ // and cancellable from Home, without constructing a second socket or queue.
+ const connectionCard=node('aside',null,'play-hub-connecting');
+ connectionCard.hidden=true;
+ connectionCard.setAttribute('aria-label','Online room connection in progress');
+ const connectionHeading=node('strong','CONNECTING TO A ROOM');
+ const connectionDetail=node('p','Waiting for the existing server connection.','play-hub-connecting-detail');
+ connectionDetail.setAttribute('role','status');
+ connectionDetail.setAttribute('aria-live','polite');
+ const connectionActions=node('div',null,'play-hub-connecting-actions');
+ function viewPendingConnection(){
+  const state=activeState();
+  if(!state.pending)return announce('Your connection changed. Check the current room status.');
+  document.getElementById('tabPlay')?.click();
+  if(typeof openDialog==='function'&&document.getElementById('networkDialog')?.open!==true)
+   openDialog('networkDialog');
+  announce('Opened the original online connection controls; no second connection was started.');
+ }
+ function cancelPendingConnection(){
+  const state=activeState();
+  if(!state.pending)return announce('The connection already changed. No disconnect was sent.');
+  // The real native button invokes the original disconnect cleanup: WebSocket,
+  // pending join state, access key, reconnect timers and local room controls.
+  const native=document.getElementById('disconnectPeer');
+  if(!native||native.disabled)return announce('The native disconnect control is not available.');
+  native.click();
+  announce('Cancelled the pending connection using the original room controls.');
+  refresh();
+ }
+ const connectionView=action('↗ View connection',viewPendingConnection,'play-hub-secondary');
+ const connectionCancel=action('× Cancel joining',cancelPendingConnection,'play-hub-connection-cancel');
+ connectionActions.append(connectionView,connectionCancel);
+ connectionCard.append(connectionHeading,connectionDetail,connectionActions);
  const grid=node('div',null,'play-hub-grid');
  const human=node('article',null,'play-hub-card play-hub-human');
  const humanCopy=node('div');
@@ -176,7 +210,7 @@
  const hint=node('span','Online matchmaking needs a live server and human consent. Training is local.','play-hub-hint');
  const network=node('span',null,'play-hub-network');
  footer.append(hint,network);
- section.append(intro,grid,extras,status,footer);
+ section.append(intro,connectionCard,grid,extras,status,footer);
  hero.insertAdjacentElement('afterend',section);
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
@@ -276,11 +310,10 @@
    }else announce('The ready check is no longer available.');
    return;
   }
+  if(state.pending){viewPendingConnection();return;}
   if(state.server||state.peer||state.local||state.playingReplay){
    current.click();return;
   }
-  if(state.pending)
-   return announce('Your room is connecting. Keep it or cancel through the native online controls.');
   if(state.inQueue||state.ready||nativeQueue.searching)
    return openSection('.quick-queue-panel','The human queue is unavailable.',
     'An existing search is active. You can cancel it there; no duplicate search was started.');
@@ -335,6 +368,13 @@
  function refresh(){
   const state=activeState();
   refreshPostMatch();
+  connectionCard.hidden=!state.pending;
+  if(state.pending){
+   const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
+   const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
+    ' You can keep waiting, review connection settings or cancel explicitly.';
+   if(connectionDetail.textContent!==copy)connectionDetail.textContent=copy;
+  }
   const canCancel=nativeQueue.searching&&!nativeQueue.ready;
   queueCancel.hidden=!canCancel;
   queueCancel.disabled=!canCancel;
@@ -348,7 +388,9 @@
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
    !document.getElementById('nextMatchPanel')?.hidden;
-  if(nativeQueue.ready){
+  if(state.pending){
+   queueNow.textContent='↗ View online connection';queueNow.disabled=false;
+  }else if(nativeQueue.ready){
    const remaining=Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000));
    queueNow.textContent=nativeQueue.accepted?'✓ Ready · waiting for players':
     '✓ Accept '+nativeQueue.mode+' match · '+remaining+'s';
@@ -363,7 +405,8 @@
    queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
   }
   if(heroFind){
-   const label=nativeQueue.ready?(nativeQueue.accepted?'WAITING FOR PLAYERS':
+   const label=state.pending?'VIEW ROOM CONNECTION':
+    nativeQueue.ready?(nativeQueue.accepted?'WAITING FOR PLAYERS':
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
@@ -371,12 +414,13 @@
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
    heroFind.disabled=nativeQueue.ready&&nativeQueue.accepted;
   }
-  current.hidden=!(state.server||state.peer||state.local||state.playingReplay);
-  if(state.server||state.peer){
+  current.hidden=!(state.pending||state.server||state.peer||state.local||state.playingReplay);
+  if(state.pending){
+   current.textContent='↗ View connecting room';
+   network.textContent='● CONNECTING · YOU CAN CANCEL';
+  }else if(state.server||state.peer){
    current.textContent=postGame?'↗ Review result / rematch':'↗ Return to online room';
    network.textContent='● ONLINE ROOM ACTIVE';
-  }else if(state.pending){
-   network.textContent='● CONNECTING TO ONLINE ROOM';
   }else if(nativeQueue.ready){
    network.textContent=nativeQueue.accepted?'● READY · WAITING FOR OTHER PLAYERS':
     '● ACTION NEEDED · CONFIRM HUMAN MATCH';
@@ -407,8 +451,8 @@
   event.preventDefault();
   event.stopImmediatePropagation();
   const state=activeState();
-  if(state.server||state.peer||state.local||state.playingReplay)current.click();
-  else if(state.pending)announce('A room is still connecting. Keep or cancel that connection in native online controls.');
+  if(state.pending)viewPendingConnection();
+  else if(state.server||state.peer||state.local||state.playingReplay)current.click();
   else findHumanNow();
  },true);
  window.addEventListener('fuckball:quick-match-state',event=>{
@@ -479,6 +523,7 @@
  const q=home.querySelector('.quick-queue-panel');
  if(q)observer.observe(q,{subtree:true,attributes:true,attributeFilter:['hidden']});
  window.addEventListener('online',refresh);window.addEventListener('offline',refresh);
+ window.addEventListener('fuckball:native-session-state',refresh);
  document.getElementById('tabHome')?.addEventListener('click',refresh);
  document.getElementById('tabPlay')?.addEventListener('click',refresh);
  window.addEventListener('focus',refresh);

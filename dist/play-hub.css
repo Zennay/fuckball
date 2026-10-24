@@ -156,3 +156,24 @@ body.menu-open .play-postmatch-ribbon{display:none!important}
  .play-hub-recovery-actions{display:grid;grid-template-columns:1fr 1fr}
  .play-hub-recovery-actions .play-hub-retry{grid-column:1/-1}
 }
+
+/* Pending native room: keep the original, cancelable socket visible on Home. */
+.play-hub-connecting[hidden]{display:none!important}
+.play-hub-connecting{display:flex;align-items:center;justify-content:space-between;gap:18px;
+ box-sizing:border-box;padding:16px 19px;margin:0 0 18px;border-radius:14px;
+ border:1px solid #9fc4ee;background:linear-gradient(115deg,#192d3e,#1a383c);
+ box-shadow:0 12px 32px #05141b6b;color:#f0f9ff}
+.play-hub-connecting strong{display:block;font-size:.78rem;letter-spacing:.07em;color:#c6e5fc}
+.play-hub-connecting-detail{font-size:.86rem;line-height:1.48;margin:4px 0 0;
+ color:#d2e4eb;max-width:58ch;overflow-wrap:anywhere}
+.play-hub-connecting-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.play-hub-connecting-actions button{font:inherit;font-weight:800;font-size:.83rem;
+ min-height:46px;padding:10px 14px;cursor:pointer;border-radius:9px;
+ border:1px solid #91bbca;color:#ebfaff;background:transparent}
+.play-hub-connecting-actions .play-hub-connection-cancel{border-color:#e4ad9d;color:#ffe5dc}
+.play-hub-connecting-actions button:focus-visible{outline:3px solid #d3f49f;outline-offset:3px}
+@media(max-width:720px){
+ .play-hub-connecting{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+ .play-hub-connecting-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:380px){.play-hub-connecting-actions{grid-template-columns:1fr}}
