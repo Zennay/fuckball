@@ -281,7 +281,7 @@
   const feedback=native.querySelector('.quick-queue-status');
   if(feedback)feedback.tabIndex=-1;
   reveal(native,'.quick-queue-status');
-  announce('Requested the native '+playlist+' human queue. Check its live status below; every player still must accept.');
+  announce('Submitted your '+playlist+' request to the native controls. Check below for server acceptance or a connection error; each human must confirm.');
  }
  function chooseMode(mode){
   if(!playlists.includes(mode))return;
