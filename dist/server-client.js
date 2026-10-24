@@ -362,7 +362,9 @@ const baseDisconnectPeer=$('disconnectPeer').onclick;$('disconnectPeer').onclick
 // extra query parameter must not silently choose one of several invites.
 const inviteQuery=(()=>{
  try{
-  const params=new URLSearchParams(location.search||'');
+  // Reuse the standard URL constructor already used by native invites;
+  // minimal browser runtimes need not provide URLSearchParams separately.
+  const params=new URL(location.href).searchParams;
   if(!params.has('room'))return{room:'',invalid:false};
   const rooms=params.getAll('room');
   if(params.size!==1||rooms.length!==1)return{room:'',invalid:true};
