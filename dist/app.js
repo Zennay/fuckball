@@ -171,7 +171,24 @@ function applyMap(text){if(text.length>2*1024*1024)throw Error('Stadium exceeds 
 function finishRecording(){const bytes=room.stopRecording();$('recordIndicator').hidden=true;$('recordButton').textContent='● Record';if(bytes){const name='fuckball-'+new Date().toISOString().replace(/[:.]/g,'-')+'.hbr2';saveBlob(bytes,name,'application/octet-stream');if(typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(new window.CustomEvent('fuckball:native-hbr2-finished',{detail:{bytes,name,local:!serverLink&&!peerConnected}}));log('Replay downloaded.');}}
 function record(){if(!started||replay)return;if(room.isRecording())finishRecording();else if(room.startRecording()){$('recordIndicator').hidden=false;$('recordButton').textContent='■ Save recording';log('Opname gestart.');}}
 function closeReplay(){if(!replay)return;replay.destroy();replay=null;renderer.room=room;renderer.initialize();renderer.followPlayerId=1;renderer.zoomCoeff=settings.zoom;room.setSimulationSpeed(1);$('replayControls').hidden=true;resetMatch(false);}
-function loadReplay(bytes,name){if(bytes.length>32*1024*1024)throw Error('Replay exceeds 32 MB.');Replay.readAll(bytes);if(peerConnected)disconnect();if(room.isRecording())finishRecording();if(replay)replay.destroy();releaseInputs();room.setSimulationSpeed(0);replay=Replay.read(bytes,{render:()=>{updatePrediction();renderer.render();updateScore();},onTeamGoal:(...a)=>renderer.onTeamGoal?.(...a),onGameStart:(...a)=>renderer.onGameStart?.(...a)},{requestAnimationFrame:window.requestAnimationFrame.bind(window),cancelAnimationFrame:window.cancelAnimationFrame.bind(window)});renderer.room=replay;renderer.initialize();renderer.followPlayerId=-1;renderer.zoomCoeff=settings.zoom;replay.onEnd=()=>{$('replayToggle').textContent='▶';replay.setSpeed(0);};replay.setSpeed(1);$('replaySpeed').value='1';$('replayToggle').textContent='Ⅱ';$('replayControls').hidden=false;setButtons();updateRoster();log('Replay loaded: '+name);}
+// Replays use the same engine/renderer as the live pitch. Never replace a
+// multiplayer connection, an in-progress handshake or a human ready-check
+// without the player explicitly leaving through its original controls.
+function replaySessionConflict(){
+ if(serverLink?.room)return 'Leave your current online room explicitly before opening a replay.';
+ if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
+ if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
+ if(peer)return 'Finish or cancel the direct-peer connection before opening a replay.';
+ const nativeQueue= document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
+ if(nativeQueue)return 'Finish or cancel the human matchmaking queue or ready check first.';
+ return '';
+}
+function loadReplay(bytes,name){
+ const sessionBlock=replaySessionConflict();
+ if(sessionBlock)throw Error(sessionBlock);
+ if(bytes.length>32*1024*1024)throw Error('Replay exceeds 32 MB.');
+ Replay.readAll(bytes);
+ if(room.isRecording())finishRecording();if(replay)replay.destroy();releaseInputs();room.setSimulationSpeed(0);replay=Replay.read(bytes,{render:()=>{updatePrediction();renderer.render();updateScore();},onTeamGoal:(...a)=>renderer.onTeamGoal?.(...a),onGameStart:(...a)=>renderer.onGameStart?.(...a)},{requestAnimationFrame:window.requestAnimationFrame.bind(window),cancelAnimationFrame:window.cancelAnimationFrame.bind(window)});renderer.room=replay;renderer.initialize();renderer.followPlayerId=-1;renderer.zoomCoeff=settings.zoom;replay.onEnd=()=>{$('replayToggle').textContent='▶';replay.setSpeed(0);};replay.setSpeed(1);$('replaySpeed').value='1';$('replayToggle').textContent='Ⅱ';$('replayControls').hidden=false;setButtons();updateRoster();log('Replay loaded: '+name);}
 for(const [i,s]of defaults.entries())$('stadium').add(new Option(s.name,i));
 $('startButton').onclick=startStop;$('resetButton').onclick=()=>resetMatch(true);$('pauseButton').onclick=togglePause;$('recordButton').onclick=record;
 $('mode').onchange=()=>{if(peerConnected)disconnect();rosterPreset='';resetMatch(started);};$('stadium').onchange=()=>{if($('stadium').value==='custom')return;stadium=defaults[+$('stadium').value];$('stadiumLabel').textContent=stadium.name.toUpperCase();resetMatch(started);};
@@ -189,7 +206,21 @@ $('importStadium').onclick=()=>$('stadiumFile').click();$('stadiumFile').onchang
 $('exportStadium').onclick=()=>saveBlob(Utils.exportStadium(stadium),safeName(stadium.name)+'.hbs','application/json');
 $('editorButton').onclick=()=>{$('stadiumCode').value=Utils.exportStadium(stadium);$('editorError').textContent='';openDialog('editorDialog');};
 $('applyStadium').onclick=()=>{try{applyMap($('stadiumCode').value);$('editorDialog').close();}catch(e){$('editorError').textContent=e.toString();}};
-$('replayButton').onclick=()=>$('replayFile').click();$('replayFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>32*1024*1024)throw Error('Limit: 32 MB.');loadReplay(new Uint8Array(await file.arrayBuffer()),file.name);}catch(err){notify('Could not load replay. HBR2 v3 required. '+err.toString());}e.target.value='';};
+$('replayButton').onclick=()=>{
+ const blocked=replaySessionConflict();
+ if(blocked){notify(blocked);return;}
+ $('replayFile').click();
+};
+$('replayFile').onchange=async e=>{
+ const file=e.target.files[0];if(!file)return;
+ try{
+  const blocked=replaySessionConflict();
+  if(blocked)throw Error(blocked);
+  if(file.size>32*1024*1024)throw Error('Limit: 32 MB.');
+  loadReplay(new Uint8Array(await file.arrayBuffer()),file.name);
+ }catch(err){notify('Could not open replay: '+(err.message||'Invalid or unsupported HBR2 recording.'));}
+ e.target.value='';
+};
 $('replayClose').onclick=closeReplay;$('replayToggle').onclick=()=>{if(!replay)return;const s=replay.getSpeed();replay.setSpeed(s?0:+$('replaySpeed').value);$('replayToggle').textContent=s?'▶':'Ⅱ';};$('replaySeek').onchange=()=>replay?.setTime(replay.length()*$('replaySeek').value/1000);$('replaySpeed').onchange=()=>{replay?.setSpeed(+$('replaySpeed').value);$('replayToggle').textContent='Ⅱ';};
 function openDialog(id){releaseInputs();$(id).showModal();}
 $('compatButton').onclick=()=>openDialog('compatDialog');$('settingsButton').onclick=()=>{$('nickname').value=settings.name;$('zoom').value=settings.zoom;$('soundEnabled').checked=settings.sound;openDialog('settingsDialog');};

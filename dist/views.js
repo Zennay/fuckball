@@ -1,4 +1,58 @@
 'use strict';
+// A live multiplayer session is never silently replaced by My Games/replays.
+// Keep one small non-invasive resume affordance next to the local library.
+const gamesSessionHost=$('gamesView');
+const gamesSessionNotice=document.createElement('aside');
+gamesSessionNotice.className='games-session-notice';
+gamesSessionNotice.hidden=true;
+gamesSessionNotice.setAttribute('aria-label','Current multiplayer session');
+const gamesSessionText=document.createElement('div');
+const gamesSessionTitle=document.createElement('strong');
+const gamesSessionDescription=document.createElement('p');
+gamesSessionText.append(gamesSessionTitle,gamesSessionDescription);
+const gamesSessionActions=document.createElement('div');
+gamesSessionActions.className='games-session-actions';
+const gamesSessionReturn=document.createElement('button');
+gamesSessionReturn.type='button';gamesSessionReturn.className='primary';
+gamesSessionReturn.textContent='↗ Return to match';
+const gamesSessionMenu=document.createElement('button');
+gamesSessionMenu.type='button';gamesSessionMenu.textContent='Room controls';
+gamesSessionActions.append(gamesSessionReturn,gamesSessionMenu);
+gamesSessionNotice.append(gamesSessionText,gamesSessionActions);
+if(typeof gamesSessionHost.prepend==='function')gamesSessionHost.prepend(gamesSessionNotice);
+else gamesSessionHost.append(gamesSessionNotice);
+function refreshGamesSession(){
+ const native=typeof serverLink!=='undefined'?serverLink:null;
+ const direct=typeof peerConnected!=='undefined'&&peerConnected;
+ const pending=typeof peer!=='undefined'&&!!peer;
+ const activeRoom=!!native?.room;
+ const hasSession=!!native||direct||pending;
+ gamesSessionNotice.hidden=!hasSession;
+ if(!hasSession)return;
+ gamesSessionTitle.textContent=activeRoom?'ONLINE ROOM STILL OPEN':
+  direct?'DIRECT MATCH STILL OPEN':'MULTIPLAYER CONNECTION IN PROGRESS';
+ gamesSessionDescription.textContent=activeRoom?
+  (native.roomState?.started?'Your live room continues while you browse My Games. ':
+   'Your online lobby is still connected. ')+
+  'Leave it explicitly before opening a replay.':
+  direct?'Your direct-peer match continues here. Disconnect explicitly before watching a replay.':
+  'Finish or cancel this connection before opening a replay. Nothing will be disconnected automatically.';
+ gamesSessionReturn.textContent=activeRoom||direct?'↗ Return to match':'↗ View connection';
+ gamesSessionMenu.hidden=!activeRoom&&!direct;
+}
+gamesSessionReturn.addEventListener('click',()=>{$('tabPlay').click();});
+gamesSessionMenu.addEventListener('click',()=>{
+ $('tabPlay').click();
+ if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+});
+// The connection may change while someone is reading their local library.
+// This is presentation only: no new socket, match polling or server messages.
+const gamesSessionPoll=setInterval(()=>{
+ if(!gamesSessionHost.hidden)refreshGamesSession();
+},1400);
+gamesSessionPoll?.unref?.();
+window.addEventListener('focus',refreshGamesSession);
+document.addEventListener('visibilitychange',refreshGamesSession);
 function showView(view){
  const leavingOnline=view!=='play'&&!$('matchView').hidden&&!!serverLink?.room;
  releaseInputs();
@@ -6,6 +60,7 @@ function showView(view){
   $(id).hidden=key!==view;
  for(const [key,id]of [['home','tabHome'],['play','tabPlay'],['games','tabReplay']])
   $(id).classList.toggle('active',key===view);
+ if(view==='games')refreshGamesSession();
  if(view==='play'){
   $('gameCanvas').focus();renderer.render();
  }else{
