@@ -4,6 +4,25 @@
 const ReplayLibrary=(()=>{
  const DB_NAME='fuckball-local-replays',MAX_FILE=32*1024*1024,MAX_TOTAL=160*1024*1024,MAX_ITEMS=30;
  let database=null,opening=null;
+ const CHANGE='fuckball:local-replay-library-change';
+ let changes=null;
+ function refreshFromAnotherTab(){
+  try{window.dispatchEvent(new Event(CHANGE));}catch{}
+ }
+ // A real recording saved, deleted or organized in another open game tab
+ // changes this tab's remaining capacity and visible My Games listing.
+ // Never send recording contents, names, account data or match results.
+ try{
+  if(typeof window.BroadcastChannel==='function'){
+   changes=new window.BroadcastChannel('fuckball-replay-local-v1');
+   changes.onmessage=e=>{if(e.data?.type==='changed')refreshFromAnotherTab();};
+   window.addEventListener('pagehide',()=>{changes?.close();changes=null;},{once:true});
+  }
+ }catch{changes=null;}
+ function notifyChanged(){
+  refreshFromAnotherTab();
+  try{changes?.postMessage({type:'changed'});}catch{}
+ }
  function parseRecording(bytes){
   const data=Replay.readAll(bytes);
   const frames=Number.isSafeInteger(data?.totalFrames)&&data.totalFrames>0?data.totalFrames:0;
@@ -90,6 +109,7 @@ const ReplayLibrary=(()=>{
     }catch(error){reason=error;tx.abort();}
    };
   });
+  notifyChanged();
   return item;
  }
  async function get(id){
@@ -109,6 +129,7 @@ const ReplayLibrary=(()=>{
    tx.onabort=()=>reject(tx.error||Error('Could not delete replay.'));
    tx.objectStore('meta').delete(id);tx.objectStore('data').delete(id);
   });
+  notifyChanged();
  }
  async function updateMeta(id,change){
   const d=await db();
@@ -121,7 +142,7 @@ const ReplayLibrary=(()=>{
     saved=change(lookup.result);
     store.put(saved);
    };
-   tx.oncomplete=()=>resolve(saved);
+   tx.oncomplete=()=>{notifyChanged();resolve(saved);};
    tx.onerror=()=>reject(tx.error||Error('Could not update replay.'));
    tx.onabort=()=>reject(Error('Replay missing or could not be updated.'));
   });
@@ -232,6 +253,12 @@ const ReplayLibrary=(()=>{
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
 gamesSort.add(new Option('Favorites first','favorites'));
+// Refresh the visible My Games library after an atomic save, removal, rename
+// or metadata update, including another browser tab. Avoid background redraws
+// while playing an active human match.
+window.addEventListener('fuckball:local-replay-library-change',()=>{
+ if(!$('gamesView').hidden)renderMyGames();
+});
 let favoritesOnly=false,activeLocalReplayId=null,selectedTag='all';
 const tagsFilterLabel=document.createElement('label');tagsFilterLabel.textContent='Collection tag';
 const tagsFilter=document.createElement('select');tagsFilter.setAttribute('aria-label','Filter replays by collection tag');
