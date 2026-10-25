@@ -28,3 +28,12 @@
 .clean-sheet-setup :is(button,select):focus-visible,.clean-sheet-hud button:focus-visible{outline:3px solid #e9ffaf;outline-offset:2px}
 @media(max-width:650px){.clean-sheet-setup{padding:12px}.clean-sheet-hud{top:65px}.clean-sheet-records{grid-template-columns:1fr}.clean-sheet-history-head button{flex:1}}
 @media(prefers-reduced-motion:reduce){.clean-sheet-setup *, .clean-sheet-hud *{transition:none!important;animation:none!important}}
+/* Real native defensive drill: pause is explicit and remains usable on touch. */
+.clean-sheet-actions button{min-height:48px}
+.clean-sheet-actions button:focus-visible{outline:3px solid #d6ff95;outline-offset:3px}
+.clean-sheet-actions button[hidden]{display:none!important}
+@media(max-width:560px){
+ .clean-sheet-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .clean-sheet-actions button{width:100%;min-width:0}
+}
+@media(max-width:330px){.clean-sheet-actions{grid-template-columns:1fr}}
