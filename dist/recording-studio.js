@@ -16,7 +16,7 @@
  const root=make('section',null,'recording-studio');
  root.setAttribute('aria-label','Private native recording studio');
  const heading=make('strong','RECORDING STUDIO · MY GAMES');
- const lead=make('p','Record the existing local engine as a genuine HBR2. Original HBR2 downloads are always kept. Saving a second, private copy in My Games requires your explicit choice below. Never uploads or produces ranked results.');
+ const lead=make('p','Record the existing local engine as a genuine HBR2. Original HBR2 downloads are always kept. A cross-view recording reminder lets you return or download before navigating away; the browser may warn before closing a tab with unsaved footage. Saving a second private copy in My Games requires your explicit choice below. Never uploads or produces ranked results.');
  const choices=make('div',null,'recording-studio-choices');
  const autoLabel=make('label'),auto=make('input');auto.type='checkbox';
  autoLabel.append(auto,document.createTextNode(' Start recording automatically on each new offline kick-off'));
@@ -32,6 +32,25 @@
  actions.append(toggle,open);
  root.append(heading,lead,choices,actions,status);
  pane.append(root);
+ // The original menu is hidden on Home / My Games. Keep the live offline
+ // recording visible there so switching views cannot conceal an unsaved HBR2.
+ const continuity=make('aside',null,'recording-studio-continuity');
+ continuity.hidden=true;
+ continuity.setAttribute('role','region');
+ continuity.setAttribute('aria-label','Unsaved local match recording');
+ const continuityCopy=make('div',null,'recording-studio-continuity-copy');
+ const continuityTitle=make('strong','● LOCAL HBR2 RECORDING IN PROGRESS');
+ const continuityStatus=make('p','Recording your current local match. Download before closing this tab.');
+ continuityStatus.setAttribute('role','status');
+ const continuityActions=make('div',null,'recording-studio-continuity-actions');
+ const continuityReturn=make('button','↗ Return to pitch');
+ const continuitySave=make('button','■ Stop & download HBR2');
+ continuitySave.className='primary';
+ for(const button of [continuityReturn,continuitySave])button.type='button';
+ continuityActions.append(continuityReturn,continuitySave);
+ continuityCopy.append(continuityTitle,continuityStatus);
+ continuity.append(continuityCopy,continuityActions);
+ document.body.append(continuity);
  const hud=make('aside',null,'recording-studio-hud');
  hud.hidden=true;hud.setAttribute('aria-label','Native HBR2 recording status');
  const badge=make('strong','● HBR2 RECORDING');
@@ -60,14 +79,47 @@
    !document.querySelector('.quick-ready:not([hidden])');
  }
  function recording(){return !!room&&typeof room.isRecording==='function'&&room.isRecording();}
+ // Recording may still be active after the game stops naturally. Do not
+ // require 'started' merely to finish and download already-captured frames.
+ function ownedLocalRecording(){
+  return recording()&&typeof serverLink!=='undefined'&&!serverLink&&
+   typeof peerConnected!=='undefined'&&!peerConnected&&
+   typeof replay!=='undefined'&&!replay;
+ }
+ function stopAndDownload(){
+  if(!ownedLocalRecording())return false;
+  // Original recorder owns HBR2 bytes, original download and optional
+  // ReplayLibrary opt-in. No second recording/parser/save path.
+  finishRecording();
+  status.textContent='Original HBR2 download requested. Import in My Games if automatic saving is off.';
+  refresh();
+  return true;
+ }
+ continuityReturn.addEventListener('click',()=>{
+  if(!ownedLocalRecording())return;
+  document.getElementById('tabPlay')?.click();
+  document.getElementById('gameCanvas')?.focus?.({preventScroll:true});
+ });
+ continuitySave.addEventListener('click',()=>stopAndDownload());
+ window.addEventListener('beforeunload',event=>{
+  if(!ownedLocalRecording())return;
+  // Browser may show its standard unsaved-data confirmation. Never claim
+  // pagehide/unload can complete a download reliably.
+  event.preventDefault();event.returnValue='';
+ });
  function refresh(){
-  const active=recording(),offline=localGame();
-  toggle.disabled=!offline;
+  const active=recording(),offline=localGame(),owned=ownedLocalRecording();
+  toggle.disabled=!offline&&!owned;
   toggle.textContent=active?'■ Stop & download HBR2':'● Start recording';
-  hud.hidden=!active||!offline||match.hidden;
+  hud.hidden=!active||!owned||match.hidden;
+  continuity.hidden=!owned||!match.hidden;
+  continuityStatus.textContent=typeof started!=='undefined'&&!started?
+   'Match stopped, but your HBR2 is still unsaved. Download it now before closing this tab.':
+   'The offline match is still recording. Return to pitch or stop & download your HBR2.';
   root.dataset.active=active?'yes':'no';
  }
  toggle.onclick=()=>{
+  if(ownedLocalRecording()){stopAndDownload();return;}
   if(!localGame()){status.textContent='Manual recording here is only available in a local offline game.';return;}
   if(recordButton.disabled){status.textContent='Native recorder is unavailable for this session.';return;}
   recordButton.click();
