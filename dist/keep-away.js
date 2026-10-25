@@ -141,7 +141,6 @@
  // list, exporting stale entries, or silently making the player restart.
  // An active in-memory drill never gains kicks/time from this storage event.
  function refreshPrivateHistory(external=false){
-  const before=attempts.textContent;
   renderHistory();
   if(external){
    const count=read().length;
