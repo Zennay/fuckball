@@ -78,6 +78,8 @@ const CORE=[
  "./friend-party.css",
  "./room-browser.css",
  "./direct-invite-join.css",
+ "./direct-peer-session-guard.js",
+ "./direct-peer-session-guard.css",
  "./career-profile.css",
  "./native-career-milestones.css",
  "./offline-player-passport.js",
