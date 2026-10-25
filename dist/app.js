@@ -149,15 +149,20 @@ function canControlLiveMatch(){
 function refreshInput(){if(!canControlLiveMatch())return;const local=couchModes.has($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),localP1=local?localPlayerOneControls().keys:null,b=a=>k(...(local?localP1[a]:bound(a)));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
 function releaseInputs(){
  keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();
- // An interrupted drag may not reactivate after menus or focus changes.
- if(stickPointer!==null){
-  try{$('joystick').releasePointerCapture?.(stickPointer);}catch{}
-  stickPointer=null;
+ // Neutral input must also neutralize the visual stick, even when the
+ // room has ended or a replay is now active.
+ $('stick').style.transform='';
+ // Drop ownership before releasing captures: a delayed lostpointercapture
+ // from the old touch must not cancel a newer finger.
+ const oldStick=stickPointer,oldKick=kickPointer;
+ stickPointer=null;kickPointer=null;
+ if(oldStick!==null){
+  try{$('joystick').releasePointerCapture?.(oldStick);}catch{}
  }
- if(kickPointer!==null){
-  try{$('touchKick').releasePointerCapture?.(kickPointer);}catch{}
-  kickPointer=null;
- }if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){room.playerInput(0,3);room.playerInput(0,4);}}$('stick').style.transform='';}
+ if(oldKick!==null){
+  try{$('touchKick').releasePointerCapture?.(oldKick);}catch{}
+ }
+ if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){room.playerInput(0,3);room.playerInput(0,4);}}}
 function gameTick(){frameStats.lastTick=performance.now();tick++;if(replay||!started||paused)return;if(peerConnected&&peerRole==='guest')return;if(!room.gameState)return;if(guestTimeline&&peerConnected&&peerRole==='host'){const v=guestTimeline.valueAt(room.currentFrameNo),g=room.state.players.find(p=>p.id===2);if(g&&g.input!==v)room.playerInput(v,2);}if(tick%2===0){for(const p of room.state.players){if(!botIds.has(p.id)||!p.disc)continue;const mode='tactical';let input=FuckballAI.tactical(room.state,p.id,tick,{difficulty:settings.botLevels?.[p.id]||settings.difficulty,profile:settings.teamProfile});if(aiModel&&mode!=='tactical'){if(aiModel.w2&&tick%6!==0)continue;const prediction=FuckballAI.infer(aiModel,room.state,p.id,['gk','dm','am','st'][room.state.players.filter(q=>q.team.id===p.team.id).findIndex(q=>q.id===p.id)%4]);if(mode==='model')input=prediction.input;else if(prediction.confidence>.58&&(prediction.input&15)!==0)input=(prediction.input&15)|(input&16);}sendInput(p.id,input);}}if(peerConnected&&peerRole==='host'&&tick%2===0)sendSnapshot();}
 function isOnlineGuest(){return peerConnected&&peerRole==='guest';}
 // HaxBall-equivalent prediction (see render-timing.js): frames ahead of the confirmed state.
