@@ -81,6 +81,88 @@
   sendFeedback.hidden=false;
   chatInput?.focus({preventScroll:true});
  },true);
+ // Keep an unsent human-room draft when the player closes chat to move,
+ // check the roster or browse My Games. A composer from a different room,
+ // account/player slot or socket must NEVER be restored to a new audience.
+ // This is session-memory only: no storage, network traffic or autosend.
+ let unsentSessionDraft=null,chatWasSubmitted=false;
+ const nativeCloseChat=typeof closeChat==='function'?closeChat:null;
+ const nativeOpenChat=typeof openChat==='function'?openChat:null;
+ const draftNote=document.createElement('p');
+ draftNote.className='native-chat-draft-notice';
+ draftNote.setAttribute('role','status');draftNote.setAttribute('aria-live','polite');
+ draftNote.hidden=true;
+ const discardDraft=document.createElement('button');
+ discardDraft.type='button';
+ discardDraft.className='native-chat-draft-discard';
+ discardDraft.textContent='Discard unsent draft';
+ discardDraft.hidden=true;
+ chatForm?.append(draftNote,discardDraft);
+ const activeDraftSession=()=>{
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const player=typeof networkPlayerId!=='undefined'?networkPlayerId:null;
+  return link?.room&&Number.isSafeInteger(player)&&player>0?
+   {link,room:link.room,player}:null;
+ };
+ const isCurrentDraft=entry=>{
+  const current=activeDraftSession();
+  return !!entry&&!!current&&entry.link===current.link&&
+   entry.room===current.room&&entry.player===current.player;
+ };
+ const clearUnsentDraft=()=>{
+  unsentSessionDraft=null;draftNote.hidden=true;discardDraft.hidden=true;
+ };
+ discardDraft.addEventListener('click',()=>{
+  if(chatInput)chatInput.value='';
+  onlineDraftRoom=null;privateDraft=false;
+  clearUnsentDraft();
+  chatInput?.focus({preventScroll:true});
+ });
+ // This capture hook runs after the existing moderation/audience fail-closed
+ // guard: a blocked submit never counts as a sent message.
+ chatForm?.addEventListener('submit',()=>{
+  chatWasSubmitted=true;clearUnsentDraft();
+  // A rejected native command can return before closeChat; later Escape
+  // should still save the draft instead of treating it as submitted.
+  queueMicrotask(()=>{chatWasSubmitted=false;});
+ },true);
+ if(nativeCloseChat&&nativeOpenChat){
+  closeChat=function(...args){
+   const existing=activeDraftSession();
+   const contents=chatForm?.hidden?'':chatInput?.value||'';
+   if(!chatWasSubmitted&&existing&&contents.trim()){
+    const channel=chatForm?.querySelector('.team-chat-channel select')?.value;
+    unsentSessionDraft={...existing,text:contents.slice(0,140),
+     teamOnly:channel==='team'||privateDraft===true};
+   }else if(chatWasSubmitted||!existing)clearUnsentDraft();
+   chatWasSubmitted=false;
+   return nativeCloseChat(...args);
+  };
+  openChat=function(...args){
+   if(unsentSessionDraft&&!isCurrentDraft(unsentSessionDraft))
+    clearUnsentDraft();
+   const out=nativeOpenChat(...args);
+   if(isCurrentDraft(unsentSessionDraft)&&chatInput){
+    chatInput.value=unsentSessionDraft.text;
+    onlineDraftRoom=unsentSessionDraft.room;
+    privateDraft=unsentSessionDraft.teamOnly;
+    if(unsentSessionDraft.teamOnly){
+     const selector=chatForm?.querySelector('.team-chat-channel select');
+     if(selector){selector.value='team';window.FuckballTeamChat?.sync();}
+    }
+    draftNote.textContent=unsentSessionDraft.teamOnly?
+     'Unsent TEAM draft restored on this device. Only the original team channel is allowed; check recipients before sending.':
+     'Unsent room draft restored on this device. Check recipients before sending.';
+    draftNote.hidden=false;discardDraft.hidden=false;
+    chatInput.focus({preventScroll:true});
+    chatInput.setSelectionRange?.(chatInput.value.length,chatInput.value.length);
+   }
+   return out;
+  };
+ }
+ window.addEventListener('fuckball:native-session-state',()=>{
+  if(unsentSessionDraft&&!isCurrentDraft(unsentSessionDraft))clearUnsentDraft();
+ });
  // A connected human room stays active while Home/My Games is on screen.
  // The HUD chat log lives on the hidden pitch; keep a bounded ephemeral
  // catch-up inbox on this device, without sending or saving chat messages.
