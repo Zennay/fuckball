@@ -44,9 +44,9 @@
  const score=el('p',null,'clean-sheet-progress');score.setAttribute('role','status');score.setAttribute('aria-live','polite');
  const gauge=el('progress');gauge.max=100;gauge.value=0;gauge.setAttribute('aria-label','Active defending time completed');
  const actions=el('div',null,'clean-sheet-actions');
- const stop=el('button','Stop drill'),again=el('button','Play again'),close=el('button','Close');
- for(const b of [stop,again,close])b.type='button';
- again.hidden=true;close.hidden=true;actions.append(stop,again,close);
+ const stop=el('button','Stop drill'),pauseButton=el('button','Ⅱ Pause'),again=el('button','Play again'),close=el('button','Close');
+ for(const b of [stop,pauseButton,again,close])b.type='button';
+ again.hidden=true;close.hidden=true;actions.append(pauseButton,stop,again,close);
  hud.append(badge,clock,score,gauge,actions);match.append(hud);
  let active=null;
  const now=()=>Date.now();
@@ -78,9 +78,13 @@
  function save(s){
   const record={at:now(),duration:s.duration,allowance:s.allowance,
    elapsed:s.duration,conceded:s.conceded,scored:s.scored,completed:s.conceded<=s.allowance};
-  try{localStorage.setItem(KEY,JSON.stringify([record,...read()].slice(0,MAX)));}
-  catch{status.textContent='Drill completed, but this browser could not save your attempt.';}
+  let saved=false;
+  try{
+   localStorage.setItem(KEY,JSON.stringify([record,...read()].slice(0,MAX)));
+   saved=true;
+  }catch{}
   paintHistory();
+  return saved;
  }
  download.onclick=()=>{
   const rows=read();if(!rows.length)return;
@@ -98,11 +102,20 @@
  };
  paintHistory();
  const matchReady=()=>{
-  if(serverLink||peerConnected||replay||!room||!started||match.hidden||!room.gameState)return false;
+  if(serverLink||peerConnected||replay||!room||!started||match.hidden||!room.gameState||
+     document.getElementById('mode')?.value!=='bot')return false;
   if(!Number.isSafeInteger(room.currentFrameNo)||room.currentFrameNo<0)return false;
   if(!Number.isSafeInteger(room.gameState.redScore)||!Number.isSafeInteger(room.gameState.blueScore))return false;
-  const p=room.state?.players?.find?.(p=>p.id===1);
-  return p&&[1,2].includes(p.team?.id)&&!botIds?.has?.(1);
+  const players=room.state?.players;
+  if(!Array.isArray(players))return false;
+  const mine=players.find(p=>p.id===1);
+  const mySide=mine?.team?.id;
+  // A defensive result requires a real approved native bot on the opposite
+  // side throughout the clock. A swapped/reconfigured, empty or 2-human
+  // room must not earn an unopposed 'clean sheet' from the same scoreboard.
+  return [1,2].includes(mySide)&&!botIds?.has?.(1)&&
+   players.some(p=>p&&Number.isSafeInteger(p.id)&&p.id!==1&&
+    botIds?.has?.(p.id)&&[1,2].includes(p.team?.id)&&p.team.id!==mySide);
  };
  const team=()=>room?.state?.players?.find?.(p=>p.id===1)?.team?.id;
  function reason(){
@@ -115,13 +128,23 @@
  }
  function progress(s){
   const left=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
-  clock.textContent=left+'s left · '+s.conceded+' conceded / '+s.allowance+' allowed';
-  score.textContent=s.scored+' for · '+s.conceded+' against · actual native 1v1 score';
+  clock.textContent=left+'s left · '+s.conceded+' conceded / '+s.allowance+' allowed'+
+   (paused?' · PAUSED':'');
+  pauseButton.textContent=paused?'▶ Resume native match':'Ⅱ Pause native match';
+  score.textContent=s.scored+' for · '+s.conceded+' against · actual native 1v1 AI score';
   gauge.value=Math.min(100,Math.floor(s.frames/(s.duration*60)*100));
  }
  function finish(label,complete=false){
   const s=active;if(!s)return;active=null;
-  if(complete)save(s);
+  if(complete){
+   const saved=save(s);
+   status.textContent=saved?
+    'Full native AI defensive clock finished. '+(s.conceded<=s.allowance?
+     'Defensive goal met.':'Defensive goal missed.')+' Private result saved on this device.':
+    'Full native AI defensive clock finished; browser storage could not save the result.';
+  }else{
+   status.textContent='Defensive drill interrupted. No result was stored.';
+  }
   badge.textContent=label;
   clock.textContent=complete?
    s.conceded+' actual goal'+(s.conceded===1?'':'s')+' conceded in '+s.duration+' active seconds':
@@ -130,10 +153,12 @@
    'Defensive goal achieved. Full active clock completed.':'Goal missed. Practice again anytime.'):
    'This was not a complete full-clock local attempt; nothing was recorded.';
   gauge.value=complete?100:gauge.value;
+  pauseButton.hidden=true;
   stop.hidden=true;again.hidden=false;close.hidden=false;
  }
  function quit(){
   active=null;hud.hidden=true;badge.textContent='CLEAN SHEET · LOCAL AI';
+  pauseButton.hidden=false;pauseButton.textContent='Ⅱ Pause native match';
   stop.hidden=false;again.hidden=true;close.hidden=true;
  }
  function tick(){
@@ -169,10 +194,29 @@
    active={room,side,duration:seconds,allowance:allowed,
     initialFor:side===1?g.redScore:g.blueScore,initialAgainst:side===1?g.blueScore:g.redScore,
     frame:room.currentFrameNo,frames:0,conceded:0,scored:0};
-   badge.textContent='CLEAN SHEET · LOCAL AI';stop.hidden=false;again.hidden=true;close.hidden=true;
+   badge.textContent='CLEAN SHEET · LOCAL AI';
+   pauseButton.hidden=false;pauseButton.textContent=paused?'▶ Resume native match':'Ⅱ Pause native match';
+   stop.hidden=false;again.hidden=true;close.hidden=true;
    hud.hidden=false;status.textContent='Defense challenge running in a real native local AI match.';
    progress(active);
   }catch(error){quit();status.textContent=error?.message||'Local defensive challenge unavailable.';}
+ };
+ pauseButton.onclick=()=>{
+  const s=active;if(!s)return;
+  if(room!==s.room||!matchReady()||team()!==s.side){
+   finish('CLEAN SHEET · GAME CHANGED');return;
+  }
+  const wasPaused=paused;
+  // Native pause/release-input path remains the sole game control authority.
+  // The tracked duration derives from actual unpaused engine frames.
+  togglePause();
+  if(paused===wasPaused){
+   status.textContent='Native pause control is unavailable in this match.';return;
+  }
+  status.textContent=paused?
+   'Native game paused. No defensive challenge time counts while paused.':
+   'Native game resumed. Full-clock defensive challenge continues.';
+  progress(s);
  };
  stop.onclick=()=>finish('CLEAN SHEET · STOPPED');
  again.onclick=()=>start.click();
