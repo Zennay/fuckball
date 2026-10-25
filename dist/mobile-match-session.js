@@ -144,6 +144,27 @@
    orientationLocked=false;render('Fullscreen is active, but this browser did not allow landscape lock.');
   }
  }
+ // A fullscreen match element can be hidden by Home/My Games navigation,
+ // room loss, or a native session reset without a fullscreenchange event.
+ // Never trap a player in an invisible fullscreen surface on a phone.
+ let hiddenFullscreenExitAttempted=false;
+ function restoreDisplayOnLeavingPitch(){
+  const hiddenFullscreen=match.hidden&&document.fullscreenElement===match;
+  if(!hiddenFullscreen){
+   hiddenFullscreenExitAttempted=false;
+   return;
+  }
+  if(hiddenFullscreenExitAttempted)return;
+  hiddenFullscreenExitAttempted=true;
+  try{
+   if(typeof document.exitFullscreen!=='function')throw Error('unsupported');
+   Promise.resolve(document.exitFullscreen())
+    .then(()=>unlockOrientation())
+    .catch(()=>render('Leaving the match could not exit fullscreen. Press Esc or your device back button.'));
+  }catch{
+   render('Leaving the match could not exit fullscreen. Press Esc or your device back button.');
+  }
+ }
  fullscreen.onclick=async()=>{
   try{
    if(document.fullscreenElement){
@@ -164,6 +185,7 @@
  });
  document.addEventListener('fullscreenchange',()=>{
   if(!document.fullscreenElement)unlockOrientation();
+  restoreDisplayOnLeavingPitch();
   render();
  });
  document.addEventListener('visibilitychange',()=>{
@@ -175,6 +197,7 @@
  // setting or an unverified claim that a match is still in progress.
  let lastActive=false,lastReason='';
  function syncMatchPower(){
+  restoreDisplayOnLeavingPitch();
   const state=powerEligibility(),now=state.active;
   if(!now&&(sentinel||pending))release();
   else if(now&&wanted&&!sentinel&&!pending)acquire();
