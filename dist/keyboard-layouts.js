@@ -51,6 +51,7 @@
  const initialSlots=readLatestSlots();
  let saved=Array.isArray(initialSlots)?initialSlots:emptySlots();
  let storageUnavailable=initialSlots===undefined;
+ const slotsNeedingReview=new Set(); // foreign updates must be acknowledged first
  const panel=document.createElement('section');panel.className='keyboard-layouts';
  panel.setAttribute('aria-label','Keyboard layout presets');
  const title=document.createElement('h3');title.textContent='KEYBOARD PROFILES.';
@@ -118,6 +119,9 @@
   updateHomeKeys();
  }
  function persist(){
+  // A tab that could not read the saved snapshot cannot safely write a
+  // replacement snapshot even if the browser later allows setItem again.
+  if(storageUnavailable)return false;
   try{
    localStorage.setItem(storeKey,JSON.stringify({version:1,slots:saved}));
    storageUnavailable=false;
@@ -136,14 +140,27 @@
    return false;
   }
   if(slotIdentity(latest)===slotIdentity(saved))return true;
+  for(let i=0;i<3;i++)if(slotIdentity(latest[i])!==slotIdentity(saved[i]))
+   slotsNeedingReview.add(i);
   saved=latest;
   refreshSlots();
   if(announce)message('Saved keyboard profiles changed in another tab. Slots refreshed; your active game keys were not changed.');
   return true;
  }
  function slotIsCurrent(index){
+  if(slotsNeedingReview.has(index)){
+   slotsNeedingReview.delete(index);
+   message('Slot '+(index+1)+' was edited in another tab. Review the updated slot, then click again to make your own change.',true);
+   return false;
+  }
   const latest=storageUnavailable?undefined:readLatestSlots();
-  if(latest===undefined)return true;
+  if(latest===undefined){
+   if(!storageUnavailable){
+    message('Saved profiles cannot be read right now. No stored slots were overwritten.',true);
+    return false;
+   }
+   return true; // explicit session-only mode
+  }
   if(latest===null){
    message('Saved profile storage has invalid data. No slots were overwritten.',true);
    return false;
@@ -161,6 +178,7 @@
  function commitSlot(index,value,action){
   if(!slotIsCurrent(index))return false;
   saved[index]=value;
+  slotsNeedingReview.delete(index);
   const persisted=persist();
   refreshSlots();
   message(persisted?'Slot '+(index+1)+' '+action+'.':
@@ -190,6 +208,7 @@
   const index=Number(slot.value);
   if(!syncSavedProfiles(true))return;
   if(!saved[index]){message('Nothing saved in this slot yet.',true);return;}
+  slotsNeedingReview.delete(index);
   apply(saved[index],'Slot '+(index+1));
  });
  button('Delete slot',()=>{
@@ -262,6 +281,7 @@
    const index=Number(homeSlot.value);
    if(!syncSavedProfiles(true))return;
    if(!saved[index]){message('Selected personal slot is empty.',true);return;}
+   slotsNeedingReview.delete(index);
    apply(saved[index],'Personal slot '+(index+1));
   };
   const save=document.createElement('button');save.type='button';save.textContent='Save current to slot';
