@@ -82,8 +82,14 @@
   const party=state?.party;
   const invites=Array.isArray(state?.invitations)?state.invitations:[];
   // Give the real active match and server-owned 15s ready-check priority.
-  const activeMatch=!!serverLink?.room||
-   (typeof peerConnected!=='undefined'&&peerConnected===true);
+  // The floating party card must never cover an active pitch or an in-flight
+  // native/direct-peer join. A paused local match and visible replay are still
+  // gameplay: existing user input and real native ready checks take priority.
+  const activeMatch=!!serverLink||
+   (typeof peerConnected!=='undefined'&&peerConnected===true)||
+   (typeof peer!=='undefined'&&!!peer)||
+   (typeof started!=='undefined'&&started===true)||
+   (typeof replay!=='undefined'&&!!replay);
   const readyCheck=document.querySelector('.quick-ready-dock:not([hidden])');
   globalParty.hidden=(!party&&!invites.length)||!home.hidden||activeMatch||!!readyCheck;
   if(globalParty.hidden)return;
