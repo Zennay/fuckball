@@ -15,9 +15,12 @@
  description.textContent='Learn to move, kick the real ball and score against the local AI. Three live challenges, no account required. Your approved game physics stay unchanged.';
  const badge=document.createElement('p');badge.className='first-play-record';
  const start=document.createElement('button');start.type='button';start.className='primary';start.textContent='▶ START FIRST MATCH';
+ const resume=document.createElement('button');resume.type='button';
+ resume.className='first-play-return';resume.textContent='↗ Return to current match';
+ resume.hidden=true;
  const result=document.createElement('p');result.className='first-play-home-status';
  result.setAttribute('role','status');result.setAttribute('aria-live','polite');
- card.append(kicker,title,description,badge,start,result);
+ card.append(kicker,title,description,badge,start,resume,result);
  const after=home.querySelector('.goal-rush-setup')||home.querySelector('.mode-cards');
  if(after)after.insertAdjacentElement('afterend',card);else home.append(card);
  const hud=document.createElement('aside');hud.className='first-play-hud';hud.hidden=true;
@@ -79,6 +82,17 @@
   session=null;hud.hidden=true;result.textContent=why||'Guide ended. The local game can continue.';
  }
  function unavailable(){
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Your original online room is reconnecting. Choose Stop reconnecting before starting a solo lesson.';
+  if(typeof peer!=='undefined'&&peer)
+   return 'Finish or cancel your pending direct-peer connection before starting a solo lesson.';
+  // Share the original native safety gate with every other local game launcher,
+  // rather than allowing the First Touch card to suggest a game can begin while
+  // it will be rejected by quickPlay().
+  if(typeof pendingSessionBlock==='function'){
+   const reason=pendingSessionBlock();
+   if(reason)return reason;
+  }
   if(serverLink||peerConnected)return 'Leave or cancel your existing online room or connecting session before starting a solo tutorial.';
   const queue=document.querySelector('.quick-queue-actions button:not([hidden])');
   const ready=document.querySelector('.quick-ready:not([hidden])');
@@ -87,8 +101,49 @@
   if(join&&!join.hidden)return 'Finish or close your room invitation before starting a local game.';
   return null;
  }
+ function sessionPresent(){
+  return !!(typeof roomRecovery!=='undefined'&&roomRecovery.context||
+   typeof serverLink!=='undefined'&&serverLink||
+   typeof peerConnected!=='undefined'&&peerConnected||
+   typeof peer!=='undefined'&&peer||
+   typeof started!=='undefined'&&started||
+   typeof replay!=='undefined'&&replay||
+   document.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])'));
+ }
+ function refreshSessionReturn(){
+  const visible=sessionPresent();
+  resume.hidden=!visible;
+  resume.textContent=typeof roomRecovery!=='undefined'&&roomRecovery.context?
+   '↗ View original room recovery':
+   document.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])')?
+   '↗ View human match confirmation':'↗ Return to existing game';
+ }
+ function returnToSession(){
+  refreshSessionReturn();
+  if(resume.hidden){result.textContent='There is no ongoing session to return to.';return;}
+  const recovery=document.querySelector('.native-room-recovery:not([hidden])');
+  if(recovery){
+   recovery.focus?.({preventScroll:true});
+   result.textContent='Original room recovery controls are shown; no other game was started.';
+   return;
+  }
+  const human=home.querySelector('.quick-ready:not([hidden]),.quick-queue-panel:not([hidden])');
+  if(human){
+   human.scrollIntoView?.({behavior:'auto',block:'center'});
+   (human.querySelector('button:not([disabled]):not([hidden])')||human)
+    .focus?.({preventScroll:true});
+   result.textContent='Original human matchmaking controls are here; no second search was started.';
+   return;
+  }
+  if(typeof showView==='function')showView('play');
+  else document.getElementById('tabPlay')?.click();
+  result.textContent='Returned to the existing game or connection. No new session was created.';
+ }
+ resume.addEventListener('click',returnToSession);
  function launch(){
-  const blocked=unavailable();if(blocked){result.textContent=blocked;return;}
+  const blocked=unavailable();if(blocked){
+   result.textContent=blocked;refreshSessionReturn();return;
+  }
   if((started||replay)&&!window.confirm('Restart local practice for First Touch? Your current local game or replay will be replaced and unsaved progress may be lost.')){
    result.textContent='First Touch not started; your current local game or replay was kept.';return;
   }
@@ -101,9 +156,14 @@
   session={room,stage:0,moved:0,lastPos:{x:player.disc.pos.x,y:player.disc.pos.y},
    frame:room.currentFrameNo,side:player.team.id,score:null};
   result.textContent='Guide running in the local pitch.';
-  hud.hidden=false;render();
+  hud.hidden=false;render();refreshSessionReturn();
  }
  start.addEventListener('click',launch);
+ document.getElementById('tabHome')?.addEventListener('click',refreshSessionReturn);
+ window.addEventListener('focus',refreshSessionReturn);
+ window.addEventListener('fuckball:native-session-state',refreshSessionReturn);
+ setInterval(()=>{if(!home.hidden)refreshSessionReturn();},1800);
+ refreshSessionReturn();
  restart.addEventListener('click',launch);
  quit.addEventListener('click',()=>finish('First Touch closed; your local match stays available.'));
  online.addEventListener('click',()=>{
