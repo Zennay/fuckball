@@ -178,9 +178,24 @@
   }
   closePanel(false);
  },true);
- panel.addEventListener('keydown',event=>{
-  if(event.key==='Escape'){event.stopPropagation();closePanel();}
- });
+ // Keyboard focus can move elsewhere while the non-modal picker remains
+ // open. Escape always dismisses this picker first, not a background match.
+ window.addEventListener('keydown',event=>{
+  if(!opened||event.key!=='Escape')return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closePanel();
+ },true);
+ // Match menus and native dialogs take precedence as soon as they open,
+ // rather than leaving a Quick Calls input lease active until the next poll.
+ if(typeof MutationObserver==='function'){
+  const nativeOverlayWatch=new MutationObserver(update);
+  const menu=document.getElementById('pauseMenu');
+  if(menu)nativeOverlayWatch.observe(menu,{attributes:true,attributeFilter:['hidden']});
+  nativeOverlayWatch.observe(match,{attributes:true,attributeFilter:['hidden']});
+  for(const dialog of document.querySelectorAll('dialog'))
+   nativeOverlayWatch.observe(dialog,{attributes:true,attributeFilter:['open']});
+ }
  save.onclick=()=>{
   const next=inputs.map(x=>x.value);
   if(!next.every(valid)){status.textContent='Use six unique or repeated printable lines, each 2–80 characters, without control characters.';return;}
