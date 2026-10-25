@@ -83,9 +83,13 @@
    isReferee:!!person&&referee===networkPlayerId,
    isHost:link.isOwner===true,request:req,
    online:link.ws?.readyState===1,
-   // Use the same server-authoritative match snapshot as the actual room.
-   // Stale local solo/playback state cannot authorize a new room's pause.
-   running:state.started===true,paused:state.paused===true};
+   // The authoritative server sends started/paused as a separate status
+   // packet; its room payload contains refereeId/pauseRequest but not those
+   // flags. The original channel applies that packet to these shared flags.
+   // A connected admitted current link and actual appointed roster member
+   // are still required before the referee can act.
+   running:typeof started!=='undefined'&&started===true,
+   paused:typeof paused!=='undefined'&&paused===true};
  }
  function render(){
   const d=snapshot();
