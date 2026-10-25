@@ -311,30 +311,30 @@
   const result=inspect(v),needed=Math.floor(v.bestOf/2)+1;
   return {...result,needed};
  }
- function update(id,change){
+ async function update(id,change){
   const v=items.find(x=>x.id===id);if(!v)throw Error('Series changed in another view.');
   const next=inspect({...v,updatedAt:Math.max(v.createdAt,Date.now()),games:change(v)}).series;
-  persist(items.map(x=>x.id===id?next:x));
+  await persist(items.map(x=>x.id===id?next:x));
   render();
  }
- function scoreGame(v,i,h,a){
+ async function scoreGame(v,i,h,a){
   const prior=statusFor(v);
   if(prior.winner)throw Error('The series is decided. Undo the most recent game to correct a result.');
   if(i!==prior.recorded)throw Error('Record games in order; undo the last score to correct it.');
   if(!Number.isSafeInteger(h)||!Number.isSafeInteger(a)||h<0||a<0||h>99||a>99||h===a)
    throw Error('A best-of game needs a decisive whole-number score from 0 to 99.');
-  update(v.id,x=>x.games.map((g,j)=>j===i?{...g,redScore:h,blueScore:a}:g));
+  await update(v.id,x=>x.games.map((g,j)=>j===i?{...g,redScore:h,blueScore:a}:g));
   inform('Real, manually entered game '+(i+1)+' saved. The series standings updated.');
  }
- function undoGame(v){
+ async function undoGame(v){
   const info=statusFor(v);if(!info.recorded)return inform('No recorded game to undo.');
   if(!window.confirm('Remove the last manually entered game result? Kickoff date is preserved.'))return;
-  try{update(v.id,x=>x.games.map((g,j)=>j===info.recorded-1?
+  try{await update(v.id,x=>x.games.map((g,j)=>j===info.recorded-1?
     {...g,redScore:null,blueScore:null}:g));
    inform('The latest game result was cleared. Series standings recalculated.');}
   catch(e){inform('Undo failed: '+e.message);}
  }
- function scheduleGame(v,i,value,venue){
+ async function scheduleGame(v,i,value,venue){
   const kickoff=value===''?null:new Date(value).getTime();
   if(value!==''&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)||
    !Number.isFinite(kickoff)||localTime(kickoff)!==value))
@@ -342,7 +342,7 @@
   if(!when(kickoff)||typeof venue!=='string'||venue.length>60||
    /[\u0000-\u001f\u007f-\u009f]/.test(venue)||venue.trim()!==venue)
    throw Error('Invalid kickoff or venue.');
-  update(v.id,x=>x.games.map((g,j)=>j===i?{...g,kickoff,venue}:g));
+  await update(v.id,x=>x.games.map((g,j)=>j===i?{...g,kickoff,venue}:g));
   inform('Provisional local kickoff saved; no online fixture was created.');
  }
  function render(){
@@ -439,7 +439,7 @@
      'Later matches may become unnecessary if a team clinches the series early.'));
    }catch(error){output.append(text('p',error.message||'Cannot plan games.'));}
   }
-  inputs.onsubmit=e=>{
+  inputs.onsubmit=async e=>{
    e.preventDefault();
    if(!prepared||prepared.signature!==planSignature()){
     clearPreview();return inform('The series plan changed. Preview it again before saving.');
@@ -447,7 +447,7 @@
    if(!window.confirm('Save '+prepared.diff.length+' provisional kickoff dates for "'+v.name+
      '"? Scores remain unchanged and no invitations are sent.'))return;
    try{
-    persist(items.map(x=>x.id===v.id?prepared.candidate:x));
+    await persist(items.map(x=>x.id===v.id?prepared.candidate:x));
     message=prepared.diff.length+' provisional series kickoffs saved. Export Calendar ICS to share dates.';
     render();
    }catch(error){clearPreview();inform('Schedule not saved: '+(error.message||'Storage error'));}
@@ -476,11 +476,11 @@
    const submit=text('button','Save game result');submit.type='submit';
    const canScore=healthy&&!data.winner&&i===data.recorded;
    h.disabled=a.disabled=submit.disabled=!canScore;
-   form.onsubmit=event=>{
+   form.onsubmit=async event=>{
     event.preventDefault();
     if(!/^(0|[1-9]\d?)$/.test(h.value)||!/^(0|[1-9]\d?)$/.test(a.value))
      return inform('Enter whole-number goals (0–99) for both teams.');
-    try{scoreGame(v,i,Number(h.value),Number(a.value));}
+    try{await scoreGame(v,i,Number(h.value),Number(a.value));}
     catch(error){inform(error.message);}
    };
    form.append(label(v.red+' goals',h),label(v.blue+' goals',a),submit);
@@ -490,12 +490,12 @@
    const venue=text('input');venue.maxLength=60;venue.placeholder='Venue · optional';venue.value=g.venue;
    venue.setAttribute('aria-label','Game '+(i+1)+' venue');
    const save=text('button','Save kickoff');save.type='submit';save.disabled=!healthy;
-   const clear=button('Remove kickoff',()=>{
-    try{scheduleGame(v,i,'','');}catch(e){inform(e.message);}
+   const clear=button('Remove kickoff',async()=>{
+    try{await scheduleGame(v,i,'','');}catch(e){inform(e.message);}
    });clear.disabled=!healthy||g.kickoff===null;
-   schedule.onsubmit=event=>{
+   schedule.onsubmit=async event=>{
     event.preventDefault();
-    try{scheduleGame(v,i,date.value,venue.value.trim());}catch(e){inform(e.message);}
+    try{await scheduleGame(v,i,date.value,venue.value.trim());}catch(e){inform(e.message);}
    };
    schedule.append(label('Provisional local date',date),label('Venue',venue),save,clear);
    card.append(line,form,schedule);
@@ -509,7 +509,7 @@
   }
   board.append(grid);
  }
- creation.onsubmit=e=>{
+ creation.onsubmit=async e=>{
   e.preventDefault();
   const n=name.value.trim(),r=redName.value.trim(),b=blueName.value.trim(),size=Number(format.value);
   if(!validName(n,60)||!validName(r,35)||!validName(b,35)||
@@ -519,14 +519,14 @@
   const now=Date.now(),v={version:1,id:uid(),name:n,red:r,blue:b,bestOf:size,
    createdAt:now,updatedAt:now,games:Array.from({length:size},(_,i)=>({
     id:'g'+(i+1),redScore:null,blueScore:null,kickoff:null,venue:''}))};
-  try{persist([...items,v]);selected=v.id;creation.hidden=true;message='Private series created.';render();}
+  try{await persist([...items,v]);selected=v.id;creation.hidden=true;message='Private series created.';render();}
   catch(error){inform(error.message);}
  };
  choose.onchange=()=>{selected=choose.value;message='';render();};
- function deleteSeries(){
+ async function deleteSeries(){
   const v=current();if(!v)return;
   if(!window.confirm('Delete "'+v.name+'" and all its local scores/dates? Export a backup first.'))return;
-  try{persist(items.filter(x=>x.id!==v.id));selected='';message='Series deleted locally.';render();}
+  try{await persist(items.filter(x=>x.id!==v.id));selected='';message='Series deleted locally.';render();}
   catch(error){inform(error.message);}
  }
  file.onchange=async()=>{
@@ -543,7 +543,7 @@
    const now=Date.now(),copies=imported.map(x=>({
     ...x,id:uid(),createdAt:now,updatedAt:now,games:x.games.map(g=>({...g}))}));
    if(!window.confirm('Import '+copies.length+' private series as new copies? Existing series remain unchanged.'))return;
-   persist([...items,...copies]);selected=copies[0].id;
+   await persist([...items,...copies]);selected=copies[0].id;
    message=copies.length+' private series imported as separate copies.';render();
   }catch(error){inform('Import refused: '+(error.message||'Invalid file'));}
  };
@@ -556,7 +556,7 @@
    message='Another tab changed stored series into unreadable data. Original bytes protected.';}
   render();
  });
- window.addEventListener('fuckball:create-private-series',event=>{
+ window.addEventListener('fuckball:create-private-series',async event=>{
   const request=event.detail;
   const respond=(ok,detail)=>window.dispatchEvent(new CustomEvent('fuckball:private-series-created',{
    detail:ok?{ok:true,id:detail}:{ok:false,reason:detail}
@@ -577,7 +577,7 @@
     games:Array.from({length:request.bestOf},(_,i)=>({
      id:'g'+(i+1),redScore:null,blueScore:null,kickoff:null,venue:''
     }))}).series;
-   persist([...items,created]);selected=created.id;
+   await persist([...items,created]);selected=created.id;
    message='New best-of-'+created.bestOf+' series created for '+created.red+' vs '+created.blue+
     '. All games are unplayed and unofficial.';
    details.open=true;render();
