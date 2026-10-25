@@ -197,6 +197,14 @@
       (position?' · unfinished at '+clock:''),
      item.favorite===true?'★ FAVORITE REPLAY':'LOCAL HBR2 REPLAY',
      position?'▶ Continue at '+clock:'▶ Watch replay',async()=>{
+      // Resume is a separate launcher from Watch; protect it too, even if
+      // the session became active after this shortcut was first rendered.
+      const current=active();
+      if(current){
+       note.textContent='Return to or explicitly close '+current[1].toLowerCase()+
+        ' before continuing a saved replay.';
+       refreshSession();return;
+      }
       if(!position)return watch(item);
       const success=await window.FuckballReplayResume.open(item.id);
       if(!success)note.textContent='Could not resume. Open My Games to inspect your private saved position.';
