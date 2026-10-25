@@ -239,7 +239,10 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
      'The server did not admit the room within 20 seconds. Review and retry explicitly.':
      'The server connection ended before joining. Review the room and retry explicitly.');
     if(retrySpectator)$('joinSpectator').checked=true;
-   }else notify('Disconnected.');
+   }else if(link.connectionTimedOut)notify(
+    'The server did not respond within 20 seconds. No room was created. Review your server connection and try again explicitly.'
+   );
+   else notify('Disconnected.');
   };
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(link.spectatorJoinAwaiting){
