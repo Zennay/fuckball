@@ -91,9 +91,11 @@
    if(data.link!==hostPauseAwaiting.link||data.link.roomState?.paused===true){
     if(data.link===hostPauseAwaiting.link&&data.link.roomState?.paused===true)
      feedback.textContent='Room server confirmed the pause. Bench rotation can now proceed.';
+     if(typeof notify==='function')notify('Room server confirmed the pause.');
     hostPauseAwaiting=null;
    }else if(Date.now()-hostPauseAwaiting.at>6500){
     feedback.textContent='The room has not confirmed this pause. Check the original room controls before retrying.';
+    if(typeof notify==='function')notify('No server confirmation for pause. Check room controls.');
     hostPauseAwaiting=null;
    }
   }
@@ -220,6 +222,7 @@
   // The existing authoritative room handler is still the only sender.
   nativeButton.click();
   feedback.textContent='Pause submitted using native host controls; awaiting the room server.';
+  if(typeof notify==='function')notify('Pause requested. Awaiting the room server.');
   render();
  }
  hostPause.onclick=confirmHostPause;
