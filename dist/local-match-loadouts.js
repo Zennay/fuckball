@@ -36,6 +36,9 @@
   });
  };
  let snapshot=null,rows=[],healthy=true;
+ // An array index is not an identity: another tab may reorder, rename or
+ // delete a loadout while the first tab is editing it.
+ let selectedName=null,selectionNeedsReview=false;
  function refreshStored(){
   try{
    const raw=localStorage.getItem(KEY);snapshot=raw;
@@ -44,17 +47,21 @@
   }catch{healthy=false;rows=[];}
  }
  refreshStored();
- function write(next){
+ function write(next,selection=selectedName){
   if(!healthy)throw Error('Stored presets could not be read. They were not overwritten.');
   const payload={version:1,presets:next};
   const raw=JSON.stringify(payload);
   if(raw.length>MAX_BYTES)throw Error('Preset collection is too large.');
   if(localStorage.getItem(KEY)!==snapshot){
+   // Never keep a numeric selection across an external replacement: index 2
+   // might now be a completely different teammate's practice preset.
+   selectedName=null;selectionNeedsReview=true;
    refreshStored();render();
-   throw Error('Another tab changed your saved presets. Latest list loaded. Repeat the action.');
+   throw Error('Another tab changed your saved presets. No preset was overwritten. Choose the latest saved loadout again.');
   }
   localStorage.setItem(KEY,raw);
-  snapshot=raw;rows=next;render();
+  snapshot=raw;rows=next;selectedName=selection;
+  selectionNeedsReview=false;render();
  }
  const root=newNode('section',null,'local-match-loadouts');
  root.setAttribute('aria-label','Private local match loadouts');
@@ -98,10 +105,21 @@
  root.append(header,fields,actions,note,status);
  const after=home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
  if(after)after.insertAdjacentElement('afterend',root);else home.append(root);
- function selectedIndex(){
+ function chosenIndex(){
   if(picker.value==='')return null;
   const index=Number(picker.value);
   return Number.isSafeInteger(index)&&index>=0&&index<rows.length?index:null;
+ }
+ function selectedIndex(){
+  const index=chosenIndex();
+  if(index===null||selectionNeedsReview||!selectedName||
+     rows[index].name.toLocaleLowerCase()!==selectedName)return null;
+  return index;
+ }
+ function requireSelection(){
+  const i=selectedIndex();
+  if(i===null)throw Error('Choose a saved loadout from the latest list before changing or deleting it.');
+  return i;
  }
  function readForm(){
   const draft={name:name.value.trim(),mode:mode.value,difficulty:difficulty.value,
@@ -114,10 +132,15 @@
   score.value=String(p.scoreLimit);time.value=String(p.timeLimit);map.value=String(p.stadium);
  }
  function render(){
-  const previous=picker.value;
+  // Bind selection by normalized NAME rather than stale list position.
+  // Cross-tab changes intentionally disarm the selection until the human
+  // explicitly chooses a current entry in the refreshed list.
+  const current=!selectionNeedsReview&&selectedName?
+   rows.findIndex(row=>row.name.toLocaleLowerCase()===selectedName):-1;
   picker.replaceChildren(new Option('Choose a saved loadout',''));
   rows.forEach((row,i)=>picker.add(new Option(row.name,String(i))));
-  picker.value=previous&&Number(previous)<rows.length?previous:'';
+  picker.value=current>=0?String(current):'';
+  if(current<0)selectedName=null;
   meta.textContent=rows.length+' / '+LIMIT+' SAVED';
   picker.disabled=remove.disabled=update.disabled=!healthy||!rows.length;
   save.disabled=!healthy||rows.length>=LIMIT;
@@ -126,33 +149,40 @@
    status.textContent='Existing local match presets are unreadable. Storage was not overwritten. Restore the damaged data manually before saving.';
   }
  }
- picker.onchange=()=>{const index=selectedIndex();if(index!==null){fill(rows[index]);
-   status.textContent='Loaded '+rows[index].name+' for review. No game started.';}};
+ picker.onchange=()=>{
+  const index=chosenIndex();
+  selectedName=index===null?null:rows[index].name.toLocaleLowerCase();
+  selectionNeedsReview=false;
+  if(index!==null){
+   fill(rows[index]);
+   status.textContent='Selected '+rows[index].name+' from the current saved list. No game started.';
+  }else status.textContent='Choose a saved loadout before editing or deleting it.';
+ };
  function saveNew(){
   try{
    const item=readForm();
    if(rows.length>=LIMIT)throw Error('Eight local loadouts is the maximum.');
    if(rows.some(x=>x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
     throw Error('A loadout with this name already exists; select it to update.');
-   write([...rows,item]);picker.value=String(rows.length-1);
+   write([...rows,item],item.name.toLocaleLowerCase());
    status.textContent='New local loadout saved. It will only start when you click Play.';
   }catch(e){status.textContent=e.message||'Could not save loadout.';}
  }
  function saveExisting(){
   try{
-   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout to update.');
+   const i=requireSelection();
    const item=readForm();
    if(rows.some((x,n)=>n!==i&&x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
     throw Error('Another saved loadout already uses that name.');
-   write(rows.map((x,n)=>n===i?item:x));picker.value=String(i);
+   write(rows.map((x,n)=>n===i?item:x),item.name.toLocaleLowerCase());
    status.textContent='Saved changes to the selected local loadout.';
   }catch(e){status.textContent=e.message||'Loadout not updated.';}
  }
  function removeSelected(){
   try{
-   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout.');
+   const i=requireSelection();
    if(!confirm('Remove saved local loadout "'+rows[i].name+'"? Your native practice results and matches will remain unchanged.'))return;
-   write(rows.filter((_,n)=>n!==i));status.textContent='Only the chosen loadout was deleted.';
+   write(rows.filter((_,n)=>n!==i),'');status.textContent='Only the selected loadout was deleted. Choose another before editing.';
   }catch(e){status.textContent=e.message||'Loadout not deleted.';}
  }
  function launch(){
@@ -267,12 +297,14 @@
    const incoming=validate({version:1,presets:parsed.presets});
    if(!confirm('Replace '+rows.length+' saved local match loadouts with '+
     incoming.length+' from this device backup? No real matches or practice history will change.'))return;
-   write(incoming);status.textContent='Restored '+incoming.length+' private match loadout settings.';
+   write(incoming,'');status.textContent='Restored '+incoming.length+' private match loadouts. Choose an entry to edit it.';
   }catch(e){status.textContent='Restore refused: '+(e.message||'Unsupported data');}
  };
  window.addEventListener('storage',e=>{
   if(e.key!==KEY&&e.key!==null)return;
-  refreshStored();render();status.textContent='Saved loadouts changed in another tab. Re-select your current setup.';
+  selectedName=null;selectionNeedsReview=true;
+  refreshStored();render();
+  status.textContent='Another tab changed your saved loadouts. The previous selection is cleared so editing cannot overwrite a different preset. Choose the latest entry again.';
  });
  fill({name:'My solo match',mode:'bot',difficulty:'hard',scoreLimit:3,timeLimit:7,stadium:nativeMaps[0].id});
  render();
