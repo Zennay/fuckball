@@ -167,6 +167,13 @@
  }
  function park(){
   const s=active;if(!s)return;
+  // A hidden drill still belongs to one immutable native match. If the
+  // player launched a different local game or online room, do not show a
+  // misleading Resume prompt or preserve old defensive counters.
+  if(room!==s.room||serverLink||peerConnected||replay||!started||
+     team()!==s.side||room.currentFrameNo<s.frame){
+   finish('CLEAN SHEET · GAME CHANGED');return;
+  }
   // Pause the original offline simulation before hiding it; do not invent
   // match time or defensive outcomes while the player cannot see the pitch.
   if(!serverLink&&!peerConnected&&!replay&&room===s.room&&started&&!paused)
