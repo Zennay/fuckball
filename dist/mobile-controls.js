@@ -8,6 +8,10 @@
  const KEY='fuckball.touch-controls.v1';
  const defaults=Object.freeze({hand:'right',scale:1,deadzone:10,edge:20,lift:0,opacity:85});
  const config={...defaults};
+ // Only a meaningful hit-target/axis change invalidates an already held
+ // finger. Cosmetic opacity changes and duplicate viewport resize events
+ // must never resend neutral input to a live human game.
+ let appliedInputGeometry=null;
  const fields=['hand','scale','deadzone','edge','lift','opacity'];
  function valid(value){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid touch layout.');
@@ -39,7 +43,8 @@
  const presetOptions=[
   ['Balanced',{scale:1,deadzone:10,edge:20,lift:0,opacity:85}],
   ['Thumb reach',{scale:1.2,deadzone:12,edge:12,lift:48,opacity:95}],
-  ['Compact',{scale:.85,deadzone:8,edge:35,lift:8,opacity:65}]
+  ['Compact',{scale:.85,deadzone:8,edge:35,lift:8,opacity:65}],
+  ['Short landscape',{scale:.85,deadzone:8,edge:8,lift:0,opacity:95}]
  ];
  const preview=document.createElement('div');preview.className='touch-layout-preview';
  preview.setAttribute('aria-hidden','true');
@@ -87,18 +92,28 @@
   // The visible viewport may be much narrower than window.innerWidth when
   // browser zoom, split-screen or software chrome is active. Account for
   // BOTH thumbs, safe outer edges, and the actual flex padding/gap.
-  const viewport=window.visualViewport?.width;
+  const viewport=window.visualViewport;
   const width=Math.max(180,Math.min(window.innerWidth||320,
-   Number.isFinite(viewport)&&viewport>0?viewport:Infinity));
+   Number.isFinite(viewport?.width)&&viewport.width>0?viewport.width:Infinity));
+  const height=Math.max(120,Math.min(window.innerHeight||480,
+   Number.isFinite(viewport?.height)&&viewport.height>0?viewport.height:Infinity));
   const reserved=40; // maximum 2×16px padding + 8px flex gap
   const minSize=.75*(88+72);
   const edge=Math.min(config.edge,Math.max(8,
    Math.floor((width-minSize-reserved)/2)));
-  const actualScale=Math.min(config.scale,Math.max(.75,
-   (width-2*edge-reserved)/(88+72)));
+  // Landscape phones have less room above the bottom browser/safe-area bar.
+  // Keep BOTH thumbs below the score HUD without changing the native
+  // joystick radius, kick strength, or the player's saved preference.
+  const bottomReserved=64,topReserved=54;
+  const heightScale=(height-bottomReserved-topReserved)/88;
+  const actualScale=Math.min(config.scale,Math.max(.75,Math.min(
+   (width-2*edge-reserved)/(88+72),heightScale)));
   const maxInset=Math.max(8,Math.floor(
    (width-(88+72)*actualScale-reserved)/2));
-  return {scale:actualScale,edge:Math.min(edge,maxInset),width};
+  const maxLift=Math.max(0,Math.floor(
+   height-bottomReserved-topReserved-88*actualScale));
+  return {scale:actualScale,edge:Math.min(edge,maxInset),
+   lift:Math.min(config.lift,maxLift),width,height};
  }
  function apply(){
   const placed=boundedPlacement();
@@ -107,37 +122,37 @@
   controls.style.setProperty('--fb-touch-stick',Math.round(38*placed.scale)+'px');
   controls.style.setProperty('--fb-touch-kick',Math.round(72*placed.scale)+'px');
   controls.style.setProperty('--fb-touch-edge',placed.edge+'px');
-  controls.style.setProperty('--fb-touch-lift',config.lift+'px');
+  controls.style.setProperty('--fb-touch-lift',placed.lift+'px');
   controls.style.setProperty('--fb-touch-opacity',String(config.opacity/100));
   // Share the *effective* size with the joystick handler, which uses this
   // exact value for its deadzone and travel radius.
   window.touchControlSettings={...config,scale:placed.scale};
-  // The main touch handler already releases ownership on this event.
-  // If an import or layout edit moves targets while a finger is held,
-  // clear the old direction instead of letting it survive into new geometry.
-  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
-   window.dispatchEvent(new CustomEvent('fuckball:touch-layout-applied'));
   hand.checked=config.hand==='left';
   for(const [control,key,format] of [
    [size,'scale',v=>Math.round(v*100)+'%'],
    [zone,'deadzone',v=>v+' px'],
    [edge,'edge',v=>v+' px'+(placed.edge!==v?' · fits at '+placed.edge+' px':'')],
-   [lift,'lift',v=>v+' px'],
+   [lift,'lift',v=>v+' px'+(placed.lift!==v?' · fits at '+placed.lift+' px':'')],
    [opacity,'opacity',v=>v+'%']
   ]){control.input.value=String(config[key]);control.value.textContent=format(config[key]);}
   field.classList.toggle('touch-preview-left',config.hand==='left');
   field.style.setProperty('--preview-edge',Math.max(4,placed.edge/3)+'px');
-  field.style.setProperty('--preview-lift',Math.round(config.lift/3)+'px');
+  field.style.setProperty('--preview-lift',Math.round(placed.lift/3)+'px');
   field.style.setProperty('--preview-scale',String(placed.scale));
   field.style.setProperty('--preview-opacity',String(config.opacity/100));
   status.textContent=(config.hand==='left'?'Kick left':'Kick right')+' · '+Math.round(placed.scale*100)+
-   '% controls'+(placed.scale<config.scale?' (fitted to visible screen)':'')+
+   '% controls'+(placed.scale<config.scale?' (size fitted to screen)':'')+
+   (placed.lift<config.lift?' · lift fitted to '+placed.lift+'px':'')+
    ' · '+config.deadzone+' px deadzone · device only';
-  // Repositioning or swapping controls invalidates an earlier finger's hit
-  // target. The live input owner clears those captures; the next deliberate
-  // touch starts fresh with the newly applied geometry.
-  if(typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')
-   window.dispatchEvent(new window.CustomEvent('fuckball:touch-layout-applied'));
+  // A layout applied twice by window.resize AND visualViewport.resize must
+  // release a held touch at most once. Opacity-only edits are purely visual.
+  const geometry=[config.hand,placed.scale,placed.edge,placed.lift,
+   config.deadzone].join(':');
+  if(geometry!==appliedInputGeometry){
+   appliedInputGeometry=geometry;
+   if(typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+    window.dispatchEvent(new window.CustomEvent('fuckball:touch-layout-applied'));
+  }
  }
  hand.addEventListener('change',()=>{config.hand=hand.checked?'left':'right';apply();persist();});
  for(const [name,settings] of presetOptions)
