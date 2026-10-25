@@ -51,6 +51,12 @@
   // Never keep an online spectator device awake just because the server
   // match continues. Native server admission and team state stay authoritative.
   const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
+  // The local started bit can lag a native room transition. Require the
+  // authoritative server round to be running and unpaused as well.
+  if(online&&!serverLink.roomState?.started)
+   return{active:false,reason:'wait for the online room to start'};
+  if(online&&serverLink.roomState?.paused)
+   return{active:false,reason:'resume the paused online round'};
   const guest=typeof peerConnected!=='undefined'&&peerConnected&&
    typeof peerRole!=='undefined'&&peerRole==='guest';
   if(online||guest){
@@ -168,13 +174,13 @@
  window.addEventListener('pagehide',()=>{wanted=false;release();unlockOrientation();});
  // Keep power behaviour aligned with the actual foreground match, not a menu
  // setting or an unverified claim that a match is still in progress.
- let lastActive=false;
+ let lastActive=false,lastReason='';
  function syncMatchPower(){
-  const now=active();
+  const state=powerEligibility(),now=state.active;
   if(!now&&(sentinel||pending))release();
   else if(now&&wanted&&!sentinel&&!pending)acquire();
-  else if(now!==lastActive)render();
-  lastActive=now;
+  else if(now!==lastActive||state.reason!==lastReason)render();
+  lastActive=now;lastReason=state.reason;
  }
  // The client can pause, switch team, enter replay, navigate home or lose
  // server admission without a document visibility event. Synchronize locally
