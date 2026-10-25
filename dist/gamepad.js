@@ -80,6 +80,14 @@
  };
  const neutral=()=>({x:0,y:0,kick:false});
  let active=null,chosenIndex=null,lastSignature='',wasStart=false,connected='';
+ // Preserve one human's actual controller identity for a live two-player
+ // couch session. A newly plugged-in controller using the old port cannot
+ // silently inherit the first player's movement or kick permission.
+ let localSeatOne=null,localSeatLocked=false;
+ const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
+  !serverLink&&!peerConnected&&!replay&&
+  ['local','coop2v2','coop3v3','coop4v4'].includes($('mode').value);
+ const reservedP2=()=>window.fuckballCouchPad?.reservedPort?.()??null;
  let lastHeldKick=false,lastScore=null,lastHapticAt=0;
  const isHeld=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
@@ -95,14 +103,19 @@
   if(typeof navigator.getGamepads!=='function')return null;
   try{
    const pads=navigator.getGamepads();
+   if(localSeatLocked&&localTwoHumanMode()){
+    const pinned=localSeatOne===null?null:pads[localSeatOne.index];
+    return pinned?.connected&&pinned.id===localSeatOne.id&&
+     pinned.index!==reservedP2()?pinned:null;
+   }
    // Explicit choices never fall back to another player's controller on disconnect.
    if(chosenIndex!==null){
     const chosen=pads[chosenIndex];
-    return chosen?.connected?chosen:null;
+    return chosen?.connected&&chosen.index!==reservedP2()?chosen:null;
    }
    const current=active===null?null:pads[active];
-   if(current?.connected)return current;
-   const next=Array.from(pads).find(p=>p?.connected);
+   if(current?.connected&&current.index!==reservedP2())return current;
+   const next=Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2());
    active=next?.index??null;
    return next||null;
   }catch{return null;}
@@ -212,11 +225,27 @@
   const index=event.detail?.index;
   if(index!==null&&(!Number.isSafeInteger(index)||index<0||index>15))return;
   chosenIndex=index;active=null;lastSignature='';connected='';
+  if(localSeatLocked&&localTwoHumanMode()){
+   const pads=typeof navigator.getGamepads==='function'?navigator.getGamepads():[];
+   const chosen=index===null?
+    Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2()):
+    pads[index];
+   localSeatOne=chosen?.connected&&chosen.index!==reservedP2()?
+    {index:chosen.index,id:chosen.id}:null;
+  }
   // Require a fresh Start press on the new controller instead of opening
   // the in-game menu just because Start was held during the switch.
   wasStart=true;
  });
  window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null};
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  localSeatLocked=false;
+  if(!localTwoHumanMode())return;
+  const pad=controller();
+  localSeatOne=pad?{index:pad.index,id:pad.id}:null;
+  localSeatLocked=true;
+  lastSignature='';
+ });
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
  window.addEventListener('focus',()=>{lastSignature='';});
