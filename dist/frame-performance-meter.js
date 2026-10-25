@@ -52,7 +52,11 @@
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(top,intro,targetWrap,stats,gauge,bars,legend,gaps,actions,notice);
  match.append(panel);
+ const MIN_RELIABLE_READINGS=12;
  let samples=[],second=0,wasVisible=false,sessionStartedAt=0;
+ // fpsValue is updated by the renderer every ~500ms. Polling it each
+ // second must never turn one frozen/stale value into many 'measurements'.
+ let lastNativeFpsWindow=null,renderEvidenceStale=false;
  let awayAt=0,gapCount=0,gapSeconds=0,lastGameElapsed=null;
  // Real in-memory transport/room identity, not a reused room code or
  // a generic 'direct-peer' label. Only the original engine knows round ids.
@@ -131,6 +135,9 @@
     observedKind==='direct-peer'?'direct-peer match':
     observedKind==='replay'?'local replay':'offline match')+
    (observedKind==='native'&&observedRound!==null?' · server round '+observedRound:'')+
+   (samples.length<MIN_RELIABLE_READINGS?
+    ' · Preliminary evidence only ('+samples.length+'/'+MIN_RELIABLE_READINGS+' required).':'')+
+   (renderEvidenceStale?' · No fresh painted frames now; prior readings are historical.':'')+
    '. One observed session only; not an official device benchmark.';
  }
  evidenceReturn?.addEventListener('click',()=>document.getElementById('tabPlay')?.click());
@@ -143,6 +150,7 @@
  };
  function clearData(){
   samples=[];second=0;sessionStartedAt=0;awayAt=0;gapCount=0;gapSeconds=0;lastGameElapsed=null;
+  lastNativeFpsWindow=null;renderEvidenceStale=false;
   observedSource=null;observedKind='';observedRound=null;wasVisible=false;
   median.textContent=low.textContent='—';count.textContent='0';
   bars.replaceChildren();gauge.textContent='Waiting for native rendered FPS samples.';
@@ -160,8 +168,13 @@
    'No unmeasured navigation or background periods in this sample window.';
   updateEvidence();
   if(!values.length){gauge.textContent='Waiting for real foreground FPS readings.';bars.replaceChildren();save.disabled=true;return;}
-  gauge.textContent=m>=goal*.9?'Rendering near your '+goal+' FPS goal':
-   'Rendering below your selected '+goal+' FPS goal · use native Performance or lower FPS target';
+  gauge.textContent=renderEvidenceStale?
+   'No new painted frames. Previous FPS readings are historical, not a live performance result.':
+   values.length<MIN_RELIABLE_READINGS?
+   'Collecting fresh, independent FPS readings ('+values.length+'/'+MIN_RELIABLE_READINGS+
+    '). Performance goal not evaluated yet.':
+   m>=goal*.9?'Observed rendering near your '+goal+' FPS goal':
+   'Observed rendering below your '+goal+' FPS goal · try native Performance settings';
   // Keep this display small: repaint the history only if the player opened
   // PERF; sample collection itself never causes a chart repaint.
   bars.replaceChildren();
@@ -211,11 +224,30 @@
    }
    awayAt=0;
   }
+  // A native FPS reading is meaningful only if the actual renderer painted
+  // frames recently AND its 500ms aggregation window changed since the
+  // previous sample. This rules out duplicated counters after a tab resumes
+  // or when RAF is stalled despite a visible, connected room.
+  const paintedWindow=typeof frameStats!=='undefined'?
+   frameStats?.fpsStart:null;
+  const paintNow=performance.now();
+  const fresh=Number.isFinite(paintedWindow)&&paintedWindow>0&&
+   paintNow>=paintedWindow&&paintNow-paintedWindow<=1500;
+  if(!fresh){
+   renderEvidenceStale=true;
+   if(wasVisible){wasVisible=false;if(samples.length)awayAt=Date.now();}
+   if(!panel.hidden)render();
+   else updateEvidence();
+   return;
+  }
+  if(paintedWindow===lastNativeFpsWindow)return;
+  renderEvidenceStale=false;
   const raw=nativeFPS.textContent?.trim()||'';
   if(!/^\d{1,4}$/.test(raw))return;
   const fps=Number(raw);
   if(!Number.isSafeInteger(fps)||fps<1||fps>2000)return;
   const now=Date.now();
+  lastNativeFpsWindow=paintedWindow;
   if(!sessionStartedAt)sessionStartedAt=now;
   samples.push({t:Math.round((now-sessionStartedAt)/1000),fps});
   second++;
@@ -251,6 +283,9 @@
     '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ['SERVER_ROUND',observedKind==='native'&&observedRound!==null?observedRound:'not available',
     'Server-issued numeric round only; no room identifier'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
+   ['MINIMUM_READINGS_FOR_GOAL',MIN_RELIABLE_READINGS,
+    'Goal status is preliminary until sufficient distinct renderer windows were observed'].map(v=>
     '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ['UNMEASURED_PERIODS',gapCount+(awayAt>0?1:0),
     'Approximately '+(gapSeconds+(awayAt>0?Math.max(0,Math.round((Date.now()-awayAt)/1000)):0))+
