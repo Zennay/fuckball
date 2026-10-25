@@ -22,7 +22,9 @@
  title.append(make('span','LOCAL RENDER DIAGNOSTICS','frame-meter-eyebrow'),
   make('h2','FRAME PERFORMANCE.'));
  const sourceLabel=make('p','Waiting for a verified game session…','frame-meter-source');
- title.append(sourceLabel);
+ const confidence=make('span','Awaiting real rendered frames','frame-meter-confidence');
+ confidence.dataset.state='preliminary';
+ title.append(sourceLabel,confidence);
  const close=make('button','✕');close.type='button';close.setAttribute('aria-label','Close frame performance panel');
  top.append(title,close);
  const intro=make('p','Uses the FPS value this game already renders. Observes up to 90 recent foreground seconds; no extra benchmark, server ping, hardware profiling or uploads. FPS is display performance, not the native 60 Hz physics tick.');
@@ -161,6 +163,12 @@
  function render(){
   const values=samples.map(x=>x.fps),sorted=values.slice().sort((a,b)=>a-b);
   const m=quantile(sorted,.5),p10=quantile(sorted,.1),goal=Number(target.value);
+  const credible=!renderEvidenceStale&&values.length>=MIN_RELIABLE_READINGS;
+  confidence.dataset.state=renderEvidenceStale?'stale':
+   credible?'measured':'preliminary';
+  confidence.textContent=renderEvidenceStale?'RENDER STALLED · LAST READINGS HISTORICAL':
+   credible?'FRESH FPS EVIDENCE · '+values.length+' READINGS':
+   'COLLECTING REAL FRAMES · '+values.length+'/'+MIN_RELIABLE_READINGS;
   median.textContent=m??'—';low.textContent=p10??'—';count.textContent=String(samples.length);
   gaps.textContent=gapCount?
    gapCount+' unmeasured period'+(gapCount===1?'':'s')+
@@ -283,6 +291,10 @@
     '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ['SERVER_ROUND',observedKind==='native'&&observedRound!==null?observedRound:'not available',
     'Server-issued numeric round only; no room identifier'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
+   ['EVIDENCE_QUALITY',renderEvidenceStale?'stale / historical':
+    samples.length<MIN_RELIABLE_READINGS?'preliminary / not enough fresh readings':'measured / distinct native FPS windows',
+    'Never treat a repeated or stale painted FPS counter as independent proof'].map(v=>
     '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ['MINIMUM_READINGS_FOR_GOAL',MIN_RELIABLE_READINGS,
     'Goal status is preliminary until sufficient distinct renderer windows were observed'].map(v=>
