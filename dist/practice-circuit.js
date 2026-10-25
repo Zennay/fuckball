@@ -189,7 +189,18 @@
  download.type=clear.type='button';archiveActions.append(download,clear);
  archive.append(historyList,archiveActions);
  const status=make('p','practice-circuit-status');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- section.append(header,live,archive,status);
+ // An active human match, room join or recovery owns the original game.
+ // Keep a visible, navigable explanation rather than offering a local start
+ // button that would endanger that session.
+ const busyCard=make('aside','practice-circuit-busy');
+ busyCard.hidden=true;
+ busyCard.setAttribute('role','status');
+ const busyCopy=make('p','','An online room, human search, direct-peer connection or room reconnect is active. Leave or cancel it explicitly before starting a local training stage.');
+ const busyReturn=make('button','','↗ Return to current session');
+ busyReturn.type='button';
+ busyReturn.onclick=()=>document.getElementById('tabPlay')?.click();
+ busyCard.append(busyCopy,busyReturn);
+ section.append(header,busyCard,live,archive,status);
  const anchor=home.querySelector('.practice-weekly-plan')||home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=make('aside','practice-circuit-hud'),hudText=make('span','','');
@@ -219,9 +230,15 @@
    (typeof peer!=='undefined'&&!!peer)||
    !!document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  }
+ function renderOnlineSafety(){
+  const busy=online();
+  busyCard.hidden=!busy;
+  selector.disabled=start.disabled=!!session||busy;
+  hud.hidden=!session||match.hidden||busy;
+ }
  function render(message){
-  live.hidden=!session;selector.disabled=start.disabled=!!session;
-  hud.hidden=!session||match.hidden||online();
+  live.hidden=!session;
+  renderOnlineSafety();
   if(!session){hudText.textContent='';renderHistory();if(message)status.textContent=message;return;}
   progress.textContent='STAGE '+(session.done+1)+' / 3 · '+session.order.map((key,i)=>i<session.done?'✓':i===session.done?'◉':'○').join('   ');
   rows.replaceChildren();
@@ -342,7 +359,8 @@
   render('Only circuit summaries were cleared; the real drill records remain.');
  };
  window.setInterval(()=>{
-  if(!refreshFromStorage()||!session)return;
+  if(!refreshFromStorage()||!session){renderOnlineSafety();return;}
+  renderOnlineSafety();
   // A circuit is a short, intentional session, not permanent surveillance.
   if(session.startedAt<Date.now()-DAY){
    if(sameState(readState(),session))try{localStorage.removeItem(STATE);}catch{}
