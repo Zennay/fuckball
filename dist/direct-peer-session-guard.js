@@ -79,10 +79,18 @@
   if(!pending()||!localSignal?.value||!nativeCopy||nativeCopy.disabled)return;
   nativeCopy.click();
  });
+ // ICE may stay "checking"/"connecting" indefinitely without ever raising
+ // "failed". Start an advisory clock only AFTER remote signalling reaches
+ // actual ICE checks, not while a human is still sharing the offer/answer.
+ // Timers never close an existing connection or auto-generate a new identity.
+ let observedPeer=null,checkingSince=0,disconnectedSince=0;
  const failedHandshake=()=>pending()&&(
   peer?.connectionState==='failed'||peer?.iceConnectionState==='failed');
+ const stalledHandshake=()=>pending()&&peer===observedPeer&&(
+  checkingSince!==0&&Date.now()-checkingSince>=25000||
+  disconnectedSince!==0&&Date.now()-disconnectedSince>=6000);
  retry.addEventListener('click',()=>{
-  if(!failedHandshake()||nativeCancel.disabled)return;
+  if(!(failedHandshake()||stalledHandshake())||nativeCancel.disabled)return;
   const role=peerRole;
   if(!['host','guest'].includes(role))return;
   const original=role==='host'?nativeHost:nativeJoin;
@@ -116,6 +124,20 @@
  let previous=false;
  function refresh(){
   const active=pending();
+  const pc=active?peer:null;
+  // Preserve exact RTCPeerConnection identity: a retry's fresh handshake
+  // must never inherit an old failed/stalled timer or connection state.
+  if(pc!==observedPeer){
+   observedPeer=pc;checkingSince=0;disconnectedSince=0;
+  }
+  if(pc){
+   const checking=pc.connectionState==='connecting'||
+    pc.iceConnectionState==='checking';
+   if(checking&&checkingSince===0)checkingSince=Date.now();
+   if(pc.iceConnectionState==='disconnected'){
+    if(disconnectedSince===0)disconnectedSince=Date.now();
+   }else disconnectedSince=0;
+  }
   if(active!==previous){
    previous=active;
    // Reuse the original native button-state authority; only the pending
@@ -125,16 +147,20 @@
   // The network dialog already contains the same original cancellation.
   surface.hidden=!active||!!dialog?.open;
   if(surface.hidden)return;
-  const failed=failedHandshake();
+  const failed=failedHandshake(),stalled=!failed&&stalledHandshake();
   heading.textContent=failed?'DIRECT 1v1 · CONNECTION FAILED':
-   'DIRECT 1v1 · CONNECTION PENDING';
+   stalled?'DIRECT 1v1 · STILL WAITING FOR ICE':'DIRECT 1v1 · CONNECTION PENDING';
   copyCode.hidden=failed||!localSignal?.value||!nativeCopy;
-  retry.hidden=!failed;
+  retry.hidden=!failed&&!stalled;
   retry.textContent=peerRole==='host'?'↻ Retry as host':'↻ Retry as guest';
   const phase=(status.textContent||'').trim().slice(0,185);
   const text=failed?
    'The direct WebRTC link failed. No match has been joined. '+
    'Choose Retry for a fresh manual code or Cancel; old codes cannot be reused.':
+   stalled?
+   'The browser has not established this direct connection after ICE checking. '+
+   'You can keep waiting, Cancel, or explicitly Retry with a fresh private code. '+
+   'Nothing was disconnected automatically.':
    (phase||'Finish exchanging the two connection codes.')+
    ' · Exchange the private offer/answer only with your intended friend. '+
    'Keep waiting or cancel explicitly.';
