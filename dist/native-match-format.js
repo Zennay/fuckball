@@ -96,9 +96,17 @@
   // Every room uses the same options: refresh selection on native room/round
   // changes instead of carrying another player's previous choice forward.
   if(ballotLink!==link||ballotRoom!==link.room||ballotRound!==state.round){
+   // The original native host configure contract increments the room round
+   // *when a format is applied*. Consume that exact authoritative result
+   // before discarding old-round pending state.
+   const applied=pendingApply&&pendingApply.link===link&&
+    ballotRoom===link.room&&state.round!==pendingApply.round&&
+    state.timeLimit===pendingApply.minutes&&
+    state.scoreLimit===pendingApply.goals&&state.matchFormatVotes.length===0;
    signature='';selected=2;pendingVote=null;pendingApply=null;
    feedback='';feedbackUntil=0;
    ballotLink=link;ballotRoom=link.room;ballotRound=state.round;
+   if(applied)showFeedback('The server confirmed the winning match format and opened a fresh lobby round.');
   }
   const limits=Number.isSafeInteger(state.scoreLimit)&&state.scoreLimit>=0&&
    Number.isSafeInteger(state.timeLimit)&&state.timeLimit>=0;
