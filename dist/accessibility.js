@@ -32,6 +32,46 @@
   root.classList.toggle('fb-access-motion-allow',!preferences.motion);
  }
  apply();
+ // The visible pitch scoreboard has only colored, detached spans. Give a
+ // screen reader one truthful, current, human-readable *displayed* snapshot.
+ // This is not a server receipt or a new score/goal event.
+ const scoreboard=document.querySelector('#matchView .scoreboard');
+ const redScore=document.getElementById('redScore');
+ const blueScore=document.getElementById('blueScore');
+ const matchClock=document.getElementById('clock');
+ const redTeam=scoreboard?.querySelector('.team-name.red');
+ const blueTeam=scoreboard?.querySelector('.team-name.blue');
+ function readDisplayedScore(){
+  if(!scoreboard||!redScore||!blueScore||!matchClock)
+   return 'The match scoreboard is not available in this view.';
+  const red=redScore.textContent.trim(),blue=blueScore.textContent.trim(),
+   time=matchClock.textContent.trim();
+  if(!/^\\d{1,3}$/.test(red)||!/^\\d{1,3}$/.test(blue)||
+     !/^\\d{1,3}:[0-5]\\d$/.test(time))
+   return 'The displayed scoreboard is not ready yet.';
+  return 'Displayed scoreboard: Red '+red+', Blue '+blue+
+   '. Displayed match clock '+time+'.';
+ }
+ function syncScoreDescription(){
+  if(!scoreboard)return;
+  scoreboard.setAttribute('role','group');
+  scoreboard.setAttribute('aria-live','off');
+  const desc=readDisplayedScore();
+  if(scoreboard.getAttribute('aria-label')!==desc)
+   scoreboard.setAttribute('aria-label',desc);
+  if(redTeam)redTeam.setAttribute('aria-label',
+   preferences.teamMarks?'Red team, diamond marker':'Red team');
+  if(blueTeam)blueTeam.setAttribute('aria-label',
+   preferences.teamMarks?'Blue team, circle marker':'Blue team');
+ }
+ syncScoreDescription();
+ if(scoreboard&&typeof MutationObserver==='function'){
+  const observed=new MutationObserver(syncScoreDescription);
+  // The clock and numeric score are authoritative only as displayed;
+  // never observe our own ARIA attributes or infer unseen goal events.
+  for(const target of [redScore,blueScore,matchClock])
+   if(target)observed.observe(target,{childList:true,characterData:true,subtree:true});
+ }
  const homeTrigger=document.createElement('button');
  homeTrigger.type='button';homeTrigger.id='accessibilityButton';
  homeTrigger.textContent='Aa';homeTrigger.setAttribute('aria-label','Accessibility preferences');
@@ -70,7 +110,7 @@
   words.append(name,hint,origin);row.append(check,words);form.append(row);
   check.addEventListener('change',()=>{
    overrides[key]=check.checked;
-   apply();fill();
+   apply();syncScoreDescription();fill();
    try{
     localStorage.setItem(storageKey,JSON.stringify({version:2,overrides}));
     message.textContent='Saved on this device. Unchanged settings still follow the device.';
@@ -83,7 +123,23 @@
  const buttons=document.createElement('div');buttons.className='fb-access-actions';
  const reset=document.createElement('button');reset.type='button';reset.textContent='Use device defaults';
  const done=document.createElement('button');done.type='button';done.className='primary';done.textContent='Done';
- buttons.append(reset,done);dialog.append(heading,intro,form,message,buttons);document.body.append(dialog);
+ const scoreReview=document.createElement('div');
+ scoreReview.className='fb-access-score-review';
+ const scoreReviewButton=document.createElement('button');
+ scoreReviewButton.type='button';
+ scoreReviewButton.textContent='Read displayed match score';
+ scoreReviewButton.setAttribute('aria-label','Read current displayed red and blue score and match clock');
+ const scoreReviewStatus=document.createElement('p');
+ scoreReviewStatus.setAttribute('role','status');
+ scoreReviewStatus.setAttribute('aria-live','polite');
+ scoreReviewStatus.textContent='Score review is on demand. It reads the visible scoreboard, not a new server event.';
+ scoreReviewButton.addEventListener('click',()=>{
+  scoreReviewStatus.textContent=readDisplayedScore();
+ });
+ scoreReview.append(scoreReviewButton,scoreReviewStatus);
+ buttons.append(reset,done);
+ dialog.append(heading,intro,form,scoreReview,message,buttons);
+ document.body.append(dialog);
  let opener=null;
  function fill(){
   for(const key of keys){
@@ -113,20 +169,23 @@
  dialog.addEventListener('close',()=>{opener?.focus();opener=null;});
  dialog.addEventListener('click',event=>{if(event.target===dialog)close();});
  reset.addEventListener('click',()=>{
-  overrides={};apply();fill();
+  overrides={};apply();syncScoreDescription();fill();
   try{localStorage.removeItem(storageKey);}catch{message.textContent='Device defaults applied for this visit.';}
  });
  for(const [query,key] of [['(prefers-contrast: more)','contrast'],['(prefers-reduced-motion: reduce)','motion']]){
   const media=window.matchMedia?.(query);
   media?.addEventListener?.('change',()=>{
-   if(!Object.prototype.hasOwnProperty.call(overrides,key)){apply();fill();}
+   if(!Object.prototype.hasOwnProperty.call(overrides,key)){
+    apply();syncScoreDescription();fill();
+   }
   });
  }
  // A second tab changes preferences without reloading the running game.
  // Never sync a user's session, controls, match, chat or server data.
  window.addEventListener('storage',event=>{
   if(event.key!==storageKey)return;
-  restore();apply();fill();
+  restore();apply();syncScoreDescription();fill();
+  scoreReviewStatus.textContent='Settings synchronized. Use Read displayed match score to review the visible score.';
   message.textContent='Accessibility preferences synchronized from another tab.';
  });
 })();
