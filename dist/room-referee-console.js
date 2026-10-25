@@ -108,7 +108,9 @@
   const liveRequest=d.isReferee&&!!d.request&&d.running&&!d.paused&&d.online;
   // The original on-pitch shortcut remains the only prompt on the pitch.
   // Home and My Games instead expose a body-mounted contextual action.
-  dock.hidden=!liveRequest||!pitch.hidden||document.hidden;
+  // Hosts already have the original owner-only pause-request prompt; do
+  // not stack two competing banners when a host appointed themselves.
+  dock.hidden=!liveRequest||d.isHost||!pitch.hidden||document.hidden;
   if(!dock.hidden){
    const actor=d.people.find(p=>p.id===d.request.by);
    const seconds=Math.max(0,Math.ceil((d.request.expiresAt-Date.now())/1000));
