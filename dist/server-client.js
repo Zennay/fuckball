@@ -121,6 +121,18 @@ function onlineSessionConflict(resumeContext=null,startingNewQueue=false){
   return 'Cancel the active human queue or ready check before starting another online room.';
  return '';
 }
+// A refused native admission is terminal for that socket. Clear its transport
+// before showing the same safe, explicit room-selection UI; otherwise a fast
+// manual retry sees the rejected socket as an active session.
+function showRejectedRoomJoin(link,code,message){
+ const spectator=link?.requestedSpectate===true;
+ const priorName=link?.joinName;
+ if(link){link.failed=true;if(serverLink===link)disconnect();}
+ showView('play');showJoinScreen(code||'',String(message||'Could not enter room.').slice(0,180));
+ if(spectator)$('joinSpectator').checked=true;
+ if(priorName&&!settings.account&&!/^Guest \d{4}$/.test(priorName))
+  $('joinName').value=priorName;
+}
 function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false,spectate=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');
  // Validate room credentials and current-session ownership BEFORE any
  // destructive disconnect, view change, replay close or local HUD mutation.
@@ -311,7 +323,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   if(Number.isSafeInteger(d.timeLimit)&&d.timeLimit>=0&&d.timeLimit<=99)
    $('timeLimit').value=String(d.timeLimit);
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();}
- else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
+ else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){
+  showRejectedRoomJoin(link,roomId,'Your former player slot expired. Join again to get a new slot.');
+ }
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     (d.message.startsWith('This room is not accepting new spectators or bench participants.')||
      d.message.startsWith('This room is full.')||
@@ -320,19 +334,17 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
      d.message.startsWith('This room was locked before you could join.')||
      d.message.startsWith('This room filled while the connection was being prepared.')||
      d.message.startsWith('This room now requires a signed-in account.'))){
-   link.failed=true;ws.close();showJoinScreen(roomId,d.message);
-   if(document.getElementById('joinSpectator'))
-    $('joinSpectator').checked=link.requestedSpectate;
+   showRejectedRoomJoin(link,roomId,d.message);
    return;
   }
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     /^(Private room access key required or incorrect\.|Too many room access attempts\.)/.test(d.message)){
-   link.failed=true;ws.close();
-   showJoinScreen(roomId,d.message);
-   if(document.getElementById('joinSpectator'))$('joinSpectator').checked=link.requestedSpectate;
+   showRejectedRoomJoin(link,roomId,d.message);
    return;
   }
- else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
+ else if(d.type==='error'&&!peerConnected&&!link.room&&/^Name reserved/.test(d.message)){
+  showRejectedRoomJoin(link,roomId,d.message);
+ }
  else if(d.type==='error'){
   const message=inviteError(typeof d.message==='string'?d.message.slice(0,180):
    'The server rejected this room request.');
@@ -342,9 +354,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    if(!create&&!link.quickMatchMode&&!link.room&&NATIVE_ROOM_CODE.test(roomId)){
     // A server's denial is not proof of an admitted seat. Immediately clear
     // the rejected socket; preserve the human's invite and explicit retry UI.
-    const watch=link.requestedSpectate;
-    disconnect();showView('play');showJoinScreen(roomId,message);
-    if(watch)$('joinSpectator').checked=true;
+    showRejectedRoomJoin(link,roomId,message);
    }else{
     if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}
     ws.close();
