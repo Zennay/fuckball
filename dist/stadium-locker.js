@@ -112,12 +112,25 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  }
  function localRoomFree(){
-  if(typeof replay!=='undefined'&&replay)return 'Close the replay before changing a stadium.';
-  if(typeof serverLink!=='undefined'&&serverLink?.room)return 'Leave your online room before loading a local stadium.';
-  if(typeof peerConnected!=='undefined'&&peerConnected)return 'Disconnect your direct peer match before loading a stadium.';
+  // Switching a local map resets the native local engine. Never do that
+  // while a server/peer handshake, timed original-room recovery, human ready
+  // check or recording owns the same local renderer/gameplay state.
+  if(typeof replay!=='undefined'&&replay)
+   return 'Close the replay before loading a local stadium.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Your original online room is reconnecting. Choose Stop reconnecting first.';
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return serverLink.room?
+    'Leave your online room explicitly before loading a local stadium.':
+    'Cancel the connecting online room or human search before loading a local stadium.';
+  if(typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&peer)
+   return 'Disconnect or cancel your direct-peer connection before loading a local stadium.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])')||
-    document.querySelector('.quick-ready:not([hidden])'))
-   return 'Cancel the active human Quick Match search before changing a stadium.';
+     document.querySelector('.quick-ready:not([hidden])'))
+   return 'Cancel the active human Quick Match search or ready check before changing a stadium.';
+  if(typeof room!=='undefined'&&room?.isRecording?.())
+   return 'Save or stop the current recording with the original Record control before switching stadiums.';
   return null;
  }
  function button(text,action){
@@ -131,15 +144,34 @@
   details.textContent='Actual stadium: '+map.name+' · '+map.width+' × '+map.height+
    ' · '+humanBytes(map.size)+' · device only';
   const tools=document.createElement('div');tools.className='stadium-locker-card-actions';
-  const load=button('▶ Load locally',()=>{
+  const load=button('▶ Load locally',async()=>{
    if(busy)return;
-   const blocked=localRoomFree();if(blocked){status.textContent=blocked;return;}
-   if(typeof started!=='undefined'&&started&&
-      !window.confirm('Switch stadium and restart your current local match? Unsaved gameplay may be lost.'))return;
+   const blocked=localRoomFree();
+   if(blocked){status.textContent=blocked;return;}
+   busy=true;
    try{
-    applyMap(map.code);
-    status.textContent='Loaded '+map.name+' through the native local stadium loader.';
-   }catch(error){status.textContent='Stadium could not be loaded: '+(error.message||'Invalid map.');}
+    // A card may be stale after another tab deletes/replaces the map. Read
+    // the actual saved row, then validate it with the same parser as import,
+    // BEFORE any restart, stadium selection or prompt.
+    const db=await database();
+    const transaction=db.transaction(STORE,'readonly');
+    const saved=await request(transaction.objectStore(STORE).get(map.id));
+    if(!saved||saved.code!==map.code)
+     throw Error('This saved stadium changed in another tab. Refresh the locker before loading it.');
+    const candidate=normalize(saved.code,saved.alias);
+    const beforeConfirm=localRoomFree();
+    if(beforeConfirm)throw Error(beforeConfirm);
+    if(typeof started!=='undefined'&&started&&
+       !window.confirm('Switch stadium and restart your current local match? Unsaved gameplay may be lost.'))return;
+    // Confirm dialogs and IndexedDB await points can allow an online join or
+    // recording to start. Recheck immediately before the native mutation.
+    const immediatelyBefore=localRoomFree();
+    if(immediatelyBefore)throw Error(immediatelyBefore);
+    applyMap(candidate.code);
+    status.textContent='Loaded '+candidate.name+' locally using the game’s original stadium loader.';
+   }catch(error){
+    status.textContent='Stadium was not loaded: '+(error.message||'Invalid or unavailable saved map.');
+   }finally{busy=false;render();}
   });
   const exportButton=button('↓ Export .hbs',()=>{
    download(map.code,safeName(map.alias)+'.hbs','application/json');
