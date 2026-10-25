@@ -28,6 +28,10 @@
  launchNotice.setAttribute('role','status');launchNotice.setAttribute('aria-live','polite');
  // Attached with the other panel content below.
  function onlineConflict(){
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Your previous room is reconnecting. Stop reconnecting explicitly before starting offline practice.';
+  if(typeof peer!=='undefined'&&peer)
+   return 'Cancel the pending direct-peer connection before starting offline practice.';
   if(typeof serverLink!=='undefined'&&serverLink)
    return serverLink.room?'Leave your active native online room explicitly before starting offline practice.':
     'An online connection or human search is in progress. Cancel it explicitly before practising.';
@@ -49,9 +53,12 @@
   if(!control||control.disabled){launchNotice.textContent=description+' cannot start right now. Use the original game controls.';return;}
   // Opening another local mode may end an in-progress solo game or replay.
   // The player decides whether to discard that local session.
-  if(document.getElementById('matchView')?.hidden===false&&
-      ((typeof started!=='undefined'&&started)||(typeof replay!=='undefined'&&replay))&&
-      !window.confirm('Leave the current local game or replay to start '+description+'? Unsaved local progress may be lost.'))return;
+  // A local match/replay is still the player's active session even when its
+  // canvas is hidden behind Home or My Games. Require consent to discard it.
+  const localGame=(typeof started!=='undefined'&&started)||
+   (typeof replay!=='undefined'&&!!replay);
+  if(localGame&&!window.confirm('Leave the current local game or replay to start '+
+      description+'? Unsaved local progress may be lost.'))return;
   if(!quickPlay(id==='quickSquad'?'4v4':'bot',true)){
    launchNotice.textContent='The original local game did not start; your existing session was kept.';return;
   }
@@ -157,9 +164,14 @@
   }
  }
  function safeToReload(){
-  // Do not interrupt a match, native room, Quick Match search or ready check.
+  // A Home or My Games view may hide an active local game, replay or
+  // authorized room reconnect. Do not lose that session to a PWA update.
   if(!document.getElementById('matchView')?.hidden||
+      (typeof started!=='undefined'&&started)||
+      (typeof replay!=='undefined'&&!!replay)||
+      (typeof roomRecovery!=='undefined'&&!!roomRecovery.context)||
       (typeof peerConnected!=='undefined'&&peerConnected)||
+      (typeof peer!=='undefined'&&!!peer)||
       (typeof serverLink!=='undefined'&&!!serverLink)||
       document.querySelector('.quick-queue-actions button:not([hidden])')||
       document.querySelector('.quick-ready:not([hidden])'))return false;
@@ -177,7 +189,7 @@
  reload.addEventListener('click',()=>{
   if(!newVersion)return;
   if(!safeToReload()){
-   offlineStatus.textContent='Finish your active game or queue before reloading. No match was interrupted.';return;
+   offlineStatus.textContent='Finish or explicitly leave your current game, replay, room reconnect or human queue before updating. Nothing was interrupted.';return;
   }
   if(window.confirm('Reload Fuckball to use the updated offline package?'))location.reload();
  });
