@@ -110,6 +110,13 @@
  .native-room-chat-inbox-actions button{min-height:48px}
 }
 
+/* A native room chat draft must stay visible when socket admission is lost.
+   This message is device-only: it does not imply server delivery. */
+.native-chat-send-feedback[hidden]{display:none!important}
+.native-chat-send-feedback{margin:7px 0 0;padding:9px 12px;
+ border:1px solid #e7b29c;border-radius:8px;background:#342a25;
+ color:#ffebd9;font-size:.84rem;line-height:1.35;max-width:65ch}
+
 /* Real human off-pitch chat: one-click reply keeps the original moderated
    composer and sender. The two secondary actions remain visibly distinct. */
 .native-room-chat-inbox-actions button:first-child{flex:1 1 100%;background:#dbff9c;
