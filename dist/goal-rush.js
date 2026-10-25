@@ -6,6 +6,35 @@
  if(!home||!match||!document.getElementById('quickPractice'))return;
  const STORAGE='fuckball-local-goal-rush-v1';
  const ATTEMPTS='fuckball-local-goal-rush-history-v1';
+ // Old records used one shared array and could silently overwrite another
+ // tab's newer attempt. Distinct event keys keep each finished drill intact.
+ const ATTEMPT_ENTRY=ATTEMPTS+'.entry.';
+ const BEST_ENTRY=STORAGE+'.record.';
+ const CLEARED_AT=ATTEMPTS+'.cleared-at';
+ const newEntryKey=prefix=>prefix+Date.now().toString(36)+'-'+
+  Math.random().toString(36).slice(2,12);
+ function keys(prefix){
+  const out=[];
+  try{
+   if(typeof localStorage.key!=='function')return out;
+   for(let i=0,n=Math.min(2048,localStorage.length);i<n;i++){
+    const name=localStorage.key(i);
+    if(typeof name==='string'&&name.startsWith(prefix))out.push(name);
+   }
+  }catch{}
+  return out;
+ }
+ const validAttempt=a=>!!a&&[60,120,180].includes(a.duration)&&
+  [1,3,5].includes(a.target)&&Number.isSafeInteger(a.goals)&&
+  a.goals>=0&&a.goals<=999&&Number.isSafeInteger(a.elapsed)&&
+  a.elapsed>=0&&a.elapsed<=180&&Number.isSafeInteger(a.at)&&
+  a.at>0&&a.at<=Date.now()+86400000&&typeof a.completed==='boolean';
+ const clearedAt=()=>{
+  try{
+   const at=Number(localStorage.getItem(CLEARED_AT));
+   return Number.isSafeInteger(at)&&at>0&&at<=Date.now()+86400000?at:0;
+  }catch{return 0;}
+ };
  const card=document.createElement('section');card.className='goal-rush-setup';
  card.setAttribute('aria-label','Local goal rush practice');
  const title=document.createElement('h2');title.textContent='GOAL RUSH.';
@@ -79,23 +108,47 @@
   // Never resume automatically. Existing local-focus controls own that action.
  };
  function readBest(){
+  const best={};
   try{
-   const parsed=JSON.parse(localStorage.getItem(STORAGE)||'{}');
-   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return{};
-   return Object.fromEntries(Object.entries(parsed).filter(([k,v])=>
-    /^(60|120|180)$/.test(k)&&Number.isSafeInteger(v)&&v>=0&&v<=999));
-  }catch{return{};}
+   const legacy=JSON.parse(localStorage.getItem(STORAGE)||'{}');
+   if(legacy&&typeof legacy==='object'&&!Array.isArray(legacy))
+    for(const [time,goals] of Object.entries(legacy))
+     if(/^(60|120|180)$/.test(time)&&Number.isSafeInteger(goals)&&goals>=0&&goals<=999)
+      best[time]=Math.max(best[time]??0,goals);
+  }catch{}
+  // Atomic per-record writes ensure a newer/better score in another tab is
+  // still discoverable even if an old-format aggregate write races with it.
+  for(const key of keys(BEST_ENTRY))try{
+   const record=JSON.parse(localStorage.getItem(key)||'null');
+   if([60,120,180].includes(record?.duration)&&
+      Number.isSafeInteger(record.goals)&&record.goals>=0&&record.goals<=999)
+    best[record.duration]=Math.max(best[record.duration]??0,record.goals);
+  }catch{}
+  return best;
+ }
+ function storedAttemptEntries(){
+  const entries=[];
+  for(const key of keys(ATTEMPT_ENTRY))try{
+   const item=JSON.parse(localStorage.getItem(key)||'null');
+   if(validAttempt(item))entries.push({key,item});
+  }catch{}
+  return entries;
  }
  function readAttempts(){
+  const cleared=clearedAt(),all=[];
   try{
-   const value=JSON.parse(localStorage.getItem(ATTEMPTS)||'[]');
-   if(!Array.isArray(value)||value.length>20)return[];
-   return value.filter(a=>a&&[60,120,180].includes(a.duration)&&
-    [1,3,5].includes(a.target)&&Number.isSafeInteger(a.goals)&&a.goals>=0&&a.goals<=999&&
-    Number.isSafeInteger(a.elapsed)&&a.elapsed>=0&&a.elapsed<=180&&
-    Number.isSafeInteger(a.at)&&a.at>0&&a.at<=Date.now()+86400000&&
-    typeof a.completed==='boolean');
-  }catch{return[];}
+   const legacy=JSON.parse(localStorage.getItem(ATTEMPTS)||'[]');
+   if(Array.isArray(legacy)&&legacy.length<=20)
+    all.push(...legacy.filter(validAttempt).filter(x=>x.at>cleared));
+  }catch{}
+  all.push(...storedAttemptEntries().map(x=>x.item).filter(x=>x.at>cleared));
+  return all.sort((a,b)=>b.at-a.at).slice(0,20);
+ }
+ function pruneOldAttempts(){
+  // Preserve the 20 recent entries even when multiple tabs save together.
+  // Only remove distinct event keys beyond a generous 40-entry buffer.
+  const old=storedAttemptEntries().sort((a,b)=>b.item.at-a.item.at).slice(40);
+  for(const entry of old)try{localStorage.removeItem(entry.key);}catch{}
  }
  function renderAttempts(){
   const all=readAttempts();
@@ -119,9 +172,16 @@
  function saveAttempt(s){
   const attempt={duration:s.duration,target:s.target,goals:s.goals,
    elapsed:Math.min(180,Math.max(0,Math.ceil(s.frames/60))),
-   completed:s.goals>=s.target,at:Date.now()};
-  const entries=[attempt,...readAttempts()].slice(0,20);
-  try{localStorage.setItem(ATTEMPTS,JSON.stringify(entries));}catch{}
+   completed:s.goals>=s.target,at:Math.max(Date.now(),clearedAt()+1)};
+  try{
+   if(typeof localStorage.key==='function'){
+    localStorage.setItem(newEntryKey(ATTEMPT_ENTRY),JSON.stringify(attempt));
+    pruneOldAttempts();
+   }else{
+    // Minimal offline game runtimes may have a Map-like storage mock.
+    localStorage.setItem(ATTEMPTS,JSON.stringify([attempt,...readAttempts()].slice(0,20)));
+   }
+  }catch{journeyNote.textContent='The last drill could not be saved on this device. Browser storage may be full.';}
   renderAttempts();
  }
  exportJourney.onclick=()=>{
@@ -136,7 +196,16 @@
  };
  clearJourney.onclick=()=>{
   if(!confirm('Clear all Goal Rush attempt history from this device? Personal bests will remain.'))return;
-  try{localStorage.removeItem(ATTEMPTS);}catch{}
+  // Snapshot the best before clearing old attempt events. Personal bests
+  // are separate by design and must survive a user-cleared history.
+  const best=readBest();
+  try{
+   localStorage.setItem(STORAGE,JSON.stringify(best));
+   localStorage.setItem(CLEARED_AT,String(Date.now()));
+   localStorage.removeItem(ATTEMPTS);
+   for(const key of keys(ATTEMPT_ENTRY))localStorage.removeItem(key);
+   journeyNote.textContent='Local attempts cleared. Personal bests are preserved.';
+  }catch{journeyNote.textContent='Could not clear all attempts on this device.';}
   renderAttempts();
  };
  renderAttempts();
@@ -147,6 +216,15 @@
    'No personal best saved for '+time+'s yet. Records stay on this device.';
  }
  duration.onchange=updateBest;
+ // Other open game tabs share local storage. Refresh both the visible best
+ // and local history after their independent writes or clear operations.
+ window.addEventListener('storage',event=>{
+  if(event.key===null||event.key===STORAGE||event.key===ATTEMPTS||
+     event.key===CLEARED_AT||event.key?.startsWith(ATTEMPT_ENTRY)||
+     event.key?.startsWith(BEST_ENTRY)){
+   renderAttempts();updateBest();
+  }
+ });
  updateBest();
  const localReady=()=>!serverLink&&!peerConnected&&!replay&&
   !!room&&typeof room.currentFrameNo==='number'&&
@@ -162,7 +240,13 @@
   const best=readBest();
   if(best[seconds]===undefined||goals>best[seconds]){
    best[seconds]=goals;
-   try{localStorage.setItem(STORAGE,JSON.stringify(best));}catch{}
+   try{
+    // An event per personal best avoids losing a stronger result to a
+    // concurrent old-format last-writer-wins update in another game tab.
+    localStorage.setItem(newEntryKey(BEST_ENTRY),
+     JSON.stringify({duration:seconds,goals,at:Date.now()}));
+    localStorage.setItem(STORAGE,JSON.stringify(best));
+   }catch{}
   }
   updateBest();
  }
