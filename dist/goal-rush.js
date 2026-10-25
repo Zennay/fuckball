@@ -37,7 +37,16 @@
  clearJourney.textContent='Clear attempt history';
  journeyActions.append(exportJourney,clearJourney);
  journey.append(journeyTitle,journeyNote,journeyRows,journeyActions);
- card.append(title,explanation,fields,history,journey);
+ const pausedDrill=document.createElement('aside');
+ pausedDrill.className='goal-rush-return';pausedDrill.hidden=true;
+ pausedDrill.setAttribute('role','region');
+ pausedDrill.setAttribute('aria-label','Paused Goal Rush practice');
+ const pausedDrillText=document.createElement('p');
+ pausedDrillText.setAttribute('role','status');
+ const returnToDrill=document.createElement('button');
+ returnToDrill.type='button';returnToDrill.textContent='↗ Return to paused Goal Rush';
+ pausedDrill.append(pausedDrillText,returnToDrill);
+ card.append(title,explanation,fields,history,pausedDrill,journey);
  const quickPanel=home.querySelector('.quick-queue-panel');
  if(quickPanel)quickPanel.insertAdjacentElement('afterend',card);
  else home.append(card);
@@ -54,7 +63,21 @@
  dismiss.hidden=true;
  hud.append(status,clock,progress,stop,restart,dismiss);
  match.append(hud);
- let session=null;
+ let session=null,parked=false;
+ function updateReturn(){
+  pausedDrill.hidden=!session||!parked||document.hidden||!match.hidden;
+  if(!pausedDrill.hidden){
+   pausedDrillText.textContent='Your '+session.duration+'s drill is paused at '+session.goals+
+    ' / '+session.target+' goals with '+Math.max(0,session.duration-Math.ceil(session.frames/60))+
+    's of active play left. The original local match is still here.';
+  }
+ }
+ returnToDrill.onclick=()=>{
+  if(!session||!parked||!match.hidden||document.hidden)return;
+  document.getElementById('tabPlay')?.click();
+  updateReturn();
+  // Never resume automatically. Existing local-focus controls own that action.
+ };
  function readBest(){
   try{
    const parsed=JSON.parse(localStorage.getItem(STORAGE)||'{}');
@@ -146,11 +169,13 @@
  function updateHUD(s){
   const remain=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
   clock.textContent=remain+'s left · '+s.goals+' / '+s.target+' goals';
-  progress.textContent=s.goalSide===1?'Playing RED vs AI · no ranked result':'Playing BLUE vs AI · no ranked result';
+  progress.textContent=paused||parked?
+   'Paused · return to the pitch and explicitly resume the original local match. No drill time is lost.':
+   s.goalSide===1?'Playing RED vs AI · no ranked result':'Playing BLUE vs AI · no ranked result';
  }
  function finish(message,save=true){
   const s=session;if(!s)return;
-  session=null;
+  session=null;parked=false;updateReturn();
   if(save){saveRecord(s.duration,s.goals);saveAttempt(s);}
   status.textContent=message;
   clock.textContent=s.goals+' goal(s) in '+Math.ceil(s.frames/60)+'s of active local play';
@@ -158,19 +183,37 @@
   stop.hidden=true;restart.hidden=false;dismiss.hidden=false;
  }
  function quit(){
-  if(session){session=null;status.textContent='GOAL RUSH · STOPPED';}
+  if(session){session=null;parked=false;updateReturn();status.textContent='GOAL RUSH · STOPPED';}
   hud.hidden=true;stop.hidden=false;restart.hidden=true;dismiss.hidden=true;
   updateBest();
  }
+ function parkDrill(){
+  const s=session;if(!s)return;
+  if(localReady()&&started&&room===s.room&&!paused){
+   // Pause the *existing* native local match. We do not reset the room,
+   // advance simulation or send a pause to any online human session.
+   togglePause();
+  }
+  if(localReady()&&room===s.room)s.frame=room.currentFrameNo;
+  parked=true;updateHUD(s);updateReturn();
+ }
  function tick(){
   const s=session;if(!s)return;
-  if(document.hidden){quit();history.textContent='Goal Rush stopped because the tab was hidden. Start a new challenge anytime.';return;}
-  if(!localReady()||!started||$('matchView').hidden){finish('DRILL INTERRUPTED',false);return;}
-  if(ownSide()!==s.goalSide||room!==s.room||room.currentFrameNo<s.frame){finish('TEAMS OR MATCH CHANGED',false);return;}
-  const frame=room.currentFrameNo;
-  if(!paused){
-   s.frames+=Math.max(0,frame-s.frame);
+  if(document.hidden||match.hidden){parkDrill();return;}
+  if(!localReady()||!started){finish('DRILL INTERRUPTED',false);return;}
+  if(ownSide()!==s.goalSide||room!==s.room||room.currentFrameNo<s.frame){
+   finish('TEAMS OR MATCH CHANGED',false);return;
   }
+  const frame=room.currentFrameNo;
+  // A background or paused interval never accrues challenge time. The first
+  // real foreground frame is the new baseline and needs explicit local resume.
+  if(parked||paused){
+   s.frame=frame;
+   if(!paused)parked=false;
+   updateHUD(s);updateReturn();
+   return;
+  }
+  s.frames+=Math.max(0,frame-s.frame);
   s.frame=frame;
   const score=s.goalSide===1?room.gameState.redScore:room.gameState.blueScore;
   const opposite=s.goalSide===1?room.gameState.blueScore:room.gameState.redScore;
@@ -203,9 +246,11 @@
    session={duration:seconds,target:count,frames:0,frame:room.currentFrameNo,
     initialScore:side===1?g.redScore:g.blueScore,opponentScore:side===1?g.blueScore:g.redScore,
     goals:0,goalSide:side,room};
+   parked=false;updateReturn();
    status.textContent='GOAL RUSH · LOCAL';stop.hidden=false;restart.hidden=true;dismiss.hidden=true;
    hud.hidden=false;updateHUD(session);
-  }catch(error){history.textContent=error.message||'Practice challenge unavailable.';session=null;hud.hidden=true;}
+  }catch(error){history.textContent=error.message||'Practice challenge unavailable.';
+   session=null;parked=false;updateReturn();hud.hidden=true;}
  };
  stop.onclick=()=>{finish('DRILL STOPPED',false);};
  restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
@@ -213,7 +258,13 @@
  window.setInterval(tick,150);
  const previousShowView=showView;
  showView=function(next){
-  if(next!=='play'&&session)quit();
+  if(next!=='play'&&session)parkDrill();
   previousShowView(next);
+  updateReturn();
  };
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&session)parkDrill();
+  else updateReturn();
+ });
+ window.addEventListener('focus',updateReturn);
 })();

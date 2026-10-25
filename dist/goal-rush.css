@@ -26,3 +26,16 @@
 .goal-rush-journey-actions{display:flex;flex-wrap:wrap;gap:9px}.goal-rush-journey-actions button{padding:9px 13px;border:1px solid #8aac8f;background:#315345;color:#e8f3dc;border-radius:8px;font-size:11px}
 .goal-rush-journey-actions button:last-child{color:#ffd4c6;border-color:#bb8e83;background:#3e3436}.goal-rush-journey-actions button:disabled{opacity:.45;cursor:default}
 .goal-rush-journey-actions button:focus-visible{outline:3px solid #e1f7ad;outline-offset:3px}
+
+/* Active offline drill remains actionable after Home/My Games navigation. */
+.goal-rush-return[hidden]{display:none!important}
+.goal-rush-return{margin:15px 0 0;padding:15px 17px;border:1px solid #b8e696;
+ border-radius:12px;background:#153732;color:#edfce8;display:flex;
+ justify-content:space-between;align-items:center;gap:16px}
+.goal-rush-return p{margin:0;font-size:.86rem;line-height:1.48;color:#ddf0df}
+.goal-rush-return button{font:inherit;min-height:46px;flex-shrink:0;
+ font-size:.82rem;font-weight:850;cursor:pointer;color:#163525;
+ background:#d7ff9c;border:1px solid #d7ff9c;border-radius:9px;padding:10px 14px}
+.goal-rush-return button:focus-visible{outline:3px solid #fff2a7;outline-offset:3px}
+@media(max-width:700px){.goal-rush-return{flex-direction:column;align-items:stretch;
+ padding:13px}.goal-rush-return button{width:100%}}
