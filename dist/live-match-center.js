@@ -76,9 +76,9 @@
  function formatClock(seconds){
   return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
  }
- function addObservation(label,reading){
+ function addObservation(label,reading,gap=false){
   timeline.push({clock:formatClock(reading.elapsed),red:reading.red,blue:reading.blue,
-   detail:label,observedAt:new Date().toISOString()});
+   detail:label,observedAt:new Date().toISOString(),gap:gap===true});
   if(timeline.length>MAX_HISTORY)timeline.shift();
   lastSignature='';
  }
@@ -86,6 +86,7 @@
   feedList.replaceChildren();
   for(const entry of [...timeline].reverse()){
    const item=document.createElement('li');
+   if(entry.gap===true)item.className='match-center-feed-gap';
    const clock=document.createElement('time');clock.textContent=entry.clock;
    const detail=document.createElement('span');detail.textContent=entry.detail;
    const score=document.createElement('small');score.textContent=entry.red+'–'+entry.blue;
@@ -96,7 +97,10 @@
    item.textContent='No live changes observed. Open a local or online match to begin.';
    feedList.append(item);
   }
-  feedStatus.textContent=timeline.length+' read-only observations in this tab. No server upload, official scoring or persistent tracking.';
+  const gaps=timeline.filter(item=>item.gap===true).length;
+  feedStatus.textContent=timeline.length+' local observations'+
+   (gaps?' · '+gaps+' unobserved viewing gap'+(gaps===1?'':'s'):'')+
+   '. No server upload, official scoring or persistent tracking.';
   downloadFeed.disabled=!timeline.length;
  }
  function resetObservations(){
@@ -130,10 +134,10 @@
    const description=historyInterrupted?'Scoreboard changed while away from the pitch; individual events are unknown.':
     single?(redDelta?'Red':'Blue')+' score increased by one (scorer unknown).':
     'Scoreboard changed by multiple points (cause unknown).';
-   addObservation(description,reading);
+   addObservation(description,reading,historyInterrupted);
   }else if(historyInterrupted&&reading.elapsed-prior.elapsed>=3){
    // An unchanged score never implies no activity while the view was hidden.
-   addObservation('Returned after viewing another screen; activity during the gap was not observed.',reading);
+   addObservation('Returned after viewing another screen; activity during the gap was not observed.',reading,true);
   }
   snapshot=reading;historyInterrupted=false;
  }
@@ -143,7 +147,8 @@
    'Player-owned, unverified scoreboard notes. Not an official match result.',
    'No room identifiers, player names, accounts, chat or authentication data included.','',
    'Context: '+(snapshot?.kind||'local view'),'',
-   ...timeline.map(x=>'- ['+x.clock+'] '+x.detail+' Score observed: '+x.red+'-'+x.blue)];
+   ...timeline.map(x=>'- ['+x.clock+'] '+(x.gap?'[UNOBSERVED INTERVAL] ':'')+
+    x.detail+' Score observed: '+x.red+'-'+x.blue)];
   const blob=new Blob([lines.join('\n')+'\n'],{type:'text/markdown'});
   if(blob.size>16384){feedStatus.textContent='Too many observations to export safely.';return;}
   const url=URL.createObjectURL(blob),a=document.createElement('a');
