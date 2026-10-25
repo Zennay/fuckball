@@ -221,11 +221,11 @@ function replaySessionConflict(){
  if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
  if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
  if(peer)return 'Finish or cancel the direct-peer connection before opening a replay.';
- // A local/Couch Rivals game still owns the real HaxBall room while My Games
- // is visible (navigation pauses it, but it remains started). Replay playback
- // switches the same simulation/render engine; never destroy that ongoing
- // score, human slots or an unsaved recording without explicit Stop.
- if(started&&!replay)
+ // Home/My Games can hide a still-running local or Couch Rivals match.
+ // A replay opened from those views would silently replace its current score,
+ // player slots and progress. Block that hidden-match path; a conscious replay
+ // selection from the visible pitch retains the original playback behavior.
+ if(started&&!replay&&$('matchView').hidden)
   return 'Your local match is still active. Return to the pitch and choose Stop match before opening a replay.';
  if(room.isRecording())
   return 'Finish and save the active local recording before opening a replay.';
