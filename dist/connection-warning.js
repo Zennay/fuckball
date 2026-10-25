@@ -23,6 +23,7 @@
  const hud=document.getElementById('hudCorner');
  (hud?.parentElement||match).append(panel);
  let current='clear',dismissed=null,session=null,roster=null,rosterFreshAt=0;
+ let playStartedAt=null;
  function clear(){
   panel.hidden=true;current='clear';dismissed=null;
  }
@@ -65,21 +66,29 @@
   // Do not label ordinary lobby or pause as an interrupted connection.
   const running=native?serverLink.roomState?.started===true&&
    serverLink.roomState?.paused!==true:started&&!paused;
-  const recent=running&&net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
-   Math.max(0,now-net.lastSnapshot):null;
-  return {ms,source,jitter,recent};
+  if(!running)playStartedAt=null;
+  else if(playStartedAt===null)playStartedAt=now;
+  // A match can freeze BEFORE its first snapshot. With lastSnapshot unset,
+  // the old warning had no timestamp and stayed permanently silent.
+  // Start timing from observed active play, not from stale previous rounds;
+  // paused lobbies and hidden/background tabs restart this grace window.
+  const last=running&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
+   Math.max(net.lastSnapshot,playStartedAt):playStartedAt;
+  const recent=running&&last!==null?Math.max(0,now-last):null;
+  const neverReceived=running&&!(Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0);
+  return {ms,source,jitter,recent,neverReceived};
  };
  function refresh(){
   const native=!!serverLink?.room;
   if(document.hidden||match.hidden||replay||(!native&&!peerConnected)){
-   clear();session=null;roster=null;rosterFreshAt=0;return;
+   clear();session=null;roster=null;rosterFreshAt=0;playStartedAt=null;return;
   }
   // A room code can be reused by a new socket/player. Warnings dismissed in
   // the previous session must not hide a real new-session warning.
   const key=native?serverLink:
    (typeof peer!=='undefined'&&peer?peer:channel);
-  if(key!==session){session=key;clear();roster=null;rosterFreshAt=0;}
-  const {ms,source,jitter,recent}=readings();
+  if(key!==session){session=key;clear();roster=null;rosterFreshAt=0;playStartedAt=null;}
+  const {ms,source,jitter,recent,neverReceived}=readings();
   panel.dataset.transport=native?'native':'peer';
   let severity='clear';
   if(recent!==null&&recent>3500)severity='stalled';
@@ -93,7 +102,9 @@
    panel.dataset.level=severity;
    if(severity==='stalled'){
     heading.textContent='GAME UPDATES DELAYED';
-    description.textContent='No recent match snapshot. Your connection may be interrupted; avoid relying on the displayed position.';
+    description.textContent=neverReceived?
+     'No live match snapshot has arrived. Check your connection before relying on the displayed position.':
+     'No recent match snapshot. Your connection may be interrupted; avoid relying on the displayed position.';
    }else if(severity==='poor'){
     heading.textContent='POOR CONNECTION';
     description.textContent='High measured latency or jitter can delay your actions and cause visible corrections.';
@@ -111,7 +122,9 @@
   if(ms!==null)pieces.push(Math.round(ms)+' ms '+(source==='server'?'server-challenge RTT':
    source==='hosted-peer'?'peer-host transport RTT':'direct-peer RTT'));
   if(jitter!==null)pieces.push(Math.round(jitter)+' ms jitter');
-  if(recent!==null&&recent>3500)pieces.push('last update '+(recent/1000).toFixed(1)+'s ago');
+  if(recent!==null&&recent>3500)pieces.push(neverReceived?
+   'no update in '+(recent/1000).toFixed(1)+'s of live play':
+   'last update '+(recent/1000).toFixed(1)+'s ago');
   metric.textContent=pieces.join(' · ')||'Connection recovering';
   panel.hidden=dismissed===severity;
  }
