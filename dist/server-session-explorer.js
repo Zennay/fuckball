@@ -92,7 +92,7 @@
   const section=document.createElement('section');section.className='native-play-sessions';
   section.setAttribute('aria-label','Recent online match session explorer');
   const title=text('h3','RECENT PLAY SESSIONS');
-  const desc=text('p','Your server stores separate, unranked match receipts—not session IDs. Device-calculated session boundaries use the latest 50 receipts; every displayed count, comparison and export respects your selected period and mode. Not a ranked rating.','native-session-intro');
+  const desc=text('p','Your server stores separate, unranked match receipts—not session IDs. Device-calculated session boundaries use the latest 50 receipts; every displayed count, comparison and export respects your selected period, mode, outcome and calendar day. Not a ranked rating.','native-session-intro');
   const top=document.createElement('div');top.className='native-session-top';
   const label=text('label','Maximum gap between results');
   const gap=document.createElement('select');gap.setAttribute('aria-label','Gap for grouping recent online results');
@@ -121,7 +121,7 @@
    const detail=text('p',stats.wins+' W · '+stats.draws+' D · '+stats.losses+' L · goals '+stats.goalsFor+
     '–'+stats.goalsAgainst+' · '+Math.floor(stats.frames/60)+'s active play');
    const scoped=text('small','All '+rows.length+' result'+(rows.length===1?'':'s')+
-    ' match your selected period and mode');
+    ' match your active period, mode, outcome and calendar filters');
    const actions=document.createElement('div');actions.className='native-session-actions';
    const show=text('button',active?.key===cluster.key?'Selected ✓':'Show these results');
    show.type='button';show.disabled=active?.key===cluster.key||!rows.length;
