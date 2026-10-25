@@ -85,10 +85,14 @@
   evidence.hidden=!samples.length;
   if(evidence.hidden)return;
   const values=samples.map(x=>x.fps).sort((a,b)=>a-b);
+  const activeGap=awayAt>0?Math.max(0,Math.round((Date.now()-awayAt)/1000)):0;
+  const totalGaps=gapCount+(awayAt>0?1:0);
   evidenceDetail.textContent=samples.length+' actual foreground FPS readings · median '+
    quantile(values,.5)+' FPS · low-end P10 '+quantile(values,.1)+' FPS. '+
-   gapCount+' unmeasured period'+(gapCount===1?'':'s')+
-   ' (about '+gapSeconds+'s away). Only locally observed data; not a device benchmark or official match evidence.';
+   totalGaps+' unmeasured period'+(totalGaps===1?'':'s')+
+   ' (about '+(gapSeconds+activeGap)+'s away). '+
+   (awayAt>0?'Sampling paused outside the game. ':'')+
+   'Only locally observed data; not a device benchmark or official match evidence.';
  }
  evidenceReturn?.addEventListener('click',()=>document.getElementById('tabPlay')?.click());
  evidenceSave?.addEventListener('click',()=>save.click());
@@ -141,6 +145,7 @@
   if(!observing){
    if(wasVisible){wasVisible=false;if(samples.length)awayAt=Date.now();}
    if(!visible&&!panel.hidden)toggle(false);
+   if(samples.length&&!games?.hidden)updateEvidence();
    return;
   }
   const key=matchKey(),elapsed=matchClock();
@@ -195,7 +200,9 @@
  save.onclick=()=>{
   if(!samples.length){notice.textContent='No real FPS measurements to export.';return;}
   const rows=['Elapsed seconds since first foreground sample,Observed painted FPS,Measurement note',
-   ['OBSERVATION_GAPS',gapCount,'About '+gapSeconds+' seconds outside foreground observation; no missing FPS inferred'].map(v=>
+   ['UNMEASURED_PERIODS',gapCount+(awayAt>0?1:0),
+    'Approximately '+(gapSeconds+(awayAt>0?Math.max(0,Math.round((Date.now()-awayAt)/1000)):0))+
+    ' seconds excluded; no missing FPS inferred'].map(v=>
     '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ...samples.map(x=>[x.t,x.fps,'Real visible native FPS counter sample; no GPU frame timing, room identity or server latency'].map(v=>
     '"'+String(v).replace(/"/g,'""')+'"').join(','))];
@@ -210,5 +217,10 @@
    wasVisible=false;if(!panel.hidden)toggle(false);}
  });
  window.addEventListener('pagehide',clearData);
+ // Local practice starts a fresh game without changing room ID. Keep its FPS
+ // evidence separate even when the previous round had only just kicked off.
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  clearData();sessionKey='local';wasVisible=false;
+ });
  window.setInterval(capture,1000);
 })();
