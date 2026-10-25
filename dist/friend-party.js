@@ -79,7 +79,8 @@
  // never a silent polling loop or a fictitious successful team queue.
  function partyLaunchKey(p){
   return p?.launchMode&&Number.isFinite(p.launchExpires)?
-   p.id+':'+p.launchExpires+':'+p.launchMode:'';
+   p.id+':'+p.launchExpires+':'+p.launchMode+':'+
+   (settings.account?.username||'').toLowerCase():'';
  }
  function mayRetryParty(state){
   const p=state?.party,key=partyLaunchKey(p);
@@ -125,7 +126,13 @@
   try{
    // Do not trust stale polling state after a room switch, account change,
    // revoked invite, expiry or a leader relaunch.
+   const accountToken=settings.account?.token;
    const state=await api(null);
+   if(settings.account?.token!==accountToken){
+    bannerRetry.hidden=true;
+    notice.textContent='Your signed-in account changed. Reopen Party to check invitations.';
+    return;
+   }
    render(state);
    if(!mayRetryParty(state)){
     notice.textContent=partyLaunchKey(state?.party)===lastModeKey?
