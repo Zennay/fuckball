@@ -195,7 +195,10 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
- };ws.onclose=event=>{if(serverLink!==link)return;link.clearJoinTimers?.();if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+ };ws.onclose=event=>{if(serverLink!==link)return;link.clearJoinTimers?.();if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({
+ type:'queueStatus',status:'disconnected',
+ reason:link.connectFailure||'Human search disconnected. Review the server and retry.'
+});if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -225,6 +228,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
      'The server connection ended before joining. Review the room and retry explicitly.');
     if(retrySpectator)$('joinSpectator').checked=true;
     if(!settings.account&&name)$('joinName').value=name;
+   }else if(create&&!admitted){
+    showView('home');
+    notify(link.connectFailure||'The server closed before creating your room. Try again explicitly.');
    }else notify('Disconnected.');
   };
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
