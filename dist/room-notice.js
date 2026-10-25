@@ -54,16 +54,29 @@
  awayRestore.type='button';awayRestore.className='room-notice-away-restore';
  awayRestore.textContent='📌 Show room briefing';awayRestore.hidden=true;
  document.body.append(awayRestore);
- let activeRoom=null,hiddenHud=false,seenAt=0,hiddenAwayAt=null;
+ let activeRoom=null,activeSession=null,hiddenHud=false,seenKey=null,hiddenAwayKey=null;
  let pendingEdit=null;
+ // A room code is a shareable locator, not a unique live WebSocket session.
+ // The same code can be joined again with a different verified player/host.
+ const noticeKey=data=>data&&Number.isSafeInteger(data.at)?
+  JSON.stringify([data.at,data.by,data.text]):null;
  function current(){return typeof serverLink!=='undefined'?serverLink:null;}
  function canEdit(link){return !!link?.room&&link.ws?.readyState===1&&
   !link.quickMatchMode&&link.roomControl?.roomNoticeSupported===true&&link.isOwner===true;}
  function render(){
   const link=current(),currentId=link?.room||null;
-  if(currentId!==activeRoom){
-   activeRoom=currentId;hiddenHud=false;hiddenAwayAt=null;seenAt=0;pendingEdit=null;
-   input.value='';notice.textContent='';
+  const sessionChanged=link!==activeSession,roomChanged=currentId!==activeRoom;
+  if(sessionChanged||roomChanged){
+   activeRoom=currentId;activeSession=link;
+   hiddenHud=false;hiddenAwayKey=null;seenKey=null;
+   // A prior socket's optimistic server receipt cannot confirm actions in a
+   // newly admitted session, even when the visible shareable room code matches.
+   const lostPending=!!pendingEdit;
+   pendingEdit=null;
+   // Do not move an unsent briefing or its dismissal between connections.
+   input.value='';
+   notice.textContent=lostPending&&currentId?
+    'Room connection changed. Your earlier briefing update was not confirmed. Review the current server notice before editing.':'';
   }
   const supported=!!currentId&&!link?.quickMatchMode&&
    link.roomControl?.roomNoticeSupported===true;
@@ -77,15 +90,18 @@
   }
   body.textContent=data?.text||'No briefing pinned by this room host.';
   by.textContent=data?'Pinned by '+data.by:'Only the current host can pin or change this note.';
-  if(data?.at!==seenAt){
-   seenAt=data?.at||0;
+  const version=noticeKey(data);
+  if(version!==seenKey){
+   seenKey=version;
+   // Distinguish a truly changed server briefing even if two updates have
+   // the same timestamp. Never overwrite a currently focused host draft.
    if(document.activeElement!==input)input.value=data?.text||'';
   }
   // The local click is not server confirmation. Only a later authoritative
   // roomControl state that matches this room and requested content is proof.
   if(pendingEdit){
    const expected=pendingEdit.text;
-   const confirmed=pendingEdit.room===currentId&&
+   const confirmed=pendingEdit.session===link&&pendingEdit.room===currentId&&
     (expected===null?!data?.text:
      data?.text===expected&&Number.isSafeInteger(data.at)&&data.at>pendingEdit.afterAt);
    if(confirmed){
@@ -106,7 +122,7 @@
    '.quick-ready-dock:not([hidden]),.native-rematch-dock:not([hidden]),'+
    '.native-room-recovery:not([hidden]),.native-sub-consent-dock:not([hidden])');
   const awayEligible=!!data?.text&&match.hidden&&!urgent;
-  const dismissed=hiddenAwayAt===data?.at;
+  const dismissed=hiddenAwayKey!==null&&hiddenAwayKey===version;
   away.hidden=!awayEligible||dismissed;
   awayRestore.hidden=!awayEligible||!dismissed;
   if(awayEligible){
@@ -132,7 +148,8 @@
   const now=Date.now();
   try{
    link.send(expected===null?{type}:{type,text:expected});
-   pendingEdit={room:link.room,text:expected,afterAt:link.roomControl?.notice?.at||0,
+   pendingEdit={session:link,room:link.room,text:expected,
+    afterAt:link.roomControl?.notice?.at||0,
     until:now+6000};
    notice.textContent='Sent to the room server; waiting for its updated briefing.';
    render();
@@ -146,9 +163,14 @@
  dismiss.onclick=()=>{hiddenHud=true;render();};
  showNotice.onclick=()=>{hiddenHud=false;render();};
  awayView.onclick=()=>{document.getElementById('tabPlay')?.click();render();};
- awayDismiss.onclick=()=>{hiddenAwayAt=current()?.roomControl?.notice?.at??null;render();};
- awayRestore.onclick=()=>{hiddenAwayAt=null;render();awayView.focus?.({preventScroll:true});};
+ awayDismiss.onclick=()=>{hiddenAwayKey=noticeKey(current()?.roomControl?.notice);render();};
+ awayRestore.onclick=()=>{hiddenAwayKey=null;render();awayView.focus?.({preventScroll:true});};
  window.FuckballRoomNotice={sync:render};
  render();
+ // Disconnect/welcome transitions must immediately invalidate old room UI,
+ // rather than leaving a dismissed or falsely confirmed notice for 1.5s.
+ window.addEventListener('fuckball:native-session-state',render);
+ document.addEventListener('visibilitychange',render);
+ window.addEventListener('focus',render);
  setInterval(render,1500); // local HUD/menu state only, no background sending.
 })();
