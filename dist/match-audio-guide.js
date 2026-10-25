@@ -15,7 +15,8 @@
     {captions:x.captions,voice:x.voice,minutes:x.minutes}:{...defaults};
   }catch{return{...defaults};}
  }
- let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null;
+ let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null,
+  previewSpeaking=false;
  const speechAvailable=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance==='function';
  const section=document.createElement('fieldset');section.className='match-audio-guide-options';
  const legend=document.createElement('legend');legend.textContent='LIVE SCORE GUIDE';
@@ -40,10 +41,21 @@
    sync();previous=null;
   });
  }
+ // One explicit, on-device voice preview lets players verify their browser's
+ // speech output before entering live play. Never simulate a goal or change
+ // the official scoreboard in order to provide this preview.
+ const preview=document.createElement('button');
+ preview.type='button';preview.className='match-audio-guide-preview';
+ preview.textContent='▶ Preview voice';
+ preview.setAttribute('aria-label','Preview score voice on this device');
+ preview.addEventListener('click',()=>{
+  if(!speechAvailable||!prefs.voice)return;
+  speak('Voice preview. Red one, Blue zero.',true);
+ });
  const support=document.createElement('p');support.className='match-audio-guide-help';
  support.textContent=speechAvailable?'Voice uses your browser’s speech synthesizer; mute or adjust device volume as usual.':
   'Speech synthesis is unavailable here; visual captions still work.';
- section.prepend(legend,note);section.append(support);video.append(section);
+ section.prepend(legend,note);section.append(preview,support);video.append(section);
  const caption=document.createElement('aside');caption.className='match-audio-guide-caption';
  caption.setAttribute('role','status');caption.setAttribute('aria-live','polite');caption.hidden=true;
  match.append(caption);
@@ -51,22 +63,30 @@
   if(ownSpeech&&speechAvailable){
    try{window.speechSynthesis.cancel();}catch{}
   }
-  ownSpeech=null;
+  ownSpeech=null;previewSpeaking=false;
  }
  function sync(){
   for(const key of Object.keys(controls))controls[key].checked=prefs[key];
   controls.minutes.disabled=!prefs.voice;
   controls.voice.disabled=!speechAvailable;
+  preview.disabled=!speechAvailable||!prefs.voice;
   if(!prefs.captions)caption.hidden=true;
   if(!prefs.voice)stopSpeech();
  }
  sync();
  function visibleActive(){
-  // Ignore replay scrubbing and menu/hidden transitions: they are not
-  // independent new native goals. Rebaseline rather than fabricate events.
+  // A displayed score is not proof of a currently running match. In particular,
+  // the scoreboard stays mounted while local games are paused, during server
+  // lobby/rematch voting, and through disconnect/replay transitions.
   if(match.hidden||document.visibilityState!=='visible'||!document.hasFocus()||
-   !document.getElementById('pauseMenu')?.hidden)return false;
-  return typeof replay==='undefined'||!replay;
+   !document.getElementById('pauseMenu')?.hidden||
+   typeof replay!=='undefined'&&!!replay)return false;
+  if(typeof serverLink!=='undefined'&&serverLink){
+   const state=serverLink.roomState;
+   return !!serverLink.room&&state?.started===true&&state.paused!==true;
+  }
+  return typeof started!=='undefined'&&started===true&&
+   (typeof paused==='undefined'||paused!==true);
  }
  function sample(){
   const r=Number(red.textContent.trim()),b=Number(blue.textContent.trim());
@@ -75,28 +95,38 @@
   if(!Number.isSafeInteger(r)||!Number.isSafeInteger(b)||r<0||b<0||r>999||b>999||!m)return null;
   return{red:r,blue:b,time:Number(m[1])*60+Number(m[2])};
  }
- function speak(text){
-  if(!prefs.voice||!speechAvailable||!visibleActive())return;
+ function speak(text,explicitPreview=false){
+  if(!prefs.voice||!speechAvailable||!explicitPreview&&!visibleActive())return;
   const now=Date.now();
-  if(now-lastVoice<1450)return;
+  if(!explicitPreview&&now-lastVoice<1450)return;
   lastVoice=now;
   try{
    if(ownSpeech)window.speechSynthesis.cancel();
-   const utterance=new SpeechSynthesisUtterance(text);utterance.lang='en-GB';
+   previewSpeaking=explicitPreview;
+   const utterance=new window.SpeechSynthesisUtterance(text);utterance.lang='en-GB';
    utterance.rate=1;utterance.pitch=1;utterance.volume=.8;
    ownSpeech=utterance;
-   utterance.onend=()=>{if(ownSpeech===utterance)ownSpeech=null;};
-   utterance.onerror=()=>{if(ownSpeech===utterance)ownSpeech=null;};
+   utterance.onend=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
+   utterance.onerror=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
    window.speechSynthesis.speak(utterance);
-  }catch{ownSpeech=null;}
+  }catch{ownSpeech=null;previewSpeaking=false;}
  }
  function show(text){
   if(!prefs.captions)return;
   clearTimeout(captionTimer);caption.textContent=text;caption.hidden=false;
   captionTimer=setTimeout(()=>{caption.hidden=true;},4200);
  }
+ function silenceAndRebaseline(){
+  previous=null;stopSpeech();caption.hidden=true;
+  if(captionTimer){clearTimeout(captionTimer);captionTimer=0;}
+ }
  function poll(){
-  if(!visibleActive()){previous=null;stopSpeech();caption.hidden=true;return;}
+  if(!visibleActive()){
+   // An explicit Voice Preview is allowed while the settings menu is open.
+   // It is still cancelled immediately by blur, tab changes or navigation.
+   if(!previewSpeaking)silenceAndRebaseline();
+   return;
+  }
   const current=sample();if(!current){previous=null;return;}
   const last=previous;previous=current;
   if(!last)return;
@@ -116,8 +146,21 @@
  setInterval(poll,350);
  window.addEventListener('storage',event=>{
   if(event.key!==KEY)return;
-  prefs=load();sync();previous=null;
+  prefs=load();sync();silenceAndRebaseline();
  });
- document.addEventListener('visibilitychange',()=>{if(document.hidden){stopSpeech();caption.hidden=true;previous=null;}});
- window.addEventListener('pagehide',stopSpeech);
+ // Do not continue speech after leaving the game, switching applications or
+ // closing the tab. On return, sample the real authoritative score as a fresh
+ // baseline rather than announcing changes that happened while away.
+ window.addEventListener('blur',silenceAndRebaseline);
+ window.addEventListener('focus',silenceAndRebaseline);
+ document.addEventListener('visibilitychange',silenceAndRebaseline);
+ window.addEventListener('pagehide',silenceAndRebaseline);
+ const menu=document.getElementById('pauseMenu');
+ if(typeof MutationObserver==='function'){
+  const visibilityObserver=new MutationObserver(()=>{
+   if(!visibleActive())silenceAndRebaseline();
+  });
+  visibilityObserver.observe(match,{attributes:true,attributeFilter:['hidden']});
+  if(menu)visibilityObserver.observe(menu,{attributes:true,attributeFilter:['hidden']});
+ }
 })();
