@@ -237,3 +237,34 @@ body.lobby .scoreboard{opacity:.35}
 .join-online-server small{font-size:.73rem;font-weight:500;color:#c4d7d0;line-height:1.45}
 .join-online-server input:focus-visible{outline:3px solid #d6ff9a;outline-offset:2px}
 @media(max-width:480px){.join-card{padding:18px}.join-online-server input{font-size:16px}}
+
+/* Human bench substitution requires opt-in, even when the player is on
+   My Games or Home. This panel mirrors authoritative native room requests. */
+.native-sub-consent-dock[hidden]{display:none!important}
+.native-sub-consent-dock{position:fixed;z-index:116;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));width:min(960px,calc(100vw - 24px));
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:18px;padding:16px 19px;border:2px solid #b2dcf0;border-radius:15px;
+ background:linear-gradient(110deg,#1b2d3f,#203b3a);color:#f4fff6;
+ box-shadow:0 16px 44px #09151cee}
+.native-sub-consent-copy{min-width:0}
+.native-sub-consent-copy strong{display:block;font-size:.82rem;
+ letter-spacing:.075em;color:#dcf5b7}
+.native-sub-consent-copy p{margin:6px 0 0;font-size:.85rem;line-height:1.48;
+ color:#deecea;overflow-wrap:anywhere}
+.native-sub-consent-actions{display:flex;gap:9px;flex-wrap:wrap;flex-shrink:0}
+.native-sub-consent-actions button{font:inherit;font-size:.84rem;font-weight:800;
+ min-height:48px;padding:10px 14px;border:1px solid #aac3cb;
+ border-radius:9px;color:#f2fff8;background:#28434c;cursor:pointer}
+.native-sub-consent-actions button.primary{border-color:#d6ff99;
+ background:#d6ff99;color:#183224}
+.native-sub-consent-actions button:disabled{opacity:.56;cursor:not-allowed}
+.native-sub-consent-actions button:focus-visible{outline:3px solid #e4ff9a;outline-offset:3px}
+@media(max-width:720px){
+ .native-sub-consent-dock{flex-direction:column;align-items:stretch;
+  padding:14px;gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-sub-consent-actions{display:grid;grid-template-columns:1fr 1fr}
+ .native-sub-consent-actions button:last-child{grid-column:1/-1}
+}
+@media(max-width:385px){.native-sub-consent-actions{grid-template-columns:1fr}
+ .native-sub-consent-actions button:last-child{grid-column:auto}}

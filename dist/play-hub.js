@@ -109,6 +109,48 @@
  const connectionCancel=action('× Cancel joining',cancelPendingConnection,'play-hub-connection-cancel');
  connectionActions.append(connectionView,connectionCancel);
  connectionCard.append(connectionHeading,connectionDetail,connectionActions);
+ // One contextual, server-authorized room strip replaces digging through
+ // the match menu/network dialog to return, invite friends or leave.
+ // It is deliberately absent for human Quick Match: no private invites for
+ // the server-controlled, ranked-independent matching queue.
+ const activeRoomCard=node('aside',null,'play-hub-current-room');
+ activeRoomCard.hidden=true;
+ activeRoomCard.setAttribute('aria-label','Your current online room');
+ const roomCopy=node('div',null,'play-hub-current-room-copy');
+ const roomHead=node('strong','YOU ARE IN A ROOM');
+ const roomDetail=node('p','','play-hub-current-room-detail');
+ const roomAdmission=node('small','Invites use the server’s existing room access rules.','play-hub-current-room-admission');
+ roomCopy.append(roomHead,roomDetail,roomAdmission);
+ const currentRoomActions=node('div',null,'play-hub-current-room-actions');
+ function currentInvitableRoom(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!link?.room||link.quickMatchMode)return null;
+  const invite=document.getElementById('inviteLink')?.value;
+  if(!link.invite||link.invite!==invite)return null;
+  return link;
+ }
+ function nativeRoomAction(id,description){
+  const link=currentInvitableRoom();
+  if(!link)return announce('Your previous room has ended. No '+description+' was sent.');
+  const control=document.getElementById(id);
+  if(!control||control.disabled)return announce('The original '+description+' control is unavailable.');
+  control.click();
+ }
+ const roomReturn=action('↗ Return to match',()=>{
+  if(!currentInvitableRoom())return announce('You are no longer connected to that room.');
+  document.getElementById('tabPlay')?.click();
+ },'play-hub-current-room-return');
+ const roomCopyInvite=action('Copy invite',()=>nativeRoomAction('copyInvite','invite copy'),'play-hub-current-room-copy-link');
+ const roomShareInvite=action('Share',()=>nativeRoomAction('shareInvite','invite share'),'play-hub-current-room-share');
+ const roomLeave=action('Leave room',()=>{
+  if(!currentInvitableRoom())return announce('The room has already ended.');
+  if(typeof window.confirm==='function'&&
+     !window.confirm('Leave your current online room? Your place in the match will be lost.'))return;
+  nativeRoomAction('disconnectPeer','disconnect');
+  announce('Leaving through the original online room controls.');
+ },'play-hub-current-room-leave');
+ currentRoomActions.append(roomReturn,roomCopyInvite,roomShareInvite,roomLeave);
+ activeRoomCard.append(roomCopy,currentRoomActions);
  const grid=node('div',null,'play-hub-grid');
  const human=node('article',null,'play-hub-card play-hub-human');
  const humanCopy=node('div');
@@ -210,7 +252,7 @@
  const hint=node('span','Online matchmaking needs a live server and human consent. Training is local.','play-hub-hint');
  const network=node('span',null,'play-hub-network');
  footer.append(hint,network);
- section.append(intro,connectionCard,grid,extras,status,footer);
+ section.append(intro,connectionCard,activeRoomCard,grid,extras,status,footer);
  hero.insertAdjacentElement('afterend',section);
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
@@ -369,6 +411,23 @@
  function refresh(){
   const state=activeState();
   refreshPostMatch();
+  const activeRoom=currentInvitableRoom();
+  activeRoomCard.hidden=!activeRoom;
+  // During an admitted friend room, focus Home on that ongoing match instead
+  // of offering duplicate start actions that admission correctly rejects.
+  section.classList.toggle('is-in-room',!!activeRoom);
+  if(activeRoom){
+   // Distinguish a real admitted lobby, live match and completed round. Never
+   // infer server admission, room occupancy or player permissions locally.
+   const state=activeRoom.roomState;
+   const phase=state?.started?'MATCH LIVE':
+    state?.lastResult?'MATCH COMPLETE · REMATCH AVAILABLE':'ROOM LOBBY';
+   const role=activeRoom.isOwner?' · HOST':' · PLAYER / SPECTATOR';
+   const head=phase+' · '+activeRoom.room;
+   if(roomHead.textContent!==head)roomHead.textContent=head;
+   const detail=phase+role+' · Invite friends or return to the match.';
+   if(roomDetail.textContent!==detail)roomDetail.textContent=detail;
+  }
   connectionCard.hidden=!state.pending;
   if(state.pending){
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
@@ -384,7 +443,9 @@
   if(!recoveryCard.hidden){
    const text=String(recovery.reason||'The human queue ended. Try again or choose another server.').slice(0,180);
    if(recoveryDetail.textContent!==text)recoveryDetail.textContent=text;
-   retrySearch.textContent='↻ Retry '+recovery.mode+' human match';
+   recoveryHead.textContent=recovery.party?'FRIENDS PARTY SEARCH ENDED':'SEARCH INTERRUPTED';
+   retrySearch.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';
   }
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
@@ -402,7 +463,8 @@
   }else if(state.server||state.peer||state.local||state.playingReplay){
    queueNow.textContent='↗ Return to current game';queueNow.disabled=false;
   }else if(recovery){
-   queueNow.textContent='↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
+   queueNow.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
   }else{
    queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
   }
@@ -413,7 +475,8 @@
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
-    recovery?'RETRY HUMAN MATCH':'FIND A QUICK MATCH';
+    recovery?(recovery.party?'VIEW FRIENDS PARTY':'RETRY HUMAN MATCH'):
+    'FIND A QUICK MATCH';
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
    heroFind.disabled=nativeQueue.ready&&(nativeQueue.accepted||nativeQueue.confirming);
   }
@@ -431,7 +494,9 @@
   }else if(nativeQueue.searching||state.inQueue){
    network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
   }else if(recovery){
-   network.textContent='● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
+   network.textContent=recovery.party?
+    '● PARTY SEARCH ENDED · RESTART VIA FRIENDS PARTY':
+    '● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
@@ -465,8 +530,10 @@
   const newlyReady=data.ready&&!nativeQueue.ready;
   const newlyAccepted=data.accepted&&!nativeQueue.accepted;
   const safeRecovery=data.recovery&&typeof data.recovery==='object'&&
-   playlists.includes(data.recovery.mode)&&typeof data.recovery.reason==='string'?
-   {mode:data.recovery.mode,reason:data.recovery.reason.slice(0,180)}:null;
+   [...playlists,'club4v4'].includes(data.recovery.mode)&&
+   typeof data.recovery.reason==='string'?
+   {mode:data.recovery.mode,party:data.recovery.party===true,
+    reason:data.recovery.reason.slice(0,180)}:null;
   nativeQueue={...data,recovery:safeRecovery};
   if(newlyReady){
    announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
