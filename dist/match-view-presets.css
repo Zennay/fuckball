@@ -11,3 +11,19 @@
 .match-view-presets-status{min-height:20px}
 @media(max-width:560px){.match-view-presets-grid{grid-template-columns:1fr 1fr}.match-view-preset-card{min-height:95px}}
 @media(max-width:390px){.match-view-presets-grid{grid-template-columns:1fr}}
+
+/* The selected preset reflects the actual native settings, not a guessed
+   local toggle. Manual preference changes immediately clear stale selection. */
+.match-view-preset-card[aria-pressed="true"]{
+ border:2px solid #dbffa1;
+ background:#365745;
+ box-shadow:inset 0 0 0 1px rgba(224,255,181,.25)
+}
+.match-view-preset-card[aria-pressed="true"] strong::after{
+ content:" · ACTIVE";font-size:10px;color:#f0ffca
+}
+.match-view-preset-card:disabled{
+ opacity:.55;cursor:not-allowed;filter:saturate(.55)
+}
+.match-view-presets>button[hidden]{display:none!important}
+.match-view-presets-status{overflow-wrap:anywhere;line-height:1.55}
