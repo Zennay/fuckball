@@ -148,7 +148,7 @@
   if(!archived.length){announce('There are no saved series to export.');displayHistory();return;}
   const payload={format:'fuckball-couch-series-archive-v1',source:'offline-unverified',
    exportedAt:Date.now(),results:archived.slice(0,MAX)};
-  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\\n'],
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\n'],
    {type:'application/json'}));
   const link=make('a');link.href=url;
   link.download='fuckball-couch-private-archive-'+new Date().toISOString().slice(0,10)+'.json';
@@ -175,11 +175,19 @@
   if(!archived.length)return;
   if(!window.confirm('Delete ALL '+archived.length+' local Couch Rivals series results on this device? '+
    'This cannot be undone. Export the archive first if you need a copy.'))return;
-  inArchiveTransaction(()=>{
+  const confirmed=new Set(archived.map(seriesIdentity));
+  inArchiveTransaction(current=>{
+   // A delayed confirmation must never delete a result another tab just
+   // finished. Require a fresh explicit confirmation if the archive grew.
+   if(current.some(result=>!confirmed.has(seriesIdentity(result)))){
+    archived=current;return false;
+   }
    archived=saveArchiveSnapshot([]);return true;
-  }).then(()=>{
-   showAllHistory=false;displayHistory();
-   announce('Private Couch Rivals history cleared from this device.');
+  }).then(cleared=>{
+   if(cleared)showAllHistory=false;
+   displayHistory();
+   announce(cleared?'Private Couch Rivals history cleared from this device.':
+    'New series results arrived in another tab. Nothing was deleted; review the refreshed history and confirm again.');
   }).catch(()=>announce('Local storage refused deletion. Saved results were preserved.'));
  }
  function displayHistory(){
