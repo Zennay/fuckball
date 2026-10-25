@@ -398,10 +398,16 @@ function makeGameButton(text,description,handler){
  button.onclick=async()=>{button.disabled=true;try{await handler();}catch(e){gamesMessage(e.message||'Replay action failed.');}finally{button.disabled=false;}};
  return button;
 }
+// A focus event, a fresh recording and typing in Search may all request a
+// library refresh. Older IndexedDB reads must never replace the latest view.
+let myGamesRenderGeneration=0;
 async function renderMyGames(){
+ const generation=++myGamesRenderGeneration;
  gamesMessage('Loading local replays…');
  try{
-  const all=await ReplayLibrary.list(),term=gamesSearch.value.trim().toLocaleLowerCase();
+  const all=await ReplayLibrary.list();
+  if(generation!==myGamesRenderGeneration)return;
+  const term=gamesSearch.value.trim().toLocaleLowerCase();
   const availableTags=new Map();
   for(const item of all)for(const tag of ReplayLibrary.normalizeTags(item.tags)){
    const key=tag.toLocaleLowerCase();if(!availableTags.has(key))availableTags.set(key,tag);
@@ -491,18 +497,22 @@ async function renderMyGames(){
   gamesMessage(all.length?'Stored only in this browser. Goal markers are from unverified recordings.':(term?'':'Import a recording to get started.'));
   if(all.length&&!items.length)gamesMessage('No replays match the current search, favorites and tag filters.');
  }catch(e){
+  if(generation!==myGamesRenderGeneration)return;
   gamesEmpty.hidden=true;gamesList.replaceChildren();
   gamesMessage('Local replay storage is unavailable: '+(e.message||'Unknown error')+'. Downloads still work.');
  }
 }
+// Keep the original download unconditional. The Recording Studio is the sole
+// opt-in writer of newly downloaded HBR2 files; do not silently save a file
+// here and then save a second copy from its recording-finished event.
 const saveReplayDownload=saveBlob;
 saveBlob=function(bytes,name,type){
- // Keep the original user-requested download even if IndexedDB is blocked/full.
  saveReplayDownload(bytes,name,type);
- if(/\.hbr2$/i.test(name)&&bytes&&bytes.length){
-  ReplayLibrary.save(bytes,name).then(()=>{
-   if(!$('gamesView').hidden)renderMyGames();
-  }).catch(e=>notify('Replay downloaded, but not stored in My Games: '+e.message));
+ if(/\.hbr2$/i.test(name)&&bytes&&bytes.length&&
+    typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function'){
+  window.dispatchEvent(new window.CustomEvent('fuckball:hbr2-downloaded',{
+   detail:{bytes,name}
+  }));
  }
 };
 $('gamesImport').onclick=()=>$('gamesImportFile').click();
