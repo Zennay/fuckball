@@ -215,6 +215,7 @@ body.lobby .scoreboard{opacity:.35}
 .native-rematch-dock-actions button.primary{border-color:#ddffa0;
  background:#ddffa0;color:#153322}
 .native-rematch-dock-actions button[hidden]{display:none}
+.native-rematch-dock-actions button:disabled{opacity:.58;cursor:not-allowed}
 .native-rematch-dock-actions button:focus-visible{outline:3px solid #f6ffa8;outline-offset:3px}
 @media(max-width:760px){
  .native-rematch-dock{flex-direction:column;align-items:stretch;gap:12px;
