@@ -184,6 +184,9 @@
  }
  const score=()=>[room.gameState.redScore,room.gameState.blueScore];
  function render(s){
+  // On a phone the active match needs an unobstructed, compact score HUD;
+  // expand the historical rounds and actions when a round finishes.
+  hud.setAttribute('data-phase',s.phase);
   const finished=s.phase==='complete'||s.phase==='stopped';
   const waiting=s.phase==='between';
   title.textContent=s.phase==='complete'?'SERIES COMPLETE · '+(s.opponent==='human'?'TWO PLAYERS':'LOCAL AI'):
