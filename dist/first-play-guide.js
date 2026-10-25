@@ -205,6 +205,16 @@
  start.addEventListener('click',()=>launch(false));
  document.getElementById('tabHome')?.addEventListener('click',refreshSessionReturn);
  window.addEventListener('focus',refreshSessionReturn);
+ // Window blur and visibility changes may occur between two 180ms lesson
+ // ticks. Park before the client can observe a hidden frame or goal.
+ function parkOnLostFocus(){
+  if(!session||!sameLessonMatch()||lessonParked)return;
+  lessonParked=true;hud.hidden=true;updateHome();
+ }
+ window.addEventListener('blur',parkOnLostFocus);
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)parkOnLostFocus();
+ });
  window.addEventListener('fuckball:native-session-state',refreshSessionReturn);
  setInterval(()=>{if(!home.hidden)refreshSessionReturn();},1800);
  refreshSessionReturn();
@@ -218,7 +228,7 @@
  window.addEventListener('fuckball:local-kick',event=>{
   const s=session;
   if(!s||s.stage!==1||event.detail?.room!==s.room||event.detail?.playerId!==1)return;
-  if(!localRoom()||s.frame>event.detail?.frame)return;
+  if(lessonParked||document.hidden||!localRoom()||s.frame>event.detail?.frame)return;
   s.stage=2;s.frame=room.currentFrameNo;
   const g=room.gameState;
   s.score=s.side===1?g.redScore:g.blueScore;
