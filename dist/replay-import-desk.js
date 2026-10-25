@@ -132,12 +132,48 @@
   if(!dragDepth)zone.classList.remove('dragging');
  });
  zone.addEventListener('drop',event=>{
-  if(busy||!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
-  event.preventDefault();dragDepth=0;zone.classList.remove('dragging');
-  stage(event.dataTransfer.files);
+  if(!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
+  const files=Array.from(event.dataTransfer?.files||[]);
+  dragDepth=0;zone.classList.remove('dragging');
+  // ZIP backups belong to the view's archive restore flow, not the HBR2
+  // preview selection. Let the ancestor handle only an unambiguous ZIP.
+  if(files.length===1&&/\.zip$/i.test(files[0].name))return;
+  event.preventDefault();
+  event.stopPropagation();
+  if(busy||window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='An import or backup restore is already running. Retry when it finishes.';
+   return;
+  }
+  stage(files);
+  updateUsage().then(render);
  });
+ // A recording dropped on empty My Games space should stage in the same
+ // explicit-review flow as a drop onto the HBR2 panel. This listener is
+ // registered before the ZIP archive's view handler, and consumes non-ZIPs
+ // so the archive never replaces the HBR2 preview with a misleading warning.
+ view.addEventListener('drop',event=>{
+  if(event.defaultPrevented||!event.dataTransfer?.files?.length)return;
+  const files=Array.from(event.dataTransfer.files);
+  if(files.length===1&&/\.zip$/i.test(files[0].name))return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if(busy||window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='Finish the current import or ZIP restore before adding files.';
+   return;
+  }
+  stage(files);
+  section.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  zone.focus?.({preventScroll:true});
+  updateUsage().then(render);
+ });
+ // Local private UI signal only; never exposes recording bytes to other tabs.
+ window.FuckballReplayImportDesk={isBusy:()=>busy};
  async function importFiles(){
   if(busy||!selected.length)return;
+  if(window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='ZIP backup restore is in progress. Finish restoring before importing individual replays.';
+   return;
+  }
   const files=[...selected];
   try{preflight(files);}catch(error){
    status.textContent=error.message;return;

@@ -28,3 +28,18 @@
 .clean-sheet-setup :is(button,select):focus-visible,.clean-sheet-hud button:focus-visible{outline:3px solid #e9ffaf;outline-offset:2px}
 @media(max-width:650px){.clean-sheet-setup{padding:12px}.clean-sheet-hud{top:65px}.clean-sheet-records{grid-template-columns:1fr}.clean-sheet-history-head button{flex:1}}
 @media(prefers-reduced-motion:reduce){.clean-sheet-setup *, .clean-sheet-hud *{transition:none!important;animation:none!important}}
+
+/* Same native match, paused while navigating away. Never auto-resume. */
+.clean-sheet-return[hidden]{display:none!important}
+.clean-sheet-return{position:fixed;z-index:108;bottom:max(12px,env(safe-area-inset-bottom));
+ left:50%;transform:translateX(-50%);width:min(770px,calc(100vw - 24px));
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:13px;padding:14px 16px;border:2px solid #d6eda9;border-radius:13px;
+ color:#f4fff0;background:#203a37;box-shadow:0 16px 44px #07151bd9}
+.clean-sheet-return p{font-size:.85rem;line-height:1.5;margin:0;color:#e1eee5}
+.clean-sheet-return button{flex-shrink:0;min-height:48px;min-width:175px;
+ border:1px solid #dfffa8;background:#dfffa8;color:#183023;border-radius:9px;
+ padding:10px 14px;font:inherit;font-weight:800;cursor:pointer}
+.clean-sheet-return button:focus-visible{outline:3px solid #f4ffcc;outline-offset:3px}
+@media(max-width:600px){.clean-sheet-return{flex-direction:column;align-items:stretch}
+ .clean-sheet-return button{width:100%}}

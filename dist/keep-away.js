@@ -38,6 +38,18 @@
  const attempts=el('div',null,'keep-away-history-rows');
  history.append(rowhead,attempts);
  panel.append(head,intro,fields,message,history);
+ // One deliberate Return action for a parked native local session, visible
+ // from either Home or My Games. It never starts a new game or auto-unpauses.
+ const returnPanel=el('aside',null,'keep-away-return');
+ returnPanel.hidden=true;
+ returnPanel.setAttribute('role','region');
+ returnPanel.setAttribute('aria-label','Paused Keep Away session');
+ const returnText=el('p');
+ returnText.setAttribute('role','status');
+ const returnButton=el('button','↗ Return to Keep Away');
+ returnButton.type='button';
+ returnPanel.append(returnText,returnButton);
+ document.body.append(returnPanel);
  const anchor=home.querySelector('.comeback-arena')||home.querySelector('.ai-gauntlet-setup')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',panel);else home.append(panel);
 
@@ -55,7 +67,22 @@
  again.hidden=true;dismiss.hidden=true;controls.append(stop,again,dismiss);
  hud.append(badge,clock,progress,bar,controls);pitch.append(hud);
 
- let active=null;
+ let active=null,parked=false;
+ function updateReturn(){
+  returnPanel.hidden=!active||!parked||!pitch.hidden||document.hidden;
+  if(returnPanel.hidden)return;
+  const s=active;
+  returnText.textContent='Keep Away is paused · '+s.best+' best consecutive kicks · '+
+   Math.max(0,s.duration-Math.ceil(s.frames/60))+
+   's of real active play left. Your original local match is preserved.';
+ }
+ returnButton.addEventListener('click',()=>{
+  if(!active||!parked||!pitch.hidden||document.hidden)return;
+  document.getElementById('tabPlay')?.click();
+  // Leave the original match paused. Only the existing Pause/Resume
+  // control can resume the simulation and the drill clock.
+  updateReturn();
+ });
  const read=()=>{
   try{
    const data=JSON.parse(localStorage.getItem(KEY)||'[]');
@@ -125,11 +152,12 @@
  const nativeScore=()=>[room.gameState.redScore,room.gameState.blueScore];
  function paint(s){
   clock.textContent=Math.max(0,Math.ceil((s.duration*60-s.frames)/60))+'s left · '+s.streak+' current / '+s.target+' target';
-  progress.textContent=s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks';
+  progress.textContent=(parked||paused?'Paused · explicitly resume the original local match. ':'')+
+   s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks';
   bar.value=Math.min(100,Math.round(s.best/s.target*100));
  }
  function finish(label,complete=false){
-  const s=active;if(!s)return;active=null;
+  const s=active;if(!s)return;active=null;parked=false;updateReturn();
   if(complete)save(s);
   badge.textContent=label;
   clock.textContent='Best '+s.best+' consecutive native kicks · '+s.kicks+' total';
@@ -139,7 +167,8 @@
   stop.hidden=true;again.hidden=false;dismiss.hidden=false;
  }
  function close(){
-  active=null;hud.hidden=true;badge.textContent='KEEP AWAY · LOCAL AI';
+  active=null;parked=false;updateReturn();
+  hud.hidden=true;badge.textContent='KEEP AWAY · LOCAL AI';
   stop.hidden=false;again.hidden=true;dismiss.hidden=true;
  }
  window.addEventListener('fuckball:local-native-kick',event=>{
@@ -159,15 +188,37 @@
   }
   paint(s);
  });
+ function park(){
+  const s=active;if(!s)return;
+  // Do not keep advertising a paused old drill if a different offline game
+  // or online session replaced its actual native room while off-screen.
+  if(room!==s.room||serverLink||peerConnected||replay||!started||
+     own()?.team?.id!==s.side||room.currentFrameNo<s.frame){
+   finish('KEEP AWAY · GAME CHANGED');return;
+  }
+  // Neutralize the real offline match while it cannot be observed. Goal
+  // Rush follows the same native pause path; never alter physics or frames.
+  if(!serverLink&&!peerConnected&&!replay&&room===s.room&&started&&!paused)
+   togglePause();
+  if(room===s.room&&Number.isSafeInteger(room.currentFrameNo))
+   s.frame=room.currentFrameNo;
+  parked=true;paint(s);updateReturn();
+ }
  function tick(){
   const s=active;if(!s)return;
-  if(document.hidden){finish('KEEP AWAY · TAB HIDDEN');return;}
+  if(document.hidden||pitch.hidden){park();return;}
   if(!ready()||room!==s.room||own()?.team?.id!==s.side||
    room.currentFrameNo<s.frame){
    finish('KEEP AWAY · GAME CHANGED');return;
   }
   const frame=room.currentFrameNo;
-  if(!paused)s.frames+=Math.max(0,frame-s.frame);
+  if(parked||paused){
+   s.frame=frame;
+   if(!paused)parked=false;
+   paint(s);updateReturn();
+   return;
+  }
+  s.frames+=Math.max(0,frame-s.frame);
   s.frame=frame;
   const current=nativeScore();
   if(current[0]<s.score[0]||current[1]<s.score[1]){
@@ -193,6 +244,7 @@
    active={room,side:own().team.id,duration,target:goal,frame:room.currentFrameNo,
     frames:0,score:nativeScore(),kicks:0,streak:0,best:0,breaks:0,
     lastKickFrame:-1,lastKickId:-1};
+   parked=false;updateReturn();
    badge.textContent='KEEP AWAY · LOCAL AI';
    hud.hidden=false;stop.hidden=false;again.hidden=true;dismiss.hidden=true;
    message.textContent='Keep Away is live. Use real movement and kicks; no alternate simulation.';
@@ -205,7 +257,13 @@
  window.setInterval(tick,125);
  const previousShowView=showView;
  showView=function(next){
-  if(next!=='play'&&active)finish('KEEP AWAY · LEFT PITCH');
+  if(next!=='play'&&active)park();
   previousShowView(next);
+  updateReturn();
  };
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&active)park();
+  else updateReturn();
+ });
+ window.addEventListener('focus',updateReturn);
 })();

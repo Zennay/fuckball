@@ -36,55 +36,118 @@
    camera:controls.cameraMode.value,zoom:controls.matchZoom.value,
    sound:controls.matchSound.checked,focus:controls.focus.value,chat:controls.chat.checked};
  }
- let undo=null;
+ let undo=null,undoExpected=null,applying=false;
+ const presetButtons=new Map();
+ const equal=(a,b)=>!!a&&!!b&&['quality','fps','camera','zoom','sound','focus','chat'].every(k=>String(a[k])===String(b[k]));
  const valid=choice=>['native','performance'].includes(choice.quality)&&
   ['0','60','120','144','165','240','360','480','1000','-1'].includes(choice.fps)&&
   ['stadium','follow'].includes(choice.camera)&&Number.isFinite(Number(choice.zoom))&&
   Number(choice.zoom)>=.6&&Number(choice.zoom)<=2&&
   typeof choice.sound==='boolean'&&['standard','focus','contrast'].includes(choice.focus)&&
   typeof choice.chat==='boolean';
+ function optionsAvailable(choice,controls){
+  for(const [key,node] of [['quality',controls.renderQuality],['fps',controls.fpsLimit],
+   ['camera',controls.cameraMode],['focus',controls.focus]]){
+   if(![...node.options].some(x=>x.value===String(choice[key])))return false;
+  }
+  const zoom=controls.matchZoom;
+  if(zoom.min!==''&&Number(choice.zoom)<Number(zoom.min))return false;
+  if(zoom.max!==''&&Number(choice.zoom)>Number(zoom.max))return false;
+  return true;
+ }
+ function clearUndo(){undo=null;undoExpected=null;restore.hidden=true;}
+ function syncCards(){
+  const controls=readControls(),now=controls?capture(controls):null;
+  for(const preset of presets){
+   const card=presetButtons.get(preset.id);
+   if(!card)continue;
+   card.disabled=!controls||!optionsAvailable(preset,controls);
+   card.setAttribute('aria-pressed',String(equal(now,preset)));
+  }
+ }
+ function writeNative(controls,choice){
+  // Every change and rollback goes through the original local settings
+  // handlers. Never touch server authority, ball physics or render clocks.
+  const changes=[
+   [controls.renderQuality,'value','quality','change'],
+   [controls.fpsLimit,'value','fps','change'],
+   [controls.cameraMode,'value','camera','change'],
+   [controls.matchZoom,'value','zoom','input'],
+   [controls.matchSound,'checked','sound','change'],
+   [controls.focus,'value','focus','change'],
+   [controls.chat,'checked','chat','change']
+  ];
+  for(const [node,property,key,event]of changes){
+   node[property]=key==='zoom'?String(choice[key]):choice[key];
+   node.dispatchEvent(new Event(event,{bubbles:true}));
+  }
+ }
  function apply(choice,withUndo){
   const controls=readControls();
-  if(!controls||!valid(choice)){
-   status.textContent='These native match settings are unavailable. Nothing changed.';return false;
-  }
-  for(const [key,node]of [['quality',controls.renderQuality],['fps',controls.fpsLimit],
-   ['camera',controls.cameraMode],['focus',controls.focus]]){
-   if(![...node.options].some(x=>x.value===String(choice[key]))){
-    status.textContent='A native match option is unavailable. Nothing changed.';return false;
-   }
+  if(!controls||!valid(choice)||!optionsAvailable(choice,controls)){
+   status.textContent='A required native match option is unavailable. Nothing changed.';
+   syncCards();return false;
   }
   const before=capture(controls);
+  applying=true;
   try{
-   // Call existing authoritative client settings handlers; do not update
-   // engine state, simulation timing, prediction or the network directly.
-   controls.renderQuality.value=choice.quality;controls.renderQuality.dispatchEvent(new Event('change',{bubbles:true}));
-   controls.fpsLimit.value=choice.fps;controls.fpsLimit.dispatchEvent(new Event('change',{bubbles:true}));
-   controls.cameraMode.value=choice.camera;controls.cameraMode.dispatchEvent(new Event('change',{bubbles:true}));
-   controls.matchZoom.value=String(choice.zoom);controls.matchZoom.dispatchEvent(new Event('input',{bubbles:true}));
-   controls.matchSound.checked=choice.sound;controls.matchSound.dispatchEvent(new Event('change',{bubbles:true}));
-   controls.focus.value=choice.focus;controls.focus.dispatchEvent(new Event('change',{bubbles:true}));
-   controls.chat.checked=choice.chat;controls.chat.dispatchEvent(new Event('change',{bubbles:true}));
-   if(withUndo){undo=before;restore.hidden=false;}else{undo=null;restore.hidden=true;}
-   return true;
+   writeNative(controls,choice);
+   if(!equal(capture(controls),choice))throw Error('Native option did not apply.');
+   if(withUndo){undo=before;undoExpected=capture(controls);restore.hidden=false;}
+   else clearUndo();
+   syncCards();return true;
   }catch{
-   status.textContent='The browser could not apply every local setting. Review the native Settings panel.';
-   return false;
-  }
+   // This is a transaction, not seven independent half-applied preferences.
+   // Roll back through the same native handlers if even one step rejects.
+   try{
+    writeNative(controls,before);
+    if(!equal(capture(controls),before))throw Error('Rollback incomplete.');
+    status.textContent='Preset failed; previous match settings were restored.';
+   }catch{
+    status.textContent='Preset partly failed and previous settings could not be fully restored. Check the native Video settings.';
+   }
+   clearUndo();syncCards();return false;
+  }finally{applying=false;}
  }
  for(const preset of presets){
   const card=el('button',null,'match-view-preset-card');card.type='button';
+  card.setAttribute('aria-pressed','false');
   card.append(el('strong',preset.title),el('small',preset.description));
+  presetButtons.set(preset.id,card);
   card.onclick=()=>{
-   if(apply(preset,true))status.textContent=preset.title+' view applied locally. Undo available until the next preset or navigation.';
+   if(apply(preset,true))status.textContent=preset.title+' view applied. Undo remains available while these settings are unchanged.';
   };
   cards.append(card);
  }
  restore.onclick=()=>{
   if(!undo)return;
-  const previous=undo;
-  if(apply(previous,false))status.textContent='Previous native match view restored.';
+  const controls=readControls();
+  if(!controls||!equal(capture(controls),undoExpected)){
+   clearUndo();syncCards();
+   status.textContent='View settings changed since the preset. Undo was cancelled to keep your newer choices.';
+   return;
+  }
+  if(apply(undo,false))status.textContent='Previous native match view restored.';
  };
- document.addEventListener('visibilitychange',()=>{if(document.hidden){undo=null;restore.hidden=true;}});
- window.addEventListener('pagehide',()=>{undo=null;restore.hidden=true;});
+ // Any manual native settings change makes an earlier undo unsafe.
+ // Do not overwrite the user's newer accessibility or performance choices.
+ const controls=readControls();
+ if(controls){
+  const changed=()=>{
+   if(applying)return;
+   if(undo&&!equal(capture(controls),undoExpected)){
+    clearUndo();
+    status.textContent='Match settings changed manually. Previous preset undo is no longer available.';
+   }
+   syncCards();
+  };
+  for(const node of [controls.renderQuality,controls.fpsLimit,controls.cameraMode,
+   controls.matchZoom,controls.matchSound,controls.focus,controls.chat]){
+   node.addEventListener('change',changed);
+   if(node===controls.matchZoom)node.addEventListener('input',changed);
+  }
+ }
+ syncCards();
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)clearUndo();});
+ window.addEventListener('pagehide',clearUndo);
 })();

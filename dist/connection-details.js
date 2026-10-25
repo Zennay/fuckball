@@ -67,6 +67,7 @@
  dialog.append(header,state,tiles,chartBox,overview,tips,footer);
  document.body.append(dialog);
  let session=null,sessionPlayerId=null,history=[],sessionSamples=[],sessionStarted=0;
+ let playingSince=null;
  let rosterSource=null,rosterFreshAt=0;
  function num(x){return x===null||!Number.isFinite(x)?null:Math.round(x);}
  function percentile(values,fraction){
@@ -76,12 +77,15 @@
  }
  function summary(){
   const latency=sessionSamples.map(x=>x.rttMs).filter(x=>x!==null).sort((a,b)=>a-b);
-  const stalled=sessionSamples.filter(x=>x.snapshotAgeMs!==null&&x.snapshotAgeMs>=3500).length;
+  // A missing first snapshot is a delayed live update as surely as a stale
+  // previously received snapshot; never omit that part of session history.
+  const stalled=sessionSamples.filter(x=>x.snapshotAgeMs!==null&&x.snapshotAgeMs>=3500||
+   x.waitingForFirstSnapshotMs!==null&&x.waitingForFirstSnapshotMs>=3500).length;
   const total=sessionSamples.length;
   overviewDetail.textContent=total?(
    latency.length+'/'+total+' ticks with real RTT · median '+(latency.length?percentile(latency,.5)+' ms':'unavailable')+
    ' · P95 '+(latency.length?percentile(latency,.95)+' ms':'unavailable')+
-   ' · '+stalled+' stale-snapshot observations (≥3.5 s). '+
+   ' · '+stalled+' delayed or absent live-update observations (≥3.5 s). '+
    'Sources are labeled per sample; no RTT is inferred from stale data. '+
    'These are observations, NOT packet-loss or gameplay results.'
   ):'Waiting for measured match updates.';
@@ -129,16 +133,33 @@
   // The server can still provide valid RTT while play is intentionally held.
   const playing=native?serverLink.roomState?.started===true&&
    serverLink.roomState?.paused!==true:started&&!paused;
-  const ageMs=playing&&net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
-   Math.max(0,now-net.lastSnapshot):null;
+  // Ping is NOT evidence that the game's visual state is arriving. A
+  // newly started/resumed round can be measured before its first snapshot,
+  // while net.lastSnapshot may still belong to the previous round.
+  if(!playing)playingSince=null;
+  else if(playingSince===null)playingSince=now;
+  const last=Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
+   net.lastSnapshot:null;
+  // On the first 1s UI tick, an already-received snapshot may predate the
+  // observation slightly. Allow the current tick's 1s window, never a stale
+  // reading from an older play period.
+  const snapshotReceived=playing&&last!==null&&last>=playingSince-1000;
+  const sinceUpdate=playing?Math.max(0,now-(snapshotReceived?last:playingSince)):null;
+  const ageMs=snapshotReceived?sinceUpdate:null;
+  const waitingForFirstSnapshotMs=playing&&!snapshotReceived?sinceUpdate:null;
   const source=fromServer?'fresh server challenge':
    fromPeer?(native?'peer-host transport':'direct-peer transport'):
    native&&roster&&!freshRoster?'server RTT stale — awaiting new sample':
    native?'no current server RTT':'no current direct-peer RTT';
-  return {ms,j,ageMs,source,playing};
+  return {ms,j,ageMs,waitingForFirstSnapshotMs,snapshotReceived,source,playing};
  }
  function setStatus(s){
   if(!s.playing)return ['Room connected · no live snapshots expected during lobby or pause','idle'];
+  if(s.waitingForFirstSnapshotMs!==null){
+   if(s.waitingForFirstSnapshotMs>=3500)
+    return ['No live match snapshots received yet · game view may be outdated','stalled'];
+   return ['Waiting for first live match snapshot · ping alone is not gameplay','unknown'];
+  }
   if(s.ageMs!==null&&s.ageMs>=3500)return ['Delayed snapshots','stalled'];
   if(s.ms!==null&&(s.ms>=220||s.j!==null&&s.j>=85))return ['High delay','poor'];
   if(s.ms!==null&&(s.ms>=140||s.j!==null&&s.j>=45))return ['Elevated latency','slow'];
@@ -156,8 +177,12 @@
   jitter.val.textContent=s.j!==null?Math.round(s.j)+' ms':'—';
   jitter.extra.textContent=s.j!==null?'Measured peer transport variation':
    'No comparable jitter for this RTT source';
-  age.val.textContent=s.ageMs!==null?Math.round(s.ageMs)+' ms':'—';
-  age.extra.textContent=s.ageMs!==null?'Time since latest match snapshot':'No snapshot timestamp yet';
+  age.val.textContent=s.ageMs!==null?Math.round(s.ageMs)+' ms':
+   s.waitingForFirstSnapshotMs!==null?'Not yet received':'—';
+  age.extra.textContent=s.ageMs!==null?'Time since last live match snapshot':
+   s.waitingForFirstSnapshotMs!==null?
+    Math.round(s.waitingForFirstSnapshotMs/1000*10)/10+'s of active play awaiting first snapshot':
+    'Lobby / pause · no live snapshot expected';
   chart.replaceChildren();
   let good=0;
   for(const x of history){
@@ -191,7 +216,7 @@
   const active=online()&&!document.hidden;
   button.hidden=!active;
   if(!active){
-   session=null;sessionPlayerId=null;history=[];sessionSamples=[];sessionStarted=0;
+   session=null;sessionPlayerId=null;history=[];sessionSamples=[];sessionStarted=0;playingSince=null;
    rosterSource=null;rosterFreshAt=0;
    if(dialog.open)dialog.close();
    return;
@@ -202,13 +227,15 @@
    (typeof peer!=='undefined'&&peer?peer:channel);
   const playerId=serverLink?.room?networkPlayerId:null;
   if(key!==session||playerId!==sessionPlayerId){
-   history=[];sessionSamples=[];sessionStarted=performance.now();
+   history=[];sessionSamples=[];sessionStarted=performance.now();playingSince=null;
    session=key;sessionPlayerId=playerId;
    rosterSource=null;rosterFreshAt=0;
   }
   const s=sample();history.push({ms:s.ms});
   sessionSamples.push({elapsedSeconds:Math.max(0,Math.round((performance.now()-sessionStarted)/1000)),
-   rttMs:num(s.ms),jitterMs:num(s.j),snapshotAgeMs:num(s.ageMs),source:s.source});
+   rttMs:num(s.ms),jitterMs:num(s.j),snapshotAgeMs:num(s.ageMs),
+   waitingForFirstSnapshotMs:num(s.waitingForFirstSnapshotMs),
+   snapshotReceived:s.snapshotReceived===true,source:s.source});
   if(sessionSamples.length>300)sessionSamples.shift();
   if(history.length>45)history.shift();
   if(dialog.open)render(s);

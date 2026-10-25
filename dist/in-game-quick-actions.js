@@ -43,7 +43,10 @@
  }
  function close(focus=false){
   if(!opened)return;
-  opened=false;sheet.hidden=true;window.fuckballQuickActionsOpen=false;
+  opened=false;sheet.hidden=true;
+  // A human may have switched directly into Quick Calls. Preserve its
+  // ownership of the same native keyboard/touch/controller input gate.
+  window.fuckballQuickActionsOpen=window.fuckballQuickCallsOpen===true;
   trigger.setAttribute('aria-expanded','false');
   // Never carry a pressed kick/stick/key across a panel boundary.
   neutralizeHumanSeats();
@@ -101,6 +104,9 @@
  }
  function open(){
   if(busy()||opened)return;
+  // Panels never stack. This only closes the prior view; it does not send a
+  // chat message or change the authoritative online room.
+  window.fuckballCloseQuickCalls?.(false);
   render();
   // Input must be stopped BEFORE focus is transferred: if someone held a
   // direction/kick while tapping Quick, no movement survives behind the UI.

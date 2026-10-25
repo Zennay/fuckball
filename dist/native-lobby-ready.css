@@ -89,3 +89,33 @@
   grid-column:1/-1;max-width:none}
  .native-lobby-ready-dock-host label select{width:100%}
 }
+
+/* Finished room: original server result and native rematch actions, not
+   the unrelated pre-kickoff readiness controls. */
+.native-finished-round-dock[hidden]{display:none!important}
+.native-finished-round-dock{box-sizing:border-box;position:fixed;
+ z-index:112;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(920px,calc(100vw - 24px));display:flex;align-items:center;
+ justify-content:space-between;gap:16px;padding:16px 19px;
+ border:2px solid #c9ec9d;border-radius:14px;
+ background:#17332e;color:#f3ffee;box-shadow:0 15px 42px #041b1bd4}
+.native-finished-round-copy{min-width:0}
+.native-finished-round-copy strong{display:block;font-size:.84rem;
+ letter-spacing:.075em;color:#e3ffa7}
+.native-finished-round-detail{margin:6px 0 0;color:#d1e5d9;
+ line-height:1.5;font-size:.86rem;overflow-wrap:anywhere}
+.native-finished-round-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.native-finished-round-actions button{min-height:48px;border:1px solid #a1b9aa;
+ border-radius:9px;background:#264940;color:#f4fff4;
+ font:inherit;font-weight:800;font-size:.83rem;cursor:pointer;padding:10px 14px}
+.native-finished-round-actions button.primary{background:#dbff93;color:#183426;
+ border-color:#dbff93}
+.native-finished-round-actions button[hidden]{display:none}
+.native-finished-round-actions button:focus-visible{outline:3px solid #f6ffab;outline-offset:3px}
+@media(max-width:680px){
+ .native-finished-round-dock{flex-direction:column;align-items:stretch;
+ gap:12px;padding:14px;bottom:max(9px,env(safe-area-inset-bottom))}
+ .native-finished-round-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:410px){.native-finished-round-actions{grid-template-columns:1fr}}

@@ -37,6 +37,9 @@
  section.append(heading,help,settings,context,rows,suggestions,manual,notice);
  host.append(section);
  let latest=null,signature='',roomToken=null;
+ // A reused room code is not a persistent identity: the native socket is.
+ // Invalidate selections when a reconnect creates a new admitted session.
+ let observedLink=null,sessionGeneration=0;
  const validId=n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647;
  const validFrames=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000000;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
@@ -46,8 +49,15 @@
  }
  function snapshot(){
   const link=typeof serverLink==='undefined'?null:serverLink;
+  if(link!==observedLink){observedLink=link;sessionGeneration++;}
   const state=link?.roomState;
+  // The local room engine can still contain an older room's human names and
+  // teams between native welcome and the first NEW server physics snapshot.
+  // Never recommend or export those players based on a room code alone.
   if(!link?.room||link.quickMatchMode||!state||
+   link.ws?.readyState!==1||state.room!==link.room||
+   typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+   net.receivedSequence<1||
    !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
   const benches=new Map(Array.isArray(state.benches)?state.benches:[]);
@@ -78,7 +88,7 @@
   const mayPropose=!!link.isOwner||captain===networkPlayerId;
   const pendingTeam=pending.some(p=>p?.team===desired);
   const total=validFrames(state.round)?state.round:null;
-  return{token:link.room,desired,people,active,waiting,idle,mayPropose,
+  return{sessionGeneration,token:link.room,desired,people,active,waiting,idle,mayPropose,
    captain:validId(captain)?captain:null,pendingTeam,owner:!!link.isOwner,round:total};
  }
  const elapsed=s=>s===null?'not measured':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s';
@@ -104,7 +114,8 @@
  }
  function nativePrepare(outgoing,incoming){
   const data=snapshot();
-  if(!data||data.token!==latest?.token||data.desired!==latest?.desired||
+  if(!data||data.sessionGeneration!==latest?.sessionGeneration||
+   data.token!==latest?.token||data.desired!==latest?.desired||
    !data.mayPropose||data.pendingTeam||
    !data.active.some(p=>p.id===outgoing.id&&p.available)||
    !data.waiting.some(p=>p.id===incoming.id&&p.available)){
@@ -141,7 +152,8 @@
  }
  manualButton.onclick=()=>{
   const data=snapshot();
-  if(!data||!latest||data.token!==latest.token||data.desired!==latest.desired){
+  if(!data||!latest||data.sessionGeneration!==latest.sessionGeneration||
+   data.token!==latest.token||data.desired!==latest.desired){
    notice.textContent='Room changed; refresh before preparing a swap.';render(true);return;
   }
   const outgoing=data.active.find(p=>p.id===Number(outChoice.value)&&p.available);
@@ -151,9 +163,17 @@
  };
  function render(force=false){
   const data=snapshot();
-  if(!data){section.hidden=true;clear();return;}
-  section.hidden=false;
-  const key=JSON.stringify([data.token,data.desired,data.round,data.owner,data.captain,
+  if(!data){
+   const link=typeof serverLink==='undefined'?null:serverLink;
+   const pending=!!link?.room&&!link.quickMatchMode&&link.ws?.readyState===1;
+   section.hidden=!pending;clear();
+   manual.hidden=true;manualButton.disabled=true;download.disabled=true;
+   if(pending)context.textContent='Waiting for the original online room’s current server roster and physics snapshot. No stale swap suggestion or CSV is available.';
+   else context.textContent='';
+   return;
+  }
+  section.hidden=false;manual.hidden=false;
+  const key=JSON.stringify([data.sessionGeneration,data.token,data.desired,data.round,data.owner,data.captain,
    data.mayPropose,data.pendingTeam,data.people]);
   if(!force&&signature===key)return;
   if(roomToken!==null&&roomToken!==data.token){section.open=false;notice.textContent='Room changed; old rotation not retained.';}
@@ -195,7 +215,8 @@
  side.onchange=()=>{signature='';render(true);};
  refresh.onclick=()=>{render(true);notice.textContent='Refreshed from the current native room snapshot.';};
  download.onclick=()=>{
-  const data=snapshot();if(!data||data.token!==latest?.token||!data.people.length){
+  const data=snapshot();if(!data||data.sessionGeneration!==latest?.sessionGeneration||
+   data.token!==latest?.token||!data.people.length){
    notice.textContent='The room has changed; refresh before exporting.';return;
   }
   if(!window.confirm('Export displayed player names and their currently observed playing time to a private CSV file?'))return;
@@ -220,6 +241,8 @@
  section.addEventListener('toggle',()=>{if(section.open)render(true);});
  // The panel starts hidden before a room exists. Poll for the first genuine
  // server state as well as later changes; never make hidden DOM block discovery.
+ window.addEventListener('fuckball:native-session-state',()=>render(true));
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)render(true);});
  setInterval(()=>{if(!document.hidden)render();},2400);
  render();
 })();

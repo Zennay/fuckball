@@ -19,3 +19,16 @@
 .match-quick-calls-fields input{box-sizing:border-box;width:100%;background:#0f2e32;color:#f3fde5;border:1px solid #769c86;border-radius:7px;padding:9px;font-size:12px}
 .match-quick-calls-tools{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:550px){.match-quick-calls{top:66px;right:5px;width:calc(100vw - 10px);padding:11px}.match-quick-calls-options,.match-quick-calls-fields{grid-template-columns:1fr}}
+
+/* Make the actual public-room audience clear before the user sends. */
+.match-quick-calls-destination{margin:10px 0 0;padding:9px 11px;
+ border:1px solid #a5c6a3;border-radius:9px;background:#24463c;
+ color:#e4f6e3!important;font-size:.79rem!important;font-weight:700;
+ overflow-wrap:anywhere}
+.match-quick-calls-message{min-height:48px!important}
+.match-quick-calls button:focus-visible{outline-offset:3px}
+@media(max-width:550px){
+ .match-quick-calls{max-height:calc(100dvh - 82px);
+  overscroll-behavior:contain}
+ .match-quick-calls-tools button{min-height:48px}
+}

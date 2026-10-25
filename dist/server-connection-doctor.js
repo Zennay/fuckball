@@ -37,6 +37,16 @@
  const original='Open Online Rooms to check the selected same-origin native server.';
  let last=null,request=0,controller=null;
  const MODES=['1v1','2v2','3v3','4v4'];
+ // A short-lived, receipt-only signal for the Home readiness checklist.
+ // Health checks never certify WebSocket admission, available opponents or
+ // identity. Do not expose URLs, tickets, accounts or HTTP response bodies.
+ function publishHealthReceipt(valid,queues=false){
+  if(typeof CustomEvent==='function')
+   window.dispatchEvent(new CustomEvent('fuckball:native-http-preflight',{
+    detail:{verified:valid===true,queues:queues===true,at:valid?Date.now():null,
+     origin:location.origin}
+   }));
+ }
  function selected(){
   const value=address.value.trim();
   if(!value)return {ok:false,message:'Configure a native multiplayer WebSocket server first.'};
@@ -61,7 +71,9 @@
   slots.target.textContent=text||'Not configured';
  }
  address.addEventListener('input',()=>{
-  cancel();const s=selected();blank(s.ok?s.display:'Different/invalid server');status.textContent=s.ok?original:s.message;
+  cancel();publishHealthReceipt(false);
+  const s=selected();blank(s.ok?s.display:'Different/invalid server');
+  status.textContent=s.ok?original:s.message;
  });
  dialog.addEventListener('close',()=>{
   cancel();status.textContent='Check cancelled or cleared when the dialog closed.';
@@ -94,7 +106,8 @@
   try{return JSON.parse(body);}catch{throw Error('The server sent unreadable diagnostics.');}
  }
  check.onclick=async()=>{
-  cancel();blank('Not verified');const target=selected();
+  cancel();publishHealthReceipt(false);
+  blank('Not verified');const target=selected();
   if(!target.ok){status.textContent=target.message;return;}
   if(navigator.onLine===false){status.textContent='Browser reports offline; no live server request sent.';return;}
   check.disabled=true;const ticket=++request,ctrl=new AbortController();controller=ctrl;
@@ -128,8 +141,10 @@
    status.textContent=occupancy?'Native server and real-player queue endpoint both verified. This is NOT confirmation that a match can be joined.':
     'Native health endpoint verified. '+queueError;
    copy.disabled=false;
+   publishHealthReceipt(true,!!occupancy);
   }catch(error){
    if(ticket===request){
+    publishHealthReceipt(false);
     last=null;copy.disabled=true;
     slots.health.textContent='Could not verify live native server';
     status.textContent=ctrl.signal.aborted?
@@ -159,6 +174,21 @@
    status.textContent='Private diagnostic summary copied. No credentials, user identity or server URL included.';
   }catch{status.textContent='Clipboard unavailable; select and copy the visible numbers manually.';}
  };
+ // An explicit user click in Home delegates to the original on-demand
+ // diagnostics. It does not initiate any independent or background probe.
+ window.FuckballServerDoctor=Object.freeze({
+  checkSelected(){
+   if(!dialog.open&&typeof openDialog==='function')openDialog('networkDialog');
+   const target=selected();
+   if(!target.ok){
+    status.textContent=target.message;address.focus({preventScroll:true});
+    return false;
+   }
+   if(!dialog.open)return false;
+   check.click();
+   return true;
+  }
+ });
  const initial=selected();blank(initial.ok?initial.display:'Unverified server');
  status.textContent=initial.ok?original:initial.message;
 })();

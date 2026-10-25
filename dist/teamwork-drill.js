@@ -53,6 +53,38 @@
  const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='Close';dismiss.hidden=true;
  hudActions.append(stop,restart,dismiss);hud.append(badge,score,feedback,bar,hudActions);match.append(hud);
  let session=null;
+ // A hidden app view is not permission to discard real, unranked practice.
+ // Preserve the original room and native 60 Hz clock; never simulate frames.
+ const parkedDock=document.createElement('aside');
+ parkedDock.className='teamwork-parked-dock';parkedDock.hidden=true;
+ parkedDock.setAttribute('aria-label','Paused Teamwork drill');
+ const parkedText=document.createElement('p');
+ parkedText.setAttribute('role','status');parkedText.setAttribute('aria-live','polite');
+ const parkedActions=document.createElement('div');
+ const returnToDrill=document.createElement('button');
+ returnToDrill.type='button';returnToDrill.className='primary';
+ returnToDrill.textContent='↗ Return to Teamwork';
+ const endParked=document.createElement('button');
+ endParked.type='button';endParked.textContent='End drill';
+ parkedActions.append(returnToDrill,endParked);
+ parkedDock.append(parkedText,parkedActions);document.body.append(parkedDock);
+ function updateParkedDock(){
+  const s=session;
+  parkedDock.hidden=!s||!s.parked||!match.hidden||document.hidden;
+  if(parkedDock.hidden)return;
+  parkedText.textContent='TEAMWORK PAUSED · '+s.links+' / '+s.target+
+   ' actual native teammate kicks · '+
+   Math.max(0,Math.ceil((s.duration*60-s.frames)/60))+
+   's active time left. Return to the same pitch, then explicitly resume.';
+ }
+ returnToDrill.onclick=()=>{
+  const s=session;
+  if(!s||!s.parked||!match.hidden||document.hidden)return;
+  if(!ownsOriginalDrill(s)){finish('TEAMWORK · MATCH CHANGED',false);return;}
+  document.getElementById('tabPlay')?.click();
+  updateParkedDock();
+ };
+ endParked.onclick=()=>finish('TEAMWORK · STOPPED',false);
  function read(){
   try{
    const list=JSON.parse(localStorage.getItem(KEY)||'[]');
@@ -101,8 +133,9 @@
   refresh();
  };
  refresh();
- function ready(){
-  if(serverLink||peerConnected||replay||!room||!started||paused||match.hidden)return null;
+ function localSide(){
+  if(serverLink||peerConnected||typeof peer!=='undefined'&&peer||
+     replay||!room||!started)return null;
   if(document.getElementById('mode')?.value!=='4v4'||!room.gameState)return null;
   const human=room.state?.players?.find?.(p=>p.id===1);
   const team=human?.team?.id;
@@ -110,8 +143,31 @@
   if(!room.state.players.some(p=>p.id!==1&&p.team?.id===team&&botIds.has(p.id)))return null;
   return team;
  }
+ function ready(){
+  return paused||match.hidden||document.hidden?null:localSide();
+ }
+ function ownsOriginalDrill(s){
+  return !!s&&room===s.room&&localSide()===s.side&&
+   Number.isSafeInteger(room.currentFrameNo)&&room.currentFrameNo>=s.frame;
+ }
+ function parkDrill(){
+  const s=session;if(!s)return;
+  if(!ownsOriginalDrill(s)){finish('TEAMWORK · MATCH CHANGED',false);return;}
+  if(!s.parked){
+   // Pause the genuine offline game via its existing input-safe control.
+   // Never pause a native/peer match, and never automatically unpause.
+   if(!paused)togglePause();
+   s.parked=true;s.frame=room.currentFrameNo;
+   status.textContent='Teamwork parked safely. Return to the original match and press Resume.';
+  }
+  feedback.textContent='Parked · no teammate kicks or drill time are counted until you explicitly resume.';
+  updateParkedDock();
+ }
  function blocked(){
-  if(serverLink||peerConnected)return 'Leave or cancel the active online room or connecting session before starting a local drill.';
+  if(serverLink||peerConnected||typeof peer!=='undefined'&&peer)
+   return 'Leave or cancel the active online room or direct-peer connection before starting a local drill.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Stop the current native room reconnect explicitly before starting a local drill.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])'))return 'Cancel the human Quick Match search before local practice.';
   const readyCheck=document.querySelector('.quick-ready:not([hidden])');
   if(readyCheck)return 'Complete or decline the human matchmaking ready-check first.';
@@ -130,7 +186,7 @@
  }
  function finish(message,saveAttempt=true){
   const s=session;if(!s)return;
-  session=null;
+  session=null;updateParkedDock();
   if(saveAttempt)save(s);
   badge.textContent=message;
   score.textContent=s.links+' real team link(s) · '+s.attempts+' human kicks';
@@ -139,7 +195,8 @@
   stop.hidden=true;restart.hidden=false;dismiss.hidden=false;
  }
  function quit(){
-  session=null;hud.hidden=true;badge.textContent='TEAMWORK · AI 4V4';
+  session=null;updateParkedDock();
+  hud.hidden=true;badge.textContent='TEAMWORK · AI 4V4';
   stop.hidden=false;restart.hidden=true;dismiss.hidden=true;
  }
  launch.onclick=()=>{
@@ -156,7 +213,7 @@
   const seconds=Number(duration.value),goal=Number(target.value);
   if(![120,180,300].includes(seconds)||![2,4,6].includes(goal))return;
   session={room,side,duration:seconds,target:goal,frame:room.currentFrameNo,
-   frames:0,links:0,attempts:0,pending:0};
+   frames:0,links:0,attempts:0,pending:0,parked:false};
   hud.hidden=false;status.textContent='Teamwork training running in local 4v4.';
   paint();
  };
@@ -165,7 +222,7 @@
  dismiss.onclick=quit;
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=session,d=event.detail;
-  if(!s||!d||d.room!==s.room||document.hidden||ready()!==s.side||
+  if(!s||!d||s.parked||d.room!==s.room||document.hidden||ready()!==s.side||
     !Number.isSafeInteger(d.frame)||d.frame<s.frame)return;
   if(d.playerId===1&&d.team===s.side){
    s.attempts++;s.pending=d.frame+1;paint();return;
@@ -180,16 +237,37 @@
  });
  function tick(){
   const s=session;if(!s)return;
-  if(document.hidden){finish('TEAMWORK · TAB HIDDEN',false);return;}
-  if(match.hidden){finish('TEAMWORK · LEFT PITCH',false);return;}
-  if(paused){feedback.textContent='Paused. Resume the local match to continue your timed teamwork drill.';return;}
-  if(ready()!==s.side||room!==s.room||room.currentFrameNo<s.frame){
-   finish('TEAMWORK · MATCH CHANGED',false);return;
-  }
+  if(!ownsOriginalDrill(s)){finish('TEAMWORK · MATCH CHANGED',false);return;}
+  if(document.hidden||match.hidden){parkDrill();return;}
   const frame=room.currentFrameNo;
+  if(s.parked){
+   // First foreground tick is a baseline only, even if native physics
+   // advanced a frame immediately after the player's explicit Resume.
+   s.frame=frame;
+   if(!paused){s.parked=false;paint(s);updateParkedDock();}
+   else feedback.textContent='Paused. Press the original Resume control to continue Teamwork.';
+   return;
+  }
+  if(paused){
+   s.frame=frame;
+   feedback.textContent='Paused. Resume the local match to continue your timed teamwork drill.';
+   return;
+  }
   s.frames+=Math.max(0,frame-s.frame);s.frame=frame;
   if(s.frames>=s.duration*60){finish('TEAMWORK · TIME UP');return;}
   paint();
  }
+ const previousShowView=showView;
+ showView=function(next){
+  if(next!=='play'&&session)parkDrill();
+  previousShowView(next);
+  updateParkedDock();
+ };
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&session)parkDrill();
+  else updateParkedDock();
+ });
+ window.addEventListener('blur',()=>{if(session)parkDrill();});
+ window.addEventListener('focus',updateParkedDock);
  window.setInterval(tick,180);
 })();

@@ -47,3 +47,8 @@
  .frame-meter-evidence-actions{grid-template-columns:1fr}
  .frame-meter-evidence-actions button:first-child{grid-column:auto}
 }
+
+/* Evidence scope is deliberately not a room/account identifier. */
+.frame-meter-source{margin:6px 0 0;color:#cce6d0;font-size:.84rem;
+ line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:560px){.frame-meter-source{font-size:.78rem}}

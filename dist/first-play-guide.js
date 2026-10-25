@@ -29,6 +29,8 @@
  const step=document.createElement('span');step.className='first-play-step';
  const detail=document.createElement('p');detail.className='first-play-detail';
  detail.setAttribute('role','status');detail.setAttribute('aria-live','polite');
+ const controlsHint=document.createElement('p');controlsHint.className='first-play-controls-hint';
+ controlsHint.setAttribute('aria-label','Controls for the current First Touch challenge');
  const bar=document.createElement('div');bar.className='first-play-bar';
  bar.setAttribute('role','progressbar');bar.setAttribute('aria-label','First match coaching progress');
  bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','3');
@@ -37,12 +39,12 @@
  const restart=document.createElement('button');restart.type='button';restart.textContent='Try again';
  const quit=document.createElement('button');quit.type='button';quit.textContent='Leave guide';
  const online=document.createElement('button');online.type='button';online.className='primary';online.textContent='Find real players';online.hidden=true;
- actions.append(restart,quit,online);hud.append(heading,step,detail,bar,actions);
+ actions.append(restart,quit,online);hud.append(heading,step,detail,controlsHint,bar,actions);
  match.append(hud);
  const stages=[
-  ['01 / 03 · MOVE','Move around the pitch using your movement keys. Reach 70 field units of real player movement.'],
+  ['01 / 03 · MOVE','Move your own player 70 field units with your controls. Getting pushed by the AI does not count.'],
   ['02 / 03 · KICK','Get close to the ball and kick it using your Kick control. This step counts a kick reported by the actual game engine.'],
-  ['03 / 03 · SCORE','Score one goal for your own team against the AI. The scoreboard must register it.']
+  ['03 / 03 · SCORE','Score for your own team against the AI. Only the real match scoreboard can complete this step.']
  ];
  let session=null,lessonParked=false;
  // Track one actual engine match. Visiting Home/My Games is not a new
@@ -87,8 +89,32 @@
   const count=Math.min(3,Math.max(0,stage));
   bar.setAttribute('aria-valuenow',String(count));fill.style.width=count/3*100+'%';
  }
+ function readableKey(key){
+  const named={Space:'Space',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',
+   ShiftLeft:'Shift',ShiftRight:'Shift',ControlLeft:'Ctrl',ControlRight:'Ctrl',
+   Numpad0:'Num 0',Enter:'Enter'};
+  if(named[key])return named[key];
+  if(/^Key[A-Z]$/.test(key))return key.slice(3);
+  if(/^Digit[0-9]$/.test(key))return key.slice(5);
+  return typeof key==='string'&&key.length<=14?key:'key';
+ }
+ function configuredKey(action){
+  try{
+   const keys=typeof bound==='function'?bound(action):settings?.keys?.[action];
+   return readableKey(Array.isArray(keys)?keys[0]:keys);
+  }catch{return 'key';}
+ }
+ function lessonControls(stage){
+  if(stage===0)return 'Keyboard: '+['up','left','down','right'].map(configuredKey).join(' · ')+
+   ' | Controller: stick / D-pad | Touch: move joystick';
+  if(stage===1)return 'Kick: '+configuredKey('kick')+' | Controller: kick button | Touch: Kick';
+  if(stage===2)return 'Move and kick toward the AI goal. Only a real goal counts.';
+  return 'Challenge complete. Practice again or choose to play with humans.';
+ }
  function render(){
   const s=session;if(!s)return;
+  const hint=lessonControls(s.stage);
+  if(controlsHint.textContent!==hint)controlsHint.textContent=hint;
   progress(s.stage);
   if(s.stage===3){
    heading.textContent='FIRST TOUCH · COMPLETE';
@@ -276,10 +302,24 @@
   if(s.stage===0&&frame>s.frame){
    const current=p.disc.pos,dx=current.x-s.lastPos.x,dy=current.y-s.lastPos.y;
    const displacement=Math.hypot(dx,dy);
-   if(Number.isFinite(displacement)&&displacement<75)s.moved+=displacement;
+   // The local engine exposes P1's actual key-state input, shared by
+   // keyboard, controller and touch. A bot collision can move the disc even
+   // while P1 is idle; never count that displacement as learned movement.
+   const humanMoving=Number.isSafeInteger(p.input)&&(p.input&15)!==0&&
+    (typeof canControlLiveMatch!=='function'||canControlLiveMatch());
+   if(humanMoving&&Number.isFinite(displacement)&&displacement<75)
+    s.moved+=displacement;
+   // Always follow the authoritative position even when idle, otherwise a
+   // knockback gets counted on the next actual player keypress.
    s.lastPos={x:current.x,y:current.y};
    if(s.moved>=70){s.stage=1;render();}
-   else detail.textContent=stages[0][1]+' · '+Math.floor(s.moved)+'/70';
+   else{
+    const hint=humanMoving?'Move with your controls':'Move yourself; AI bumps do not count';
+    const label=stages[0][1]+' · '+Math.floor(s.moved)+'/70 · '+hint;
+    if(detail.textContent!==label)detail.textContent=label;
+    const controlLabel=lessonControls(0);
+    if(controlsHint.textContent!==controlLabel)controlsHint.textContent=controlLabel;
+   }
   }
   if(s.stage===2){
    const score=s.side===1?room.gameState.redScore:room.gameState.blueScore;

@@ -68,7 +68,13 @@
  // Only current authoritative WebSocket snapshots can drive a live native
  // radar. Do not export, follow or trail unobserved server positions.
  function freshNativeFrame(){
-  if(!serverLink?.room)return true; // Local Watch Bots uses local physics.
+  // A pending online join is not a local match. Local Watch Bots has no
+  // WebSocket snapshots, but must still respect the actual local pause/stop.
+  // Never treat a frozen local formation as live action or exportable radar.
+  if(!serverLink?.room)
+   return !serverLink&&typeof started!=='undefined'&&started===true&&
+    typeof paused!=='undefined'&&paused===false&&
+    document.getElementById('mode')?.value==='watch';
   if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
   const at=typeof net!=='undefined'?net?.lastSnapshot:0;
   const age=performance.now()-at;
@@ -128,7 +134,11 @@
    // selectable hit targets behind a visually updated, frozen radar.
    reset();
    const waiting=!!serverLink?.room&&!freshNativeFrame();
-   const detail=waiting?'Waiting for fresh server frames':'Waiting for real match positions';
+   const localStopped=!serverLink&&document.getElementById('mode')?.value==='watch'&&
+    (typeof started==='undefined'||!started||typeof paused==='undefined'||paused);
+   const detail=waiting?'Waiting for fresh live server frames':
+    localStopped?'Local Watch Bots is paused or stopped · resume play for live radar':
+    'Waiting for real match positions';
    ctx.fillStyle='#f5fbf4';ctx.textAlign='center';ctx.font='bold 22px sans-serif';
    ctx.fillText(detail,W/2,H/2-10);
    if(message.textContent!==detail+' · no live positions to follow or export.')

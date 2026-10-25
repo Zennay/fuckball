@@ -28,6 +28,10 @@
  launchNotice.setAttribute('role','status');launchNotice.setAttribute('aria-live','polite');
  // Attached with the other panel content below.
  function onlineConflict(){
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Your previous room is reconnecting. Stop reconnecting explicitly before starting offline practice.';
+  if(typeof peer!=='undefined'&&peer)
+   return 'Cancel the pending direct-peer connection before starting offline practice.';
   if(typeof serverLink!=='undefined'&&serverLink)
    return serverLink.room?'Leave your active native online room explicitly before starting offline practice.':
     'An online connection or human search is in progress. Cancel it explicitly before practising.';
@@ -49,9 +53,12 @@
   if(!control||control.disabled){launchNotice.textContent=description+' cannot start right now. Use the original game controls.';return;}
   // Opening another local mode may end an in-progress solo game or replay.
   // The player decides whether to discard that local session.
-  if(document.getElementById('matchView')?.hidden===false&&
-      ((typeof started!=='undefined'&&started)||(typeof replay!=='undefined'&&replay))&&
-      !window.confirm('Leave the current local game or replay to start '+description+'? Unsaved local progress may be lost.'))return;
+  // A local match/replay is still the player's active session even when its
+  // canvas is hidden behind Home or My Games. Require consent to discard it.
+  const localGame=(typeof started!=='undefined'&&started)||
+   (typeof replay!=='undefined'&&!!replay);
+  if(localGame&&!window.confirm('Leave the current local game or replay to start '+
+      description+'? Unsaved local progress may be lost.'))return;
   if(!quickPlay(id==='quickSquad'?'4v4':'bot',true)){
    launchNotice.textContent='The original local game did not start; your existing session was kept.';return;
   }
@@ -105,7 +112,9 @@
   }catch{setup.textContent='Installation not available here. Try the browser’s Add to Home Screen option.';}
  };
  update();
- // Only check explicitly public offline assets, never cached API/room/account data.
+ // An offline pack is playable only when *all* of its saved HTML's
+ // startup scripts and styles are present, not merely six handpicked files.
+ // Never inspect or cache online rooms, accounts, invites, or API responses.
  const essential=['./','app.js','room-core.js','vendor/haxball.js','ai/policy.js','replay-library.js'];
  async function inspectCache(){
   if(!('caches' in window)){offlineStatus.textContent='Cache inspection is not supported here.';return;}
@@ -114,18 +123,55 @@
     .sort((a,b)=>Number(b.split('-v').pop())-Number(a.split('-v').pop()));
    if(!names.length){offlineStatus.textContent='No offline practice pack stored on this device.';return;}
    const cache=await caches.open(names[0]);
-   const found=await Promise.all(essential.map(async path=>
-    !!(await cache.match(new URL(path,location.href).href))));
-   const count=found.filter(Boolean).length;
-   offlineStatus.textContent=count===essential.length?
-    'Core offline practice files are stored ('+count+'/'+essential.length+'). Live rooms and account data still require the server.':
-    'Only '+count+'/'+essential.length+' core offline files are saved. Reconnect and reopen Fuckball to finish setup.';
-  }catch{offlineStatus.textContent='Browser storage cannot be inspected; offline readiness is unverified.';}
+   const scope=new URL('./',registered?.scope||location.href);
+   const shell=await cache.match(scope.href);
+   if(!shell){offlineStatus.textContent='Offline game shell is missing. Reconnect to reinstall local practice.';return;}
+   // DOMParser constructs an inert document; no scripts execute and no
+   // additional network fetch is made while reading cached markup.
+   if(typeof DOMParser!=='function'){
+    offlineStatus.textContent='This browser cannot verify the complete offline game pack.';
+    return;
+   }
+   const markup=new DOMParser().parseFromString(await shell.text(),'text/html');
+   const required=new Set(essential.map(path=>new URL(path,scope).href));
+   for(const node of markup.querySelectorAll('script[src],link[rel~="stylesheet"][href]')){
+    const file=node.getAttribute(node.tagName.toLowerCase()==='script'?'src':'href');
+    if(!file)continue;
+    const url=new URL(file,scope);
+    if(url.origin!==scope.origin||!url.pathname.startsWith(scope.pathname)||
+       url.search||url.hash||!(/\.(?:js|css)$/i.test(url.pathname)))continue;
+    required.add(url.href);
+   }
+   // Bound the work for malformed or unexpectedly huge cached HTML.
+   if(required.size>400){
+    offlineStatus.textContent='Unexpected offline game bundle. Reconnect to refresh the installation.';
+    return;
+   }
+   const files=[...required],found=await Promise.all(files.map(url=>cache.match(url)));
+   const missing=files.filter((_,i)=>!found[i]);
+   if(!missing.length){
+    offlineStatus.textContent='Offline game is ready ('+files.length+'/'+files.length+
+     ' startup files saved). Local matches and your own downloaded replays can start without internet; online rooms still need the server.';
+   }else{
+    const names=missing.slice(0,3).map(url=>decodeURIComponent(new URL(url).pathname.split('/').pop()));
+    offlineStatus.textContent='Offline pack incomplete ('+(files.length-missing.length)+'/'+
+     files.length+' startup files). Missing '+names.join(', ')+
+     (missing.length>3?' and '+(missing.length-3)+' more':'')+
+     '. Reconnect, check for updates, and reopen Fuckball before starting offline.';
+   }
+  }catch{
+   offlineStatus.textContent='Browser storage cannot be inspected; offline readiness is unverified.';
+  }
  }
  function safeToReload(){
-  // Do not interrupt a match, native room, Quick Match search or ready check.
+  // A Home or My Games view may hide an active local game, replay or
+  // authorized room reconnect. Do not lose that session to a PWA update.
   if(!document.getElementById('matchView')?.hidden||
+      (typeof started!=='undefined'&&started)||
+      (typeof replay!=='undefined'&&!!replay)||
+      (typeof roomRecovery!=='undefined'&&!!roomRecovery.context)||
       (typeof peerConnected!=='undefined'&&peerConnected)||
+      (typeof peer!=='undefined'&&!!peer)||
       (typeof serverLink!=='undefined'&&!!serverLink)||
       document.querySelector('.quick-queue-actions button:not([hidden])')||
       document.querySelector('.quick-ready:not([hidden])'))return false;
@@ -143,7 +189,7 @@
  reload.addEventListener('click',()=>{
   if(!newVersion)return;
   if(!safeToReload()){
-   offlineStatus.textContent='Finish your active game or queue before reloading. No match was interrupted.';return;
+   offlineStatus.textContent='Finish or explicitly leave your current game, replay, room reconnect or human queue before updating. Nothing was interrupted.';return;
   }
   if(window.confirm('Reload Fuckball to use the updated offline package?'))location.reload();
  });
