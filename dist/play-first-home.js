@@ -147,8 +147,14 @@
   const target=document.getElementById(location.hash.slice(1));
   if(target&&[...optional].some(el=>el===target||el.contains(target)))change(true);
  });
- const observer=new MutationObserver(()=>queueMicrotask(sync));
- observer.observe(home,{childList:true});
+ // Game actions may call showView('play') directly rather than clicking a tab.
+ // Observe the actual Home visibility as well as late-added features so a
+ // temporary search reveal never changes the next Home visit's layout.
+ const observer=new MutationObserver(()=>queueMicrotask(()=>{
+  if(home.hidden)restoreTemporaryExpansion();
+  sync();
+ }));
+ observer.observe(home,{childList:true,attributes:true,attributeFilter:['hidden']});
  sync();
  if(location.hash){
   const target=document.getElementById(location.hash.slice(1));
