@@ -127,7 +127,8 @@
    result.textContent='Original room recovery controls are shown; no other game was started.';
    return;
   }
-  const human=home.querySelector('.quick-ready:not([hidden]),.quick-queue-panel:not([hidden])');
+  const searching=home.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])');
+  const human=searching?home.querySelector('.quick-ready:not([hidden]),.quick-queue-panel:not([hidden])'):null;
   if(human){
    human.scrollIntoView?.({behavior:'auto',block:'center'});
    (human.querySelector('button:not([disabled]):not([hidden])')||human)
