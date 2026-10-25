@@ -109,7 +109,7 @@
    status.textContent='Choose an available connected player from this room.';return;
   }
   const text=note.value.trim();
-  if(text.length>200||/[\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e]/.test(text)){
+  if(text.length>200||/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/.test(text)){
    status.textContent='Details must be 200 printable characters or less.';return;
   }
   if(!confirm('Submit this report privately to the server operator for review? No automatic punishment will be applied.'))return;
