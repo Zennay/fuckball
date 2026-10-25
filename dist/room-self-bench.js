@@ -62,9 +62,95 @@
    started:typeof started!=='undefined'&&started===true,
    paused:typeof paused!=='undefined'&&paused===true};
  }
+ // The original team/bench controls live deep inside the match menu.
+ // During a connected Custom Room lobby, players reading Home/My Games can
+ // miss that they are a spectator and fail to mark themselves available for
+ // a real host-authorized substitution. Surface the actual server roster and
+ // forward deliberate clicks to the original controls, never a new protocol.
+ const benchShortcuts=[];
+ for(const [selector,titleText]of [['#homeView','YOUR TEAM IN THIS ROOM'],
+                                    ['#gamesView','YOUR CURRENT ROOM TEAM']]){
+  const view=document.querySelector(selector);
+  if(!view)continue;
+  const shortcut=make('aside',null,'self-bench-shortcut');
+  shortcut.hidden=true;
+  shortcut.setAttribute('aria-label','Native room team and bench');
+  const heading=make('strong',titleText);
+  const role=make('p','Waiting for your native team status.','self-bench-shortcut-role');
+  role.setAttribute('role','status');
+  role.setAttribute('aria-live','polite');
+  const note=make('p','','self-bench-shortcut-note');
+  const actions=make('div',null,'self-bench-shortcut-actions');
+  const buttons=[];
+  for(const [source,label]of [[red,'Red bench'],[blue,'Blue bench'],
+      [spec,'Neutral spectator'],[readyButton,'Mark available']]){
+   const button=make('button',label);button.type='button';
+   button.addEventListener('click',()=>{
+    const now=native();
+    if(!now||!now.online||now.disconnected||source.hidden||source.disabled){
+     note.textContent='Your native team status changed. Open the room menu to review it.';
+     render();return;
+    }
+    source.click(); // source dispatch has server and permission checks
+    note.textContent=feedback.textContent||
+     'Waiting for the real room server to confirm this choice.';
+    render();
+   });
+   actions.append(button);
+   buttons.push({button,source});
+  }
+  const open=make('button','↗ Open team controls');
+  open.type='button';open.className='self-bench-shortcut-open';
+  open.addEventListener('click',()=>{
+   if(!native())return;
+   document.querySelector('#tabPlay')?.click();
+   if(typeof openMatchMenu==='function')
+    openMatchMenu('menuMatchPane','menuMatch');
+   else document.querySelector('#matchMenuButton')?.click();
+   panel.scrollIntoView?.({block:'nearest',behavior:'auto'});
+   const first=[red,blue,spec,readyButton].find(b=>!b.hidden&&!b.disabled);
+   (first||panel).focus?.({preventScroll:true});
+  });
+  actions.append(open);
+  shortcut.append(heading,role,note,actions);
+  const roomCard=selector==='#homeView'?
+   view.querySelector('.play-hub-current-room'):null;
+  if(roomCard)roomCard.insertAdjacentElement('afterend',shortcut);
+  else view.prepend(shortcut);
+  benchShortcuts.push({shortcut,role,note,buttons});
+ }
+ function renderBenchShortcuts(data){
+  for(const item of benchShortcuts){
+   item.shortcut.hidden=!data;
+   if(!data)continue;
+   const team=data.side===1?'RED · ON THE PITCH':
+    data.side===2?'BLUE · ON THE PITCH':
+    data.chosen===1?'RED · TEAM BENCH':
+    data.chosen===2?'BLUE · TEAM BENCH':'NEUTRAL SPECTATOR';
+   const phase=data.started?(data.paused?'MATCH PAUSED':'MATCH LIVE'):
+    'ROOM LOBBY / BREAK';
+   const line=team+' · '+phase+
+    (data.disconnected?' · RECONNECTING':
+     data.side===0&&data.chosen!==0?
+      (data.ready?' · AVAILABLE TO SUB':' · NOT AVAILABLE TO SUB'):'');
+   if(item.role.textContent!==line)item.role.textContent=line;
+   // Never promise a successful team change before authoritative receipt.
+   const message=feedback.textContent;
+   if(message&&item.note.textContent!==message)item.note.textContent=message;
+   for(const {button,source}of item.buttons){
+    button.hidden=source.hidden;
+    button.disabled=source.disabled||!data.online||data.disconnected;
+    button.textContent=source===readyButton?source.textContent:
+     button.textContent;
+    button.setAttribute('aria-pressed',
+     source.getAttribute('aria-pressed')||'false');
+   }
+  }
+ }
  function reset(){
   pending=null;previousRoom=null;previousLink=null;pauseAwaiting=null;
   nextPauseAsk=0;latest='';panel.hidden=true;requestBanner.hidden=true;prompt.hidden=true;feedback.textContent='';
+  renderBenchShortcuts(null);
  }
  function render(){
   const data=native();
@@ -141,6 +227,7 @@
     pending=null;
    }
   }
+  renderBenchShortcuts(data);
   if(latest!==signature)latest=signature;
  }
  function dispatch(type,team){
