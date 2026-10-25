@@ -123,6 +123,10 @@
   if(!liveCouchSession()){
    recoveryRequired=false;recovery.hidden=true;lastPorts='';return;
   }
+  // Browsers may suppress Gamepad API snapshots in background tabs. A
+  // missing background snapshot is not proof a human unplugged their pad;
+  // the existing local focus guard already pauses the match when hidden.
+  if(document.hidden){recovery.hidden=true;return;}
   const state=window.fuckballCouchRivals?.seatStatus?.();
   if(!state)return;
   const missing=state.assigned?state.missing:[3,4];
