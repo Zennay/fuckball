@@ -133,6 +133,10 @@
    row.querySelector('strong').textContent=counts[i]+' vote'+(counts[i]===1?'':'s');
    row.classList.toggle('native-match-format-winning',state.matchFormatWinner===i);
   });
+  // Resolve the native response/timeout before computing button enabled state.
+  // Otherwise the first explicit retry after timeout remains disabled for
+  // one render cycle and falsely looks like a submitted new vote.
+  const receipt=receiptStatus(d);
   const human=room?.state?.players?.some?.(p=>p.id===networkPlayerId&&!botIds.has(p.id))===true;
   const open=connected(link);
   cast.disabled=!open||!human||state.kickoff!=null||!!pendingVote;
@@ -141,7 +145,6 @@
   const winner=state.matchFormatWinner;
   apply.disabled=!open||!link.isOwner||state.kickoff!=null||!!pendingApply||
    !Number.isSafeInteger(winner)||winner<0||winner>=list.length;
-  const receipt=receiptStatus(d);
   status.textContent=receipt||(!open?'The original room connection is offline. Nothing can be sent.':
    state.kickoff?
    'Format voting is locked during the server kickoff countdown.':
@@ -220,6 +223,7 @@
   dock.hidden=!live;
   if(!live)return;
   const {link,state,list}=d;
+  const receipt=receiptStatus(d);
   const signature=JSON.stringify(list);
   if(dockOwner!==link||dockRound!==state.round||dockOptions!==signature){
    dockOwner=link;dockRound=state.round;dockOptions=signature;
@@ -258,7 +262,6 @@
   dockApply.hidden=!host;
   dockApply.disabled=!host||!connected||!!pendingApply||state.kickoff!=null||
    !Number.isSafeInteger(winner)||!list[winner];
-  const receipt=receiptStatus(d);
   if(receipt)tally.textContent=receipt;
  }
  dockSelect.addEventListener('change',()=>{
@@ -271,15 +274,18 @@
   // Synchronize the hidden native input state, then delegate to the
   // identical original handler that submits the current player vote.
   render();
+  let submitted=false;
   if(action==='cast'){
    if(!Number.isSafeInteger(dockChoice)||!d.list[dockChoice])return;
    selected=dockChoice;
    for(const input of choices.querySelectorAll('input')){
     input.checked=Number(input.value)===selected;
    }
-   if(!cast.disabled)cast.click();
-  }else if(action==='remove'&&!remove.disabled)remove.click();
-  tally.textContent='Request sent to the room server · waiting for its vote update.';
+   if(!cast.disabled){cast.click();submitted=true;}
+  }else if(action==='remove'&&!remove.disabled){
+   remove.click();submitted=true;
+  }
+  if(submitted)tally.textContent='Request sent to the room server · waiting for its vote update.';
  }
  dockVote.addEventListener('click',()=>delegateBallot('cast'));
  dockRemove.addEventListener('click',()=>delegateBallot('remove'));
