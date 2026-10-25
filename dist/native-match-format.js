@@ -47,7 +47,7 @@
   if(changed){
    ballotLink=d.link;ballotRoom=d.link.room;ballotRound=d.state.round;
    ballotPlayer=networkPlayerId;signature=sign;selected=mine??2;
-   pendingVote=null;pendingApply=null;
+   pendingVote=null;pendingApply=null;status.textContent='';
   }
   return changed;
  }
@@ -123,26 +123,62 @@
      'An outright winner needs at least two human votes.'+
       (mine!==undefined?' Your vote: '+list[mine].name+'.':'');
  }
+ function admittedVoteAction(host=false){
+  const d=source();
+  if(!d)return null;
+  if(ballotLink!==d.link||ballotRound!==d.state.round||
+     ballotRoom!==d.link.room||ballotPlayer!==networkPlayerId){
+   render();
+   status.textContent='Room or player changed. Review the new ballot before acting.';
+   return null;
+  }
+  const human=room?.state?.players?.some?.(p=>
+   p.id===networkPlayerId&&!botIds.has(p.id))===true;
+  if(!human||host&&!d.link.isOwner||d.link.ws?.readyState!==1||
+     d.state.kickoff!=null){
+   status.textContent='Only a connected, admitted human'+(host?' room host':'')+
+    ' may act before kickoff. No request was sent.';
+   return null;
+  }
+  return d;
+ }
  cast.onclick=()=>{
-  const d=source();if(!d||d.state.kickoff!=null||
-   !Number.isSafeInteger(selected)||selected<0||selected>=d.list.length)return;
+  const d=admittedVoteAction();
+  if(!d||pendingVote||!Number.isSafeInteger(selected)||selected<0||
+     selected>=d.list.length)return;
+  const mine=d.state.matchFormatVotes.find(v=>
+   Array.isArray(v)&&v[0]===networkPlayerId)?.[1];
+  if(mine===selected){
+   status.textContent='The server already recorded your vote for this format.';
+   return;
+  }
   d.link.send({type:'matchFormatVote',choice:selected});
-  status.textContent='Submitting your match format choice to the real room server…';
+  pendingVote={choice:selected,sentAt:Date.now()};
+  render();
  };
  remove.onclick=()=>{
-  const d=source();if(!d||d.state.kickoff!=null)return;
+  const d=admittedVoteAction();
+  if(!d||pendingVote)return;
+  const mine=d.state.matchFormatVotes.some(v=>Array.isArray(v)&&
+   v[0]===networkPlayerId);
+  if(!mine)return;
   d.link.send({type:'matchFormatVote',choice:null});
-  status.textContent='Removing your native match format vote…';
+  pendingVote={choice:undefined,sentAt:Date.now()};
+  render();
  };
  apply.onclick=()=>{
-  const d=source(),winner=d?.state.matchFormatWinner;
-  if(!d||!d.link.isOwner||d.state.kickoff!=null||
-   !Number.isSafeInteger(winner)||!d.list[winner])return;
-  const selectedFormat=d.list[winner];
-  if(!confirm('Apply '+selectedFormat.name+
+  const d=admittedVoteAction(true),winner=d?.state.matchFormatWinner;
+  if(!d||pendingApply||!Number.isSafeInteger(winner)||!d.list[winner])return;
+  const chosen=d.list[winner];
+  if(!confirm('Apply '+chosen.name+
    ' using the original host configuration? This refreshes the idle room and clears ready flags, without starting the game.'))return;
-  d.link.send({type:'matchFormatApply'});
-  status.textContent='Host format request sent to native room. Existing server permissions still apply.';
+  // A socket/room can be replaced while native confirmation is displayed.
+  const now=admittedVoteAction(true);
+  if(!now||now.link!==d.link||now.state.round!==d.state.round||
+     now.state.matchFormatWinner!==winner)return;
+  now.link.send({type:'matchFormatApply'});
+  pendingApply={minutes:chosen.minutes,goals:chosen.goals,sentAt:Date.now()};
+  render();
  };
  // A format ballot is a server-owned Custom Room choice. Players who are
  // browsing Home or My Games must not need to hunt for a hidden match menu.
@@ -213,10 +249,10 @@
    (state.kickoff!=null?' · locked during server kickoff.':'');
   if(tally.textContent!==newText)tally.textContent=newText;
   dockSelect.disabled=!canVote;
-  dockVote.disabled=!canVote;
-  dockRemove.disabled=!canVote||!mine;
+  dockVote.disabled=!canVote||!!pendingVote;
+  dockRemove.disabled=!canVote||!mine||!!pendingVote;
   dockApply.hidden=!host;
-  dockApply.disabled=!host||!connected||state.kickoff!=null||
+  dockApply.disabled=!host||!canVote||!!pendingApply||
    !Number.isSafeInteger(winner)||!list[winner];
  }
  dockSelect.addEventListener('change',()=>{
@@ -229,15 +265,18 @@
   // Synchronize the hidden native input state, then delegate to the
   // identical original handler that submits the current player vote.
   render();
+  let submitted=false;
   if(action==='cast'){
    if(!Number.isSafeInteger(dockChoice)||!d.list[dockChoice])return;
    selected=dockChoice;
    for(const input of choices.querySelectorAll('input')){
     input.checked=Number(input.value)===selected;
    }
-   if(!cast.disabled)cast.click();
-  }else if(action==='remove'&&!remove.disabled)remove.click();
-  tally.textContent='Request sent to the room server · waiting for its vote update.';
+   if(!cast.disabled){cast.click();submitted=!!pendingVote;}
+  }else if(action==='remove'&&!remove.disabled){
+   remove.click();submitted=!!pendingVote;
+  }
+  if(submitted)tally.textContent='Vote sent · waiting for the server ballot update.';
  }
  dockVote.addEventListener('click',()=>delegateBallot('cast'));
  dockRemove.addEventListener('click',()=>delegateBallot('remove'));
@@ -256,8 +295,10 @@
   (cast.disabled?section:cast).focus?.({preventScroll:true});
  });
  const tick=setInterval(()=>{
-  if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
-  else section.hidden=true;
+  // Continue checking server receipts and session replacement while the
+  // native menu is hidden; the global dock shows the same authoritative state.
+  render();
+  if(typeof menuOpen==='undefined'||!menuOpen||pane.hidden)section.hidden=true;
   renderDock();
  },1000);
  tick?.unref?.();
