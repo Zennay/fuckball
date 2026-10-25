@@ -106,7 +106,12 @@
   // Cross-tab writes do not trigger a same-tab storage event. Keep the
   // current draft untouched and require an explicit reload before editing.
   function inspectExternal(){
-   if(!section.isConnected||!authorized())return;
+   if(!section.isConnected){
+    window.removeEventListener('focus',inspectExternal);
+    window.removeEventListener('storage',onExternalStorage);
+    return;
+   }
+   if(!authorized())return;
    try{
     if(localStorage.getItem(key)!==savedRaw)markExternalChange();
    }catch{status.textContent='Private browser storage is unavailable.';}
@@ -197,7 +202,7 @@
     refresh();
     status.textContent='Private goal restored on this device. No match results or rankings were imported.';
    }catch(error){status.textContent=error?.message||'Could not restore the private goal.';}
-   finally{restore.disabled=false;}
+   finally{restore.disabled=externalChange;}
   };
   function coachSheet(notes,includePrivateNotes){
    const plan=readPlan(savedRaw);
