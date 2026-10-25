@@ -74,7 +74,7 @@ function notifyNativeSessionView(){
  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
   window.dispatchEvent(new CustomEvent('fuckball:native-session-state'));
 }
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();const link=serverLink;clearQuickRematchAlert(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();const link=serverLink;clearQuickRematchAlert(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
@@ -443,16 +443,76 @@ function populateSubSelect(id,items,empty){
  for(const item of items){const option=document.createElement('option');option.value=String(item.id);option.textContent=item.name;control.append(option);}
  control.value=items.some(item=>String(item.id)===previous)?previous:String(items[0].id);
 }
+// A native vote is not a confirmed human decision until the SERVER echoes
+// this player in the accepted roster (or closes a declined proposal).
+// Keep pending sends scoped to the admitted room + immutable proposal ID.
+let nativeRematchVotePending=null,nativeRematchVoteNotice=null;
+function clearNativeRematchVote(){
+ if(nativeRematchVotePending?.timer)clearTimeout(nativeRematchVotePending.timer);
+ nativeRematchVotePending=null;nativeRematchVoteNotice=null;
+}
+function rematchVoteRequest(link=serverLink){
+ if(!link?.room||!link.roomState||link.roomState.started)return null;
+ return link.quickMatchMode?link.quickRematch:link.roomState.rematch;
+}
+function syncNativeRematchVote(link,request){
+ const pending=nativeRematchVotePending,notice=nativeRematchVoteNotice;
+ const accepted=Array.isArray(request?.accepted)&&request.accepted.includes(networkPlayerId);
+ const same=!!link&&!!request&&Number.isSafeInteger(request.id)&&
+  link.room&&request.id===(pending?.id??notice?.id)&&
+  link===(pending?.link??notice?.link);
+ if(pending&&(!same||accepted))clearNativeRematchVote();
+ else if(notice&&(!same||accepted))nativeRematchVoteNotice=null;
+}
+function submitNativeRematchVote(accept){
+ const link=serverLink,request=rematchVoteRequest(link);
+ if(!request||!Number.isSafeInteger(request.id)||
+    !Array.isArray(request.required)||!request.required.includes(networkPlayerId)||
+    !Array.isArray(request.accepted)||request.accepted.includes(networkPlayerId)||
+    Number.isSafeInteger(request.expiresAt)&&Date.now()>=request.expiresAt)return;
+ if(nativeRematchVotePending?.link===link&&nativeRematchVotePending.id===request.id)return;
+ const id=request.id;
+ if(link.ws?.readyState!==1){
+  nativeRematchVoteNotice={link,id,message:'Connection unavailable. Reconnect or retry explicitly before the deadline.'};
+  renderNextMatchPanel();return;
+ }
+ // A single explicit human action is sent through the existing native socket,
+ // never auto-retried, auto-accepted or interpreted as a server receipt.
+ try{
+  link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id,accept});
+ }catch{
+  nativeRematchVoteNotice={link,id,message:'Vote could not be sent. Retry explicitly before the deadline.'};
+  renderNextMatchPanel();return;
+ }
+ const pending={link,id,accept,timer:null};
+ nativeRematchVotePending=pending;nativeRematchVoteNotice=null;
+ pending.timer=setTimeout(()=>{
+  if(nativeRematchVotePending!==pending)return;
+  nativeRematchVotePending=null;
+  nativeRematchVoteNotice={link,id,message:'No server receipt yet. Retry explicitly before the deadline.'};
+  renderNextMatchPanel();
+ },2300);
+ renderNextMatchPanel();
+}
 function renderNextMatchPanel(){
  const panel=$('nextMatchPanel'),link=serverLink,state=link?.roomState;
+ const request=rematchVoteRequest(link);
+ syncNativeRematchVote(link,request);
  panel.hidden=!(link?.room&&state&&!state.started);
  if(panel.hidden){renderGlobalRematchDock();return;}
  const result=state.lastResult,quick=!!link.quickMatchMode;
- const request=quick?link.quickRematch:state.rematch;
  $('nextMatchTitle').textContent=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
  const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
+ const seconds=Number.isSafeInteger(request?.expiresAt)?
+  Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000)):null;
+ const pending=nativeRematchVotePending?.link===link&&nativeRematchVotePending.id===request?.id;
+ const notice=nativeRematchVoteNotice?.link===link&&nativeRematchVoteNotice.id===request?.id?
+  nativeRematchVoteNotice.message:'';
  $('nextMatchInfo').textContent=request?
-   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' players'+(Number.isSafeInteger(request.expiresAt)?' · expires shortly':''):
+   (pending?'Your '+(nativeRematchVotePending.accept?'accept':'decline')+' vote was sent · awaiting server receipt. ':
+    notice?notice+' ':'')+
+   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' players'+
+   (seconds===null?'':' · '+seconds+'s left'):
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
    'Everyone remains connected to this room.';
  const list=$('nextMatchPlayers');list.replaceChildren();
@@ -469,23 +529,18 @@ function renderNextMatchPanel(){
  $('rematchRequest').disabled=!result||!!request||!canRequest;
  $('nextGame').hidden=!host;
  $('nextGame').disabled=!host;
- const canVote=!!request&&voters.has(networkPlayerId)&&!approved.has(networkPlayerId);
+ const canVote=!!request&&voters.has(networkPlayerId)&&!approved.has(networkPlayerId)&&
+  (seconds===null||seconds>0);
  $('rematchAccept').hidden=!canVote;
  $('rematchDecline').hidden=!canVote;
+ $('rematchAccept').disabled=!!pending;
+ $('rematchDecline').disabled=!!pending;
  renderGlobalRematchDock();
 }
 $('rematchRequest').onclick=()=>serverLink?.send({type:serverLink?.quickMatchMode?'quickRematchRequest':'rematchRequest'});
 $('nextGame').onclick=()=>serverLink?.send({type:'newGame'});
-$('rematchAccept').onclick=()=>{
- const link=serverLink;
- const request=link?.quickMatchMode?link.quickRematch:link?.roomState?.rematch;
- if(link&&request&&Number.isSafeInteger(request.id))link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:true});
-};
-$('rematchDecline').onclick=()=>{
- const link=serverLink;
- const request=link?.quickMatchMode?link.quickRematch:link?.roomState?.rematch;
- if(link&&request&&Number.isSafeInteger(request.id))link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:false});
-};
+$('rematchAccept').onclick=()=>submitNativeRematchVote(true);
+$('rematchDecline').onclick=()=>submitNativeRematchVote(false);
 // A rematch can be proposed for only 45 seconds. If a human is reading My
 // Games or Home when the server vote arrives, the native menu is invisible.
 // Mirror the existing consent instead of constructing a second voting path.
@@ -540,8 +595,18 @@ function renderGlobalRematchDock(){
   (state.approved?' · Waiting for remaining players.':
    ' · Accept or decline before the server deadline.');
  if(globalRematchStatus.textContent!==text)globalRematchStatus.textContent=text;
+ const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
+ const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
+  nativeRematchVoteNotice.message:'';
+ if(pending||notice){
+  const feedback=pending?'Vote sent · waiting for server receipt. ':notice+' ';
+  if(!globalRematchStatus.textContent.startsWith(feedback))
+   globalRematchStatus.textContent=feedback+text;
+ }
  globalRematchAccept.hidden=state.approved;
  globalRematchDecline.hidden=state.approved;
+ globalRematchAccept.disabled=!!pending;
+ globalRematchDecline.disabled=!!pending;
 }
 function sendGlobalRematchVote(accept){
  const state=currentRematchVote();
@@ -552,7 +617,7 @@ function sendGlobalRematchVote(accept){
  const original=$(accept?'rematchAccept':'rematchDecline');
  if(original.hidden||original.disabled)return;
  original.click();
- globalRematchStatus.textContent='Vote sent · waiting for the server to update the player count.';
+ renderGlobalRematchDock();
 }
 globalRematchAccept.addEventListener('click',()=>sendGlobalRematchVote(true));
 globalRematchDecline.addEventListener('click',()=>sendGlobalRematchVote(false));
