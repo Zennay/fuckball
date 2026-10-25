@@ -320,10 +320,14 @@ self.addEventListener('fetch',event=>{
   event.respondWith((async()=>{
    try{
     const response=await fetch(request);
-    // The install snapshot is atomic. Replacing only the cached HTML on a
-    // routine online visit can strand a player offline with new script tags
-    // and old missing assets before the replacement worker is installed.
-    // Leave the installed shell immutable until the next verified install.
+    // Only the public query-free home may fall back to the installed solo
+    // game during a temporary origin outage. Never render an offline copy
+    // as though it were a live online room, invitation or account page.
+    if(response.status>=500&&url.pathname===root&&!url.search){
+     const cached=await (await caches.open(CACHE)).match(shell);
+     if(cached)return cached;
+    }
+    // The install snapshot is immutable until a complete verified update.
     return response;
    }catch{
     if(url.pathname===root&&!url.search){
