@@ -183,7 +183,9 @@
  window.addEventListener('focus',syncMatchPower);
  window.addEventListener('blur',syncMatchPower);
  window.addEventListener('fuckball:native-session-state',syncMatchPower);
- for(const id of ['pauseButton','startButton','tabHome','tabPlay','tabGames'])
+ // The legacy minimal runtime has Home/Play but no standalone My Games tab.
+ // Cross-view release remains covered by the eligibility refresh tick.
+ for(const id of ['pauseButton','startButton','tabHome','tabPlay'])
   document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(syncMatchPower));
  render();
 })();
