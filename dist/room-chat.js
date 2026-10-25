@@ -39,28 +39,93 @@
  sendFeedback.setAttribute('aria-live','polite');
  sendFeedback.hidden=true;
  chatForm?.append(sendFeedback);
- let onlineDraftRoom=null,privateDraft=false;
- function preserveDraftAudience(){
+ // One unsent draft remains scoped to its original room and audience.
+ // Data stays on this device in memory; only the native handler sends.
+ let onlineDraftRoom=null,privateDraft=false,localDraft=false;
+ let submittingNativeChat=false,closingNativeChat=false;
+ const draftControls=document.createElement('div');
+ draftControls.className='native-chat-draft-actions';draftControls.hidden=true;
+ const draftInfo=document.createElement('p');
+ draftInfo.className='native-chat-draft-info';
+ draftInfo.setAttribute('role','status');
+ const discardDraft=document.createElement('button');
+ discardDraft.type='button';discardDraft.textContent='Discard unsent draft';
+ discardDraft.setAttribute('aria-label','Discard unsent chat draft on this device');
+ draftControls.append(draftInfo,discardDraft);
+ chatForm?.append(draftControls);
+ function clearDraftScope(){onlineDraftRoom=null;privateDraft=false;localDraft=false;}
+ function updateDraftControls(){
+  const hasText=!!chatInput?.value.trim();
+  draftControls.hidden=!hasText;
+  if(!hasText){clearDraftScope();return;}
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!onlineDraftRoom&&link?.room)onlineDraftRoom=link.room;
+  const differentRoom=!!onlineDraftRoom&&link?.room!==onlineDraftRoom;
+  const differentAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const wrongOrigin=localDraft&&!!link?.room;
+  const scope=privateDraft?'private TEAM draft':
+   localDraft?'local-game draft':'online room draft';
+  draftInfo.textContent=differentRoom||differentAudience||wrongOrigin?
+   'Unsent '+scope+' preserved. It cannot be sent to another room or audience. Discard it to start fresh.':
+   'Unsent '+scope+' · preserved if you close chat. Not sent.';
+ }
+ function preserveDraftAudience(){
+  if(!chatInput?.value.trim())return;
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!onlineDraftRoom&&!localDraft){
+   if(link?.room)onlineDraftRoom=link.room;
+   else localDraft=true;
+  }
   // Never let a previously team-only draft silently turn public if the
   // native channel picker resets while a player reconnects or changes teams.
   if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
    privateDraft=true;
  }
  chatInput?.addEventListener('focus',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  preserveDraftAudience();sendFeedback.hidden=true;updateDraftControls();
  });
  chatInput?.addEventListener('input',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  if(!chatInput.value.trim())clearDraftScope();
+  else preserveDraftAudience();
+  sendFeedback.hidden=true;updateDraftControls();
  });
  chatForm?.addEventListener('change',()=>{
   if(chatInput?.value.trim())preserveDraftAudience();
+  updateDraftControls();
  });
- chatForm?.addEventListener('focusout',event=>{
-  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget)){
-   onlineDraftRoom=null;privateDraft=false;
+ discardDraft.addEventListener('click',()=>{
+  if(chatInput)chatInput.value='';
+  clearDraftScope();sendFeedback.hidden=true;
+  updateDraftControls();chatInput?.focus({preventScroll:true});
+ });
+ const nativeCloseChat=typeof closeChat==='function'?closeChat:null;
+ if(nativeCloseChat)closeChat=function(...args){
+  const text=chatInput?.value||'';
+  const preserve=!submittingNativeChat&&!!text.trim();
+  if(preserve)preserveDraftAudience();
+  closingNativeChat=true;
+  let result;
+  try{result=nativeCloseChat.apply(this,args);}
+  finally{closingNativeChat=false;}
+  if(preserve&&chatInput)chatInput.value=text;
+  else if(!preserve)clearDraftScope();
+  updateDraftControls();
+  return result;
+ };
+ const nativeSubmit=chatForm?.onsubmit;
+ if(typeof nativeSubmit==='function')chatForm.onsubmit=function(event){
+  submittingNativeChat=true;
+  try{return nativeSubmit.call(this,event);}
+  finally{
+   submittingNativeChat=false;
+   if(!chatInput?.value.trim())clearDraftScope();
+   updateDraftControls();
   }
+ };
+ window.addEventListener('fuckball:native-session-state',updateDraftControls);
+ chatForm?.addEventListener('focusout',event=>{
+  // Focus loss during Close is not permission to make a team draft public.
+  if(!closingNativeChat&&chatForm.hidden&&!chatForm.contains(event.relatedTarget)
+     &&!chatInput?.value.trim())clearDraftScope();
  });
  chatForm?.addEventListener('submit',event=>{
   const link=typeof serverLink!=='undefined'?serverLink:null;
@@ -69,12 +134,14 @@
   const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
   const blocked=link&&(!link.room||link.ws?.readyState!==1)||
     !!onlineDraftRoom&&!link?.room;
+  const wrongOrigin=localDraft&&!!link?.room;
   const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!blocked&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
   event.preventDefault();event.stopImmediatePropagation();
   sendFeedback.textContent=wrongRoom?
-   'This draft was written for another room. Close chat and start a new message before sending to these players.':
+   'This draft belongs to another room. Discard it explicitly before sending to these players.':
+   wrongOrigin?'This local-game draft cannot be sent to an online room. Discard it to start fresh.':
    blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
    wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
    'The room host muted your chat. Your unsent draft is still here.';
