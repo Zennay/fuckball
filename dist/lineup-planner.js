@@ -25,7 +25,7 @@
  const admin=document.querySelector('.room-admin-panel');
  if(admin?.parentElement===pane)admin.insertAdjacentElement('afterend',section);
  else pane.append(section);
- let base=null,plan=new Map(),dirty=false,pending=null;
+ let base=null,plan=new Map(),dirty=false,pending=null,refreshRequired=false;
  // Team moves remain asynchronous server operations. The host must see the
  // authoritative roster update, not a local "request sent" success claim.
  const RECEIPT_MS=8000;
@@ -75,7 +75,10 @@
   if(pending){
    const final=pending.proposed.every(([id,team])=>
     latest.all.some(p=>p.id===id&&p.team.id===team));
-   if(final&&latest.authoritativeLobby&&serverLink?.ws?.readyState===1){
+   if(final&&latest.authoritativeLobby&&serverLink?.ws?.readyState===1&&
+      latest.session?.roomState!==pending.initialRoomState){
+    // Matching local actor state is not enough: require a fresh native room
+    // snapshot after Apply, not a cached roster already in browser memory.
     pending=null;status.textContent='Confirmed: the live server roster now reflects every requested team move.';
     paint(true);return;
    }
@@ -85,7 +88,7 @@
      pending.proposed.length+' team moves. The planner has not claimed success.';
     return;
    }
-   pending=null;refresh.disabled=false;apply.disabled=true;
+   pending=null;refreshRequired=true;refresh.disabled=false;apply.disabled=true;
    status.textContent='No complete server roster receipt arrived. Some moves may have applied. Refresh before retrying.';
   }
   if(latest.signature!==base.signature){
@@ -99,12 +102,13 @@
   // A stale local started/gameState flag is not authoritative online.
   const lobby=latest.authoritativeLobby;
   const online=latest.session?.ws?.readyState===1;
-  apply.disabled=!valid||!lobby||!online||changed===0;
+  apply.disabled=refreshRequired||!valid||!lobby||!online||changed===0;
   summary.textContent='Red '+counts.red+'/4 · Blue '+counts.blue+'/4 · Bench / spectators '+
    counts.bench+' · '+changed+' proposed changes. '+(!valid?
     'Too many active players; move someone to bench first.':
     !lobby?'Match is running; lineup changes require the pregame lobby.':
     !online?'Wait for the room server connection.':
+    refreshRequired?'Receipt unresolved. Read current room before any new Apply.':
     changed?'Ready to request host-authorized changes.':'Choose a different team for a player.');
  }
  function paint(confirmed=false){
@@ -112,7 +116,7 @@
   if(pending)return;
   section.hidden=!!document.getElementById('matchView').hidden;
   rowList.replaceChildren();
-  base=current();plan=new Map(base.humans.map(p=>[p.id,p.team.id]));dirty=false;
+  base=current();plan=new Map(base.humans.map(p=>[p.id,p.team.id]));dirty=false;refreshRequired=false;
   refresh.disabled=false;apply.disabled=true;
   if(!base.humans.length){
    status.textContent='No human players in this room yet.';updatePreview();return;
@@ -139,7 +143,7 @@
  }
  refresh.onclick=paint;
  apply.onclick=()=>{
-  if(!permitted()||!base||!dirty||pending)return;
+  if(!permitted()||!base||!dirty||pending||refreshRequired)return;
   if(serverLink?.roomState?.started!==false){
    status.textContent='This action is unavailable after match start; use normal authorized substitutions.';
    return;
@@ -172,8 +176,8 @@
     serverLink.send({type:'team',id:p.id,team:0});
    for(const p of moves)if(plan.get(p.id)!==0)
     serverLink.send({type:'team',id:p.id,team:plan.get(p.id)});
-   pending={session:serverLink,room:serverLink.room,proposed:moves.map(p=>[p.id,plan.get(p.id)]),
-    until:Date.now()+RECEIPT_MS};
+   pending={session:serverLink,room:serverLink.room,initialRoomState:serverLink.roomState,
+    proposed:moves.map(p=>[p.id,plan.get(p.id)]),until:Date.now()+RECEIPT_MS};
    apply.disabled=true;refresh.disabled=true;
    status.textContent='Requests sent. Awaiting the native server roster receipt; no team movement is assumed.';
    updatePreview();
