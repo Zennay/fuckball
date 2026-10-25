@@ -44,7 +44,10 @@
   if(typeof stadium!=='string'||stadium.length>48)return null;
   const focus=typeof entry.focus==='string'&&Object.hasOwn(focusOptions,entry.focus)?entry.focus:'none';
   const note=typeof entry.note==='string'?entry.note.slice(0,240):'';
-  return {at,mode,stadium,side,red,blue,seconds,focus,note};
+  // The legacy journal had no evidence of a real native opponent. Preserve
+  // its historical rows, but never upgrade them into proven AI game receipts.
+  return {at,mode,stadium,side,red,blue,seconds,focus,note,
+   aiOpponent:entry.aiOpponent===true};
  }
  function read(){
   try{
@@ -90,7 +93,9 @@
    const body=document.createElement('div');body.className='local-journal-match';
    const name=document.createElement('strong');name.textContent=modes[e.mode]+' · '+e.red+' – '+e.blue;
    const meta=document.createElement('span');
-   meta.textContent='You: '+(e.side===1?'Red':'Blue')+' · '+(e.stadium||'Custom field')+' · '+duration(e)+' · '+new Date(e.at).toLocaleString();
+   meta.textContent='You: '+(e.side===1?'Red':'Blue')+' · '+(e.stadium||'Custom field')+
+    ' · '+duration(e)+' · '+new Date(e.at).toLocaleString()+
+    (e.aiOpponent?' · Native opposing AI verified':' · Legacy opponent not verified');
    const coaching=document.createElement('details');coaching.className='local-journal-coaching';
    const summary=document.createElement('summary');
    summary.textContent='Personal notes · '+focusOptions[e.focus]+(e.note?' · saved':'');
@@ -143,12 +148,20 @@
  render();
  let observation=null;
  function eligible(){
-  if(replay||peerConnected||serverLink?.room||!room||!started)return null;
+  if(replay||peerConnected||serverLink||!room||!started)return null;
   const mode=document.getElementById('mode')?.value;
   if(!Object.hasOwn(modes,mode)||mode==='watch'||mode==='local'||botIds.has(1))return null;
   const human=room.state?.players?.find?.(p=>p.id===1);
   if(!human||![1,2].includes(human.team?.id)||!human.disc)return null;
-  return {mode,side:human.team.id};
+  // Only a native completed match with exactly one human on the field and a
+  // physically present opposing AI can count as local human-vs-AI. The mode
+  // selector alone is not proof: couch teams, substituted bots, empty rooms
+  // and queued online joins must never become Academy solo-win evidence.
+  const others=room.state.players.filter(p=>p.id!==1&&
+   [1,2].includes(p.team?.id));
+  if(!others.length||!others.every(p=>botIds.has(p.id))||
+     !others.some(p=>p.team.id!==human.team.id&&p.disc))return null;
+  return {mode,side:human.team.id,aiOpponent:true};
  }
  // No new events, network calls or game-state mutations: inspect real frames
  // only. After a native score/time limit ends, gameState becomes null.
@@ -179,9 +192,11 @@
       observation.side!==player.side||frame<observation.frame||
       time+0.5<observation.seconds||red<observation.red||blue<observation.blue){
     observation={room,mode:player.mode,side:player.side,
+     aiOpponent:player.aiOpponent,
      stadium:String(room.state?.stadium?.name||'').slice(0,48),
      frame,red,blue,seconds:time};
-   }else Object.assign(observation,{frame,red,blue,seconds:time});
+   }else Object.assign(observation,{frame,red,blue,seconds:time,
+    aiOpponent:player.aiOpponent});
    return;
   }
  }
