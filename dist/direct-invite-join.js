@@ -209,18 +209,24 @@
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
+  const request=++imageEpoch;
   imageFile.disabled=true;
   try{
    await readyDecoder();
+   if(request!==imageEpoch||home.hidden||document.hidden)return;
    const bitmap=await createImageBitmap(file);
    try{
     if(bitmap.width>4096||bitmap.height>4096)throw Error('Image dimensions exceed 4096 pixels.');
+    if(request!==imageEpoch||home.hidden||document.hidden)return;
     const found=await decodeQR(bitmap);
+    if(request!==imageEpoch||home.hidden||document.hidden)return;
     if(!found?.some(item=>typeof item.rawValue==='string'&&acceptScanned(item.rawValue)))
      status.textContent='No valid same-site room QR found. Paste a link or use another image.';
    }finally{bitmap.close();}
-  }catch(error){status.textContent=error?.message||'Could not read QR from this image.';}
-  finally{imageFile.disabled=false;}
+  }catch(error){
+   if(request===imageEpoch&&!home.hidden&&!document.hidden)
+    status.textContent=error?.message||'Could not read QR from this image.';
+  }finally{imageFile.disabled=false;}
  };
  function leaveInviteView(){
   if(!home.hidden&&!document.hidden)return;
