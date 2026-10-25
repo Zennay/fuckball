@@ -36,7 +36,12 @@
  const clearJourney=document.createElement('button');clearJourney.type='button';
  clearJourney.textContent='Clear attempt history';
  journeyActions.append(exportJourney,clearJourney);
- journey.append(journeyTitle,journeyNote,journeyRows,journeyActions);
+ const progressSync=document.createElement('p');
+ progressSync.className='goal-rush-sync';
+ progressSync.setAttribute('role','status');
+ progressSync.setAttribute('aria-live','polite');
+ progressSync.textContent='Your attempts and personal bests remain on this device.';
+ journey.append(journeyTitle,journeyNote,progressSync,journeyRows,journeyActions);
  const pausedDrill=document.createElement('aside');
  pausedDrill.className='goal-rush-return';pausedDrill.hidden=true;
  pausedDrill.setAttribute('role','region');
@@ -64,6 +69,21 @@
  hud.append(status,clock,progress,stop,restart,dismiss);
  match.append(hud);
  let session=null,parked=false;
+ // Coordinate writes to the existing progress keys across participating
+ // tabs without changing their schema. All existing academy/vault/export
+ // readers continue to see the same 20-entry Goal Rush array.
+ const PROGRESS_LOCK='fuckball.goal-rush.progress.v1';
+ let progressQueue=Promise.resolve();
+ function queueProgress(write){
+  const work=()=>{
+   const locks=navigator?.locks;
+   return locks&&typeof locks.request==='function'?
+    locks.request(PROGRESS_LOCK,{mode:'exclusive'},write):write();
+  };
+  const task=progressQueue.catch(()=>{}).then(work);
+  progressQueue=task.catch(()=>{});
+  return task;
+ }
  function updateReturn(){
   pausedDrill.hidden=!session||!parked||document.hidden||!match.hidden;
   if(!pausedDrill.hidden){
@@ -79,12 +99,21 @@
   // Never resume automatically. Existing local-focus controls own that action.
  };
  function readBest(){
+  let best={};
   try{
    const parsed=JSON.parse(localStorage.getItem(STORAGE)||'{}');
-   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))return{};
-   return Object.fromEntries(Object.entries(parsed).filter(([k,v])=>
-    /^(60|120|180)$/.test(k)&&Number.isSafeInteger(v)&&v>=0&&v<=999));
-  }catch{return{};}
+   if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))
+    best=Object.fromEntries(Object.entries(parsed).filter(([k,v])=>
+     /^(60|120|180)$/.test(k)&&Number.isSafeInteger(v)&&v>=0&&v<=999));
+  }catch{}
+  // A completed attempt is durable evidence of an offline personal best,
+  // even if a separate best-score write failed or a second tab restored
+  // an older aggregate snapshot. Never treat attempts as ranked results.
+  for(const a of readAttempts()){
+   const k=String(a.duration);
+   if(!Number.isSafeInteger(best[k])||a.goals>best[k])best[k]=a.goals;
+  }
+  return best;
  }
  function readAttempts(){
   try{
@@ -117,29 +146,66 @@
   }
  }
  function saveAttempt(s){
+  // Copy exactly the finished, genuine local match result; do not hold an
+  // active game reference while waiting for browser storage coordination.
   const attempt={duration:s.duration,target:s.target,goals:s.goals,
    elapsed:Math.min(180,Math.max(0,Math.ceil(s.frames/60))),
    completed:s.goals>=s.target,at:Date.now()};
-  const entries=[attempt,...readAttempts()].slice(0,20);
-  try{localStorage.setItem(ATTEMPTS,JSON.stringify(entries));}catch{}
-  renderAttempts();
+  progressSync.textContent='Saving completed local attempt…';
+  queueProgress(()=>{
+   // Read inside the cross-tab lock, not when the match ended. Another tab
+   // may have completed a separate legitimate drill while this one waited.
+   const entries=[attempt,...readAttempts()].slice(0,20);
+   localStorage.setItem(ATTEMPTS,JSON.stringify(entries));
+   const best=readBest();
+   const k=String(attempt.duration);
+   if(best[k]===undefined||attempt.goals>best[k])best[k]=attempt.goals;
+   localStorage.setItem(STORAGE,JSON.stringify(best));
+  }).then(()=>{
+   renderAttempts();updateBest();
+   progressSync.textContent='Attempt saved on this device. Other open tabs can see the updated history.';
+  }).catch(()=>{
+   renderAttempts();updateBest();
+   progressSync.textContent='This attempt could not be saved. Check available browser storage before closing this tab.';
+  });
  }
  exportJourney.onclick=()=>{
-  const attempts=readAttempts();if(!attempts.length)return;
-  const output={format:'fuckball-local-goal-rush',version:1,
-   source:'unverified-local-practice',exportedAt:new Date().toISOString(),attempts};
-  const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob),anchor=document.createElement('a');
-  anchor.href=url;anchor.download='fuckball-goal-rush-'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.append(anchor);anchor.click();anchor.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  // Export after any in-flight save/clear, so the user never receives a
+  // silently stale snapshot of a drill that just ended in this tab.
+  progressQueue.then(()=>{
+   const attempts=readAttempts();
+   if(!attempts.length){progressSync.textContent='There are no saved attempts to export.';return;}
+   const output={format:'fuckball-local-goal-rush',version:1,
+    source:'unverified-local-practice',exportedAt:new Date().toISOString(),attempts};
+   const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json'});
+   const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+   anchor.href=url;anchor.download='fuckball-goal-rush-'+new Date().toISOString().slice(0,10)+'.json';
+   document.body.append(anchor);anchor.click();anchor.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }).catch(()=>{progressSync.textContent='Could not export progress from browser storage.';});
  };
  clearJourney.onclick=()=>{
   if(!confirm('Clear all Goal Rush attempt history from this device? Personal bests will remain.'))return;
-  try{localStorage.removeItem(ATTEMPTS);}catch{}
-  renderAttempts();
+  progressSync.textContent='Clearing saved attempts…';
+  queueProgress(()=>localStorage.removeItem(ATTEMPTS)).then(()=>{
+   renderAttempts();updateBest();
+   progressSync.textContent='Attempt history cleared on this device. Personal bests remain.';
+  }).catch(()=>{
+   progressSync.textContent='Could not clear attempt history. Check browser storage permissions.';
+  });
  };
  renderAttempts();
+ window.addEventListener('storage',event=>{
+  // Another tab can finish/clear an attempt or update a personal best.
+  // Refresh the actual canonical keys without manufacturing local records.
+  if(event.storageArea!==localStorage)return;
+  if(event.key===ATTEMPTS){
+   renderAttempts();updateBest();
+   progressSync.textContent=event.newValue===null?
+    'Attempt history was cleared in another tab.':
+    'Practice progress updated in another tab.';
+  }else if(event.key===STORAGE)updateBest();
+ });
  function updateBest(){
   const best=readBest(),time=duration.value;
   history.textContent=Number.isSafeInteger(best[time])?
@@ -157,15 +223,6 @@
   const team=player?.team?.id;
   return [1,2].includes(team)?team:null;
  }
- function saveRecord(seconds,goals){
-  if(![60,120,180].includes(seconds)||!Number.isSafeInteger(goals)||goals<0||goals>999)return;
-  const best=readBest();
-  if(best[seconds]===undefined||goals>best[seconds]){
-   best[seconds]=goals;
-   try{localStorage.setItem(STORAGE,JSON.stringify(best));}catch{}
-  }
-  updateBest();
- }
  function updateHUD(s){
   const remain=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
   clock.textContent=remain+'s left · '+s.goals+' / '+s.target+' goals';
@@ -176,7 +233,7 @@
  function finish(message,save=true){
   const s=session;if(!s)return;
   session=null;parked=false;updateReturn();
-  if(save){saveRecord(s.duration,s.goals);saveAttempt(s);}
+  if(save)saveAttempt(s);
   status.textContent=message;
   clock.textContent=s.goals+' goal(s) in '+Math.ceil(s.frames/60)+'s of active local play';
   progress.textContent=s.goals>=s.target?'Target achieved!': 'Target not reached. Continue practicing anytime.';
