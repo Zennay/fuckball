@@ -341,10 +341,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   }
   if(Number.isSafeInteger(d.timeLimit)&&d.timeLimit>=0&&d.timeLimit<=99)
    $('timeLimit').value=String(d.timeLimit);
-  updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();}
+  updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();
+  // Update the contextual room strip from actual native room status.
+  notifyNativeSessionView();}
  else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){
-  showRejectedRoomJoin(link,roomId,'Your former player slot expired. Join again to get a new slot.');
+   showRejectedRoomJoin(link,roomId,'Your former player slot expired. Join again to get a new slot.');
  }
+
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     (d.message.startsWith('This room is not accepting new spectators or bench participants.')||
      d.message.startsWith('This room is full.')||
@@ -725,11 +728,106 @@ globalRematchTicker?.unref?.();
 for(const id of ['tabHome','tabPlay'])
  $(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalRematchDock));
 
+// A bench player may be browsing Home / My Games when the native host
+// proposes a substitution. The only consent source is still the server
+// pendingSubs request; this mirror forwards explicit clicks to native buttons.
+const globalSubConsent=document.createElement('aside');
+globalSubConsent.className='native-sub-consent-dock';
+globalSubConsent.hidden=true;
+globalSubConsent.setAttribute('role','region');
+globalSubConsent.setAttribute('aria-label','Your pending human substitution');
+const globalSubCopy=document.createElement('div');
+globalSubCopy.className='native-sub-consent-copy';
+const globalSubTitle=document.createElement('strong');
+globalSubTitle.textContent='YOUR TEAM NEEDS A DECISION';
+const globalSubStatus=document.createElement('p');
+globalSubStatus.setAttribute('role','status');
+globalSubStatus.setAttribute('aria-live','polite');
+globalSubCopy.append(globalSubTitle,globalSubStatus);
+const globalSubActions=document.createElement('div');
+globalSubActions.className='native-sub-consent-actions';
+const globalSubAccept=document.createElement('button');
+globalSubAccept.type='button';globalSubAccept.className='primary';
+globalSubAccept.textContent='✓ Accept & enter';
+const globalSubDecline=document.createElement('button');
+globalSubDecline.type='button';globalSubDecline.textContent='Decline';
+const globalSubView=document.createElement('button');
+globalSubView.type='button';globalSubView.textContent='View team request';
+globalSubActions.append(globalSubAccept,globalSubDecline,globalSubView);
+globalSubConsent.append(globalSubCopy,globalSubActions);
+document.body.append(globalSubConsent);
+let subConsentReceipt=null;
+function currentSubConsent(){
+ const link=serverLink,state=link?.roomState;
+ if(!link?.room||!state||!Array.isArray(state.pendingSubs))return null;
+ const pending=state.pendingSubs.find(p=>p&&p.inId===networkPlayerId&&
+   p.accepted!==true&&Number.isSafeInteger(p.requestId)&&
+   [1,2].includes(p.team)&&Number.isSafeInteger(p.outId));
+ return pending?{link,pending}:null;
+}
+function renderGlobalSubConsent(){
+ const request=currentSubConsent();
+ if(!request)subConsentReceipt=null;
+ else if(subConsentReceipt&&(
+  subConsentReceipt.link!==request.link||
+  subConsentReceipt.id!==request.pending.requestId||
+  Date.now()-subConsentReceipt.sentAt>=2400))subConsentReceipt=null;
+ const menuVisible=!$('matchView').hidden&&!$('pauseMenu').hidden&&
+  !$('subPanel').hidden&&!$('subConsent').hidden;
+ globalSubConsent.hidden=!request||menuVisible;
+ if(globalSubConsent.hidden)return;
+ const p=request.pending;
+ const roster=Array.isArray(room?.state?.players)?room.state.players:[];
+ const leaving=roster.find(player=>player.id===p.outId);
+ const playerName=leaving?.name||'Player '+p.outId;
+ const waiting=!!subConsentReceipt;
+ const team=p.team===1?'Red':'Blue';
+ globalSubTitle.textContent=waiting?'DECISION SENT · WAITING FOR SERVER':
+  'YOUR '+team.toUpperCase()+' TEAM NEEDS YOU';
+ const description='Enter '+team+' for '+playerName+
+  '? The substitution happens only when the native room approves and applies it.'+
+  (waiting?' Your answer was sent; waiting for the server to update the room.':'');
+ if(globalSubStatus.textContent!==description)globalSubStatus.textContent=description;
+ globalSubAccept.disabled=waiting||request.link.ws?.readyState!==1;
+ globalSubDecline.disabled=waiting||request.link.ws?.readyState!==1;
+}
+function sendGlobalSubConsent(accept){
+ const request=currentSubConsent();
+ if(!request||globalSubConsent.hidden||subConsentReceipt||
+    request.link.ws?.readyState!==1)return;
+ // Use native handlers: they read the current server-owned request ID,
+ // team and player slot immediately before sending.
+ renderSubPanel();
+ const original=$(accept?'subApprove':'subDecline');
+ if(original.hidden||original.disabled)return;
+ subConsentReceipt={link:request.link,id:request.pending.requestId,sentAt:Date.now()};
+ original.click();
+ renderGlobalSubConsent();
+}
+globalSubAccept.addEventListener('click',()=>sendGlobalSubConsent(true));
+globalSubDecline.addEventListener('click',()=>sendGlobalSubConsent(false));
+globalSubView.addEventListener('click',()=>{
+ if(!currentSubConsent())return;
+ $('tabPlay').click();
+ if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+ renderSubPanel();
+ const native=$('subConsent');
+ native.scrollIntoView?.({behavior:'auto',block:'center'});
+ const accept=$('subApprove');
+ if(!accept.hidden&&!accept.disabled)accept.focus?.({preventScroll:true});
+ else native.focus?.({preventScroll:true});
+ renderGlobalSubConsent();
+});
+const globalSubTicker=setInterval(renderGlobalSubConsent,950);
+globalSubTicker?.unref?.();
+for(const id of ['tabHome','tabPlay','tabReplay'])
+ document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalSubConsent));
+
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
  renderNextMatchPanel();
- if(panel.hidden)return;
+ if(panel.hidden){renderGlobalSubConsent();return;}
  const players=(room?.state?.players||[]).filter(p=>Number.isSafeInteger(p.id)&&!botIds.has(p.id));
  const nameOf=id=>players.find(p=>p.id===id)?.name||'Player '+id;
  const team=Number($('subTeam').value)===2?2:1;
@@ -768,6 +866,7 @@ function renderSubPanel(){
  $('subConsent').hidden=!yourRequest;
  $('subConsentText').textContent=yourRequest?
   'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?':'';
+ renderGlobalSubConsent();
 }
 const baseOnlineRefreshMenu=refreshMenu;
 refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};

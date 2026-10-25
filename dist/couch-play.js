@@ -28,7 +28,10 @@
  configure.append(source);
  const status=node('p','Connect two controllers, or use a keyboard for either player.','couch-play-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- controls.append(launch,coop2,coop3,coop4,rivals,rivals3,rivals4,configure);
+ const bindP2=node('button','↻ Bind / replace P2 controller');
+ bindP2.type='button';
+ bindP2.setAttribute('aria-label','Explicitly bind current player two gamepad');
+ controls.append(launch,coop2,coop3,coop4,rivals,rivals3,rivals4,configure,bindP2);
  // Apply match rules only on an explicitly approved native offline kickoff.
  // The original native score/time inputs remain the authoritative source.
  const rulePresets=Object.freeze({
@@ -138,19 +141,23 @@
  // Only the native kickoff event confirms which rules the new room captured.
  // Any other local launcher clears this receipt, so it never mislabels a match.
  window.addEventListener('fuckball:local-match-kickoff',()=>{
+  seatTwoSession=true;
+  const pad=candidate();
+  seatTwoLock=pad?{index:pad.index,id:pad.id}:null;
   if(pendingKickoffRules)kickoffObserved=true;
   liveRuleHint.textContent=pendingKickoffRules||'';
   liveRuleHint.hidden=!pendingKickoffRules;
  });
  let chosen='auto',availableSignature='',lastInput='0:0:false';
+ let seatTwoLock=null,seatTwoSession=false;
  const neutral=()=>({x:0,y:0,kick:false});
- const isLocal=()=>typeof started!=='undefined'&&started&&
+ const activeCouchSession=()=>typeof started!=='undefined'&&started&&
   typeof replay!=='undefined'&&!replay&&
   typeof serverLink!=='undefined'&&!serverLink&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
-  ['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value)&&
-  document.getElementById('joinScreen')?.hidden!==false&&
-  !pitch.hidden;
+  ['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
+ const isLocal=()=>activeCouchSession()&&
+  document.getElementById('joinScreen')?.hidden!==false&&!pitch.hidden;
  function pads(){
   if(typeof navigator.getGamepads!=='function')return [];
   try{return Array.from(navigator.getGamepads()).filter(p=>p?.connected&&
@@ -161,7 +168,7 @@
   const index=window.fuckballGamepad?.sourceIndex?.();
   return Number.isSafeInteger(index)?index:null;
  }
- function selected(){
+ function candidate(){
   if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value))return null;
   const all=pads(),first=playerOneIndex();
   if(chosen!=='auto'){
@@ -171,6 +178,27 @@
   }
   return all.find(p=>p.index!==first)||null;
  }
+ // Reuse of the same Gamepad API port is not proof that the same human returned.
+ function selected(){
+  if(!seatTwoSession||!activeCouchSession())return candidate();
+  if(!seatTwoLock)return null;
+  const connected=pads().find(p=>p.index===seatTwoLock.index&&p.id===seatTwoLock.id);
+  return connected&&connected.index!==playerOneIndex()?connected:null;
+ }
+ function bindSeatTwo(){
+  const pad=candidate();
+  if(!pad){
+   status.textContent='No separate standard P2 controller available. Keyboard controls still work.';
+   return false;
+  }
+  seatTwoLock={index:pad.index,id:pad.id};
+  seatTwoSession=true;lastInput='';
+  if(isLocal()&&typeof refreshInput==='function')refreshInput();
+  status.textContent='Player 2 bound to controller port '+(pad.index+1)+
+   '. Disconnecting or replacing it makes P2 neutral until you rebind explicitly.';
+  return true;
+ }
+ const reservedPort=()=>seatTwoSession&&activeCouchSession()?seatTwoLock?.index??null:null;
  const held=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const axis=n=>Number.isFinite(n)&&Math.abs(n)>=.30?Math.sign(n):0;
@@ -209,6 +237,7 @@
    source.value=chosen;
   }
   paintBlueSources();
+  bindP2.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
   // Four-human rivals exclusively reserve both gamepads for Blue.
   source.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
   configure.title=source.disabled?'Red Player 2 uses arrows/Enter in four-human 2v2/3v3/4v4.':'Select a dedicated Player 2 controller.';
@@ -223,7 +252,8 @@
     'RED · P1 WASD/F · P2 arrows/Enter | BLUE · '+
      (window.fuckballCouchRivals?.describe?.()||'two gamepads required'):
     'P1 WASD/F or controller'+(first===null?'':' '+(first+1))+
-    ' · P2 arrows/Enter'+(p2?' or controller '+(p2.index+1):' · no separate controller');
+    ' · P2 arrows/Enter'+(p2?' or controller '+(p2.index+1):
+     seatTwoLock?' · P2 controller disconnected/replaced · rebind explicitly':' · no separate controller');
   }
  }
  source.onchange=()=>{
@@ -234,12 +264,15 @@
    availableSignature='';paint();return;
   }
   chosen=next;lastInput='0:0:false';availableSignature='';
+  if(seatTwoSession&&activeCouchSession())bindSeatTwo();
   paint();
   status.textContent=next==='auto'?
    'Player 2 will use the first connected controller not assigned to Player 1.':
    'Player 2 is assigned to controller port '+(Number(next)+1)+
     '. Disconnecting it will not reassign Player 1’s controller.';
  };
+ bindP2.onclick=()=>{if(seatTwoSession&&activeCouchSession())bindSeatTwo();else status.textContent=
+  'Choose a controller port and start local football; the game locks it at kickoff.';};
  function startMode(mode){
   if(typeof pendingSessionBlock==='function'){
    const reason=pendingSessionBlock();
@@ -335,7 +368,7 @@
   paint();
   requestAnimationFrame(frame);
  }
- window.fuckballCouchPad=Object.freeze({read});
+ window.fuckballCouchPad=Object.freeze({read,reservedPort});
  window.addEventListener('gamepadconnected',()=>{availableSignature='';});
  window.addEventListener('gamepaddisconnected',()=>{
   lastInput='0:0:false';availableSignature='';
