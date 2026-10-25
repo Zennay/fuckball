@@ -12,16 +12,16 @@
  const head=document.createElement('div');head.className='teamwork-panel-head';
  const heading=document.createElement('h2');heading.textContent='TEAMWORK TRAINING.';
  const intro=document.createElement('p');
- intro.textContent='Practise link-up play with your 4v4 AI team. Kick, then have a teammate kick before an opponent. The drill has no early match score/time cap, so the full active clock is possible; your ordinary settings remain. These are native kicks, not verified passes.';
+ intro.textContent='Build a genuine streak of different teammates kicking consecutively, beginning with your own kick. Opponent touches, repeated kicks by one player and stoppages reset the current streak. Total links and your best streak are tracked separately. This is unranked practice from native kicks, not verified completed passes.';
  head.append(heading,intro);
  const fields=document.createElement('div');fields.className='teamwork-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Active play time';
  const duration=document.createElement('select');duration.setAttribute('aria-label','Teamwork training duration');
  for(const sec of [120,180,300])duration.add(new Option(sec/60+' minutes',String(sec)));
  durationLabel.append(duration);
- const targetLabel=document.createElement('label');targetLabel.textContent='Link-up target';
+ const targetLabel=document.createElement('label');targetLabel.textContent='Consecutive link target';
  const target=document.createElement('select');target.setAttribute('aria-label','Target consecutive teammate kicks');
- for(const n of [2,4,6])target.add(new Option(n+' team links',String(n)));
+ for(const n of [2,4,6])target.add(new Option(n+' consecutive links',String(n)));
  target.value='4';targetLabel.append(target);
  const launch=document.createElement('button');launch.type='button';launch.className='primary';launch.textContent='▶ START TEAMWORK';
  fields.append(durationLabel,targetLabel,launch);
@@ -72,8 +72,8 @@
   const s=session;
   parkedDock.hidden=!s||!s.parked||!match.hidden||document.hidden;
   if(parkedDock.hidden)return;
-  parkedText.textContent='TEAMWORK PAUSED · '+s.links+' / '+s.target+
-   ' actual native teammate kicks · '+
+  parkedText.textContent='TEAMWORK PAUSED · best '+s.bestStreak+' / '+s.target+
+   ' consecutive native team links · '+
    Math.max(0,Math.ceil((s.duration*60-s.frames)/60))+
    's active time left. Return to the same pitch, then explicitly resume.';
  }
@@ -92,6 +92,8 @@
    return list.slice(0,MAX).filter(x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<Date.now()+86400000&&
     [120,180,300].includes(x.seconds)&&[2,4,6].includes(x.target)&&
     Number.isSafeInteger(x.links)&&x.links>=0&&x.links<=99&&
+    (x.bestStreak===undefined||Number.isSafeInteger(x.bestStreak)&&
+     x.bestStreak>=0&&x.bestStreak<=x.links)&&
     Number.isSafeInteger(x.attempts)&&x.attempts>=0&&x.attempts<=9999&&
     Number.isSafeInteger(x.elapsed)&&x.elapsed>=0&&x.elapsed<=300&&
     typeof x.completed==='boolean');
@@ -106,7 +108,10 @@
   }
   for(const a of list.slice(0,5)){
    const row=document.createElement('div');row.className='teamwork-record-row';
-   const left=document.createElement('b');left.textContent=a.links+' / '+a.target+' links · '+(a.completed?'GOAL MET':'TIME UP');
+   const left=document.createElement('b');left.textContent=Number.isSafeInteger(a.bestStreak)?
+    'Best '+a.bestStreak+' / '+a.target+' consecutive links · '+
+    (a.completed?'GOAL MET':'TIME UP'):
+    a.links+' total links · LEGACY SESSION (streak not measured)';
    const right=document.createElement('span');
    right.textContent=a.attempts+' human kick(s) · '+a.elapsed+'s active · '+new Date(a.at).toLocaleDateString();
    row.append(left,right);recordRows.append(row);
@@ -114,13 +119,14 @@
  }
  function save(s){
   const a={at:Date.now(),seconds:s.duration,target:s.target,links:s.links,
-   attempts:s.attempts,elapsed:Math.min(300,Math.ceil(s.frames/60)),completed:s.links>=s.target};
+   bestStreak:s.bestStreak,attempts:s.attempts,
+   elapsed:Math.min(300,Math.ceil(s.frames/60)),completed:s.bestStreak>=s.target};
   try{localStorage.setItem(KEY,JSON.stringify([a,...read()].slice(0,MAX)));}catch{status.textContent='Drill ended, but private history could not be saved.';}
   refresh();
  }
  exportButton.onclick=()=>{
   const list=read();if(!list.length)return;
-  const pack={format:'fuckball-local-teamwork-drill',version:1,source:'browser-private-native-kicks-not-verified-passes',exportedAt:new Date().toISOString(),attempts:list};
+  const pack={format:'fuckball-local-teamwork-drill',version:2,source:'browser-private-native-kicks-not-verified-passes',scoring:'best-consecutive-distinct-teammate-kicks-starting-with-human; legacy version 1 totals are not streaks',exportedAt:new Date().toISOString(),attempts:list};
   const url=URL.createObjectURL(new Blob([JSON.stringify(pack,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download='fuckball-teamwork-'+new Date().toISOString().slice(0,10)+'.json';
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
@@ -154,13 +160,16 @@
   const s=session;if(!s)return;
   if(!ownsOriginalDrill(s)){finish('TEAMWORK · MATCH CHANGED',false);return;}
   if(!s.parked){
+   // A resumed drill must earn a new real team sequence, not carry an old
+   // possession through a hidden view / missed physics events.
+   s.streak=0;s.lastKicker=null;s.lastKickKey=null;
    // Pause the genuine offline game via its existing input-safe control.
    // Never pause a native/peer match, and never automatically unpause.
    if(!paused)togglePause();
    s.parked=true;s.frame=room.currentFrameNo;
    status.textContent='Teamwork parked safely. Return to the original match and press Resume.';
   }
-  feedback.textContent='Parked · no teammate kicks or drill time are counted until you explicitly resume.';
+  feedback.textContent='Parked · current streak reset; best consecutive links retained. Resume the original pitch explicitly.';
   updateParkedDock();
  }
  function blocked(){
@@ -177,19 +186,22 @@
  function paint(){
   const s=session;if(!s)return;
   const remain=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
-  score.textContent=s.links+' / '+s.target+' links · '+remain+'s left';
-  feedback.textContent=s.pending?'Good kick — now get an AI teammate to touch the ball before an opponent.':
-   'Kick the ball, then keep it with your AI teammates. Native kicks only.';
+  score.textContent=s.streak+' / '+s.target+' consecutive · best '+s.bestStreak+
+   ' · '+remain+'s left';
+  feedback.textContent=s.lastKicker===1?'Good kick — have a different AI teammate kick next.':
+   s.lastKicker!==null?'Team possession: each *different* teammate kick extends the streak.':
+   'Kick to begin a new possession; opponent touches or repeated self-kicks reset the streak.';
   bar.setAttribute('aria-valuemax',String(s.target));
-  bar.setAttribute('aria-valuenow',String(Math.min(s.links,s.target)));
-  fill.style.width=Math.min(100,s.links/s.target*100)+'%';
+  bar.setAttribute('aria-valuenow',String(Math.min(s.streak,s.target)));
+  fill.style.width=Math.min(100,s.streak/s.target*100)+'%';
  }
  function finish(message,saveAttempt=true){
   const s=session;if(!s)return;
   session=null;updateParkedDock();
   if(saveAttempt)save(s);
   badge.textContent=message;
-  score.textContent=s.links+' real team link(s) · '+s.attempts+' human kicks';
+  score.textContent='Best '+s.bestStreak+' consecutive · '+s.links+
+   ' total links · '+s.attempts+' human kicks';
   feedback.textContent=saveAttempt?'Private offline practice only. A teammate follow-up is not proof of a completed pass.':
    'This attempt was interrupted and was not saved.';
   stop.hidden=true;restart.hidden=false;dismiss.hidden=false;
@@ -213,33 +225,55 @@
   const seconds=Number(duration.value),goal=Number(target.value);
   if(![120,180,300].includes(seconds)||![2,4,6].includes(goal))return;
   session={room,side,duration:seconds,target:goal,frame:room.currentFrameNo,
-   frames:0,links:0,attempts:0,pending:0,parked:false};
+   frames:0,links:0,streak:0,bestStreak:0,attempts:0,
+   lastKicker:null,lastKickKey:null,
+   redScore:room.gameState.redScore,blueScore:room.gameState.blueScore,parked:false};
   hud.hidden=false;status.textContent='Teamwork training running in local 4v4.';
   paint();
  };
  stop.onclick=()=>finish('TEAMWORK · STOPPED',false);
  restart.onclick=()=>launch.click(); // Retain the completed HUD until launch consent is granted.
  dismiss.onclick=quit;
+ // Count an actual succession of different players on the same side,
+ // anchored by a native human kick. Totals alone never satisfy the target.
+ // No model prediction, ball-proximity guess or simulated input is credited.
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=session,d=event.detail;
   if(!s||!d||s.parked||d.room!==s.room||document.hidden||ready()!==s.side||
-    !Number.isSafeInteger(d.frame)||d.frame<s.frame)return;
-  if(d.playerId===1&&d.team===s.side){
-   s.attempts++;s.pending=d.frame+1;paint();return;
+     !Number.isSafeInteger(d.frame)||d.frame<s.frame||
+     !Number.isSafeInteger(d.playerId)||d.playerId<1||
+     ![1,2].includes(d.team))return;
+  const key=d.frame+':'+d.playerId;
+  if(key===s.lastKickKey)return; // duplicate event != second native kick
+  s.lastKickKey=key;
+  if(d.team!==s.side){
+   s.streak=0;s.lastKicker=null;paint();return;
   }
-  if(d.team===s.side&&botIds.has(d.playerId)){
-   if(s.pending&&d.frame>=s.pending){s.links++;s.pending=0;paint();
-    if(s.links>=s.target)finish('TEAMWORK · TARGET MET');}
-   return;
+  if(d.playerId!==1&&!botIds.has(d.playerId)){
+   s.streak=0;s.lastKicker=null;paint();return;
   }
-  // A kick by the opposition breaks a potential passing sequence.
-  if(d.team!==s.side){s.pending=0;paint();}
+  if(d.playerId===1)s.attempts++;
+  if(s.lastKicker!==null&&s.lastKicker!==d.playerId){
+   s.streak++;s.links++;s.bestStreak=Math.max(s.bestStreak,s.streak);
+  }else if(s.lastKicker===d.playerId){
+   // Two successive touches from the same person are not team links.
+   s.streak=0;
+  }
+  // A bot cannot open the drill's possession: first kick must be the human.
+  if(s.lastKicker!==null||d.playerId===1)s.lastKicker=d.playerId;
+  paint();
+  if(s.streak>=s.target)finish('TEAMWORK · STREAK ACHIEVED');
  });
  function tick(){
   const s=session;if(!s)return;
   if(!ownsOriginalDrill(s)){finish('TEAMWORK · MATCH CHANGED',false);return;}
   if(document.hidden||match.hidden){parkDrill();return;}
   const frame=room.currentFrameNo;
+  const gs=room.gameState;
+  if(gs&&(gs.redScore!==s.redScore||gs.blueScore!==s.blueScore)){
+   s.redScore=gs.redScore;s.blueScore=gs.blueScore;
+   s.streak=0;s.lastKicker=null;s.lastKickKey=null;
+  }
   if(s.parked){
    // First foreground tick is a baseline only, even if native physics
    // advanced a frame immediately after the player's explicit Resume.
@@ -249,8 +283,8 @@
    return;
   }
   if(paused){
-   s.frame=frame;
-   feedback.textContent='Paused. Resume the local match to continue your timed teamwork drill.';
+   s.frame=frame;s.streak=0;s.lastKicker=null;s.lastKickKey=null;
+   feedback.textContent='Paused · current streak reset; best stays saved. Resume to build a new chain.';
    return;
   }
   s.frames+=Math.max(0,frame-s.frame);s.frame=frame;
