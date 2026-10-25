@@ -19,6 +19,12 @@
  const landscapeLabel=el('label',undefined,'mobile-match-session-landscape');
  const landscape=el('input');landscape.type='checkbox';
  landscapeLabel.append(landscape,document.createTextNode('Try landscape orientation in fullscreen (where allowed)'));
+ // Show a truthful capability choice before a player opts in. Unsupported
+ // browsers retain normal device rotation without a fake lock promise.
+ if(typeof screen==='undefined'||typeof screen.orientation?.lock!=='function'){
+  landscape.disabled=true;
+  landscapeLabel.title='This browser does not support fullscreen landscape orientation lock.';
+ }
  const status=el('p','Off · normal device sleep rules apply','mobile-match-session-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const hint=el('p','Wake protection releases whenever you leave active play, spectate, or hide the tab. Leaving the pitch also exits its fullscreen display and releases any landscape lock.','mobile-match-session-hint');
