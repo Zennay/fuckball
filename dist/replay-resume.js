@@ -137,8 +137,15 @@
   }
   const saved=lookup(id);
   if(!saved){feedback.textContent='This recorded position has already been cleared.';return;}
-  if((typeof started!=='undefined'&&started||typeof replay!=='undefined'&&replay)&&
-   !window.confirm('Open the saved replay? The current local match or replay will be replaced.')){
+  // Saved-position playback already requests consent when replacing an
+  // existing replay. Replacing an unfinished local match *from My Games*
+  // is handled by the single shared replay-loader guard after the async
+  // storage read, so players never receive two overlapping confirmation
+  // prompts and state changes during the read cannot bypass that guard.
+  const activeReplay=typeof replay!=='undefined'&&!!replay;
+  const localOutsideGames=typeof started!=='undefined'&&started&&games.hidden;
+  if((activeReplay||localOutsideGames)&&
+   !window.confirm('Open the saved replay? Your current local match or replay will be replaced.')){
    feedback.textContent='Existing playback preserved.';return;
   }
   busy=true;feedback.textContent='Opening saved HBR2 playback…';
