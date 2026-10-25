@@ -44,7 +44,10 @@
  const fields=make('div','controller-setup-fields');
  const deviceLabel=make('label','','Controller in this tab');
  const deviceSelect=make('select');deviceSelect.setAttribute('aria-label','Choose which gamepad controls your player');
- deviceLabel.append(deviceSelect);
+ const rebind=make('button','controller-setup-rebind','↻ Bind selected controller to P1');
+ rebind.type='button';
+ rebind.setAttribute('aria-label','Explicitly bind the selected gamepad to player one');
+ deviceLabel.append(deviceSelect,rebind);
  const mappingLabel=make('label','','Kick buttons');
  const mapping=make('select');mapping.setAttribute('aria-label','Gamepad kick mapping');
  for(const [v,label] of MODES)mapping.add(new Option(label,v));
@@ -222,6 +225,23 @@
   }
   deviceSelect.value=selectedSource===null?'auto':String(selectedSource);
  }
+ rebind.onclick=()=>{
+  const pad=controller();
+  if(!pad){
+   hint.textContent='Connect the chosen controller before binding it to Player 1.';
+   state.textContent='No connected controller on the selected port.';
+   return;
+  }
+  // Only an explicit user click grants a replacement pad live movement/kick
+  // authority. An index reused by another hardware model cannot auto-bind.
+  window.dispatchEvent(new CustomEvent('fuckball:controller-source',{
+   detail:{index:selectedSource}}));
+  cancelBinding();
+  cancelCalibration();
+  hint.textContent='Player 1 explicitly bound to port '+(pad.index+1)+
+   '. Movement and kick now use only that gamepad during this live match.';
+  lastMessage='';present(pad);
+ };
  deviceSelect.onchange=()=>{
   const choice=deviceSelect.value;
   const next=choice==='auto'?null:Number(choice);
@@ -250,7 +270,11 @@
    direction.textContent='No input';kick.textContent='Kick unavailable';
    return;
   }
-  const msg='Connected · '+String(pad.id||'Gamepad').slice(0,72)+
+  const seat=window.fuckballGamepad?.sourceStatus?.();
+  const needsRebind=seat?.locked&&seat.connected===false;
+  const msg=needsRebind?
+   'Controller available, but the active P1 gamepad was disconnected or replaced. Click Bind selected controller to P1 before gameplay resumes.':
+   'Connected · '+String(pad.id||'Gamepad').slice(0,72)+
    ' · '+pad.buttons.length+' buttons · '+pad.axes.length+' axes · '+
    (typeof pad.vibrationActuator?.playEffect==='function'?'vibration available':'no vibration support')+'.';
   if(msg!==lastMessage){state.textContent=msg;lastMessage=msg;}
