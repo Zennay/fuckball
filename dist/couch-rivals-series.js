@@ -305,36 +305,55 @@
  }
  function nextRound(){
   if(!series||series.complete||!series.resolved)return;
-  const prior=window.fuckballCouchRivals?.seatStatus?.();
-  if(!prior?.ok){
-   announce('The original Blue controllers must still own their human seats. Rebind explicitly during the paused native match or end the series and start a new one.');
+  // Do not restart an unrelated game, network room, replay or a different
+  // local team size from a stale series button on Home.
+  const sameMatch=document.getElementById('mode')?.value===series.mode&&
+   typeof serverLink!=='undefined'&&!serverLink&&
+   typeof peerConnected!=='undefined'&&!peerConnected&&
+   typeof replay!=='undefined'&&!replay;
+  if(!sameMatch){
+   announce('This series is not the current local match. Return to the original game or end the series.');
    return;
+  }
+  // Preserve the *original* four humans' controller ownership between
+  // rounds. A new connected pad must never silently inherit a Blue seat.
+  const prior=window.fuckballCouchRivals?.seatStatus?.();
+  if(!prior?.ok||!prior.assigned){
+   announce('The original Blue controllers must own their seats. Reconnect or explicitly rebind before Next Round.');
+   display();return;
   }
   const originalPorts=(prior.seats||[]).map(seat=>seat.port);
   const prepared=window.fuckballCouchRivals?.prepare?.();
   if(!prepared?.ok){announce(prepared?.message||'Reconnect both Blue controllers first.');return;}
-  const nextSeats=window.fuckballCouchRivals?.seatStatus?.();
-  if(!nextSeats?.ok||(nextSeats.seats||[]).some((seat,i)=>seat.port!==originalPorts[i])){
-   // A new port preference must not silently swap two humans' Blue roles in
-   // the middle of a best-of (even when both pads are physically attached).
-   abandonSeries('Controller seat ownership changed between native rounds.');
+  const afterPrepare=window.fuckballCouchRivals?.seatStatus?.();
+  if(!afterPrepare?.ok||(afterPrepare.seats||[]).some((seat,i)=>seat.port!==originalPorts[i])){
+   abandonSeries('Controller seat ownership changed between rounds.');
    return;
   }
-  if(typeof resetMatch!=='function'){announce('Native match reset unavailable.');return;}
+  if(typeof resetMatch!=='function'||typeof showView!=='function'){
+   announce('The native match controls are unavailable. Round not advanced.');return;
+  }
+  // Reveal the real pitch before triggering native gameplay. The kickoff
+  // event is mandatory evidence before committing a new series round.
   const nextNumber=series.round+1;
   expectedSeriesKickoff=true;observedSeriesKickoff=false;
-  try{resetMatch(true);}
-  catch(error){
+  try{
+   showView('play');
+   resetMatch(true);
+  }catch(error){
    abandonSeries('The native next-round kickoff failed: '+String(error?.message||'Unknown error').slice(0,100)+'.');
    return;
   }finally{expectedSeriesKickoff=false;}
-  if(!observedSeriesKickoff||typeof started==='undefined'||!started){
-   abandonSeries('The next native round did not start.');
+  if(!observedSeriesKickoff||typeof started==='undefined'||!started||
+     typeof paused==='undefined'||paused||
+     document.getElementById('matchView')?.hidden!==false||
+     document.getElementById('mode')?.value!==series.mode){
+   abandonSeries('The next round did not visibly start in the original native match.');
    return;
   }
   series.round=nextNumber;series.resolved=false;series.seen=false;
   series.suspended=false;lastControllerScan=0;
-  announce('Round '+series.round+' live · first native goal wins.');
+  announce('Round '+series.round+' live · original four human seats preserved. First native goal wins.');
   display();
  }
  function exportResult(){
