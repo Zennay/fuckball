@@ -190,6 +190,12 @@
  });
  function park(){
   const s=active;if(!s)return;
+  // Do not keep advertising a paused old drill if a different offline game
+  // or online session replaced its actual native room while off-screen.
+  if(room!==s.room||serverLink||peerConnected||replay||!started||
+     own()?.team?.id!==s.side||room.currentFrameNo<s.frame){
+   finish('KEEP AWAY · GAME CHANGED');return;
+  }
   // Neutralize the real offline match while it cannot be observed. Goal
   // Rush follows the same native pause path; never alter physics or frames.
   if(!serverLink&&!peerConnected&&!replay&&room===s.room&&started&&!paused)
