@@ -80,6 +80,34 @@
  };
  const neutral=()=>({x:0,y:0,kick:false});
  let active=null,chosenIndex=null,lastSignature='',wasStart=false,connected='';
+ // Preserve one human's actual controller identity for a live two-player
+ // couch session. A newly plugged-in controller using the old port cannot
+ // silently inherit the first player's movement or kick permission.
+ let localSeatOne=null,localSeatLocked=false;
+ // A live P1 session owns its exact Gamepad API port + hardware identity.
+ // Otherwise a disconnected pad could be replaced by a different person's
+ // controller on the same port, unintentionally moving/kicking online.
+ let liveSeatOne=null,liveSeatLocked=false;
+ const isCouchRivals=()=>['couchRivals','couchRivals3v3','couchRivals4v4']
+  .includes($('mode').value);
+ const liveP1Session=()=>typeof started!=='undefined'&&started&&
+  !replay&&!isCouchRivals()&&!localTwoHumanMode();
+ function liveSeatPad(pads){
+  const seat=liveSeatOne;
+  if(!seat||seat.lost)return null;
+  const pad=pads[seat.index];
+  // A pad model's ID is not a unique physical identity. Once a live seat
+  // disappears, a different pad with the same model on the same port must
+  // not recover kick/movement without the player's explicit Bind action.
+  if(!pad?.connected||pad.index!==seat.index||pad.id!==seat.id){
+   seat.lost=true;return null;
+  }
+  return pad.index!==reservedP2()?pad:null;
+ }
+ const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
+  !serverLink&&!peerConnected&&!replay&&
+  ['local','coop2v2','coop3v3','coop4v4'].includes($('mode').value);
+ const reservedP2=()=>window.fuckballCouchPad?.reservedPort?.()??null;
  let lastHeldKick=false,lastScore=null,lastHapticAt=0;
  const isHeld=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
@@ -95,14 +123,39 @@
   if(typeof navigator.getGamepads!=='function')return null;
   try{
    const pads=navigator.getGamepads();
+   if(localSeatLocked&&localTwoHumanMode()){
+    if(!localSeatOne||localSeatOne.lost)return null;
+    const pinned=pads[localSeatOne.index];
+    if(!pinned?.connected||pinned.id!==localSeatOne.id||
+       pinned.index!==localSeatOne.index){
+     localSeatOne.lost=true;return null;
+    }
+    return pinned.index!==reservedP2()?pinned:null;
+   }
+   // No live match may auto-handoff movement/kick authority when a gamepad is
+   // unplugged or a new pad occupies the same Gamepad API port. The original
+   // human must choose Bind controller in the setup UI to authorize a change.
+   if(!liveP1Session()){liveSeatLocked=false;liveSeatOne=null;}
+   else{
+    if(!liveSeatLocked){
+     const candidate=chosenIndex===null?
+      (pads[active]?.connected&&pads[active]?.index!==reservedP2()?pads[active]:
+       Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2())):
+      pads[chosenIndex];
+     liveSeatOne=candidate?.connected&&candidate.index!==reservedP2()?
+      {index:candidate.index,id:candidate.id}:null;
+     liveSeatLocked=true;
+    }
+    return liveSeatPad(pads);
+   }
    // Explicit choices never fall back to another player's controller on disconnect.
    if(chosenIndex!==null){
     const chosen=pads[chosenIndex];
-    return chosen?.connected?chosen:null;
+    return chosen?.connected&&chosen.index!==reservedP2()?chosen:null;
    }
    const current=active===null?null:pads[active];
-   if(current?.connected)return current;
-   const next=Array.from(pads).find(p=>p?.connected);
+   if(current?.connected&&current.index!==reservedP2())return current;
+   const next=Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2());
    active=next?.index??null;
    return next||null;
   }catch{return null;}
@@ -126,8 +179,10 @@
  }
  function read(){return playable()&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)?sample(controller()):neutral();}
  function describe(pad){
+  const seatMissing=!pad&&liveP1Session()&&liveSeatLocked;
   const next=pad?'Connected: '+String(pad.id||'Controller').slice(0,70)+
    ' · stick / D-pad move · configured buttons kick · Start menu.':
+   seatMissing?'Gamepad changed or disconnected. Movement and kick are neutral until you explicitly rebind in Controller Setup.':
    'No controller active. Connect a gamepad and press a button. Keyboard and touch still work.';
   if(next!==connected){connected=next;label.textContent=next;}
  }
@@ -212,11 +267,58 @@
   const index=event.detail?.index;
   if(index!==null&&(!Number.isSafeInteger(index)||index<0||index>15))return;
   chosenIndex=index;active=null;lastSignature='';connected='';
+  // This event is a deliberate player action, including rebinding the same
+  // port. It is the only mid-match way to authorize a different controller.
+  if(liveP1Session()){
+   let pads=[];
+   try{pads=typeof navigator.getGamepads==='function'?navigator.getGamepads():[];}catch{}
+   const selected=index===null?
+    Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2()):
+    pads[index];
+   liveSeatOne=selected?.connected&&selected.index!==reservedP2()?
+    {index:selected.index,id:selected.id}:null;
+   liveSeatLocked=true;
+  }
+  if(localSeatLocked&&localTwoHumanMode()){
+   const pads=typeof navigator.getGamepads==='function'?navigator.getGamepads():[];
+   const chosen=index===null?
+    Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2()):
+    pads[index];
+   localSeatOne=chosen?.connected&&chosen.index!==reservedP2()?
+    {index:chosen.index,id:chosen.id}:null;
+  }
   // Require a fresh Start press on the new controller instead of opening
   // the in-game menu just because Start was held during the switch.
   wasStart=true;
  });
- window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null};
+ window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null,
+  sourceStatus:()=>{
+   if(localSeatLocked&&localTwoHumanMode())return{
+    locked:true,connected:!!controller(),port:localSeatOne?.index??null};
+   return {locked:liveSeatLocked&&liveP1Session(),
+    connected:!!controller(),port:liveSeatOne?.index??null};
+  }};
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  localSeatLocked=false;
+  liveSeatLocked=false;liveSeatOne=null;
+  if(!localTwoHumanMode())return;
+  const pad=controller();
+  localSeatOne=pad?{index:pad.index,id:pad.id}:null;
+  localSeatLocked=true;
+  lastSignature='';
+ });
+ // Some browsers disconnect and reconnect an identical controller between
+ // two animation frames. Observe the disconnect event too so port+model ID
+ // reuse never inherits P1's human seat without an explicit rebind.
+ window.addEventListener('gamepaddisconnected',event=>{
+  const index=event?.gamepad?.index;
+  if(!Number.isSafeInteger(index))return;
+  if(liveSeatLocked&&liveSeatOne?.index===index)liveSeatOne.lost=true;
+  if(localSeatLocked&&localSeatOne?.index===index)localSeatOne.lost=true;
+  lastSignature='';wasStart=true;
+  if(typeof refreshInput==='function'&&typeof started!=='undefined'&&started)
+   refreshInput();
+ });
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
  window.addEventListener('focus',()=>{lastSignature='';});

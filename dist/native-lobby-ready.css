@@ -24,3 +24,31 @@
 .native-lobby-kickoff-hud[hidden]{display:none!important}
 .native-lobby-kickoff-controls select:focus-visible,.native-lobby-kickoff-controls button:focus-visible{outline:3px solid #e2f7ad;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){.native-lobby-kickoff-hud{transition:none;animation:none}}
+
+/* Native Custom Room readiness: global view-only mirror of the same
+   server roster and original voluntary native readiness button. */
+.native-lobby-ready-dock[hidden]{display:none!important}
+.native-lobby-ready-dock{box-sizing:border-box;position:fixed;z-index:112;
+ left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(920px,calc(100vw - 24px));padding:16px 18px;display:flex;
+ align-items:center;justify-content:space-between;gap:18px;
+ border:2px solid #c8edaa;border-radius:14px;background:#173530;
+ box-shadow:0 16px 44px #031218d9;color:#f2f9ee}
+.native-lobby-ready-dock-content{min-width:0}
+.native-lobby-ready-dock-content strong{font-size:.84rem;
+ letter-spacing:.055em;color:#e2ffaf}
+.native-lobby-ready-dock-progress{margin:6px 0 0;font-size:.85rem;
+ line-height:1.48;color:#d1e6db;overflow-wrap:anywhere}
+.native-lobby-ready-dock-actions{display:flex;gap:9px;flex-shrink:0}
+.native-lobby-ready-dock-actions button{min-height:48px;padding:10px 15px;
+ font:inherit;font-size:.84rem;font-weight:800;border:1px solid #9bb7a6;
+ background:#2a4d40;color:#f2fff2;border-radius:9px;cursor:pointer}
+.native-lobby-ready-dock-actions button.primary{background:#ddffa1;
+ color:#193527;border-color:#ddffa1}
+.native-lobby-ready-dock-actions button[hidden]{display:none!important}
+.native-lobby-ready-dock-actions button:disabled{opacity:.55;cursor:not-allowed}
+.native-lobby-ready-dock-actions button:focus-visible{outline:3px solid #f5ffb5;outline-offset:3px}
+@media(max-width:700px){.native-lobby-ready-dock{flex-direction:column;
+ align-items:stretch;padding:14px;gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-lobby-ready-dock-actions{display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:360px){.native-lobby-ready-dock-actions{grid-template-columns:1fr}}

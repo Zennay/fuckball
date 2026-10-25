@@ -82,8 +82,18 @@
   return online||watch;
  };
  const roomKey=()=>serverLink?.room||'local-watch';
+ // An old native state is not proof that the match is still broadcasting.
+ // Paused/completed rooms retain their explicitly labelled last score, but
+ // actively playing rooms must have a recent authoritative server frame.
+ const waitingForLiveFrame=()=>{
+  if(!serverLink?.room||serverLink.roomState?.started!==true||
+     serverLink.roomState?.paused===true)return false;
+  const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  const age=performance.now()-at;
+  return !Number.isFinite(at)||at<=0||age<0||age>3500;
+ };
  const liveSnapshot=()=>{
-  if(!viewAvailable())return null;
+  if(!viewAvailable()||waitingForLiveFrame())return null;
   const g=room?.gameState;
   if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
    !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
@@ -103,10 +113,26 @@
   const ref=room,key=roomKey();
   if(ref!==lastRef||key!==lastRoom){lastRef=ref;lastRoom=key;last=null;}
   const snapshot=liveSnapshot();
-  if(!snapshot){last=null;overlay.hidden=true;save.disabled=true;return;}
+  if(!snapshot){
+   last=null;overlay.hidden=true;save.disabled=true;
+   toggle.textContent=waitingForLiveFrame()?'◌ WAITING FOR LIVE FRAMES':'◉ HUD ON';
+   return;
+  }
+  toggle.textContent='◉ HUD ON';
   last=snapshot;
   red.textContent=String(snapshot.red);blue.textContent=String(snapshot.blue);
   clock.textContent=clockText(snapshot.time);
+  // A finished round still has a genuine local score, but labeling the
+  // waiting room LIVE is misleading. Never infer the official final result.
+  const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
+  const inProgress=online?serverLink.roomState?.started===true&&serverLink.roomState?.paused!==true:
+   typeof started!=='undefined'&&started===true&&typeof paused!=='undefined'&&paused!==true;
+  stamp.textContent=inProgress?'LIVE LOCAL VIEW · UNVERIFIED':
+   online&&serverLink.roomState?.started===true?'MATCH PAUSED · LAST LOCAL SCORE':
+   'BETWEEN ROUNDS · LAST LOCAL SCORE · UNVERIFIED';
+  foot.textContent=inProgress?'Current native match snapshot · no verified match result':
+   'No current live action · displayed score is the last locally observed snapshot';
+  overlay.classList.toggle('between-rounds',!inProgress);
   overlay.classList.toggle('compact',settings.mode==='compact');
   overlay.hidden=false;save.disabled=false;
  }
@@ -126,7 +152,7 @@
   context.fillStyle='#152d37';context.fillRect(0,0,900,220);
   context.textAlign='center';
   context.fillStyle='#d9f0dd';context.font='bold 18px system-ui';
-  context.fillText('FUCKBALL · LOCAL SPECTATOR VIEW · UNVERIFIED',450,36);
+  context.fillText(stamp.textContent.slice(0,65),450,36);
   context.fillStyle='#ff9896';context.font='bold 28px system-ui';
   context.fillText(settings.red,165,101);
   context.fillStyle='#9ccbf9';context.fillText(settings.blue,735,101);
@@ -135,7 +161,7 @@
   context.font='bold 60px system-ui';context.fillText(':',450,138);
   context.font='bold 28px system-ui';context.fillText(clockText(last.time),450,191);
   context.font='14px system-ui';context.fillStyle='#bbd0c5';
-  context.fillText('Current match snapshot · no player identity or official outcome',450,211);
+  context.fillText(foot.textContent.slice(0,90),450,211);
   canvas.toBlob(blob=>{
    if(!blob||blob.size>4*1048576)return;
    const url=URL.createObjectURL(blob),a=node('a');

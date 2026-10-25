@@ -149,18 +149,37 @@
  let lastAttempt=null;
  function hideRecovery(){recovery.hidden=true;}
  function showRecovery(reason){
-  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
-  recoveryReason.textContent=String(reason||'Search interrupted.').slice(0,180)+
-   ' A new search needs another explicit click; no ready check is restored.';
-  retry.textContent='↻ Retry '+lastAttempt.mode+' human search';recovery.hidden=false;
+  if(!lastAttempt){hideRecovery();return;}
+  const reasonText=String(reason||'Search interrupted.').slice(0,160);
+  if(lastAttempt.party){
+   // A party launch is server-issued and expires. Reusing it or silently
+   // requeueing could misrepresent other teammates' readiness.
+   recoveryHeading.textContent='FRIENDS PARTY SEARCH ENDED';
+   recoveryReason.textContent=reasonText+
+    ' Return to your existing friends party. All teammates must ready up and the leader must explicitly start a new search.';
+   retry.textContent='↗ Open friends party';
+  }else{
+   recoveryHeading.textContent='SEARCH INTERRUPTED';
+   recoveryReason.textContent=reasonText+
+    ' A new search needs another explicit click; no ready check is restored.';
+   retry.textContent='↻ Retry '+lastAttempt.mode+' human search';
+  }
+  recovery.hidden=false;
  }
  retry.onclick=()=>{
   if(searching||ready||serverLink?.room||peerConnected){
    recoveryReason.textContent='Finish your current match, connection or ready check first.';return;
   }
-  if(!lastAttempt||lastAttempt.party){hideRecovery();return;}
+  if(!lastAttempt){hideRecovery();return;}
+  if(lastAttempt.party){
+   // This is navigation, not a party launch, server request or automatic
+   // restoration of an expired teammate consent.
+   if(typeof window.openFriendParty==='function')window.openFriendParty();
+   else recoveryReason.textContent='Open Friends → Party to arrange a new human search.';
+   return;
+  }
   const mode=lastAttempt.mode;
-  try{if(serverLink?.quickMatchMode)disconnect();}catch{}
+  try{if(serverLink?.quickMatchMode&&!serverLink.room)disconnect();}catch{}
   start(mode,false);
  };
  changeServer.onclick=()=>{
@@ -279,8 +298,14 @@
     'Your proposed match is waiting for every player to accept.';
   }else if(searching&&queuedAt){
    const duration=Math.max(0,Math.floor((Date.now()-queuedAt)/1000));
-   notice.textContent='Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
-    ' human players available · '+duration+'s elapsed. No bots will be added.';
+   // The client has only *requested* queue admission until the server
+   // answers. Do not display made-up player occupancy while connecting.
+   const acknowledged=serverLink?.quickQueueAcknowledged===true;
+   notice.textContent=acknowledged?
+    'Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
+     ' human players available · '+duration+'s elapsed. No bots will be added.':
+    'Connecting to the human-match server · '+duration+
+     's elapsed. Server confirmation required before searching (20s timeout).';
   }
   // A read-only reflection of the real human queue. The Play landing page may
   // display it or forward an *explicit* player click to native ready controls.
@@ -290,9 +315,10 @@
     searching,mode:matchMode,ready:!!ready,accepted:readyAccepted,
     confirming:readyConfirming,
     waiting,needed,expiresAt:ready?ready.expiresAt:null,
-    recovery:!recovery.hidden&&lastAttempt&&!lastAttempt.party&&
-     standardModes.includes(lastAttempt.mode)?{
-      mode:lastAttempt.mode,reason:recoveryReason.textContent.slice(0,180)
+    recovery:!recovery.hidden&&lastAttempt&&
+     [...standardModes,'club4v4'].includes(lastAttempt.mode)?{
+      mode:lastAttempt.mode,party:lastAttempt.party===true,
+      reason:recoveryReason.textContent.slice(0,180)
      }:null
    }}));
  }
@@ -337,7 +363,7 @@
   if(connectServer(false,'','',null,mode,party)===false){
    // Reject invalid server setup without leaving a fictitious active search
    // on the landing page. No duplicate socket or ready consent is created.
-   done('Could not connect to the game server. Check Online Rooms and retry.');
+   done('Could not connect to the game server. Check Online Rooms and retry.',true);
   }
  }
  for(const mode of ['1v1','2v2','3v3','4v4']){
@@ -559,9 +585,18 @@
     notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
    }else if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     waiting=d.waiting;needed=d.needed;refresh();
-   }else if(d.status==='cancelled')done('Search cancelled.',true);
-   else if(d.status==='error'||d.status==='disconnected')
-    done(d.reason||'Match search disconnected. You can try again.',true);
+   }else if(['cancelled','error','disconnected'].includes(d.status)&&searching){
+    // A terminal queue status does not necessarily close the original
+    // WebSocket. Release this specific unadmitted search before exposing a
+    // recovery action; otherwise every future native join is blocked by
+    // the orphaned session-admission guard. Never leave an active match.
+    const reason=d.reason||(d.status==='cancelled'?'Human search cancelled.':
+     'Human match search ended on the server.');
+    if(serverLink?.quickMatchMode&&!serverLink.room){
+     try{disconnect();}catch{}
+    }
+    done(reason,true);
+   }
   }
  };
 })();

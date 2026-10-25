@@ -28,10 +28,200 @@
  const players=document.createElement('div');players.className='native-chat-players';
  panel.append(title,description,focusControls,status,players);settingsPane.append(panel);
  let roomId=null,muted=new Set();
+ // Keep the real chat handler as the only sender. A form submitted while
+ // the WebSocket is down must not be consumed as a fake successful local or
+ // server message, or silently throw away the player's unsent text.
+ const chatForm=document.getElementById('chatForm');
+ const chatInput=document.getElementById('chatInput');
+ const sendFeedback=document.createElement('p');
+ sendFeedback.className='native-chat-send-feedback';
+ sendFeedback.setAttribute('role','status');
+ sendFeedback.setAttribute('aria-live','polite');
+ sendFeedback.hidden=true;
+ chatForm?.append(sendFeedback);
+ let onlineDraftRoom=null,privateDraft=false;
+ function preserveDraftAudience(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!onlineDraftRoom&&link?.room)onlineDraftRoom=link.room;
+  // Never let a previously team-only draft silently turn public if the
+  // native channel picker resets while a player reconnects or changes teams.
+  if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
+   privateDraft=true;
+ }
+ chatInput?.addEventListener('focus',()=>{
+  preserveDraftAudience();sendFeedback.hidden=true;
+ });
+ chatInput?.addEventListener('input',()=>{
+  preserveDraftAudience();sendFeedback.hidden=true;
+ });
+ chatForm?.addEventListener('change',()=>{
+  if(chatInput?.value.trim())preserveDraftAudience();
+ });
+ chatForm?.addEventListener('focusout',event=>{
+  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget)){
+   onlineDraftRoom=null;privateDraft=false;
+  }
+ });
+ chatForm?.addEventListener('submit',event=>{
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  // Any pending native connection or stale online chat draft is not a local
+  // chat session. The sender must consciously reconnect or leave the form.
+  const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
+  const blocked=link&&(!link.room||link.ws?.readyState!==1)||
+    !!onlineDraftRoom&&!link?.room;
+  const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
+  if(!wrongRoom&&!blocked&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  sendFeedback.textContent=wrongRoom?
+   'This draft was written for another room. Close chat and start a new message before sending to these players.':
+   blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
+   wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
+   'The room host muted your chat. Your unsent draft is still here.';
+  sendFeedback.hidden=false;
+  chatInput?.focus({preventScroll:true});
+ },true);
+ // A connected human room stays active while Home/My Games is on screen.
+ // The HUD chat log lives on the hidden pitch; keep a bounded ephemeral
+ // catch-up inbox on this device, without sending or saving chat messages.
+ let unread=0,expanded=false;
+ const recentChat=[];
+ const chatDock=document.createElement('section');
+ chatDock.className='native-room-chat-inbox';chatDock.hidden=true;
+ chatDock.setAttribute('aria-label','Current human room chat');
+ const chatDockSummary=document.createElement('button');
+ chatDockSummary.type='button';chatDockSummary.className='native-room-chat-inbox-toggle';
+ chatDockSummary.setAttribute('aria-expanded','false');
+ const chatDockPanel=document.createElement('div');
+ chatDockPanel.className='native-room-chat-inbox-panel';chatDockPanel.hidden=true;
+ const chatDockHead=document.createElement('strong');
+ chatDockHead.textContent='ROOM CHAT · THIS SESSION';
+ const chatDockHelp=document.createElement('p');
+ chatDockHelp.className='native-room-chat-inbox-help';
+ const normalInboxHelp='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox. Before replying, check the original ROOM/TEAM recipient.';
+ chatDockHelp.textContent=normalInboxHelp;
+ chatDockHelp.setAttribute('role','status');
+ chatDockHelp.setAttribute('aria-live','polite');
+ const chatDockMessages=document.createElement('ol');
+ chatDockMessages.className='native-room-chat-inbox-messages';
+ chatDockMessages.setAttribute('aria-label','Recent messages from this connected room');
+ const chatDockActions=document.createElement('div');
+ chatDockActions.className='native-room-chat-inbox-actions';
+ const chatDockReply=document.createElement('button');
+ chatDockReply.type='button';
+ chatDockReply.textContent='↩ Reply in match';
+ chatDockReply.setAttribute('aria-label','Reply to the current room using the existing chat input');
+ const chatDockView=document.createElement('button');
+ chatDockView.type='button';chatDockView.textContent='↗ View match chat';
+ const chatDockClose=document.createElement('button');
+ chatDockClose.type='button';chatDockClose.textContent='Close';
+ chatDockActions.append(chatDockReply,chatDockView,chatDockClose);
+ chatDockPanel.append(chatDockHead,chatDockHelp,chatDockMessages,chatDockActions);
+ chatDock.append(chatDockSummary,chatDockPanel);document.body.append(chatDock);
+ function renderInboxMessages(){
+  chatDockMessages.replaceChildren();
+  const displayed=recentChat.filter(entry=>!muted.has(entry.from)&&
+   visibleMessage(entry.from));
+  if(!displayed.length){
+   const empty=document.createElement('li');
+   empty.textContent='No visible room messages yet.';
+   chatDockMessages.append(empty);return;
+  }
+  for(const entry of displayed){
+   const item=document.createElement('li');
+   const label=document.createElement('strong');
+   label.textContent=(entry.channel==='team'?'TEAM · ':'ROOM · ')+entry.name;
+   const content=document.createElement('span');content.textContent=entry.text;
+   item.append(label,content);chatDockMessages.append(item);
+  }
+  chatDockMessages.scrollTop=chatDockMessages.scrollHeight;
+ }
+ function pitchChatReadable(){
+  // Opening a translucent match menu or another dialog does not mean the
+  // human actually saw recent messages behind that overlay. Keep the unread
+  // count until the genuine pitch chat is visible again.
+  return document.getElementById('matchView')?.hidden===false&&
+   document.hidden!==true&&
+   document.getElementById('pauseMenu')?.hidden!==false&&
+   !document.querySelector('dialog[open]');
+ }
+ function updateRoomChatInbox(){
+  const connected=currentRoom();
+  // Transient transport errors must not leave an obsolete reconnect warning
+  // on a restored native room or an entirely new human room.
+  if(serverLink?.ws?.readyState===1&&chatDockHelp.textContent!==normalInboxHelp)
+   chatDockHelp.textContent=normalInboxHelp;
+  const match=document.getElementById('matchView');
+  const onPitch=match?.hidden===false&&document.hidden!==true;
+  // Authoritative ready/rematch/recovery decisions take priority over chat.
+  const urgent=document.querySelector('.quick-ready-dock:not([hidden]),.native-rematch-dock:not([hidden]),.native-room-recovery:not([hidden])');
+  if(pitchChatReadable()){unread=0;expanded=false;}
+  chatDock.hidden=!connected||onPitch||!!urgent;
+  chatDockPanel.hidden=!expanded||chatDock.hidden;
+  chatDockSummary.textContent=unread?
+   '● '+unread+(unread===99?'+':'')+' unread room message'+(unread===1?'':'s')+
+   ' · '+(expanded?'Hide':'Read'):
+   '◌ Room chat · '+(expanded?'Hide':'Read recent');
+  chatDockSummary.setAttribute('aria-expanded',String(!chatDockPanel.hidden));
+ }
+ chatDockSummary.addEventListener('click',()=>{
+  if(!currentRoom()||chatDock.hidden)return;
+  expanded=!expanded;
+  if(expanded){unread=0;renderInboxMessages();}
+  updateRoomChatInbox();
+ });
+ chatDockClose.addEventListener('click',()=>{
+  expanded=false;updateRoomChatInbox();chatDockSummary.focus?.();
+ });
+ // Both actions go back to the *original* pitch UI, never duplicate a
+ // WebSocket chat sender or silently change the current ROOM/TEAM audience.
+ function navigateToNativeChat(reply){
+  const roomAtClick=currentRoom();
+  if(!roomAtClick||chatDock.hidden)return;
+  const input=document.getElementById('chatInput');
+  const form=document.getElementById('chatForm');
+  // A transient socket closure may retain the room ID until cleanup.
+  // Do not open a composer that would discard a real player's message.
+  if(reply&&(!input||!form||serverLink?.ws?.readyState!==1)){
+   chatDockHelp.textContent='The room is reconnecting. Your messages were not sent; return after the connection is restored.';
+   return;
+  }
+  const savedDraft=reply?input.value:null;
+  document.getElementById('tabPlay')?.click();
+  if(currentRoom()!==roomAtClick||document.getElementById('matchView')?.hidden!==false)return;
+  // An unstarted online lobby opens the native match menu automatically.
+  // Hide that overlay so the original chat log/composer receives focus.
+  if(typeof closeMatchMenu==='function'&&
+     typeof menuOpen!=='undefined'&&menuOpen)closeMatchMenu();
+  if(reply){
+   if(typeof openChat!=='function')return;
+   openChat();
+   // Navigating through native views may close an existing composer; never
+   // overwrite or lose the player's unsent local draft.
+   if(savedDraft!==null&&input.value!==savedDraft)input.value=savedDraft;
+   input.focus?.({preventScroll:true});
+  }else{
+   const original=document.getElementById('chatLog');
+   if(original){original.tabIndex=-1;original.focus?.({preventScroll:true});original.scrollTop=original.scrollHeight;}
+  }
+  unread=0;expanded=false;updateRoomChatInbox();
+ }
+ chatDockReply.addEventListener('click',()=>navigateToNativeChat(true));
+ chatDockView.addEventListener('click',()=>navigateToNativeChat(false));
+ const inboxTicker=setInterval(updateRoomChatInbox,1400);
+ inboxTicker?.unref?.();
+ for(const id of ['tabHome','tabPlay','tabReplay'])
+  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(updateRoomChatInbox));
+ window.addEventListener('focus',updateRoomChatInbox);
+ window.addEventListener('fuckball:native-session-state',updateRoomChatInbox);
+ document.addEventListener('visibilitychange',updateRoomChatInbox);
  focusSelect.addEventListener('change',()=>{
   if(!Object.hasOwn(FOCUS_MODES,focusSelect.value))return;
   focus=focusSelect.value;
   try{localStorage.setItem(FOCUS_KEY,JSON.stringify({version:1,mode:focus}));}catch{}
+  // Changing what this device may display also clears the temporary catch-up
+  // copy, so previously received content never bypasses a new quiet filter.
+  recentChat.length=0;unread=0;expanded=false;updateRoomChatInbox();
   rows();
  });
  function visibleMessage(sender){
@@ -60,7 +250,9 @@
  };
  function currentRoom(){
   const next=serverLink?.room||null;
-  if(next!==roomId){roomId=next;muted.clear();}
+  if(next!==roomId){
+   roomId=next;muted.clear();recentChat.length=0;unread=0;expanded=false;
+  }
   return roomId;
  }
  function rows(){
@@ -88,6 +280,7 @@
    button.onclick=()=>{
     if(muted.has(player.id))muted.delete(player.id);
     else muted.add(player.id);
+    recentChat.length=0;unread=0;expanded=false;updateRoomChatInbox();
     rows();
    };
    row.append(name,button);
@@ -124,12 +317,24 @@
      typeof message.text!=='string'||message.text.length<1||message.text.length>140||
      /[\u0000-\u001f\u007f-\u009f]/.test(message.text))return;
   if(muted.has(message.from)||!visibleMessage(message.from))return;
+  let channel=null;
   if(message.channel==='team'){
    if(![1,2].includes(message.team))return;
    log('[TEAM · '+(message.team===1?'RED':'BLUE')+'] '+message.name+': '+message.text,false);
    document.querySelector('#chatLog .chat-line:last-child')?.classList.add('native-team-message');
+   channel='team';
   }else if(message.channel===undefined||message.channel==='room'){
    log(message.name+': '+message.text,false);
+   channel='room';
+  }
+  if(channel){
+   recentChat.push({from:message.from,channel,name:message.name,text:message.text});
+   if(recentChat.length>20)recentChat.shift();
+   const match=document.getElementById('matchView');
+   if(message.from!==networkPlayerId&&!pitchChatReadable()&&!expanded)
+    unread=Math.min(99,unread+1);
+   if(expanded)renderInboxMessages();
+   updateRoomChatInbox();
   }
  };
 
@@ -178,26 +383,30 @@
   const now=()=>performance.now();
   let lastSent=-Infinity,expanded=false;
   function updateVisibility(){
-   const available=!!serverLink?.room&&!match.hidden&&!replay&&!document.hidden;
+   const available=!!serverLink?.room&&serverLink.ws?.readyState===1&&
+    !match.hidden&&!replay&&!document.hidden;
    toolbar.hidden=!available;
    if(!available&&expanded){expanded=false;tray.hidden=true;toggle.setAttribute('aria-expanded','false');}
    return available;
   }
   function sendCall(text){
-   if(!updateVisibility()||!serverLink?.room)return;
+   if(!updateVisibility()||!serverLink?.room||serverLink.ws?.readyState!==1){
+    notice.textContent='Room connection unavailable. Reconnect before sending a call.';
+    return;
+   }
    if(now()-lastSent<2500){notice.textContent='One callout every 2.5 seconds. Keep chat useful.';return;}
    if(input.value.trim()){
     notice.textContent='Finish your current chat draft first; it was not replaced.';
     return;
    }
-   const mutedUntil=serverLink?.roomControl?.chatMuteUntil||serverLink?.chatMutedUntil||0;
+   const mutedUntil=Math.max(serverLink?.roomControl?.chatMuteUntil||0,serverLink?.chatMutedUntil||0);
    if(mutedUntil>Date.now()){
     notice.textContent='Room chat is muted by the host right now.';return;
    }
    const audience=window.FuckballTeamChat?.audience(serverLink);
    if(audience===null){notice.textContent='Team chat unavailable; message not sent.';return;}
-   if(!form.onsubmit){
-    notice.textContent='Chat is not ready yet.';return;
+   if(typeof form.requestSubmit!=='function'||typeof form.onsubmit!=='function'){
+    notice.textContent='Native chat is not ready; nothing was sent.';return;
    }
    // The installed native chat handler preserves server moderation/rate limits,
    // sender attribution and real acknowledgement; never log a fake send.
@@ -205,7 +414,8 @@
    try{
     form.requestSubmit();
     lastSent=now();
-    notice.textContent='Submitted to '+(audience==='team'?'team-only':'room')+' chat · server decides delivery.';
+    notice.textContent='Submitted via open '+(audience==='team'?'team-only':'room')+
+     ' chat · server controls delivery and moderation.';
    }catch{
     input.value='';
     notice.textContent='Could not open room chat.';

@@ -32,7 +32,26 @@ function makeRoom(){
  room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');if(!serverLink&&!peerConnected&&!replay&&['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
   Number.isInteger(args[0])&&[1,2].includes(args[0])&&
   typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(
-   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();}},2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
+   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);
+ log(team===1?'Red wins':team===2?'Blue wins':'Draw');
+ // Present the local result directly, without granting any rematch or
+ // fabricating a score. Only the existing offline engine certifies full-time.
+ if(!serverLink&&!peerConnected&&!peer&&!replay&&started&&[0,1,2].includes(team)&&
+    typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function'){
+  const score=room?.gameState;
+  const red=Number.isSafeInteger(score?.redScore)&&score.redScore>=0?score.redScore:null;
+  const blue=Number.isSafeInteger(score?.blueScore)&&score.blueScore>=0?score.blueScore:null;
+  window.dispatchEvent(new window.CustomEvent('fuckball:local-fulltime',{
+   detail:{room,winner:team,red,blue,mode:$('mode').value}}));
+ }
+ const finishedRoom=room;
+ setTimeout(()=>{
+  // Ignore an old victory timer after starting another room or a replay.
+  if(room===finishedRoom&&!replay&&started&&!room.gameState){
+   started=false;setButtons();
+   if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();
+  }
+ },2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
  roomStart=performance.now();
  renderer.room=room;renderer.initialize();renderer.zoomCoeff=settings.zoom;renderer.followPlayerId=1;renderer.currentPlayerDistinction=true;room.initialize();
  room.setCurrentStadium(stadium,0);room.setScoreLimit(+$('scoreLimit').value,0);room.setTimeLimit(timeLimitValue(),0);configurePlayers();room.startGame(0);room.setGamePaused(true,0);updateRoster();
@@ -104,28 +123,68 @@ function updateScore(){const g=(replay||room)?.gameState;if(typeof menuOpen!=='u
 function sendInput(id,input){if(inputCache.get(id)===input)return;inputCache.set(id,input);frameStats.inputVersion++;if(peerConnected&&peerRole==='guest')sendGuestInput(input);else room.playerInput(input,id);}
 function sendGuestInput(input){const seq=++net.inputSeq,frame=predictor.input(seq,networkPlayerId,input,performance.now());send(net.v3?{type:'in',c:[[seq,frame,input]]}:{type:'input',value:input,seq});}
 function bound(action){return settings.keys[action].filter(Boolean);}
+// Couch games deliberately reserve Player 2's arrows and kick keys. Earlier
+// Player 1 keyboard profiles changed the preview but local gameplay still
+// hard-coded WASD/F; a custom IJKL or ESDF profile did nothing during play.
+// Keep the original couch defaults unless P1 has actually customized movement.
+const couchModes=new Set(['local','coop2v2','coop3v3','coop4v4',
+ 'couchRivals','couchRivals3v3','couchRivals4v4']);
+const couchP2Keys=new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+ 'Slash','Enter','Numpad0']);
+const couchP1Defaults={
+ up:['KeyW'],down:['KeyS'],left:['KeyA'],right:['KeyD'],kick:['KeyF']
+};
+const couchP1Fallback={
+ up:['KeyI','KeyE'],down:['KeyK','KeyC'],left:['KeyJ','KeyQ'],
+ right:['KeyL','KeyR'],kick:['Space','KeyX','KeyG']
+};
+function localPlayerOneControls(){
+ const actions=['up','down','left','right','kick'];
+ const customized=actions.some(a=>(settings.keys[a]||[]).some((code,i)=>
+  code!==defaultBindings[a][i]));
+ const keys={},used=new Set(),adjusted=[];
+ for(const action of actions){
+  const requested=customized?(settings.keys[action]||[]):couchP1Defaults[action];
+  const safe=code=>typeof code==='string'&&code&&!couchP2Keys.has(code)&&!used.has(code);
+  const chosen=requested.find(safe)||
+   [...couchP1Defaults[action],...couchP1Fallback[action]].find(safe);
+  // Fallbacks never consume P2's physical keys or another P1 action's key.
+  keys[action]=[chosen];
+  used.add(chosen);
+  if(customized&&!requested.includes(chosen))adjusted.push(action);
+ }
+ return{keys,adjusted,customized};
+}
 // Human input belongs to the visible pitch, never to menus, dialogs or chat.
 function gameplayInputSurfaceActive(){
  return windowInputFocused&&!document.hidden&&!$('matchView').hidden&&
   $('joinScreen').hidden&&$('chatForm').hidden&&
   (typeof menuOpen==='undefined'||!menuOpen)&&
+  // The lightweight Quick Actions panel is not a dialog. An open panel
+  // still owns focus and must neutralize ALL human input seats.
+  window.fuckballQuickActionsOpen!==true&&
   !document.querySelector('dialog[open]');
 }
 function canControlLiveMatch(){
  return gameplayInputSurfaceActive()&&started&&!paused&&!replay&&$('mode').value!=='watch';
 }
-function refreshInput(){if(!canControlLiveMatch())return;const local=['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),b=a=>k(...bound(a));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(k('KeyD')||touch.x>0||pad.x>0)-+(k('KeyA')||touch.x<0||pad.x<0);y=+(k('KeyS')||touch.y>0||pad.y>0)-+(k('KeyW')||touch.y<0||pad.y<0);kick=touch.kick||k('KeyF')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
+function refreshInput(){if(!canControlLiveMatch())return;const local=couchModes.has($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),localP1=local?localPlayerOneControls().keys:null,b=a=>k(...(local?localP1[a]:bound(a)));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
 function releaseInputs(){
  keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();
- // An interrupted drag may not reactivate after menus or focus changes.
- if(stickPointer!==null){
-  try{$('joystick').releasePointerCapture?.(stickPointer);}catch{}
-  stickPointer=null;
+ // Neutral input must also neutralize the visual stick, even when the
+ // room has ended or a replay is now active.
+ $('stick').style.transform='';
+ // Drop ownership before releasing captures: a delayed lostpointercapture
+ // from the old touch must not cancel a newer finger.
+ const oldStick=stickPointer,oldKick=kickPointer;
+ stickPointer=null;kickPointer=null;
+ if(oldStick!==null){
+  try{$('joystick').releasePointerCapture?.(oldStick);}catch{}
  }
- if(kickPointer!==null){
-  try{$('touchKick').releasePointerCapture?.(kickPointer);}catch{}
-  kickPointer=null;
- }if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){room.playerInput(0,3);room.playerInput(0,4);}}$('stick').style.transform='';}
+ if(oldKick!==null){
+  try{$('touchKick').releasePointerCapture?.(oldKick);}catch{}
+ }
+ if(!room||replay)return;if(peerConnected&&peerRole==='guest'){if(net.v3)sendGuestInput(0);else send({type:'input',value:0,seq:++net.inputSeq});room.playerInput(0,networkPlayerId);}else{room.playerInput(0,1);if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)||peerConnected)room.playerInput(0,2);if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){room.playerInput(0,3);room.playerInput(0,4);}}}
 function gameTick(){frameStats.lastTick=performance.now();tick++;if(replay||!started||paused)return;if(peerConnected&&peerRole==='guest')return;if(!room.gameState)return;if(guestTimeline&&peerConnected&&peerRole==='host'){const v=guestTimeline.valueAt(room.currentFrameNo),g=room.state.players.find(p=>p.id===2);if(g&&g.input!==v)room.playerInput(v,2);}if(tick%2===0){for(const p of room.state.players){if(!botIds.has(p.id)||!p.disc)continue;const mode='tactical';let input=FuckballAI.tactical(room.state,p.id,tick,{difficulty:settings.botLevels?.[p.id]||settings.difficulty,profile:settings.teamProfile});if(aiModel&&mode!=='tactical'){if(aiModel.w2&&tick%6!==0)continue;const prediction=FuckballAI.infer(aiModel,room.state,p.id,['gk','dm','am','st'][room.state.players.filter(q=>q.team.id===p.team.id).findIndex(q=>q.id===p.id)%4]);if(mode==='model')input=prediction.input;else if(prediction.confidence>.58&&(prediction.input&15)!==0)input=(prediction.input&15)|(input&16);}sendInput(p.id,input);}}if(peerConnected&&peerRole==='host'&&tick%2===0)sendSnapshot();}
 function isOnlineGuest(){return peerConnected&&peerRole==='guest';}
 // HaxBall-equivalent prediction (see render-timing.js): frames ahead of the confirmed state.
@@ -189,6 +248,14 @@ function replaySessionConflict(){
  if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
  if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
  if(peer)return 'Finish or cancel the direct-peer connection before opening a replay.';
+ // Home/My Games can hide a still-running local or Couch Rivals match.
+ // A replay opened from those views would silently replace its current score,
+ // player slots and progress. Block that hidden-match path; a conscious replay
+ // selection from the visible pitch retains the original playback behavior.
+ if(started&&!replay&&$('matchView').hidden)
+  return 'Your local match is still active. Return to the pitch and choose Stop match before opening a replay.';
+ if(room.isRecording())
+  return 'Finish and save the active local recording before opening a replay.';
  const nativeQueue= document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  if(nativeQueue)return 'Finish or cancel the human matchmaking queue or ready check first.';
  return '';
@@ -287,9 +354,17 @@ const commands={
 commands.extrap=commands.extrapolation;
 function runCommand(line){const [name,...args]=line.slice(1).trim().split(/\s+/),cmd=commands[(name||'').toLowerCase()];if(!cmd){log('Unknown command /'+name+'. Type /help');return;}try{const out=cmd.run(args);if(out)log(out);}catch(err){log(err.message);}}
 $('chatInput').addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();e.stopPropagation?.();closeChat();}});
-const localKeys=new Set(['KeyW','KeyA','KeyS','KeyD','KeyF','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Numpad0','Enter']);
-function isPlayKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value))return localKeys.has(code);return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));}
-function isChatKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&localKeys.has(code))return false;return settings.keys.chat.includes(code);}
+function isPlayKey(code){
+ if(couchModes.has($('mode').value)){
+  if(couchP2Keys.has(code))return true;
+  return Object.values(localPlayerOneControls().keys).some(binding=>binding.includes(code));
+ }
+ return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));
+}
+function isChatKey(code){
+ if(couchModes.has($('mode').value)&&isPlayKey(code))return false;
+ return settings.keys.chat.includes(code);
+}
 document.addEventListener('keydown',e=>{
  if(!gameplayInputSurfaceActive()||
     ['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName)||
@@ -312,20 +387,51 @@ window.addEventListener('focus',()=>{windowInputFocused=true;});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseInputs();});
 $('gameCanvas').addEventListener('pointerdown',()=>{$('gameCanvas').focus();});
 function moveStick(e){if(stickPointer!==e.pointerId||!canControlLiveMatch())return;const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,d=Math.hypot(dx,dy);const layout=window.touchControlSettings||{scale:1,deadzone:10},scale=Number.isFinite(layout.scale)?Math.max(.75,Math.min(1.5,layout.scale)):1,reach=27*scale,deadzone=Math.max(4,Math.min(24,Number(layout.deadzone)||10))*scale,f=d>reach?reach/d:1;$('stick').style.transform=`translate(${dx*f}px,${dy*f}px)`;touch.x=Math.abs(dx)>deadzone?Math.sign(dx):0;touch.y=Math.abs(dy)>deadzone?Math.sign(dy):0;refreshInput();}
+// Each physical touch owns exactly one gameplay control until it releases.
+// In a two-thumb game, a stray additional finger on the same surface must
+// not steal movement/kick or clear the input from the actual owner.
 $('joystick').onpointerdown=e=>{
- if(!canControlLiveMatch())return;
- e.preventDefault();stickPointer=e.pointerId;
- $('joystick').setPointerCapture(e.pointerId);moveStick(e);
-};$('joystick').onpointermove=moveStick;function stopStick(){stickPointer=null;touch.x=touch.y=0;$('stick').style.transform='';refreshInput();}$('joystick').onpointerup=stopStick;$('joystick').onpointercancel=stopStick;
+ if(!canControlLiveMatch()||stickPointer!==null||kickPointer===e.pointerId)return;
+ e.preventDefault();
+ try{$('joystick').setPointerCapture(e.pointerId);}catch{return;}
+ stickPointer=e.pointerId;
+ moveStick(e);
+};
+$('joystick').onpointermove=moveStick;
+function stopStick(e){
+ if(stickPointer===null||e.pointerId!==stickPointer)return;
+ stickPointer=null;
+ touch.x=touch.y=0;
+ $('stick').style.transform='';
+ refreshInput();
+}
+$('joystick').onpointerup=stopStick;
+$('joystick').onpointercancel=stopStick;
+// Captures can also be lost when the phone rotates, the DOM moves or
+// the browser takes over a system gesture. Clear the actual owner's input.
+$('joystick').onlostpointercapture=stopStick;
 $('touchKick').onpointerdown=e=>{
- if(!canControlLiveMatch())return;
- e.preventDefault();kickPointer=e.pointerId;
- $('touchKick').setPointerCapture(e.pointerId);
+ if(!canControlLiveMatch()||kickPointer!==null||stickPointer===e.pointerId)return;
+ e.preventDefault();
+ try{$('touchKick').setPointerCapture(e.pointerId);}catch{return;}
+ kickPointer=e.pointerId;
  touch.kick=true;refreshInput();
 };
-$('touchKick').onpointerup=$('touchKick').onpointercancel=()=>{
- kickPointer=null;touch.kick=false;refreshInput();
-};
+function stopKick(e){
+ if(kickPointer===null||e.pointerId!==kickPointer)return;
+ kickPointer=null;
+ touch.kick=false;refreshInput();
+}
+$('touchKick').onpointerup=stopKick;
+$('touchKick').onpointercancel=stopKick;
+$('touchKick').onlostpointercapture=stopKick;
+// If the layout geometry changes under the player's thumb, require a new
+// touch instead of retaining a direction/kick from the old hit target.
+function releaseDisplacedTouches(){
+ if(stickPointer!==null||kickPointer!==null)releaseInputs();
+}
+window.addEventListener('resize',releaseDisplacedTouches);
+window.addEventListener('fuckball:touch-layout-applied',releaseDisplacedTouches);
 // Independent peer-to-peer play. No HaxBall service or room protocol is contacted.
 function send(data){if(channel?.readyState==='open'&&channel.bufferedAmount<262144)channel.send(typeof data==='string'?data:JSON.stringify(data));}
 function sendSnapshot(){const target=stateChannel?.readyState==='open'?stateChannel:channel;if(target?.readyState!=='open'||target.bufferedAmount>65536)return;const bytes=Replay.writeAll(Object.assign(new Replay.ReplayData(),{roomData:room.takeSnapshot(),events:[],goalMarkers:[],totalFrames:0,version:3}));if(guestTimeline){const packet=new Uint8Array(bytes.length+20),header=new DataView(packet.buffer),slack=guestTimeline.takeSlack();header.setUint32(0,0x46423203);header.setUint32(4,++net.sequence);header.setUint32(8,guestTimeline.appliedSeq>>>0);header.setUint32(12,room.currentFrameNo>>>0);header.setInt32(16,Number.isFinite(slack)?Math.round(Math.max(-1e6,Math.min(1e6,slack))*1000):-2147483648);packet.set(bytes,20);target.send(packet);return;}const packet=new Uint8Array(bytes.length+16),header=new DataView(packet.buffer);header.setUint32(0,0x46423201);header.setUint32(4,++net.sequence);header.setUint32(8,net.ack);header.setUint32(12,room.currentFrameNo>>>0);packet.set(bytes,16);target.send(packet);}
@@ -364,7 +470,7 @@ function disconnect(){predictor.reset();enableV3(false);guestTimeline=null;state
 async function beginPeer(role){disconnect();networkPlayerId=2;if(replay)closeReplay();if(!window.RTCPeerConnection)throw Error('WebRTC unavailable.');peerRole=role;peer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});peer.onconnectionstatechange=()=>{if(peer?.connectionState==='failed'){$('networkStatus').textContent='Direct connection failed. Try a room server.';}};if(role==='host'){setupChannel(peer.createDataChannel('fuckball'));setupStateChannel(peer.createDataChannel('fuckball-state',{ordered:false,maxRetransmits:0}));}else peer.ondatachannel=e=>{if(e.channel.label==='fuckball-state')setupStateChannel(e.channel);else setupChannel(e.channel);};$('localSignal').value='';$('remoteSignal').value='';return peer;}
 function gather(pc){if(pc.iceGatheringState==='complete')return Promise.resolve();return new Promise(resolve=>{const timeout=setTimeout(done,8000);function done(){clearTimeout(timeout);pc.removeEventListener('icegatheringstatechange',check);resolve();}function check(){if(pc.iceGatheringState==='complete')done();}pc.addEventListener('icegatheringstatechange',check);});}
 function signalEncode(value){return btoa(JSON.stringify(value));}function signalDecode(value){if(value.length>100000)throw Error('Connection code too large.');const d=JSON.parse(atob(value.trim()));if(!['offer','answer'].includes(d.type)||typeof d.sdp!=='string')throw Error('Invalid code.');return d;}
-$('networkButton').onclick=()=>openDialog('networkDialog');$('menuOnline').onclick=()=>typeof connectServer==='function'&&defaultServer?connectServer(true):openDialog('networkDialog');
+$('networkButton').onclick=()=>openDialog('networkDialog');$('menuOnline').onclick=()=>typeof connectServer==='function'&&$('serverAddress').value.trim()?connectServer(true):openDialog('networkDialog');
 $('hostPeer').onclick=async()=>{try{$('networkStatus').textContent='Creating code…';const pc=await beginPeer('host');await pc.setLocalDescription(await pc.createOffer());await gather(pc);if(peer!==pc)return;$('localSignal').value=signalEncode(pc.localDescription);$('networkStatus').textContent='Share your code, then paste the reply.';}catch(e){$('networkStatus').textContent=e.message;}};
 $('joinPeer').onclick=async()=>{try{await beginPeer('guest');$('networkStatus').textContent='Paste the host code and select Connect.';$('remoteSignal').focus();}catch(e){$('networkStatus').textContent=e.message;}};
 $('acceptSignal').onclick=async()=>{try{const signal=signalDecode($('remoteSignal').value);if(!peer)throw Error('Select Host or Join first.');const pc=peer;await pc.setRemoteDescription(signal);if(peerRole==='guest'){await pc.setLocalDescription(await pc.createAnswer());await gather(pc);if(peer!==pc)return;$('localSignal').value=signalEncode(pc.localDescription);$('networkStatus').textContent='Send this reply to the host.';}else $('networkStatus').textContent='Connecting…';}catch(e){$('networkStatus').textContent='Could not connect: '+e.message;}};

@@ -23,7 +23,8 @@
  toggle.setAttribute('aria-label','Toggle automatic spectator camera');toggle.textContent='◎ AUTO CAM';
  toggle.setAttribute('aria-pressed','false');
  spectatorToolbar.append(toggle);
- let enabled=false,lastRoom=null,lastChange=0,previousId=null,lastAvailable=false;
+ let enabled=false,lastRoom=null,lastChange=0,previousId=null;
+ let previousClock=null,previousScore=null;
  try{const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');
   if(stored?.version===1&&['all','red','blue'].includes(stored.mode))mode.value=stored.mode;
  }catch{}
@@ -35,6 +36,16 @@
  function activeRoom(){
   return serverLink?.room||(!serverLink&&document.getElementById('mode')?.value==='watch'?'local-watch':null);
  }
+ // The last received snapshot can still be present in the shared game
+ // renderer long after native transport stopped delivering new frames.
+ // Local Watch Bots do not use native snapshot timing.
+ function freshNativeFrame(){
+  if(!serverLink?.room)return true;
+  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
+  const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  const age=performance.now()-at;
+  return Number.isFinite(at)&&at>0&&age>=0&&age<=3500;
+ }
  function updateUi(text){
   toggle.setAttribute('aria-pressed',String(enabled));
   toggle.textContent=enabled?'◉ AUTO CAM ON':'◎ AUTO CAM';
@@ -42,7 +53,7 @@
   if(text)status.textContent=text;
  }
  function stop(reason){
-  enabled=false;previousId=null;lastChange=0;
+  enabled=false;previousId=null;lastChange=0;previousClock=null;previousScore=null;
   updateUi(reason||'Automatic camera stopped. Select a player manually at any time.');
  }
  mode.addEventListener('change',()=>{
@@ -80,10 +91,32 @@
  }
  function tick(){
   const current=activeRoom();
-  if(current!==lastRoom){lastRoom=current;if(enabled)stop('Room changed. Re-enable Auto Cam for this match.');}
+  if(current!==lastRoom){
+   lastRoom=current;previousClock=null;previousScore=null;
+   if(enabled)stop('Room changed. Re-enable Auto Cam for this match.');
+  }
   const valid=available();
   if(!valid){if(enabled)stop('Spectator view ended.');return;}
   if(!enabled)return;
+  if(!freshNativeFrame()){
+   previousId=null;lastChange=0;
+   status.textContent='Waiting for a fresh live server frame. Auto Cam is holding your last camera; no stale target selection.';
+   return;
+  }
+  // A new round can use the same native room ID and reused player IDs.
+  // Reset the old target/dwell so the spectator does not stick to the
+  // previous round's formation. Never alter any player or game state.
+  const g=room?.gameState;
+  const clock=Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0?g.timeElapsed:null;
+  const score=Number.isSafeInteger(g?.redScore)&&Number.isSafeInteger(g?.blueScore)&&
+   g.redScore>=0&&g.blueScore>=0?{red:g.redScore,blue:g.blueScore}:null;
+  if(clock!==null&&previousClock!==null&&clock+0.5<previousClock||
+     score!==null&&previousScore!==null&&
+      (score.red<previousScore.red||score.blue<previousScore.blue)){
+   previousId=null;lastChange=0;
+   status.textContent='New round detected. Auto Cam is choosing from current live players.';
+  }
+  previousClock=clock;previousScore=score;
   const list=coordinates();if(!list?.length){
    status.textContent='Waiting for real ball and player positions; keeping your current camera.';return;
   }

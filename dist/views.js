@@ -5,7 +5,7 @@ const gamesSessionHost=$('gamesView');
 const gamesSessionNotice=document.createElement('aside');
 gamesSessionNotice.className='games-session-notice';
 gamesSessionNotice.hidden=true;
-gamesSessionNotice.setAttribute('aria-label','Current multiplayer session');
+gamesSessionNotice.setAttribute('aria-label','Current game session');
 const gamesSessionText=document.createElement('div');
 const gamesSessionTitle=document.createElement('strong');
 const gamesSessionDescription=document.createElement('p');
@@ -26,19 +26,24 @@ function refreshGamesSession(){
  const direct=typeof peerConnected!=='undefined'&&peerConnected;
  const pending=typeof peer!=='undefined'&&!!peer;
  const activeRoom=!!native?.room;
- const hasSession=!!native||direct||pending;
+ const activeLocal=!native&&!direct&&!pending&&typeof started!=='undefined'&&started&&
+  typeof replay!=='undefined'&&!replay;
+ const hasSession=!!native||direct||pending||activeLocal;
  gamesSessionNotice.hidden=!hasSession;
  if(!hasSession)return;
  gamesSessionTitle.textContent=activeRoom?'ONLINE ROOM STILL OPEN':
-  direct?'DIRECT MATCH STILL OPEN':'MULTIPLAYER CONNECTION IN PROGRESS';
+  direct?'DIRECT MATCH STILL OPEN':
+  activeLocal?'LOCAL MATCH STILL ACTIVE':'MULTIPLAYER CONNECTION IN PROGRESS';
  gamesSessionDescription.textContent=activeRoom?
   (native.roomState?.started?'Your live room continues while you browse My Games. ':
    'Your online lobby is still connected. ')+
   'Leave it explicitly before opening a replay.':
   direct?'Your direct-peer match continues here. Disconnect explicitly before watching a replay.':
+  activeLocal?'Your local game and its current score are preserved while you browse My Games. Return to the pitch, then stop the match explicitly before watching a replay. The local game is paused while this view is open.':
   'Finish or cancel this connection before opening a replay. Nothing will be disconnected automatically.';
- gamesSessionReturn.textContent=activeRoom||direct?'↗ Return to match':'↗ View connection';
- gamesSessionMenu.hidden=!activeRoom&&!direct;
+ gamesSessionReturn.textContent=activeRoom||direct||activeLocal?'↗ Return to match':'↗ View connection';
+ gamesSessionMenu.textContent=activeLocal?'Match controls':'Room controls';
+ gamesSessionMenu.hidden=!activeRoom&&!direct&&!activeLocal;
 }
 gamesSessionReturn.addEventListener('click',()=>{$('tabPlay').click();});
 gamesSessionMenu.addEventListener('click',()=>{
@@ -134,7 +139,10 @@ function startNativeCustomRoom(localConsent=false){
     !window.confirm('Leave your current local game or replay to open a new online room? Unsaved progress may be lost.')){
   notify('Current local game or replay kept.');return false;
  }
- if(typeof connectServer==='function'&&defaultServer)connectServer(true);
+ // A human-specified WebSocket endpoint is valid even when this web host
+ // intentionally does not supply a default server. Existing connectServer
+ // still checks protocol, active sessions and server-issued permissions.
+ if(typeof connectServer==='function'&&$('serverAddress').value.trim())connectServer(true);
  else{showView('play');openDialog('networkDialog');}
  return true;
 }

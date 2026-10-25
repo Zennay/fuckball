@@ -44,7 +44,14 @@
  const fields=make('div','controller-setup-fields');
  const deviceLabel=make('label','','Controller in this tab');
  const deviceSelect=make('select');deviceSelect.setAttribute('aria-label','Choose which gamepad controls your player');
- deviceLabel.append(deviceSelect);
+ const rebind=make('button','controller-setup-rebind','↻ Bind selected controller to P1');
+ rebind.type='button';
+ rebind.setAttribute('aria-label','Explicitly bind the selected gamepad to player one');
+ const bindingStatus=make('small','controller-setup-source-status',
+  'Source selection previews input only. Use Bind selected controller to P1 to change gameplay control.');
+ bindingStatus.setAttribute('role','status');
+ bindingStatus.setAttribute('aria-live','polite');
+ deviceLabel.append(deviceSelect,rebind,bindingStatus);
  const mappingLabel=make('label','','Kick buttons');
  const mapping=make('select');mapping.setAttribute('aria-label','Gamepad kick mapping');
  for(const [v,label] of MODES)mapping.add(new Option(label,v));
@@ -89,7 +96,7 @@
  let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
   kickPulse:false,goalPulse:false},
   suggestion=null,sampling=null,lastMessage='',active=false;
- let selectedSource=null,deviceSignature='',binding=null;
+ let selectedSource=null,deviceSignature='',binding=null,boundSource=null;
  const allowedButtons=[0,1,2,3,4,5,6,7,8,10,11];
  function cancelBinding(message){
   binding=null;bindButton.textContent='◎ Press a button to bind kick';
@@ -100,7 +107,8 @@
   const task=binding;
   if(!active||!dialog.open||document.hidden)return cancelBinding('Binding stopped when the dialog or tab closed.');
   const pad=controller();
-  if(!pad||pad.index!==task.index)return cancelBinding('Selected controller disconnected or changed. No binding was saved.');
+  if(!pad||!pad.connected||pad.index!==task.index||pad.id!==task.id)
+   return cancelBinding('Selected controller disconnected or was replaced. No kick binding was saved.');
   if(performance.now()-task.startedAt>8000)
    return cancelBinding('No button detected within eight seconds. Choose Press a button to retry.');
   const down=allowedButtons.filter(i=>held(pad,i));
@@ -125,7 +133,7 @@
   const pad=controller();
   if(!pad)return void(hint.textContent='Connect and select a controller before binding its kick button.');
   cancelCalibration();
-  binding={index:pad.index,armed:false,startedAt:performance.now()};
+  binding={index:pad.index,id:pad.id,armed:false,startedAt:performance.now()};
   bindButton.textContent='Cancel button binding';
   hint.textContent='Release all buttons; then press the desired kick button within eight seconds.';
   requestAnimationFrame(scanBinding);
@@ -206,7 +214,10 @@
  }
  function controller(){
   const pads=availableControllers();
-  return selectedSource===null?pads[0]||null:
+  // Automatic controller previews cannot offer P2's locked gamepad as P1.
+  const reserved=window.fuckballCouchPad?.reservedPort?.()??null;
+  return selectedSource===null?
+   pads.find(p=>p.index!==reserved)||null:
    pads.find(p=>p.index===selectedSource)||null;
  }
  function refreshSources(){
@@ -222,19 +233,59 @@
   }
   deviceSelect.value=selectedSource===null?'auto':String(selectedSource);
  }
+ rebind.onclick=()=>{
+  if(['couchRivals','couchRivals3v3','couchRivals4v4']
+      .includes(document.getElementById('mode')?.value)){
+   hint.textContent='Four-human rivals reserve both gamepads for Blue players. Player 1 uses the keyboard.';
+   return;
+  }
+  const pad=controller();
+  if(!pad){
+   hint.textContent='Connect the chosen controller before binding it to Player 1.';
+   state.textContent='No connected controller on the selected port.';
+   return;
+  }
+  // Previewing a device never grants it movement/kick authority. Only this
+  // explicit click may bind the chosen physical controller to P1.
+  const reserved=window.fuckballCouchPad?.reservedPort?.()??null;
+  if(pad.index===reserved){
+   hint.textContent='This controller is reserved for Player 2. Choose an unreserved controller before binding Player 1.';
+   return;
+  }
+  // Convert an automatic preview into an explicit physical port selection.
+  // Otherwise the previewed controller and the gamepad module's sticky
+  // automatic preference could refer to two different connected devices.
+  selectedSource=pad.index;boundSource=pad.index;deviceSignature='';refreshSources();
+  bindingStatus.textContent='P1 bound explicitly to port '+(pad.index+1)+
+   ' · '+String(pad.id||'Controller').slice(0,48)+'.';
+  // One deliberate P1 authorization; browser/game code owns the live port
+  // and hardware-id lock. It neutralizes the old source before any new input.
+  window.dispatchEvent(new CustomEvent('fuckball:controller-source',{
+   detail:{index:pad.index}}));
+  cancelBinding();
+  cancelCalibration();
+  hint.textContent='Player 1 explicitly bound to port '+(pad.index+1)+
+   '. Movement and kick now use only that gamepad during this live match.';
+  lastMessage='';present(pad);
+ };
  deviceSelect.onchange=()=>{
   const choice=deviceSelect.value;
   const next=choice==='auto'?null:Number(choice);
   if(next!==null&&(!Number.isSafeInteger(next)||next<0||next>15))return;
   selectedSource=next;deviceSignature='';
+  bindingStatus.textContent='Preview only · '+(next===null?'automatic':'port '+(next+1))+
+   '. Player 1 gameplay authority is unchanged until you click Bind selected controller to P1.';
   cancelBinding('Controller changed; previous pending binding cancelled.');
   cancelCalibration();
   lastMessage='';
-  window.dispatchEvent(new CustomEvent('fuckball:controller-source',{detail:{index:next}}));
+  // Selecting a row is PREVIEW ONLY, especially during an active multiplayer
+  // round. Never hand P1 authority to another human's pad on this change.
   refreshSources();present(controller());
-  hint.textContent=next===null?
-   'Automatic selection enabled. The first connected controller controls your player.':
-   'Using only port '+(next+1)+'. If it disconnects, gameplay goes neutral instead of switching players.';
+  const preview=next===null?'Automatic preview':('Port '+(next+1)+' preview');
+  hint.textContent=preview+' selected. '+(boundSource===null?
+   'No controller was explicitly bound from this setup panel yet.':
+   'Your last explicit P1 binding remains on port '+(boundSource+1)+'.')+
+   ' Press Bind selected controller to P1 to change gameplay input.';
  };
  function present(pad){
   if(!pad){
@@ -250,7 +301,11 @@
    direction.textContent='No input';kick.textContent='Kick unavailable';
    return;
   }
-  const msg='Connected · '+String(pad.id||'Gamepad').slice(0,72)+
+  const seat=window.fuckballGamepad?.sourceStatus?.();
+  const needsRebind=seat?.locked&&seat.connected===false;
+  const msg=needsRebind?
+   'Controller available, but the active P1 gamepad was disconnected or replaced. Click Bind selected controller to P1 before gameplay resumes.':
+   'Connected · '+String(pad.id||'Gamepad').slice(0,72)+
    ' · '+pad.buttons.length+' buttons · '+pad.axes.length+' axes · '+
    (typeof pad.vibrationActuator?.playEffect==='function'?'vibration available':'no vibration support')+'.';
   if(msg!==lastMessage){state.textContent=msg;lastMessage=msg;}
@@ -269,6 +324,13 @@
   kick.textContent=isKick(pad)?'● KICK PRESSED':'○ Kick released';
   kick.classList.toggle('is-pressed',isKick(pad));
   if(!sampling)return;
+  // A disconnected/reassigned Gamepad API port must never supply calibration
+  // samples or a recommendation for a different person's controller.
+  if(!pad.connected||pad.index!==sampling.index||pad.id!==sampling.id){
+   cancelCalibration();
+   hint.textContent='Controller disconnected or changed during calibration. Nothing was applied; restart with your chosen controller.';
+   return;
+  }
   sampling.count++;
   const drift=Math.max(Math.abs(rawX),Math.abs(rawY));
   sampling.max=Math.max(sampling.max,drift);
@@ -289,10 +351,12 @@
  }
  calibrate.onclick=()=>{
   cancelBinding();
-  if(!controller()){
+  const pad=controller();
+  if(!pad){
    hint.textContent='Connect a controller and press a button before measuring drift.';return;
   }
-  sampling={started:performance.now(),max:0,moved:false,count:0};
+  sampling={index:pad.index,id:pad.id,started:performance.now(),
+   max:0,moved:false,count:0};
   suggestion=null;apply.disabled=true;calibrate.disabled=true;
   hint.textContent='Measuring for two seconds. Keep the left stick still and centered.';
  };
@@ -334,5 +398,13 @@
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
  window.addEventListener('gamepadconnected',()=>{if(active){refreshSources();present(controller());}});
  window.addEventListener('gamepaddisconnected',()=>{if(active){refreshSources();present(controller());}});
- document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelBinding();});
+ function suspendCapture(){
+  if(binding)cancelBinding('Button binding cancelled because the game is no longer focused.');
+  if(sampling){
+   cancelCalibration();
+   hint.textContent='Stick calibration cancelled when focus was lost. Restart with a still controller.';
+  }
+ }
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendCapture();});
+ window.addEventListener('blur',suspendCapture);
 })();

@@ -26,10 +26,11 @@
  teamLabel.append(teamSize);
  const start=make('button','▶ START FOUR-PLAYER SERIES');start.type='button';start.className='primary';
  const next=make('button','▶ NEXT ROUND');next.type='button';next.hidden=true;
+ const resume=make('button','▶ RESUME PAUSED ROUND');resume.type='button';resume.hidden=true;resume.className='primary';
  const end=make('button','End series');end.type='button';end.hidden=true;
  const exportButton=make('button','↓ Save series result');exportButton.type='button';exportButton.hidden=true;
  const imageButton=make('button','↓ Save PNG scorecard');imageButton.type='button';imageButton.hidden=true;
- actions.append(formatLabel,teamLabel,start,next,end,exportButton,imageButton);
+ actions.append(formatLabel,teamLabel,start,next,resume,end,exportButton,imageButton);
  const status=make('p','Requires two independent standard gamepads for Blue. Red plays on shared keyboard.','couch-series-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const tally=make('div',null,'couch-series-tally');tally.hidden=true;
@@ -39,7 +40,15 @@
  if(anchor)anchor.insertAdjacentElement('afterend',panel);else home.append(panel);
  const hud=make('aside',null,'couch-series-hud');hud.hidden=true;
  hud.setAttribute('aria-label','Current four-player best-of series score');pitch.append(hud);
- let series=null,message='',archived=[],showAllHistory=false;
+ let series=null,message='',archived=[],showAllHistory=false,lastControllerScan=0;
+ // Only the series Next Round action may authorize a new native kickoff.
+ let expectedSeriesKickoff=false,observedSeriesKickoff=false;
+ function abandonSeries(reason){
+  if(!series||series.complete)return;
+  series=null;expectedSeriesKickoff=false;
+  announce(reason+' The unfinished series was not saved or counted as a result.');
+  display();
+ }
  function announce(text){if(text!==message){message=text;status.textContent=text;}}
  function saveArchive(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,records:archived.slice(0,MAX)}));return true;}
@@ -144,18 +153,33 @@
   const active=!!series;
   start.hidden=active;formatLabel.hidden=active;teamLabel.hidden=active;
   next.hidden=!active||!series.resolved||series.complete;
+  resume.hidden=!active||!series.suspended||series.resolved||series.complete;
+  if(active&&series.suspended){
+   const health=window.fuckballCouchRivals?.seatStatus?.();
+   resume.disabled=!health?.ok;
+   resume.textContent=health?.ok?'▶ RESUME WITH FOUR HUMANS':
+    'WAITING FOR BLUE CONTROLLERS';
+  }
   end.hidden=!active;exportButton.hidden=!active||!series.complete;
   imageButton.hidden=!active||!series.complete;
   tally.hidden=!active;hud.hidden=!active||pitch.hidden;
   if(!active){tally.replaceChildren();hud.replaceChildren();return;}
-  const text='RED '+series.red+' — '+series.blue+' BLUE · '+series.teamSize+
+  const text=(series.suspended?'PAUSED · CONTROLLER LOST · ':'')+
+   'RED '+series.red+' — '+series.blue+' BLUE · '+series.teamSize+
    'v'+series.teamSize+' · Best of '+series.bestOf+
    ' · Round '+series.round+(series.draws?' · Draws '+series.draws:'');
   tally.textContent=text;hud.replaceChildren(make('strong',text));
-  if(series.resolved){
-   const action=make('button',series.complete?'↓ EXPORT SERIES':'▶ NEXT ROUND');
+  if(series.resolved||series.suspended){
+   const action=make('button',series.suspended?'▶ RESUME ROUND':
+    series.complete?'↓ EXPORT SERIES':'▶ NEXT ROUND');
    action.type='button';action.className='couch-series-hud-action';
-   action.onclick=series.complete?exportResult:nextRound;
+   action.onclick=series.suspended?resumeRound:
+    series.complete?exportResult:nextRound;
+   if(series.suspended){
+    action.disabled=!window.fuckballCouchRivals?.seatStatus?.().ok;
+    action.title=action.disabled?'Reconnect the original Blue controllers first.':
+     'Resume only after all four human seats are ready.';
+   }
    hud.append(action);
   }
  }
@@ -169,6 +193,13 @@
   if(typeof paused!=='undefined'&&!paused&&typeof started!=='undefined'&&started&&room?.gameState)
    togglePause(); // Freeze actual native play until players request another round.
   const ended=Math.max(series.red,series.blue)>=Math.floor(series.bestOf/2)+1;
+  if(!ended&&series.rounds.length>=50){
+   // The device-local archive stores at most fifty native rounds. A longer
+   // series cannot be represented faithfully: do not fabricate a winner or
+   // silently truncate the evidence of real human results.
+   abandonSeries('This best-of reached the fifty-round archive limit without a winner.');
+   return;
+  }
   if(ended){
    series.complete=true;series.final=record();
    announce((series.red>series.blue?'RED':'BLUE')+' WINS THE SERIES · '+
@@ -180,20 +211,62 @@
   }
   display();
  }
- function watch(){
+ function resumeRound(){
+  if(!series||!series.suspended||series.resolved||series.complete)return;
+  const health=window.fuckballCouchRivals?.seatStatus?.();
+  if(!health?.ok){
+   announce('Blue controllers are still disconnected. Reconnect or explicitly rebind the original seats first.');
+   display();return;
+  }
+  if(typeof started==='undefined'||!started||!room?.gameState){
+   announce('Original local round is no longer running. Do not resume a different match.');
+   return;
+  }
+  if(typeof paused!=='undefined'&&paused)togglePause();
+  if(typeof paused!=='undefined'&&paused){
+   announce('Round is still paused. Check the native match controls.');
+   return;
+  }
+  series.suspended=false;
+  announce('All four real human seats restored. Round '+series.round+' resumed explicitly.');
+  display();
+ }
+ function watch(now){
   if(series&&!series.complete&&!series.resolved){
    if(document.getElementById('mode')?.value!==series.mode||
     typeof replay!=='undefined'&&replay||
     typeof peerConnected!=='undefined'&&peerConnected||
     typeof serverLink!=='undefined'&&serverLink){
     series=null;announce('Couch series ended because the local match was left.');display();
+   }else if(typeof started!=='undefined'&&!started){
+    // Native Stop can retain a gameState and previous scores; none of those
+    // values is permission to award the next series point.
+    abandonSeries('The native match was stopped before the series round finished.');
    }else{
+    if(now-lastControllerScan>=150){
+     lastControllerScan=now;
+     const health=window.fuckballCouchRivals?.seatStatus?.();
+     if(health&&!health.ok&&!series.suspended&&typeof started!=='undefined'&&started){
+      // Never silently continue 2v1. Preserve round and locked controllers.
+      series.suspended=true;
+      announce('Round paused: Blue Player '+health.missing.join(' and Blue Player ')+
+       ' lost their assigned gamepad. Reconnect or explicitly rebind, then choose Resume.');
+      display();
+     }else if(health?.ok&&series.suspended&&resume.disabled){
+      announce('Controllers restored. The paused round will resume only when you press Resume.');
+      display();
+     }
+    }
+    // A generic P-pause/menu resume must not bypass the explicit four-human
+    // restart. Re-freeze the original native round while it is suspended.
+    if(series.suspended&&typeof started!=='undefined'&&started&&
+       typeof paused!=='undefined'&&!paused&&room?.gameState)togglePause();
     const state=typeof room!=='undefined'?room?.gameState:null;
     if(state){
      series.seen=true;
-     if((state.redScore||0)>0||(state.blueScore||0)>0)
+     if(!series.suspended&&((state.redScore||0)>0||(state.blueScore||0)>0))
       resolve((state.redScore||0)>(state.blueScore||0)?'red':'blue');
-    }else if(series.seen){
+    }else if(series.seen&&!series.suspended){
      // Native time limit expired before the first goal.
      resolve('draw');
     }
@@ -223,19 +296,44 @@
    announce('Finish the current online or local transition before starting.');return;
   }
   const bestOf=Number(format.value);
+  lastControllerScan=0;
   series={created:Date.now(),bestOf,teamSize:size,mode,red:0,blue:0,draws:0,round:1,
-   resolved:false,complete:false,seen:false,rounds:[],names:labels(),final:null};
+   resolved:false,complete:false,suspended:false,seen:false,rounds:[],names:labels(),final:null};
   announce('Round 1 live · '+size+'v'+size+' with four real humans and '+
    (size-2)+' AI teammate(s) per team. First native goal wins.');
   display();
  }
  function nextRound(){
   if(!series||series.complete||!series.resolved)return;
+  const prior=window.fuckballCouchRivals?.seatStatus?.();
+  if(!prior?.ok){
+   announce('The original Blue controllers must still own their human seats. Rebind explicitly during the paused native match or end the series and start a new one.');
+   return;
+  }
+  const originalPorts=(prior.seats||[]).map(seat=>seat.port);
   const prepared=window.fuckballCouchRivals?.prepare?.();
   if(!prepared?.ok){announce(prepared?.message||'Reconnect both Blue controllers first.');return;}
+  const nextSeats=window.fuckballCouchRivals?.seatStatus?.();
+  if(!nextSeats?.ok||(nextSeats.seats||[]).some((seat,i)=>seat.port!==originalPorts[i])){
+   // A new port preference must not silently swap two humans' Blue roles in
+   // the middle of a best-of (even when both pads are physically attached).
+   abandonSeries('Controller seat ownership changed between native rounds.');
+   return;
+  }
   if(typeof resetMatch!=='function'){announce('Native match reset unavailable.');return;}
-  series.round++;series.resolved=false;series.seen=false;
-  resetMatch(true);
+  const nextNumber=series.round+1;
+  expectedSeriesKickoff=true;observedSeriesKickoff=false;
+  try{resetMatch(true);}
+  catch(error){
+   abandonSeries('The native next-round kickoff failed: '+String(error?.message||'Unknown error').slice(0,100)+'.');
+   return;
+  }finally{expectedSeriesKickoff=false;}
+  if(!observedSeriesKickoff||typeof started==='undefined'||!started){
+   abandonSeries('The next native round did not start.');
+   return;
+  }
+  series.round=nextNumber;series.resolved=false;series.seen=false;
+  series.suspended=false;lastControllerScan=0;
   announce('Round '+series.round+' live · first native goal wins.');
   display();
  }
@@ -251,17 +349,25 @@
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   announce('Private unverified series result downloaded. No online upload or rating change.');
  }
+ // A normal match-menu restart is not a series Next Round. Do not carry
+ // the old scorecard into a newly started local match.
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  if(!series||series.complete)return;
+  if(expectedSeriesKickoff){observedSeriesKickoff=true;return;}
+  abandonSeries('A new native match started outside the series Next Round action.');
+ });
  // Use the real native goal callback as the authoritative first-goal signal.
  // Defer until the engine completes its current physics callback before pausing.
  window.addEventListener('fuckball:local-couch-goal',event=>{
-  if(!series||series.resolved||series.complete||
+  if(!series||series.resolved||series.complete||series.suspended||
    document.getElementById('mode')?.value!==series.mode||
    event.detail?.room!==room)return;
   const team=event.detail?.team;
   if(team!==1&&team!==2)return;
-  const source=series;
+  const source=series,round=source.round;
   queueMicrotask(()=>{
-   if(series===source&&!source.resolved&&!source.complete)
+   if(series===source&&source.round===round&&!source.resolved&&!source.complete&&
+      !source.suspended&&typeof started!=='undefined'&&started)
     resolve(team===1?'red':'blue');
   });
  });
@@ -312,7 +418,7 @@
    announce('PNG export is not supported in this browser. Your JSON result remains available.');
   }
  }
- start.onclick=startSeries;next.onclick=nextRound;
+ start.onclick=startSeries;next.onclick=nextRound;resume.onclick=resumeRound;
  exportButton.onclick=exportResult;imageButton.onclick=()=>savePng();
  end.onclick=()=>{
   if(!series)return;

@@ -55,6 +55,7 @@
  const W=canvas.width,H=canvas.height,PAD=25,INNER_W=W-PAD*2,INNER_H=H-PAD*2;
  const tracks=new Map();
  let open=false,roomRef=null,roomId='',lastSample=0,lastPaint=0,lastNotice=0,hits=[];
+ let previousClock=null,previousScore=null,previousField=null;
  function saveSettings(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,trails:options.trails,side:options.side}));}
   catch{message.textContent='Preferences apply for this visit; local storage unavailable.';}
@@ -64,8 +65,18 @@
     !isSpectatorCamera()||document.getElementById('pauseMenu')?.hidden===false)return false;
   return typeof room!=='undefined'&&!!room;
  }
+ // Only current authoritative WebSocket snapshots can drive a live native
+ // radar. Do not export, follow or trail unobserved server positions.
+ function freshNativeFrame(){
+  if(!serverLink?.room)return true; // Local Watch Bots uses local physics.
+  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
+  const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  const age=performance.now()-at;
+  return Number.isFinite(at)&&at>0&&age>=0&&age<=3500;
+ }
  function reset(){
   tracks.clear();hits=[];lastSample=0;lastPaint=0;
+  previousClock=null;previousScore=null;previousField=null;
  }
  function hide(){
   open=false;panel.hidden=true;toggle.setAttribute('aria-expanded','false');
@@ -74,6 +85,7 @@
   return {x:PAD+(x/width+1)*INNER_W/2,y:PAD+(y/height+1)*INNER_H/2};
  }
  function sample(){
+  if(!freshNativeFrame())return null;
   const current=room;
   const state=current?.state;
   const game=current?.gameState;
@@ -112,19 +124,51 @@
   const data=sample();
   ctx.clearRect(0,0,W,H);field();hits=[];
   if(!data){
+   // A disconnected/paused/ended source must not leave old trails or
+   // selectable hit targets behind a visually updated, frozen radar.
+   reset();
+   const waiting=!!serverLink?.room&&!freshNativeFrame();
+   const detail=waiting?'Waiting for fresh server frames':'Waiting for real match positions';
    ctx.fillStyle='#f5fbf4';ctx.textAlign='center';ctx.font='bold 22px sans-serif';
-   ctx.fillText('Waiting for real match positions',W/2,H/2-10);
+   ctx.fillText(detail,W/2,H/2-10);
+   if(message.textContent!==detail+' · no live positions to follow or export.')
+    message.textContent=detail+' · no live positions to follow or export.';
    download.disabled=true;return;
   }
   download.disabled=false;
   const roomKey=serverLink?.room||'local-spectator';
   if(roomRef!==room||roomId!==roomKey){roomRef=room;roomId=roomKey;reset();}
-  const scale=Math.min(1,Math.max(0,now-lastSample));
+  // Do not connect a previous round's or an unobserved interval's positions
+  // to the new live positions. These trails are explicitly local
+  // observations, not a replay or server-attested player route.
+  const g=room?.gameState;
+  const seconds=Number(g?.timeElapsed);
+  const red=Number(g?.redScore),blue=Number(g?.blueScore);
+  const clock=Number.isFinite(seconds)&&seconds>=0?seconds:null;
+  const score=[red,blue].every(Number.isSafeInteger)&&red>=0&&blue>=0?
+   {red,blue}:null;
+  const field=data.width+':'+data.height;
+  const newRound=clock!==null&&previousClock!==null&&clock+0.5<previousClock||
+   score!==null&&previousScore!==null&&
+    (score.red<previousScore.red||score.blue<previousScore.blue);
+  const newField=previousField!==null&&field!==previousField;
+  const missingTime=lastSample>0&&now-lastSample>3500;
+  if(newRound||newField||missingTime){
+   reset();
+   message.textContent=newRound?'New round or scoreboard reset: older player trails cleared.':
+    newField?'Stadium dimensions changed: old trails cleared.':
+    'Live position updates were missed: older trails cleared rather than inventing paths.';
+  }
+  previousClock=clock;previousScore=score;previousField=field;
   if(now-lastSample>=350){
    lastSample=now;
    const activeIds=new Set(data.players.map(p=>p.id));
    for(const id of tracks.keys())if(!activeIds.has(id))tracks.delete(id);
    for(const player of data.players){
+    // A player switching sides must not draw a false same-team path
+    // linking an old red or blue role to a new formation.
+    if(tracks.has(player.id)&&tracks.get(player.id).at(-1)?.side!==player.side)
+     tracks.delete(player.id);
     if(!tracks.has(player.id))tracks.set(player.id,[]);
     const path=tracks.get(player.id);
     path.push({x:player.x,y:player.y,at:now,side:player.side});
@@ -173,7 +217,7 @@
   }
  }
  function followAt(event){
-  if(!eligible()||!open||!hits.length)return;
+  if(!eligible()||!open||!freshNativeFrame()||!hits.length)return;
   const rect=canvas.getBoundingClientRect();
   if(!rect.width||!rect.height)return;
   const x=(event.clientX-rect.left)*W/rect.width,y=(event.clientY-rect.top)*H/rect.height;
@@ -202,10 +246,11 @@
  trails.addEventListener('change',()=>{options.trails=trails.checked;saveSettings();if(open)render(performance.now());});
  side.addEventListener('change',()=>{options.side=side.value;saveSettings();if(open)render(performance.now());});
  download.addEventListener('click',()=>{
-  if(!open||!eligible()||!sample()||typeof canvas.toBlob!=='function')return;
+  if(!open||!eligible()||!freshNativeFrame()||!sample()||typeof canvas.toBlob!=='function')return;
   download.disabled=true;
   canvas.toBlob(blob=>{
-   download.disabled=false;
+   download.disabled=!freshNativeFrame();
+   if(!freshNativeFrame())return;
    if(!blob||!blob.size||blob.size>6*1024*1024){
     message.textContent='Could not save this radar picture.';return;
    }

@@ -20,3 +20,30 @@
 .frame-meter-panel button:disabled{opacity:.48;cursor:not-allowed}
 .frame-meter-notice{min-height:15px}
 @media(max-width:560px){.frame-meter-panel{right:5px;top:65px;width:calc(100vw - 10px);padding:12px}.frame-meter-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.frame-meter-tile strong{font-size:19px}}
+
+/* Private real-FPS evidence: review it from My Games without keeping a game
+   rendering in the background or pretending unobserved time was measured. */
+.frame-meter-gaps{margin:7px 0 2px;font-size:11px;line-height:1.5;color:#d6dcb0}
+.frame-meter-evidence[hidden]{display:none!important}
+.frame-meter-evidence{box-sizing:border-box;margin:0 0 17px;padding:15px 18px;
+ display:flex;align-items:center;justify-content:space-between;gap:15px;
+ border:1px solid #8bb4a5;border-radius:13px;background:#193632;
+ color:#edfff0}
+.frame-meter-evidence-copy{min-width:0}
+.frame-meter-evidence-copy strong{font-size:.78rem;letter-spacing:.075em;color:#d8f6ac}
+.frame-meter-evidence-copy p{margin:6px 0 0;font-size:.81rem;
+ color:#d4e4da;line-height:1.48;max-width:70ch;overflow-wrap:anywhere}
+.frame-meter-evidence-actions{display:flex;flex-shrink:0;flex-wrap:wrap;gap:8px}
+.frame-meter-evidence-actions button{min-height:46px;padding:10px 12px;
+ border:1px solid #a4c0b0;background:#264d43;color:#f1ffed;
+ border-radius:9px;font-size:.82rem;font-weight:800;cursor:pointer}
+.frame-meter-evidence-actions button:focus-visible{outline:3px solid #e6ffae;outline-offset:2px}
+@media(max-width:780px){
+ .frame-meter-evidence{flex-direction:column;align-items:stretch;padding:13px}
+ .frame-meter-evidence-actions{display:grid;grid-template-columns:1fr 1fr}
+ .frame-meter-evidence-actions button:first-child{grid-column:1/-1}
+}
+@media(max-width:370px){
+ .frame-meter-evidence-actions{grid-template-columns:1fr}
+ .frame-meter-evidence-actions button:first-child{grid-column:auto}
+}

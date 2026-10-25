@@ -109,6 +109,48 @@
  const connectionCancel=action('× Cancel joining',cancelPendingConnection,'play-hub-connection-cancel');
  connectionActions.append(connectionView,connectionCancel);
  connectionCard.append(connectionHeading,connectionDetail,connectionActions);
+ // One contextual, server-authorized room strip replaces digging through
+ // the match menu/network dialog to return, invite friends or leave.
+ // It is deliberately absent for human Quick Match: no private invites for
+ // the server-controlled, ranked-independent matching queue.
+ const activeRoomCard=node('aside',null,'play-hub-current-room');
+ activeRoomCard.hidden=true;
+ activeRoomCard.setAttribute('aria-label','Your current online room');
+ const roomCopy=node('div',null,'play-hub-current-room-copy');
+ const roomHead=node('strong','YOU ARE IN A ROOM');
+ const roomDetail=node('p','','play-hub-current-room-detail');
+ const roomAdmission=node('small','Invites use the server’s existing room access rules.','play-hub-current-room-admission');
+ roomCopy.append(roomHead,roomDetail,roomAdmission);
+ const currentRoomActions=node('div',null,'play-hub-current-room-actions');
+ function currentInvitableRoom(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!link?.room||link.quickMatchMode)return null;
+  const invite=document.getElementById('inviteLink')?.value;
+  if(!link.invite||link.invite!==invite)return null;
+  return link;
+ }
+ function nativeRoomAction(id,description){
+  const link=currentInvitableRoom();
+  if(!link)return announce('Your previous room has ended. No '+description+' was sent.');
+  const control=document.getElementById(id);
+  if(!control||control.disabled)return announce('The original '+description+' control is unavailable.');
+  control.click();
+ }
+ const roomReturn=action('↗ Return to match',()=>{
+  if(!currentInvitableRoom())return announce('You are no longer connected to that room.');
+  document.getElementById('tabPlay')?.click();
+ },'play-hub-current-room-return');
+ const roomCopyInvite=action('Copy invite',()=>nativeRoomAction('copyInvite','invite copy'),'play-hub-current-room-copy-link');
+ const roomShareInvite=action('Share',()=>nativeRoomAction('shareInvite','invite share'),'play-hub-current-room-share');
+ const roomLeave=action('Leave room',()=>{
+  if(!currentInvitableRoom())return announce('The room has already ended.');
+  if(typeof window.confirm==='function'&&
+     !window.confirm('Leave your current online room? Your place in the match will be lost.'))return;
+  nativeRoomAction('disconnectPeer','disconnect');
+  announce('Leaving through the original online room controls.');
+ },'play-hub-current-room-leave');
+ currentRoomActions.append(roomReturn,roomCopyInvite,roomShareInvite,roomLeave);
+ activeRoomCard.append(roomCopy,currentRoomActions);
  const grid=node('div',null,'play-hub-grid');
  const human=node('article',null,'play-hub-card play-hub-human');
  const humanCopy=node('div');
@@ -210,7 +252,7 @@
  const hint=node('span','Online matchmaking needs a live server and human consent. Training is local.','play-hub-hint');
  const network=node('span',null,'play-hub-network');
  footer.append(hint,network);
- section.append(intro,connectionCard,grid,extras,status,footer);
+ section.append(intro,connectionCard,activeRoomCard,grid,extras,status,footer);
  hero.insertAdjacentElement('afterend',section);
  function activeState(){
   // Never infer queue/match ownership from personal settings or browser online status.
@@ -369,11 +411,31 @@
  function refresh(){
   const state=activeState();
   refreshPostMatch();
+  const activeRoom=currentInvitableRoom();
+  activeRoomCard.hidden=!activeRoom;
+  // During an admitted friend room, focus Home on that ongoing match instead
+  // of offering duplicate start actions that admission correctly rejects.
+  section.classList.toggle('is-in-room',!!activeRoom);
+  if(activeRoom){
+   // Distinguish a real admitted lobby, live match and completed round. Never
+   // infer server admission, room occupancy or player permissions locally.
+   const state=activeRoom.roomState;
+   const phase=state?.started?'MATCH LIVE':
+    state?.lastResult?'MATCH COMPLETE · REMATCH AVAILABLE':'ROOM LOBBY';
+   const role=activeRoom.isOwner?' · HOST':' · PLAYER / SPECTATOR';
+   const head=phase+' · '+activeRoom.room;
+   if(roomHead.textContent!==head)roomHead.textContent=head;
+   const detail=phase+role+' · Invite friends or return to the match.';
+   if(roomDetail.textContent!==detail)roomDetail.textContent=detail;
+  }
   connectionCard.hidden=!state.pending;
   if(state.pending){
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
    const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
-    ' You can keep waiting, review connection settings or cancel explicitly.';
+    (typeof serverLink!=='undefined'&&serverLink?.quickQueueAcknowledged?
+     ' The server accepted the human-only queue; no bots will be added.':
+     ' A server response is required within 20 seconds.')+
+    ' You can review connection settings or cancel explicitly.';
    if(connectionDetail.textContent!==copy)connectionDetail.textContent=copy;
   }
   const canCancel=nativeQueue.searching&&!nativeQueue.ready;
@@ -384,7 +446,9 @@
   if(!recoveryCard.hidden){
    const text=String(recovery.reason||'The human queue ended. Try again or choose another server.').slice(0,180);
    if(recoveryDetail.textContent!==text)recoveryDetail.textContent=text;
-   retrySearch.textContent='↻ Retry '+recovery.mode+' human match';
+   recoveryHead.textContent=recovery.party?'FRIENDS PARTY SEARCH ENDED':'SEARCH INTERRUPTED';
+   retrySearch.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';
   }
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
@@ -402,7 +466,8 @@
   }else if(state.server||state.peer||state.local||state.playingReplay){
    queueNow.textContent='↗ Return to current game';queueNow.disabled=false;
   }else if(recovery){
-   queueNow.textContent='↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
+   queueNow.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
   }else{
    queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
   }
@@ -413,7 +478,8 @@
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
-    recovery?'RETRY HUMAN MATCH':'FIND A QUICK MATCH';
+    recovery?(recovery.party?'VIEW FRIENDS PARTY':'RETRY HUMAN MATCH'):
+    'FIND A QUICK MATCH';
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
    heroFind.disabled=nativeQueue.ready&&(nativeQueue.accepted||nativeQueue.confirming);
   }
@@ -431,7 +497,9 @@
   }else if(nativeQueue.searching||state.inQueue){
    network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
   }else if(recovery){
-   network.textContent='● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
+   network.textContent=recovery.party?
+    '● PARTY SEARCH ENDED · RESTART VIA FRIENDS PARTY':
+    '● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
@@ -465,8 +533,10 @@
   const newlyReady=data.ready&&!nativeQueue.ready;
   const newlyAccepted=data.accepted&&!nativeQueue.accepted;
   const safeRecovery=data.recovery&&typeof data.recovery==='object'&&
-   playlists.includes(data.recovery.mode)&&typeof data.recovery.reason==='string'?
-   {mode:data.recovery.mode,reason:data.recovery.reason.slice(0,180)}:null;
+   [...playlists,'club4v4'].includes(data.recovery.mode)&&
+   typeof data.recovery.reason==='string'?
+   {mode:data.recovery.mode,party:data.recovery.party===true,
+    reason:data.recovery.reason.slice(0,180)}:null;
   nativeQueue={...data,recovery:safeRecovery};
   if(newlyReady){
    announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
@@ -493,12 +563,120 @@
   const vote=link.quickMatchMode?link.quickRematch:state.rematch;
   const waiting=Array.isArray(vote?.required)?vote.required.length:0;
   const accepted=Array.isArray(vote?.accepted)?vote.accepted.length:0;
-  const detail=vote&&waiting>0?
-   'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.' :
+  const requesting=typeof postgameRequestPending!=='undefined'&&
+   postgameRequestPending?.link===link;
+  const retry=typeof postgameRequestNotice!=='undefined'&&
+   postgameRequestNotice?.link===link;
+  const detail=requesting?'Server response pending · your request was sent; do not resubmit.':
+   vote&&waiting>0?'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.':
+   retry?postgameRequestNotice.message:
    'Official room result · next match remains server-controlled.';
   if(postMatchInfo.textContent!==detail)postMatchInfo.textContent=detail;
-  postMatchOpen.textContent=vote?'Review rematch consent →':'Review result & rematch →';
+  postMatchOpen.textContent=requesting?'View pending server request →':
+   vote?'Review rematch consent →':'Review result & rematch →';
  }
+ // Local full-time has no server proposal: use the original offline
+ // engine's result receipt and original native Start button for a rematch.
+ // Keep this separate from the server-authoritative rematch ribbon above.
+ let offlineFulltime=null,offlineFulltimeSerial=0,offlineFulltimeDismissed=null;
+ const localCards=[];
+ function offlineFulltimeResult(){
+  if(!offlineFulltime||offlineFulltimeDismissed===offlineFulltime.id)return null;
+  if(typeof room==='undefined'||room!==offlineFulltime.room||
+     typeof serverLink!=='undefined'&&!!serverLink||
+     typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&!!peer||
+     typeof replay!=='undefined'&&!!replay){
+   offlineFulltime=null;return null;
+  }
+  return offlineFulltime;
+ }
+ function canRepeatLocalMatch(item){
+  return !!item&&typeof started!=='undefined'&&!started&&
+   !room.gameState&&!document.getElementById('startButton')?.disabled;
+ }
+ function localRestart(){
+  const entry=offlineFulltimeResult();
+  if(!entry||!canRepeatLocalMatch(entry))
+   return announce('Full time is still finishing, or that local match has ended. Review the game controls first.');
+  const blocker=typeof pendingSessionBlock==='function'?pendingSessionBlock():'';
+  if(blocker)return announce(blocker);
+  const native=document.getElementById('startButton');
+  native.click(); // Original offline reset reuses native teams / stadium.
+  if(!started)return announce('The native match did not restart. Check the match controls.');
+  offlineFulltime=null;
+  offlineFulltimeDismissed=null;
+  refreshOfflineFulltime();
+  announce('New local round started with the same teams and stadium.');
+ }
+ function reviewLocalTeams(){
+  const entry=offlineFulltimeResult();
+  if(!entry)return announce('That local result is no longer active.');
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  document.getElementById('startButton')?.focus?.({preventScroll:true});
+ }
+ function makeLocalFulltimeCard(inMenu){
+  const card=node('section',null,'play-local-fulltime'+(inMenu?' play-local-fulltime-menu':''));
+  card.hidden=true;
+  card.setAttribute('aria-label','Finished local game');
+  const copy=node('div',null,'play-local-fulltime-content');
+  copy.append(node('span','FULL TIME · LOCAL GAME','play-local-fulltime-label'));
+  const score=node('strong','','play-local-fulltime-score');
+  const detail=node('p','','play-local-fulltime-detail');
+  detail.setAttribute('role','status');detail.setAttribute('aria-live','polite');
+  copy.append(score,detail);
+  const actions=node('div',null,'play-local-fulltime-actions');
+  const play=action('↻ Play again',localRestart,'primary');
+  const review=action('Review teams',reviewLocalTeams,'');
+  const dismiss=action('Dismiss',()=>{
+   if(offlineFulltime)offlineFulltimeDismissed=offlineFulltime.id;
+   refreshOfflineFulltime();
+  },'');
+  actions.append(play,review,dismiss);
+  card.append(copy,actions);
+  localCards.push({card,score,detail,play,review});
+  return card;
+ }
+ const homeLocalFulltime=makeLocalFulltimeCard(false);
+ intro.insertAdjacentElement('afterend',homeLocalFulltime);
+ const originalLocalMatchMenu=document.getElementById('nextMatchPanel');
+ if(originalLocalMatchMenu)
+  originalLocalMatchMenu.insertAdjacentElement('afterend',makeLocalFulltimeCard(true));
+ function refreshOfflineFulltime(){
+  const receipt=offlineFulltimeResult(),ready=canRepeatLocalMatch(receipt);
+  for(const {card,score,detail,play,review} of localCards){
+   card.hidden=!receipt;
+   if(!receipt)continue;
+   const label=receipt.winner===1?'RED WINS':
+    receipt.winner===2?'BLUE WINS':'DRAW';
+   const nativeScore=Number.isSafeInteger(receipt.red)&&
+    Number.isSafeInteger(receipt.blue)?' · '+receipt.red+' : '+receipt.blue:'';
+   const head=label+nativeScore;
+   if(score.textContent!==head)score.textContent=head;
+   const info=ready?'Local-only result · restart with the same teams and stadium.':
+    'Final whistle · the engine is finishing this round before another kickoff.';
+   if(detail.textContent!==info)detail.textContent=info;
+   play.disabled=!ready;
+   review.disabled=false;
+  }
+ }
+ window.addEventListener('fuckball:local-fulltime',event=>{
+  const data=event.detail;
+  if(!data||data.room!==room||![0,1,2].includes(data.winner))return;
+  offlineFulltime={room:data.room,winner:data.winner,mode:data.mode,
+   red:data.red,blue:data.blue,id:++offlineFulltimeSerial};
+  offlineFulltimeDismissed=null;
+  refreshOfflineFulltime();
+ });
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  offlineFulltime=null;offlineFulltimeDismissed=null;refreshOfflineFulltime();
+ });
+ const localFulltimeRefresh=setInterval(()=>{
+  if(offlineFulltime)refreshOfflineFulltime();
+ },600);
+ localFulltimeRefresh?.unref?.();
+
  const observer=new MutationObserver(()=>refresh());
  const match=document.getElementById('matchView');
  if(match){

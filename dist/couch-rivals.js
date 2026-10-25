@@ -57,11 +57,33 @@
   }
   return {ok:true,pads:[byId[3],byId[4]]};
  }
+ // Readiness in a live match describes the EXACT already locked human
+ // seats, never a fresh pool of currently available gamepads. Otherwise a new
+ // stranger's pad could make a disconnected P3/P4 appear "READY 2/2" even
+ // while actual gameplay correctly kept that original seat neutral.
+ const activeLockedMatch=()=>isMode()&&typeof started!=='undefined'&&started&&
+  typeof replay!=='undefined'&&!replay&&
+  typeof serverLink!=='undefined'&&!serverLink&&
+  typeof peerConnected!=='undefined'&&!peerConnected;
  function preview(){
+  if(activeLockedMatch()){
+   const players=[3,4].map(id=>{
+    const original=assigned?.[id-3]||null;
+    const live=padFor(id);
+    return{seat:id,index:original?.index??null,
+     id:String(original?.id||'Not assigned').slice(0,60),
+     connected:!!live};
+   });
+   const missing=players.filter(p=>!p.connected).map(p=>'P'+p.seat);
+   return{ok:missing.length===0,locked:true,players,
+    message:missing.length?
+     missing.join(' and ')+' controller disconnected or replaced. Input stays neutral until you explicitly rebind the original seat.':
+     'Blue P3 and P4 remain locked to their original two controllers.'};
+  }
   const result=choosePads();
-  if(!result.ok)return {ok:false,message:result.message,players:[]};
-  return {ok:true,players:result.pads.map((p,i)=>({seat:i+3,index:p.index,
-   id:String(p.id||'Controller').slice(0,60)})),
+  if(!result.ok)return {ok:false,locked:false,message:result.message,players:[]};
+  return {ok:true,locked:false,players:result.pads.map((p,i)=>({seat:i+3,index:p.index,
+   id:String(p.id||'Controller').slice(0,60),connected:true})),
    message:'Blue Player 3 and Player 4 have separate ready controllers.'};
  }
  function prepare(){
@@ -73,10 +95,45 @@
   return {ok:true,message:'Blue controllers locked to ports '+
    assigned.map(p=>p.index+1).join(' and ')+'. P1/P2 use the shared keyboard.'};
  }
+ // An unplugged pad stays neutral until the human explicitly selects a
+ // replacement. Never auto-assign the other Blue player's controller.
+ function rebind(id,source='auto'){
+  if(![3,4].includes(id)||!assigned||!isMode()||
+     typeof started==='undefined'||!started||
+     typeof replay!=='undefined'&&replay||
+     typeof peerConnected!=='undefined'&&peerConnected||
+     typeof serverLink!=='undefined'&&serverLink)
+   return {ok:false,message:'Start an offline four-human match before replacing a Blue controller.'};
+  const slot=id-3,other=assigned[1-slot];
+  const candidates=pads().filter(p=>p.index!==other.index);
+  let selected=null;
+  if(source==='auto'){
+   if(candidates.length!==1)return{ok:false,message:candidates.length?
+    'Choose a specific free controller port before replacing Player '+id+'.':
+    'Connect another standard controller. The other Blue player keeps their pad.'};
+   selected=candidates[0];
+  }else if(Number.isSafeInteger(source)&&source>=0&&source<=15)
+   selected=candidates.find(p=>p.index===source)||null;
+  if(!selected)return{ok:false,message:'That controller is unavailable or already belongs to the other Blue player.'};
+  assigned[slot]={index:selected.index,id:selected.id};
+  // Reset cached local command immediately. The original game engine still
+  // owns input refresh, all match physics and all player permissions.
+  last='';
+  if(typeof refreshInput==='function')refreshInput();
+  return{ok:true,message:'Blue Player '+id+' explicitly bound to port '+
+   (selected.index+1)+' · '+String(selected.id||'Gamepad').slice(0,55)+
+   '. The other human seat was not changed.'};
+ }
  function padFor(id){
   const slot=id-3,choice=assigned?.[slot];
   if(!choice)return null;
-  return pads().find(p=>p.index===choice.index&&p.id===choice.id)||null;
+  if(choice.lost)return null;
+  const connected=pads().find(p=>p.index===choice.index&&p.id===choice.id)||null;
+  // Two identical model pads can advertise the same ID and port across
+  // reconnects; once P3/P4 is lost, only their own explicit rebind may
+  // authorize movement or kicking again.
+  if(!connected&&activeLockedMatch())choice.lost=true;
+  return connected;
  }
  function usable(){return isMode()&&typeof started!=='undefined'&&started&&
   typeof paused!=='undefined'&&!paused&&typeof replay!=='undefined'&&!replay&&
@@ -110,6 +167,27 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ // A seat is healthy only when the exact controller locked to that human
+ // player is still present. Never substitute another person's connected pad.
+ function seatStatus(){
+  const seats=[3,4].map(id=>({
+   seat:id,connected:!!padFor(id),
+   port:assigned?.[id-3]?.index??null
+  }));
+  return {assigned:!!assigned,ok:!!assigned&&seats.every(p=>p.connected),
+   missing:seats.filter(p=>!p.connected).map(p=>p.seat),seats};
+ }
+ window.fuckballCouchRivals=Object.freeze({prepare,preview,seatStatus,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ // A same-model replacement can arrive before the next animation frame.
+ // Latch the exact seat on physical disconnect, even if a new device already
+ // occupies that Gamepad API index when the frame runs.
+ window.addEventListener('gamepaddisconnected',event=>{
+  if(!activeLockedMatch())return;
+  const index=event?.gamepad?.index;
+  if(!Number.isSafeInteger(index))return;
+  for(const seat of assigned||[])if(seat.index===index)seat.lost=true;
+  last='';
+  if(typeof refreshInput==='function')refreshInput();
+ });
  requestAnimationFrame(frame);
 })();
