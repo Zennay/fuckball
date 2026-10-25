@@ -171,6 +171,8 @@
   // after a user has switched rooms, disconnected, or turned this HUD off.
   const linkAtClick=typeof serverLink!=='undefined'?serverLink:null;
   const roomAtClick=room,keyAtClick=roomKey();
+  const roundAtClick=Number.isSafeInteger(serverLink?.roomState?.round)?
+   serverLink.roomState.round:null;
   const canvas=document.createElement('canvas');canvas.width=900;canvas.height=220;
   const context=canvas.getContext('2d');
   if(!context)return;
@@ -190,7 +192,9 @@
   canvas.toBlob(blob=>{
    if(!blob||blob.size>4*1048576||!enabled||overlay.hidden||
       (typeof serverLink!=='undefined'?serverLink:null)!==linkAtClick||
-      room!==roomAtClick||roomKey()!==keyAtClick)return;
+      room!==roomAtClick||roomKey()!==keyAtClick||
+      (Number.isSafeInteger(serverLink?.roomState?.round)?
+       serverLink.roomState.round:null)!==roundAtClick)return;
    const url=URL.createObjectURL(blob),a=node('a');
    a.href=url;a.download='fuckball-spectator-scoreboard.png';a.click();
    setTimeout(()=>URL.revokeObjectURL(url),60000);
