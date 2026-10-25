@@ -58,12 +58,12 @@
  const tips=document.createElement('section');tips.className='connection-details-tips';
  const tipHeading=document.createElement('strong');tipHeading.textContent='WHAT THESE NUMBERS MEAN';
  const tipText=document.createElement('p');
- tipText.textContent='RTT is the round trip of an actual measured message; lower is generally better. Jitter is variation between measurements. A stale snapshot means the displayed game state may be delayed. Network route, Wi-Fi and other device traffic can affect all three.';
+ tipText.textContent='RTT is a measured round trip, not a connection speed. Native server challenge and peer-host transport are different sources and are labeled separately; only peer transport supplies comparable jitter. Old native ping values expire after 6 seconds without a new server roster. A stale match snapshot means the displayed game may be delayed.';
  const tipHint=document.createElement('p');
  tipHint.textContent='If the connection feels unstable, try a wired connection or stable Wi-Fi, close heavy downloads and check whether other devices share your network. These readings are advisory, not a matchmaking decision or a game result.';
  tips.append(tipHeading,tipText,tipHint);
  const footer=document.createElement('p');footer.className='connection-details-privacy';
- footer.textContent='Private to this tab · Last 45 measurements in memory only · Cleared on disconnect/room switch';
+ footer.textContent='Private to this tab · Last 45 readings in memory · Reset when the connection changes, including rejoining the same room';
  dialog.append(header,state,tiles,chartBox,overview,tips,footer);
  document.body.append(dialog);
  let session=null,history=[],sessionSamples=[],sessionStarted=0;
@@ -100,8 +100,10 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
   exportMessage.textContent='Private metrics saved locally; no upload or room identifier included.';
  });
- // Zero milliseconds is a valid same-machine/low-resolution RTT or jitter.
- const valid=x=>Number.isFinite(x)&&x>=0&&x<=10000;
+ // A zero RTT is this game's unset sentinel after disconnect; never display
+ // it as a genuine 0ms ping. Measured zero jitter remains a valid reading.
+ const validRTT=x=>Number.isFinite(x)&&x>=1&&x<=10000;
+ const validJitter=x=>Number.isFinite(x)&&x>=0&&x<=10000;
  function online(){return !replay&&!match.hidden&&(!!serverLink?.room||peerConnected);}
  function sample(){
   const now=performance.now(),native=!!serverLink?.room;
@@ -114,15 +116,15 @@
   }
   const freshRoster=!!roster&&now-rosterFreshAt<=6000;
   const serverRTT=freshRoster?roster.get(networkPlayerId):null;
-  const fromServer=serverRTT!==null&&valid(serverRTT);
+  const fromServer=serverRTT!==null&&validRTT(serverRTT);
   // Native server RTT and peer-host RTT have different measurement sources.
   // Never silently substitute an unrelated local transport value as the
   // server's measured ping; if peer-hosting exists label it explicitly.
   const peerTransport=!native||!!serverLink?.net;
-  const peerRTT=peerTransport&&valid(net.rtt)?net.rtt:null;
+  const peerRTT=peerTransport&&validRTT(net.rtt)?net.rtt:null;
   const ms=fromServer?serverRTT:peerRTT;
   const fromPeer=!fromServer&&peerRTT!==null;
-  const j=fromPeer&&valid(net.jitter)?net.jitter:null;
+  const j=fromPeer&&validJitter(net.jitter)?net.jitter:null;
   const ageMs=net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
    Math.max(0,now-net.lastSnapshot):null;
   const source=fromServer?'fresh server challenge':
@@ -136,6 +138,8 @@
   if(s.ms!==null&&(s.ms>=220||s.j!==null&&s.j>=85))return ['High delay','poor'];
   if(s.ms!==null&&(s.ms>=140||s.j!==null&&s.j>=45))return ['Elevated latency','slow'];
   if(s.ms!==null)return ['Receiving live match updates','good'];
+  if(s.source.startsWith('server RTT stale'))
+   return ['Server latency sample has expired · waiting for a fresh receipt','unknown'];
   return ['Waiting for reliable RTT data','unknown'];
  }
  function render(s){
