@@ -83,22 +83,37 @@
   // control can resume the simulation and the drill clock.
   updateReturn();
  });
- const read=()=>{
+ const validAttempt=a=>a&&DURATIONS.includes(a.duration)&&TARGETS.includes(a.target)&&
+  Number.isSafeInteger(a.at)&&a.at>0&&a.at<Date.now()+86400000&&
+  Number.isSafeInteger(a.best)&&a.best>=0&&a.best<=999&&
+  Number.isSafeInteger(a.kicks)&&a.kicks>=a.best&&a.kicks<=9999&&
+  Number.isSafeInteger(a.breaks)&&a.breaks>=0&&a.breaks<=9999&&
+  Number.isSafeInteger(a.elapsed)&&a.elapsed>=a.duration&&a.elapsed<=a.duration+1&&
+  typeof a.completed==='boolean'&&a.completed===(a.best>=a.target);
+ // Do not convert corrupted private storage into an empty result list before
+ // writing: doing so would silently erase potentially recoverable attempts.
+ // Null means unreadable; [] is a genuine never-saved / cleared history.
+ const verifiedHistory=()=>{
   try{
-   const data=JSON.parse(localStorage.getItem(KEY)||'[]');
-   if(!Array.isArray(data)||data.length>MAX)return[];
-   return data.filter(a=>a&&DURATIONS.includes(a.duration)&&TARGETS.includes(a.target)&&
-    Number.isSafeInteger(a.at)&&a.at>0&&a.at<Date.now()+86400000&&
-    Number.isSafeInteger(a.best)&&a.best>=0&&a.best<=999&&
-    Number.isSafeInteger(a.kicks)&&a.kicks>=a.best&&a.kicks<=9999&&
-    Number.isSafeInteger(a.breaks)&&a.breaks>=0&&a.breaks<=9999&&
-    Number.isSafeInteger(a.elapsed)&&a.elapsed>=a.duration&&a.elapsed<=a.duration+1&&
-    typeof a.completed==='boolean'&&a.completed===(a.best>=a.target));
-  }catch{return[];}
+   const raw=localStorage.getItem(KEY);
+   if(raw===null)return[];
+   const data=JSON.parse(raw);
+   if(!Array.isArray(data)||data.length>MAX||!data.every(validAttempt))return null;
+   return data;
+  }catch{return null;}
  };
+ const read=()=>verifiedHistory()||[];
  function renderHistory(){
-  const rows=read();attempts.replaceChildren();
-  exportButton.disabled=clearButton.disabled=!rows.length;
+  const verified=verifiedHistory(),rows=verified||[];
+  attempts.replaceChildren();
+  exportButton.disabled=!rows.length;
+  // The player may explicitly clear an unreadable local cache, but it must
+  // never be silently replaced by saving the next legitimate attempt.
+  clearButton.disabled=verified!==null&&!rows.length;
+  if(verified===null){
+   attempts.append(el('p','Keep Away saved results could not be verified. They were preserved. Clear only this local Keep Away history explicitly before recording new attempts.'));
+   return;
+  }
   if(!rows.length){
    attempts.append(el('p','Complete a full local Keep Away clock to save your first result.'));
    return;
@@ -114,8 +129,11 @@
  function save(s){
   const entry={at:Date.now(),duration:s.duration,target:s.target,
    best:s.best,kicks:s.kicks,breaks:s.breaks,elapsed:s.duration,completed:s.best>=s.target};
-  try{localStorage.setItem(KEY,JSON.stringify([entry,...read()].slice(0,MAX)));}
-  catch{message.textContent='Drill complete. Browser storage could not save this result.';}
+  try{
+   const old=verifiedHistory();
+   if(old===null)throw Error('Previous local results could not be verified.');
+   localStorage.setItem(KEY,JSON.stringify([entry,...old].slice(0,MAX)));
+  }catch{message.textContent='Drill complete, but results were not saved. Unverified prior Keep Away data was not overwritten; check browser storage before retrying.';}
   renderHistory();
  }
  exportButton.onclick=()=>{
@@ -130,7 +148,11 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  };
  clearButton.onclick=()=>{
-  if(!read().length||!confirm('Remove only the Keep Away practice history on this device? Other drills, replays and online matches are not affected.'))return;
+  const verified=verifiedHistory();
+  if(verified!==null&&!verified.length)return;
+  if(!confirm(verified===null?
+   'The Keep Away results on this device are unreadable. Clear ONLY this Keep Away history? It cannot be recovered from this page. Other drills, replays and online matches are unaffected.':
+   'Remove only the Keep Away practice history on this device? Other drills, replays and online matches are not affected.'))return;
   try{localStorage.removeItem(KEY);message.textContent='Keep Away history cleared on this device.';}
   catch{message.textContent='Could not access browser storage.';}
   renderHistory();
@@ -143,8 +165,10 @@
  function refreshPrivateHistory(external=false){
   renderHistory();
   if(external){
-   const count=read().length;
-   message.textContent=count?
+   const saved=verifiedHistory(),count=saved?.length||0;
+   message.textContent=saved===null?
+    'Another tab changed Keep Away storage, but the result data could not be verified. Nothing was overwritten.':
+    count?
     'Keep Away results refreshed from another browser tab · '+count+' saved attempt'+
     (count===1?'':'s')+'.':
     'Keep Away results changed in another browser tab. Your live drill is unchanged.';
