@@ -50,7 +50,7 @@
  const slotLabel=document.createElement('label');slotLabel.textContent='Personal layout slot';
  const slot=document.createElement('select');slot.setAttribute('aria-label','Personal keyboard layout slot');
  const homeSlot=document.createElement('select');homeSlot.setAttribute('aria-label','Personal slot on Play screen');
- let quickStatus=null,quickPreview=null,liveCheck=null;
+ let quickStatus=null,quickPreview=null,liveCheck=null,couchKeysInfo=null;
  const names={up:'↑ Up',down:'↓ Down',left:'← Left',right:'→ Right',kick:'⚽ Kick',chat:'💬 Chat'};
  const description=code=>code.replace(/^Key/,'').replace(/^Numpad/,'Num ').replace(/^Arrow/,'Arrow ').replace(/^Digit/,'');
  const pressed=new Set();
@@ -64,6 +64,18 @@
    const codes=settings.keys[action]||[];
    controls.textContent=codes.filter(Boolean).map(description).join(' · ')||'Not assigned';
    row.append(label,controls);quickPreview.append(row);
+  }
+  // In couch games P2 owns the arrows; show the *effective* P1 mapping,
+  // not just the online key profile. This avoids misleading players before
+  // a local 2-player kickoff or during a personal-profile switch.
+  if(couchKeysInfo&&typeof localPlayerOneControls==='function'){
+   const p1=localPlayerOneControls();
+   const d=a=>description(p1.keys[a]?.[0]||'');
+   const details='P1 '+d('up')+'/'+d('left')+'/'+d('down')+'/'+d('right')+
+    ' · Kick '+d('kick')+' · P2 Arrow keys · Kick Enter / Slash / Num 0';
+   couchKeysInfo.textContent='LOCAL COUCH · '+details+
+    (p1.adjusted.length?' · P2 keys are reserved: safe P1 fallbacks for '+
+     p1.adjusted.join(', ')+'.':'');
   }
   if(liveCheck)showLiveKeys();
  }
@@ -194,6 +206,8 @@
   slotRow.append(slotName,load,save);
   const currentTitle=document.createElement('h3');currentTitle.textContent='YOUR CURRENT KEYS';
   quickPreview=document.createElement('div');quickPreview.className='keyboard-quick-map';
+  couchKeysInfo=document.createElement('p');couchKeysInfo.className='keyboard-couch-keys';
+  couchKeysInfo.setAttribute('role','status');couchKeysInfo.setAttribute('aria-live','polite');
   liveCheck=document.createElement('div');liveCheck.tabIndex=0;liveCheck.className='keyboard-quick-live';
   liveCheck.setAttribute('role','group');liveCheck.setAttribute('aria-label','Check keyboard controls safely here');
   liveCheck.addEventListener('keydown',event=>{
@@ -208,8 +222,8 @@
   quickStatus=document.createElement('p');quickStatus.className='keyboard-quick-status';
   quickStatus.setAttribute('role','status');quickStatus.setAttribute('aria-live','polite');
   const footer=document.createElement('p');footer.className='keyboard-quick-help';
-  footer.textContent='To remap individual keys, use Match Menu → Controls. Changes apply to the existing keyboard input path; live physics and online rules never change.';
-  quick.append(top,presets,slotRow,currentTitle,quickPreview,liveCheck,quickStatus,footer);
+  footer.textContent='To remap individual keys, use Match Menu → Controls. Couch P2 keeps the arrow keys; P1 uses safe alternatives if a profile overlaps them. Game physics and online rules never change.';
+  quick.append(top,presets,slotRow,currentTitle,quickPreview,couchKeysInfo,liveCheck,quickStatus,footer);
   const homeAnchor=home.querySelector('.controller-setup')||home.querySelector('.mode-cards');
   if(homeAnchor)homeAnchor.insertAdjacentElement('afterend',quick);
   else home.append(quick);

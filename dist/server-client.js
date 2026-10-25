@@ -145,9 +145,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:recoveringHuman?resumeContext.quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  notifyNativeSessionView();
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
- token=[REDACTED]'classic'?2:3}:
+ token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,
- spectate:link.requestedSpectate||undefined,accessKey:link.temporaryRoomKey||undefined,token=[REDACTED]
+ spectate:link.requestedSpectate||undefined,accessKey:link.temporaryRoomKey||undefined,token:settings.account?.token||undefined,
  netcode:settings.netcode==='classic'?2:3,mesh:peerHostingSupported(),
  resumeOptIn:settings.guestReconnect===true,resume:resumeContext?.ticket||undefined});
  link.temporaryRoomKey=null;
@@ -171,7 +171,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room&&!link.reconnect)
   window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
     link.failed=true;
-    if(settings.account?.token=[REDACTED]
+    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
    }
    if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}
@@ -251,7 +251,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   }
   if(d.type==='sessionRevoked'){
     link.failed=true;
-    if(settings.account?.token=[REDACTED]
+    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
    }
    if(d.type==='roomRemoved'){
@@ -485,9 +485,9 @@ $('joinName').addEventListener('keydown',e=>{if(e.key==='Enter'||e.code==='Enter
 $('joinGuest').onclick=()=>joinRoom('Guest '+String(Math.floor(1000+Math.random()*9000)));
 $('joinShowLogin').onclick=()=>{$('joinPlay').hidden=true;$('joinAuth').hidden=false;$('joinError').textContent='';$('authUser').focus();};
 $('authBack').onclick=()=>{if(joinRoomId){$('joinAuth').hidden=true;$('joinPlay').hidden=false;$('joinError').textContent='';}else hideJoinScreen();};
-async function authRequest(route){const username=$('authUser').value.trim(),password=[REDACTED]'authPass').value;try{const res=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await res.json();if(!res.ok)throw Error(d.error||'Request failed.');settings.account={username:d.username,token=[REDACTED]'authPass').value='';renderAccount();notify('Logged in as '+d.username);if(joinRoomId)joinRoom(d.username);else hideJoinScreen();}catch(e){$('joinError').textContent=e.message;}}
+async function authRequest(route){const username=$('authUser').value.trim(),password=$('authPass').value;try{const res=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await res.json();if(!res.ok)throw Error(d.error||'Request failed.');settings.account={username:d.username,token:d.token};setName(d.username);$('authPass').value='';renderAccount();notify('Logged in as '+d.username);if(joinRoomId)joinRoom(d.username);else hideJoinScreen();}catch(e){$('joinError').textContent=e.message;}}
 $('joinAuth').onsubmit=e=>{e.preventDefault();authRequest('/api/login');};$('authRegister').onclick=()=>authRequest('/api/register');
-$('accountButton').onclick=()=>{if(settings.account){const token=[REDACTED]'/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}).catch(()=>{});notify('Logged out');}else showJoinScreen('');};
+$('accountButton').onclick=()=>{if(settings.account){const token=settings.account.token;settings.account=null;savePrefs();renderAccount();fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}).catch(()=>{});notify('Logged out');}else showJoinScreen('');};
 renderAccount();
 // Drop a stored session the server no longer knows.
 if(settings.account?.token&&defaultServer)fetch('/api/me',{headers:{Authorization:'Bearer '+settings.account.token}}).then(r=>{if(r.status===401){settings.account=null;savePrefs();renderAccount();}}).catch(()=>{});
@@ -975,14 +975,14 @@ async function renderAccountCareer(token,load){
    ' bot-mode matches. Survives trimming of recent history while this server keeps its data. Not ranked; guest and peer-hosted results are excluded.';
   accountCareerPanel.replaceChildren(grid,note);
  }catch{
-  if(load===accountMatchLoad&&settings.account?.token=[REDACTED]
+  if(load===accountMatchLoad&&settings.account?.token===token)
    accountCareerPanel.textContent='Career totals are currently unavailable. Recent matches remain visible.';
  }
 }
 async function renderAccountMatchHistory(){
  const load=++accountMatchLoad,status=accountMatchStatus,list=accountMatchList;
  list.replaceChildren();accountMatchSummary.textContent='';accountCareerPanel.replaceChildren();accountHistoryItems=[];accountCareerData=null;accountCareerMatches=0;exportServerHistory.disabled=true;eraseServerHistory.disabled=true;
- const token=[REDACTED]
+ const token=settings.account?.token;
  if(!token){status.textContent='Log in from the online room to see your completed server matches.';return;}
  status.textContent='Loading server results…';
  try{
@@ -1026,15 +1026,15 @@ exportServerHistory.onclick=()=>{
  saveBlob(bytes,'fuckball-my-server-results-'+new Date().toISOString().slice(0,10)+'.json','application/json');
 };
 eraseServerHistory.onclick=async()=>{
- const token=[REDACTED]
+ const token=settings.account?.token;
  if(!token||(!accountHistoryItems.length&&!accountCareerMatches))return;
  if(typeof window.confirm!=='function'||!window.confirm('Permanently delete all server-recorded match results AND career statistics? This cannot be undone. Local replay files will remain.'))return;
  eraseServerHistory.disabled=true;accountMatchStatus.textContent='Removing your stored server results…';
  try{
   const response=await fetch('/api/match-history',{method:'DELETE',headers:{Authorization:'Bearer '+token},cache:'no-store'});
   if(!response.ok)throw Error('Could not delete your results.');
-  if(settings.account?.token=[REDACTED] renderAccountMatchHistory();
- }catch{if(settings.account?.token=[REDACTED]'Could not delete server results. Please try again.';eraseServerHistory.disabled=false;}}
+  if(settings.account?.token===token)await renderAccountMatchHistory();
+ }catch{if(settings.account?.token===token){accountMatchStatus.textContent='Could not delete server results. Please try again.';eraseServerHistory.disabled=false;}}
 };
 const showViewWithServerHistory=showView;
 showView=function(view){showViewWithServerHistory(view);if(view==='games')renderAccountMatchHistory();};
