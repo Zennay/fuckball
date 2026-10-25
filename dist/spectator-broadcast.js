@@ -74,6 +74,11 @@
   panel.append(apply,tip,status);menu.append(panel);
  }
  let enabled=false,last=null,lastRef=null,lastRoom='',lastPaint=0;
+ // A global renderer/netcode timestamp can belong to a *previous* native
+ // WebSocket. Do not trust it after a room switch or reconnect until a frame
+ // arrives later than the current link's first observed timestamp.
+ let lastNativeLink=null,lastNativeRound=null,linkFrameBaseline=0;
+ let hasSessionFrame=false;
  const viewAvailable=()=>{
   if(document.hidden||match.hidden||typeof replay!=='undefined'&&replay||
    !isSpectatorCamera()||document.getElementById('pauseMenu')?.hidden===false)return false;
@@ -82,11 +87,26 @@
   return online||watch;
  };
  const roomKey=()=>serverLink?.room||'local-watch';
+ function syncNativeSession(){
+  const link=typeof serverLink!=='undefined'&&serverLink?.room?serverLink:null;
+  const round=link&&Number.isSafeInteger(link.roomState?.round)?link.roomState.round:null;
+  const frame=typeof net!=='undefined'&&Number.isFinite(net?.lastSnapshot)?
+   net.lastSnapshot:0;
+  if(link!==lastNativeLink||round!==lastNativeRound){
+   lastNativeLink=link;lastNativeRound=round;
+   linkFrameBaseline=frame;hasSessionFrame=false;
+   last=null;
+  }
+  if(link&&frame>linkFrameBaseline&&frame>0&&
+     frame<=performance.now())hasSessionFrame=true;
+ }
  // An old native state is not proof that the match is still broadcasting.
  // Paused/completed rooms retain their explicitly labelled last score, but
  // actively playing rooms must have a recent authoritative server frame.
  const waitingForLiveFrame=()=>{
-  if(!serverLink?.room||serverLink.roomState?.started!==true||
+  if(!serverLink?.room)return false;
+  if(!hasSessionFrame)return true;
+  if(serverLink.roomState?.started!==true||
      serverLink.roomState?.paused===true)return false;
   const at=typeof net!=='undefined'?net?.lastSnapshot:0;
   const age=performance.now()-at;
@@ -108,6 +128,7 @@
   save.disabled=true;
  };
  function refresh(){
+  syncNativeSession();
   if(!enabled)return;
   if(!viewAvailable()){disable();return;}
   const ref=room,key=roomKey();
@@ -115,7 +136,7 @@
   const snapshot=liveSnapshot();
   if(!snapshot){
    last=null;overlay.hidden=true;save.disabled=true;
-   toggle.textContent=waitingForLiveFrame()?'◌ WAITING FOR LIVE FRAMES':'◉ HUD ON';
+   toggle.textContent=waitingForLiveFrame()?'◌ WAITING FOR THIS ROOM’S FRAMES':'◉ HUD ON';
    return;
   }
   toggle.textContent='◉ HUD ON';
@@ -146,6 +167,10 @@
  save.onclick=()=>{
   refresh();
   if(!enabled||!last||!viewAvailable())return;
+  // Blob encoding is asynchronous. Never download the previous room's score
+  // after a user has switched rooms, disconnected, or turned this HUD off.
+  const linkAtClick=typeof serverLink!=='undefined'?serverLink:null;
+  const roomAtClick=room,keyAtClick=roomKey();
   const canvas=document.createElement('canvas');canvas.width=900;canvas.height=220;
   const context=canvas.getContext('2d');
   if(!context)return;
@@ -163,7 +188,9 @@
   context.font='14px system-ui';context.fillStyle='#bbd0c5';
   context.fillText(foot.textContent.slice(0,90),450,211);
   canvas.toBlob(blob=>{
-   if(!blob||blob.size>4*1048576)return;
+   if(!blob||blob.size>4*1048576||!enabled||overlay.hidden||
+      (typeof serverLink!=='undefined'?serverLink:null)!==linkAtClick||
+      room!==roomAtClick||roomKey()!==keyAtClick)return;
    const url=URL.createObjectURL(blob),a=node('a');
    a.href=url;a.download='fuckball-spectator-scoreboard.png';a.click();
    setTimeout(()=>URL.revokeObjectURL(url),60000);
