@@ -24,7 +24,8 @@ function retryRoomRecovery(info,attempt){
  connectServer(false,info.room,info.name,
   {ticket:info.ticket,previousId:info.previousId,retries:attempt,roomRecovery:true});
  if(serverLink?.recoveryAttempt)window.FuckballRoomRecovery?.show({
-  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery
+  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery,
+  quickMatchMode:info.quickMatchMode||null
  });
  else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
 }
@@ -33,7 +34,7 @@ function offerRoomRecovery(info){
  clearRoomRecovery();roomRecovery.context=info;
  if(info.tries>=3){
   window.FuckballRoomRecovery?.show({
-   phase:'failed',attempt:3,max:3,
+   phase:'failed',attempt:3,max:3,quickMatchMode:info.quickMatchMode||null,
    retry:()=>retryRoomRecovery({...info,tries:0},0),cancel:cancelRoomRecovery
   });return;
  }
@@ -41,6 +42,7 @@ function offerRoomRecovery(info){
   roomRecovery.offlineRetry=()=>retryRoomRecovery(info,info.tries+1);
   window.FuckballRoomRecovery?.show({
    phase:'offline',attempt:info.tries+1,max:3,
+   quickMatchMode:info.quickMatchMode||null,
    retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
   });return;
  }
@@ -48,6 +50,7 @@ function offerRoomRecovery(info){
  roomRecovery.timer=setTimeout(()=>retryRoomRecovery(info,attempt),delay);
  window.FuckballRoomRecovery?.show({
   phase:'waiting',attempt,max:3,delay,
+  quickMatchMode:info.quickMatchMode||null,
   retry:()=>retryRoomRecovery(info,attempt),cancel:cancelRoomRecovery
  });
 }
