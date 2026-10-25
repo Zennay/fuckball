@@ -328,6 +328,16 @@
  }
  bannerOpen.onclick=open;entry.onclick=open;
  window.openFriendParty=open;
+ // Native account login/logout updates this real account label. Invalidate
+ // private party UI immediately, rather than waiting for the next quiet
+ // polling interval; the watcher never changes credentials itself.
+ const accountLabel=document.getElementById('accountStatus');
+ if(accountLabel&&typeof MutationObserver==='function'){
+  const identityObserver=new MutationObserver(()=>{
+   if(syncAccountScope())refresh();
+  });
+  identityObserver.observe(accountLabel,{subtree:true,childList:true,characterData:true});
+ }
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
  setInterval(()=>{if(document.visibilityState==='visible')refresh();},2500);
  // Discover invitations without keeping the Friends dialog open.
