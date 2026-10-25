@@ -67,7 +67,9 @@
  function updateHome(){
   const at=completedAt();
   badge.textContent=at?'Completed on '+new Date(at).toLocaleDateString()+'. Replay this guide whenever you like.':'Local solo lesson · 3 real gameplay challenges · no ranked stats.';
-  if(session&&sameLessonMatch()){
+  const current=session&&sameLessonMatch();
+  card.classList.toggle('first-play-active',!!current);
+  if(current){
    const stage=session.stage===3?'COMPLETE':(session.stage+1)+' / 3';
    start.textContent='↗ Continue First Touch';
    start.setAttribute('aria-label','Continue First Touch stage '+stage+' in your existing local match');
@@ -195,7 +197,7 @@
   result.textContent='Guide running in the local pitch.';
   hud.hidden=false;render();refreshSessionReturn();
  }
- start.addEventListener('click',launch);
+ start.addEventListener('click',()=>launch(false));
  document.getElementById('tabHome')?.addEventListener('click',refreshSessionReturn);
  window.addEventListener('focus',refreshSessionReturn);
  window.addEventListener('fuckball:native-session-state',refreshSessionReturn);
