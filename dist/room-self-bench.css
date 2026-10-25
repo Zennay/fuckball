@@ -33,3 +33,35 @@
   max-width:min(230px,calc(100vw - 18px));min-height:48px;font-size:12px}
  .self-bench-actions button{min-height:46px}
 }
+
+/* Real Custom Room role and bench entry, surfaced on Home / My Games only.
+   The original room menu still owns all mutations and server receipts. */
+.self-bench-shortcut[hidden]{display:none!important}
+.self-bench-shortcut{box-sizing:border-box;margin:10px 0 17px;padding:13px 16px;
+ border:1px solid #8ebda1;border-radius:14px;background:#16302e;
+ color:#f2fbed;display:grid;gap:7px}
+.self-bench-shortcut strong{font-size:.82rem;letter-spacing:.075em;color:#dcf5a4}
+.self-bench-shortcut-role{margin:0;font-size:.94rem;font-weight:850;
+ color:#f7ffef;line-height:1.35}
+.self-bench-shortcut-note{margin:0;min-height:0;font-size:.79rem;line-height:1.4;
+ color:#bcdad0;overflow-wrap:anywhere}
+.self-bench-shortcut-note:empty{display:none}
+.self-bench-shortcut-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.self-bench-shortcut-actions button{min-height:46px;padding:9px 14px;
+ border-radius:9px;border:1px solid #9ab7a5;background:#2c5142;color:#f3fbed;
+ font:inherit;font-size:.84rem;font-weight:800;cursor:pointer}
+.self-bench-shortcut-actions button[hidden]{display:none}
+.self-bench-shortcut-actions button[aria-pressed=true]{border-color:#ddfaa4;
+ background:#3c6249}
+.self-bench-shortcut-actions button:disabled{opacity:.5;cursor:not-allowed}
+.self-bench-shortcut-actions .self-bench-shortcut-open{margin-left:auto;
+ background:#dff7a5;color:#183627;border-color:#dff7a5}
+.self-bench-shortcut-actions button:focus-visible{outline:3px solid #f5ffc0;outline-offset:3px}
+@media(max-width:600px){
+ .self-bench-shortcut{padding:12px;gap:8px}
+ .self-bench-shortcut-actions{display:grid;grid-template-columns:1fr 1fr}
+ .self-bench-shortcut-actions button{min-width:0}
+ .self-bench-shortcut-actions .self-bench-shortcut-open{margin:0;grid-column:1/-1}
+}
+@media(max-width:365px){.self-bench-shortcut-actions{grid-template-columns:1fr}
+ .self-bench-shortcut-actions .self-bench-shortcut-open{grid-column:auto}}
