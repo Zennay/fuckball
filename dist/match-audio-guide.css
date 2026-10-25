@@ -18,3 +18,10 @@
  color:#f1ffe4;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
 .match-audio-guide-preview:disabled{opacity:.55;cursor:not-allowed}
 .match-audio-guide-preview:focus-visible{outline:3px solid #d6faa7;outline-offset:3px}
+
+/* The player sees which actual match may produce spoken/visual score cues. */
+.match-audio-guide-provenance{margin:9px 0 0;padding:9px 11px;
+ border:1px solid #8ab3a2;border-radius:8px;background:#153037;
+ color:#e4f7e9;font-size:12px;line-height:1.5;
+ overflow-wrap:anywhere}
+@media(max-width:580px){.match-audio-guide-provenance{padding:10px;font-size:12px}}

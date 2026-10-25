@@ -16,7 +16,10 @@
   }catch{return{...defaults};}
  }
  let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null,
-  previewSpeaking=false;
+  previewSpeaking=false,observedSource=null;
+ function sourceLabel(text){
+  if(provenance.textContent!==text)provenance.textContent=text;
+ }
  const speechAvailable=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance==='function';
  const section=document.createElement('fieldset');section.className='match-audio-guide-options';
  const legend=document.createElement('legend');legend.textContent='LIVE SCORE GUIDE';
@@ -55,7 +58,12 @@
  const support=document.createElement('p');support.className='match-audio-guide-help';
  support.textContent=speechAvailable?'Voice uses your browser’s speech synthesizer; mute or adjust device volume as usual.':
   'Speech synthesis is unavailable here; visual captions still work.';
- section.prepend(legend,note);section.append(preview,support);video.append(section);
+ const provenance=document.createElement('p');
+ provenance.className='match-audio-guide-provenance';
+ provenance.setAttribute('role','status');
+ provenance.setAttribute('aria-live','polite');
+ provenance.textContent='Awaiting a visible, current match scoreboard.';
+ section.prepend(legend,note);section.append(preview,support,provenance);video.append(section);
  const caption=document.createElement('aside');caption.className='match-audio-guide-caption';
  caption.setAttribute('role','status');caption.setAttribute('aria-live','polite');caption.hidden=true;
  match.append(caption);
@@ -87,6 +95,36 @@
   }
   return typeof started!=='undefined'&&started===true&&
    (typeof paused==='undefined'||paused!==true);
+ }
+ // The DOM scoreboard is not an authoritative event stream. Require an
+ // admitted and currently snapshotted native session, or a real local/peer
+ // game, and key each observation to its transport and server-issued round.
+ // Numeric player IDs, room codes and a reused clock are not enough to
+ // distinguish different human matches.
+ function currentScoreSource(){
+  if(typeof serverLink!=='undefined'&&serverLink){
+   const link=serverLink;
+   if(!link.room||link.ws?.readyState!==1||link.roomState?.started!==true)
+    return null;
+   if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+      net.receivedSequence<1)return null;
+   if(link.roomState.room&&link.roomState.room!==link.room)return null;
+   const round=Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0?
+    link.roomState.round:null;
+   return{kind:'native',transport:link,room:link.room,round};
+  }
+  if(typeof peerConnected!=='undefined'&&peerConnected){
+   const transport=typeof channel!=='undefined'&&channel?channel:
+    typeof peer!=='undefined'?peer:null;
+   if(!transport)return null;
+   return{kind:'peer',transport,room:null,round:null};
+  }
+  if(typeof room==='undefined'||!room)return null;
+  return{kind:'local',transport:room,room:null,round:null};
+ }
+ function sameScoreSource(a,b){
+  return !!a&&!!b&&a.kind===b.kind&&a.transport===b.transport&&
+   a.room===b.room&&a.round===b.round;
  }
  function sample(){
   const r=Number(red.textContent.trim()),b=Number(blue.textContent.trim());
@@ -122,22 +160,60 @@
  }
  function poll(){
   if(!visibleActive()){
-   // An explicit Voice Preview is allowed while the settings menu is open.
-   // It is still cancelled immediately by blur, tab changes or navigation.
+   // An explicit Voice Preview is allowed while settings are open. It is
+   // cancelled by navigation, focus/visibility loss and session changes.
    if(!previewSpeaking)silenceAndRebaseline();
+   observedSource=null;
+   sourceLabel('Paused · only a visible active match can produce score cues.');
    return;
   }
-  const current=sample();if(!current){previous=null;return;}
+  const identity=currentScoreSource();
+  if(!identity){
+   observedSource=null;
+   silenceAndRebaseline();
+   sourceLabel('Waiting for this live room’s verified server snapshot.');
+   return;
+  }
+  const current=sample();
+  if(!current){
+   observedSource=null;
+   silenceAndRebaseline();
+   sourceLabel('Scoreboard unavailable · no goal announcements.');
+   return;
+  }
+  if(!sameScoreSource(observedSource,identity)){
+   // The first score after a connection, room or round change is ONLY a
+   // baseline. Never narrate it as a new goal from the previous session.
+   silenceAndRebaseline();
+   observedSource=identity;
+   previous=current;
+   sourceLabel(identity.kind==='native'?
+    'Current admitted online room · '+(identity.round===null?
+     'server round not supplied':'server round '+identity.round)+
+     ' · live snapshot received.':
+    identity.kind==='peer'?'Current direct-peer match · live scoreboard.':
+     'Current local match · live scoreboard.');
+   return;
+  }
   const last=previous;previous=current;
   if(!last)return;
-  if(current.time<last.time-2||current.time-last.time>3)return; // seek/reset/stale render
+  if(current.time<last.time-2||current.time-last.time>3){
+   // Large jumps are a reset, stale render or time discontinuity, not
+   // independently verified goal events.
+   silenceAndRebaseline();previous=current;return;
+  }
   const dr=current.red-last.red,db=current.blue-last.blue;
   if((dr===1&&db===0)||(db===1&&dr===0)){
    const team=dr===1?'Red':'Blue';
    const text=team+' scores. Red '+current.red+', Blue '+current.blue+'.';
    show(text);speak(text);return;
   }
-  if(dr!==0||db!==0)return;
+  if(dr!==0||db!==0){
+   // Corrections, resets and multiple-goal jumps must not generate a
+   // misleading one-goal narration on the next frame.
+   if(dr<0||db<0){stopSpeech();caption.hidden=true;}
+   return;
+  }
   if(prefs.minutes&&prefs.voice&&Math.floor(current.time/60)>Math.floor(last.time/60)&&
    current.time>=60){
    speak(Math.floor(current.time/60)+' minute'+(current.time>=120?'s':'')+' played.');
@@ -155,6 +231,12 @@
  window.addEventListener('focus',silenceAndRebaseline);
  document.addEventListener('visibilitychange',silenceAndRebaseline);
  window.addEventListener('pagehide',silenceAndRebaseline);
+ window.addEventListener('fuckball:native-session-state',()=>{
+  // This event is emitted when the authoritative socket is replaced or
+  // terminated; kill any previous spoken result immediately.
+  observedSource=null;silenceAndRebaseline();
+  sourceLabel('Room changed · waiting for the current match scoreboard.');
+ });
  const menu=document.getElementById('pauseMenu');
  if(typeof MutationObserver==='function'){
   const visibilityObserver=new MutationObserver(()=>{
