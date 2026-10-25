@@ -523,6 +523,10 @@
    // a new request rather than waiting on the old, possibly hung fetch.
    cancelDirectoryRequest();
    roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+   // Invalidate already-rendered Join buttons immediately. Although the
+   // admission guard would reject them, stale cards must not appear live
+   // when the player returns before the fresh response.
+   renderRooms();
    if(watching)watchText.textContent=
     'Availability watch paused while the public-room browser is not visible. No background refresh or automatic join.';
    return;
