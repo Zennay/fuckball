@@ -193,6 +193,13 @@
   if(typeof paused!=='undefined'&&!paused&&typeof started!=='undefined'&&started&&room?.gameState)
    togglePause(); // Freeze actual native play until players request another round.
   const ended=Math.max(series.red,series.blue)>=Math.floor(series.bestOf/2)+1;
+  if(!ended&&series.rounds.length>=50){
+   // The device-local archive stores at most fifty native rounds. A longer
+   // series cannot be represented faithfully: do not fabricate a winner or
+   // silently truncate the evidence of real human results.
+   abandonSeries('This best-of reached the fifty-round archive limit without a winner.');
+   return;
+  }
   if(ended){
    series.complete=true;series.final=record();
    announce((series.red>series.blue?'RED':'BLUE')+' WINS THE SERIES · '+
@@ -298,8 +305,21 @@
  }
  function nextRound(){
   if(!series||series.complete||!series.resolved)return;
+  const prior=window.fuckballCouchRivals?.seatStatus?.();
+  if(!prior?.ok){
+   announce('The original Blue controllers must still own their human seats. Rebind explicitly during the paused native match or end the series and start a new one.');
+   return;
+  }
+  const originalPorts=(prior.seats||[]).map(seat=>seat.port);
   const prepared=window.fuckballCouchRivals?.prepare?.();
   if(!prepared?.ok){announce(prepared?.message||'Reconnect both Blue controllers first.');return;}
+  const nextSeats=window.fuckballCouchRivals?.seatStatus?.();
+  if(!nextSeats?.ok||(nextSeats.seats||[]).some((seat,i)=>seat.port!==originalPorts[i])){
+   // A new port preference must not silently swap two humans' Blue roles in
+   // the middle of a best-of (even when both pads are physically attached).
+   abandonSeries('Controller seat ownership changed between native rounds.');
+   return;
+  }
   if(typeof resetMatch!=='function'){announce('Native match reset unavailable.');return;}
   const nextNumber=series.round+1;
   expectedSeriesKickoff=true;observedSeriesKickoff=false;
