@@ -373,7 +373,7 @@
   if(state.pending){
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
    const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
-    (link?.quickQueueAcknowledged?
+    (typeof serverLink!=='undefined'&&serverLink?.quickQueueAcknowledged?
      ' The server accepted the human-only queue; no bots will be added.':
      ' A server response is required within 20 seconds.')+
     ' You can review connection settings or cancel explicitly.';
