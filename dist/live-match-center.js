@@ -61,7 +61,7 @@
  panel.append(header,badge,score,teams,spectators,feed,footer);match.append(panel);
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
  let timeline=[],snapshot=null,sessionId='',sessionRoom=null;
- let transportIdentity=null,serverRound=null,historyInterrupted=false;
+ let transportIdentity=null,serverRound=null,historyInterrupted=false,missingSince=0;
  const MAX_HISTORY=40;
  function liveSnapshot(){
   if(typeof replay!=='undefined'&&replay)return null;
@@ -115,7 +115,7 @@
  function resetObservations(){
   timeline=[];sessionId='';sessionRoom=null;snapshot=null;
   transportIdentity=null;serverRound=null;
-  historyInterrupted=false;lastSignature='';
+  historyInterrupted=false;missingSince=0;lastSignature='';
  }
  function observe(){
   // App navigation hides the pitch but does not end an ongoing game.
@@ -127,9 +127,18 @@
   }
   const reading=liveSnapshot();
   if(!reading){
-   if(sessionId||timeline.length)resetObservations();
+   // A short handover, room intermission or missing authoritative snapshot
+   // is NOT a new game and cannot justify erasing locally observed history.
+   // Mark an unobserved gap rather than inventing goals during the silence.
+   if(sessionId||timeline.length){
+    if(!missingSince)missingSince=Date.now();
+    historyInterrupted=true;
+    if(Date.now()-missingSince>15000&&!serverLink?.room&&!peerConnected)
+     resetObservations();
+   }
    return;
   }
+  missingSince=0;
   const changedTransport=sessionRoom!==room||sessionId!==reading.key||
    transportIdentity!==reading.transport;
   const changedRound=!changedTransport&&serverRound!==reading.round;
@@ -156,13 +165,13 @@
   }else if(reading.red!==prior.red||reading.blue!==prior.blue){
    const redDelta=reading.red-prior.red,blueDelta=reading.blue-prior.blue;
    const single=redDelta+blueDelta===1&&(redDelta===1||blueDelta===1);
-   const description=historyInterrupted?'Scoreboard changed while away from the pitch; individual events are unknown.':
+   const description=historyInterrupted?'Scoreboard changed during an unobserved interval; individual events are unknown.':
     single?(redDelta?'Red':'Blue')+' score increased by one (scorer unknown).':
     'Scoreboard changed by multiple points (cause unknown).';
    addObservation(description,reading,historyInterrupted);
   }else if(historyInterrupted&&reading.elapsed-prior.elapsed>=3){
    // An unchanged score never implies no activity while the view was hidden.
-   addObservation('Returned after viewing another screen; activity during the gap was not observed.',reading,true);
+   addObservation('Returned after an unobserved interval; activity during the gap was not observed.',reading,true);
   }
   snapshot=reading;historyInterrupted=false;
  }
