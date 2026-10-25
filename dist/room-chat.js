@@ -28,6 +28,41 @@
  const players=document.createElement('div');players.className='native-chat-players';
  panel.append(title,description,focusControls,status,players);settingsPane.append(panel);
  let roomId=null,muted=new Set();
+ // Keep the real chat handler as the only sender. A form submitted while
+ // the WebSocket is down must not be consumed as a fake successful local or
+ // server message, or silently throw away the player's unsent text.
+ const chatForm=document.getElementById('chatForm');
+ const chatInput=document.getElementById('chatInput');
+ const sendFeedback=document.createElement('p');
+ sendFeedback.className='native-chat-send-feedback';
+ sendFeedback.setAttribute('role','status');
+ sendFeedback.setAttribute('aria-live','polite');
+ sendFeedback.hidden=true;
+ chatForm?.append(sendFeedback);
+ let onlineDraft=false;
+ chatInput?.addEventListener('focus',()=>{
+  onlineDraft=!!serverLink?.room;
+  sendFeedback.hidden=true;
+ });
+ chatInput?.addEventListener('input',()=>{sendFeedback.hidden=true;});
+ chatForm?.addEventListener('focusout',event=>{
+  if(!chatForm.contains(event.relatedTarget))onlineDraft=false;
+ });
+ chatForm?.addEventListener('submit',event=>{
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  // Any pending native connection or stale online chat draft is not a local
+  // chat session. The sender must consciously reconnect or leave the form.
+  const blocked=link&&(!link.room||link.ws?.readyState!==1)||
+    onlineDraft&&!link?.room;
+  const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
+  if(!blocked&&!(link?.room&&until>Date.now()))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  sendFeedback.textContent=blocked?
+   'Room connection unavailable. Your chat draft is saved here; reconnect before sending.':
+   'The room host muted your chat. Your unsent draft is still here.';
+  sendFeedback.hidden=false;
+  chatInput?.focus({preventScroll:true});
+ },true);
  // A connected human room stays active while Home/My Games is on screen.
  // The HUD chat log lives on the hidden pitch; keep a bounded ephemeral
  // catch-up inbox on this device, without sending or saving chat messages.
@@ -286,26 +321,30 @@
   const now=()=>performance.now();
   let lastSent=-Infinity,expanded=false;
   function updateVisibility(){
-   const available=!!serverLink?.room&&!match.hidden&&!replay&&!document.hidden;
+   const available=!!serverLink?.room&&serverLink.ws?.readyState===1&&
+    !match.hidden&&!replay&&!document.hidden;
    toolbar.hidden=!available;
    if(!available&&expanded){expanded=false;tray.hidden=true;toggle.setAttribute('aria-expanded','false');}
    return available;
   }
   function sendCall(text){
-   if(!updateVisibility()||!serverLink?.room)return;
+   if(!updateVisibility()||!serverLink?.room||serverLink.ws?.readyState!==1){
+    notice.textContent='Room connection unavailable. Reconnect before sending a call.';
+    return;
+   }
    if(now()-lastSent<2500){notice.textContent='One callout every 2.5 seconds. Keep chat useful.';return;}
    if(input.value.trim()){
     notice.textContent='Finish your current chat draft first; it was not replaced.';
     return;
    }
-   const mutedUntil=serverLink?.roomControl?.chatMuteUntil||serverLink?.chatMutedUntil||0;
+   const mutedUntil=Math.max(serverLink?.roomControl?.chatMuteUntil||0,serverLink?.chatMutedUntil||0);
    if(mutedUntil>Date.now()){
     notice.textContent='Room chat is muted by the host right now.';return;
    }
    const audience=window.FuckballTeamChat?.audience(serverLink);
    if(audience===null){notice.textContent='Team chat unavailable; message not sent.';return;}
-   if(!form.onsubmit){
-    notice.textContent='Chat is not ready yet.';return;
+   if(typeof form.requestSubmit!=='function'||typeof form.onsubmit!=='function'){
+    notice.textContent='Native chat is not ready; nothing was sent.';return;
    }
    // The installed native chat handler preserves server moderation/rate limits,
    // sender attribution and real acknowledgement; never log a fake send.
@@ -313,7 +352,8 @@
    try{
     form.requestSubmit();
     lastSent=now();
-    notice.textContent='Submitted to '+(audience==='team'?'team-only':'room')+' chat · server decides delivery.';
+    notice.textContent='Submitted via open '+(audience==='team'?'team-only':'room')+
+     ' chat · server controls delivery and moderation.';
    }catch{
     input.value='';
     notice.textContent='Could not open room chat.';
