@@ -49,7 +49,8 @@
    if(pendingApply.link!==d.link||pendingApply.round!==d.state.round)pendingApply=null;
    else if(d.state!==pendingApply.state&&
       d.state.timeLimit===pendingApply.minutes&&
-      d.state.scoreLimit===pendingApply.goals){
+      d.state.scoreLimit===pendingApply.goals&&
+      d.state.matchFormatVotes.length===0){
     showFeedback('The server confirmed the winning match format.');
     pendingApply=null;
    }else if(Date.now()-pendingApply.sentAt>3500){
