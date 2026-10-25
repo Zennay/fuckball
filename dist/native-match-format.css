@@ -15,3 +15,38 @@
 .native-match-format button:focus-visible,.native-match-format input:focus-visible{outline:3px solid #dcf49e;outline-offset:3px}
 
 .native-match-format-current{color:#def4a9!important;font-weight:800;letter-spacing:.015em}
+
+/* Contextual Custom Room vote, shown only outside the active pitch.
+   The room server and existing host menu remain the sole source of truth. */
+.native-format-dock[hidden]{display:none!important}
+.native-format-dock{position:fixed;left:50%;transform:translateX(-50%);
+ bottom:max(12px,env(safe-area-inset-bottom));z-index:113;
+ width:min(1060px,calc(100vw - 24px));padding:14px 17px;
+ box-sizing:border-box;background:#1a3330;border:2px solid #b9d89a;
+ border-radius:14px;color:#f4fff0;box-shadow:0 14px 45px #051719cc;
+ display:flex;gap:17px;align-items:center;justify-content:space-between}
+.native-format-dock-summary{min-width:0;max-width:430px}
+.native-format-dock-summary strong{font-size:.79rem;letter-spacing:.06em;
+ color:#e0ffa7;display:block}
+.native-format-dock-tally{font-size:.81rem;line-height:1.45;
+ color:#dbede1;margin:5px 0 0;overflow-wrap:anywhere}
+.native-format-dock-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.native-format-dock-controls select{background:#233f3b;color:#fff;
+ border:1px solid #9fbdad;border-radius:8px;max-width:210px;
+ min-height:48px;padding:8px 10px;font:inherit;font-size:.8rem}
+.native-format-dock-controls button{background:#25463d;color:#edfff2;
+ border:1px solid #93b19e;border-radius:8px;min-height:48px;
+ padding:9px 12px;font:inherit;font-size:.81rem;font-weight:750;cursor:pointer}
+.native-format-dock-controls button.primary{background:#d5ffa3;
+ color:#213622;border-color:#d5ffa3}
+.native-format-dock-controls button[hidden]{display:none}
+.native-format-dock-controls button:disabled{opacity:.55;cursor:not-allowed}
+.native-format-dock-controls :is(button,select):focus-visible{
+ outline:3px solid #f4ffad;outline-offset:3px}
+@media(max-width:800px){
+ .native-format-dock{flex-direction:column;align-items:stretch;padding:13px;gap:10px}
+ .native-format-dock-summary{max-width:none}
+ .native-format-dock-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .native-format-dock-controls select{max-width:none;grid-column:1/-1;width:100%}
+}
+@media(max-width:365px){.native-format-dock-controls{grid-template-columns:1fr}}
