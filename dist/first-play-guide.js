@@ -69,6 +69,7 @@
   badge.textContent=at?'Completed on '+new Date(at).toLocaleDateString()+'. Replay this guide whenever you like.':'Local solo lesson · 3 real gameplay challenges · no ranked stats.';
   const current=session&&sameLessonMatch();
   card.classList.toggle('first-play-active',!!current);
+  card.classList.toggle('first-play-parked',!!current&&lessonParked);
   if(current){
    const stage=session.stage===3?'COMPLETE':(session.stage+1)+' / 3';
    start.textContent='↗ Continue First Touch';
@@ -150,7 +151,11 @@
   if(sameLessonMatch()){
    if(typeof showView==='function')showView('play');
    else document.getElementById('tabPlay')?.click();
-   lessonParked=false;hud.hidden=false;render();
+   // Opening the pitch does not mean its paused simulation has resumed.
+   // Keep the lesson parked until the original match resumes, so no hidden
+   // movement or goals are credited during a navigation transition.
+   if(paused)hud.hidden=true;
+   else if(!lessonParked){hud.hidden=false;render();}
    result.textContent='The same First Touch lesson is open. Resume the paused match using its normal controls when ready.';
    return;
   }
@@ -221,8 +226,7 @@
  });
  function tick(){
   const s=session;if(!s)return;
-  if(document.hidden)return;
-  if(match.hidden){
+  if(document.hidden||match.hidden){
    // showView() pauses offline games when leaving the pitch; preserve
    // exact-session lesson milestones while reading Home or My Games.
    if(!sameLessonMatch()){
@@ -234,7 +238,6 @@
   if(!sameLessonMatch()){
    finish('The local match was replaced or restarted. Begin a new First Touch lesson.');return;
   }
-  if(lessonParked){lessonParked=false;hud.hidden=false;render();}
   const p=localRoom();
   if(!p){ // A normal manual pause is not a failed lesson.
    if(paused&&!peerConnected&&!serverLink){detail.textContent='Match paused. Resume to continue the lesson.';return;}
@@ -244,6 +247,22 @@
    finish('Match restarted or teams changed. Start the lesson again.');return;
   }
   const frame=room.currentFrameNo;
+  if(lessonParked){
+   // Preserve completed tasks, but never add unseen movement or a goal
+   // scored while the lesson had no active, controllable pitch. The engine
+   // and local match remain untouched; only lesson baselines are refreshed.
+   const pos=p.disc.pos;
+   s.lastPos={x:pos.x,y:pos.y};
+   if(s.stage===2){
+    const currentScore=s.side===1?room.gameState.redScore:room.gameState.blueScore;
+    if(currentScore<s.score){
+     finish('The scoreboard reset while away. Start a new First Touch lesson.');return;
+    }
+    s.score=currentScore;
+   }
+   s.frame=frame;
+   lessonParked=false;hud.hidden=false;render();updateHome();
+  }
   if(s.stage===0&&frame>s.frame){
    const current=p.disc.pos,dx=current.x-s.lastPos.x,dy=current.y-s.lastPos.y;
    const displacement=Math.hypot(dx,dy);
