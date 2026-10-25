@@ -181,6 +181,7 @@ body.menu-open .play-postmatch-ribbon{display:none!important}
 /* A single admitted-room toolbar: return, invite, share or explicitly leave
    without navigating a room-options dashboard. All actions remain native. */
 .play-hub-current-room[hidden]{display:none!important}
+.play-hub.is-in-room>.play-hub-grid,.play-hub.is-in-room>.play-hub-extras{display:none!important}
 .play-hub-current-room{display:flex;align-items:center;justify-content:space-between;
  gap:18px;box-sizing:border-box;margin:0 0 16px;padding:15px 18px;
  border-radius:15px;border:1px solid rgba(200,250,164,.76);
