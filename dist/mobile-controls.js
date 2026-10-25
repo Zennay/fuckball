@@ -117,6 +117,11 @@
   field.style.setProperty('--preview-opacity',String(config.opacity/100));
   status.textContent=(config.hand==='left'?'Kick left':'Kick right')+' · '+Math.round(placed.scale*100)+
    '% controls · '+config.deadzone+' px deadzone · device only';
+  // Repositioning or swapping controls invalidates an earlier finger's hit
+  // target. The live input owner clears those captures; the next deliberate
+  // touch starts fresh with the newly applied geometry.
+  if(typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+   window.dispatchEvent(new window.CustomEvent('fuckball:touch-layout-applied'));
  }
  hand.addEventListener('change',()=>{config.hand=hand.checked?'left':'right';apply();persist();});
  for(const [name,settings] of presetOptions)
