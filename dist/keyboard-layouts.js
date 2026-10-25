@@ -55,7 +55,7 @@
  panel.setAttribute('aria-label','Keyboard layout presets');
  const title=document.createElement('h3');title.textContent='KEYBOARD PROFILES.';
  const desc=document.createElement('p');
- desc.textContent='Try a ready-made layout, keep up to three personal layouts or move one to another device. Switches take effect immediately; online rules and physics do not change.';
+ desc.textContent='Try a ready-made layout, keep up to three personal layouts or move one to another device. Saved slots are shared between browser tabs: conflicting edits are never silently overwritten. Online rules and physics do not change.';
  const presets=document.createElement('div');presets.className='keyboard-layout-presets';
  for(const [id,label] of [['standard','Default'],['arrows','Arrow keys'],['wasd','WASD'],['ijkl','IJKL'],['esdf','ESDF · left hand'],['numpad','Numpad · right hand']]){
   const btn=document.createElement('button');btn.type='button';btn.textContent=label;
@@ -129,7 +129,7 @@
  }
  const slotIdentity=value=>JSON.stringify(value);
  function syncSavedProfiles(announce=false){
-  const latest=readLatestSlots();
+  const latest=storageUnavailable?undefined:readLatestSlots();
   if(latest===undefined)return true;
   if(latest===null){
    if(announce)message('Saved profiles have an invalid format. They were not replaced; resolve the stored data before editing slots.',true);
@@ -142,7 +142,7 @@
   return true;
  }
  function slotIsCurrent(index){
-  const latest=readLatestSlots();
+  const latest=storageUnavailable?undefined:readLatestSlots();
   if(latest===undefined)return true;
   if(latest===null){
    message('Saved profile storage has invalid data. No slots were overwritten.',true);
@@ -226,7 +226,10 @@
  });
  const status=document.createElement('p');status.className='keyboard-layout-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- status.textContent='Current keys are stored by Fuckball settings; saved slots stay in this browser only.';
+ status.textContent=initialSlots===null?
+  'Stored keyboard profiles could not be read. Existing data will not be overwritten.':
+  'Current keys are stored by Fuckball settings; saved slots stay in this browser only.';
+ if(initialSlots===null)status.classList.add('error');
  panel.append(title,desc,presets,slotLabel,actionsRow,file,status);
  // Real, editable keyboard profiles now start on the Play home screen too.
  // No match startup, game input, network traffic or account write is necessary.
