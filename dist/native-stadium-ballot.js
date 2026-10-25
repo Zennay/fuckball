@@ -266,8 +266,11 @@
   refreshDock();
  });
  setInterval(()=>{
-  if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
-  else section.hidden=true;
+  // Advance server receipt/timeout presentation even while the original
+  // match menu is closed. The server remains authoritative for all counts.
+  const nativeMenuVisible=typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
+  render();
+  if(!nativeMenuVisible)section.hidden=true;
   refreshDock();
  },1100);
  render();refreshDock();
