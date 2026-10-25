@@ -4,12 +4,20 @@
 (function(){
  const W=1200,H=630;
  function create(item){
+  // Only the original native account-result schema is eligible for an
+  // offline share card. Reject contradictory outcomes rather than creating
+  // a misleading WIN banner above a losing scoreboard.
   if(!item||item.source!=='native-server'||item.ranked!==false||
+    typeof item.id!=='string'||!/^[a-f0-9]{24}$/.test(item.id)||
     ![1,2].includes(item.team)||![0,1,2].includes(item.winner)||
     !['bot','1v1','2v2','3v3','4v4'].includes(item.mode)||
     !Number.isSafeInteger(item.red)||item.red<0||item.red>999||
     !Number.isSafeInteger(item.blue)||item.blue<0||item.blue>999||
-    !Number.isSafeInteger(item.at)||item.at<=0)throw Error('Invalid server match receipt.');
+    !Number.isSafeInteger(item.playedFrames)||item.playedFrames<=0||
+    !Number.isSafeInteger(item.at)||item.at<=0||
+    !Number.isFinite(new Date(item.at).getTime())||
+    item.winner!==(item.red>item.blue?1:item.blue>item.red?2:0))
+   throw Error('This result cannot be shared: inconsistent server match receipt.');
   const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
   const ctx=canvas.getContext('2d');if(!ctx)throw Error('Image rendering is unavailable.');
   const outcome=item.winner===0?'DRAW':item.winner===item.team?'WIN':'LOSS';
