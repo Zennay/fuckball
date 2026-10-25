@@ -374,8 +374,11 @@ const inviteQuery=(()=>{
 })();
 if(inviteQuery.invalid){setRoomParam(null);notify('Invalid or ambiguous room invitation. Paste a valid eight-character code.');}
 else if(inviteQuery.room){
- if(!defaultServer)notify('Invite links need the Fuckball online server.');
- else{showView('play');showJoinScreen(inviteQuery.room);}
+ // A .chatgpt.site host intentionally has no guessed WebSocket endpoint.
+ // Always retain the valid invitation: let the human choose a server in
+ // the native join form rather than discarding the invite before consent.
+ showView('play');
+ showJoinScreen(inviteQuery.room);
 }
 
 
@@ -398,16 +401,49 @@ function startPeering(link,ws){
 }
 document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState==='hidden')serverLink?.net?.relinquish('tab hidden');});
 // Join screen for room links: nickname, guest with a random name, or account.
-var joinRoomId; // var: the room-link handler above runs before this line
+var joinRoomId,joinServerAddressNode; // Hoisted: invite deep links run above.
+function ensureJoinServerAddress(){
+ if(!joinServerAddressNode){
+  const label=document.createElement('label');
+  label.className='join-online-server';
+  label.textContent='Online room server';
+  const input=document.createElement('input');
+  input.type='text';input.maxLength=256;
+  input.autocomplete='off';input.spellcheck=false;
+  input.placeholder='wss://your-server.example/ws';
+  input.setAttribute('aria-label','Online WebSocket server for this invitation');
+  const note=document.createElement('small');
+  note.textContent='Use the server address shared by your host. HTTPS pages require WSS. No connection starts until you choose Join.';
+  label.append(input,note);
+  const form=$('joinPlay');
+  if(typeof form.prepend==='function')form.prepend(label);
+  else form.append(label);
+  joinServerAddressNode=input;
+ }
+ joinServerAddressNode.value=$('serverAddress').value.trim();
+}
 function showJoinScreen(room,error=''){joinRoomId=room;
+ ensureJoinServerAddress();
  if(document.getElementById('joinRoomAccessKey'))$('joinRoomAccessKey').value='';
- if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;$('joinRoomCode').textContent=room||'';$('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
+ if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;$('joinRoomCode').textContent=room||'';$('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error||(
+  room&&!joinServerAddressNode.value?
+   'Choose the room server address supplied by the host before joining.':'');
+ if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
 function hideJoinScreen(){$('joinScreen').hidden=true;$('joinError').textContent='';}
 function renderAccount(){const a=settings.account;$('joinAccount').textContent=a?'Logged in as '+a.username+'.':'';$('joinShowLogin').hidden=!!a;$('joinName').disabled=!!a;$('accountStatus').textContent=a?'Logged in as '+a.username:'Not logged in · nickname only';$('accountButton').textContent=a?'Log out':'Log in / create account';}
 function joinRoom(name){
  if(!joinRoomId)return;
  const blocked=onlineSessionConflict();
  if(blocked){$('joinError').textContent=blocked;return;}
+ const server=joinServerAddressNode?.value.trim()||'';
+ if(!server){
+  $('joinError').textContent='Enter the online room server address provided by the host. No room connection has started.';
+  joinServerAddressNode?.focus?.();return;
+ }
+ // The explicit value must travel through the original native URL/WSS,
+ // access-key and room-admission validations. Never infer a public server
+ // from an invitation's website origin.
+ $('serverAddress').value=server;
  const watch=$('joinSpectator').checked;
  // Keep the join form and its room code/nickname/spectator choice if native
  // validation rejects this request synchronously. It must never vanish before
