@@ -568,7 +568,9 @@ globalRematchView.addEventListener('click',()=>{
 });
 const globalRematchTicker=setInterval(renderGlobalRematchDock,1000);
 globalRematchTicker?.unref?.();
-for(const id of ['tabHome','tabPlay','tabGames'])
+// Home and Play exist in both the full app and minimal original runtime.
+// My Games is still covered by the one-second view-state refresh tick.
+for(const id of ['tabHome','tabPlay'])
  $(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalRematchDock));
 
 function renderSubPanel(){
