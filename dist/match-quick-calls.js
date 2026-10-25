@@ -65,7 +65,11 @@
  tools.append(save,reset);editor.append(form,tools);
  panel.append(heading,intro,destination,options,status,editor);
  match.append(panel);
+ // Live movement, held kick, touch, P2 and controller input must never leak
+ // underneath a public-chat picker. The shared native surface gate already
+ // protects all seats; Quick Calls must own it for its entire open lifetime.
  let opened=false;
+ window.fuckballQuickCallsOpen=false;
  function actualRoom(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   return link?.room&&link.ws?.readyState===1?link:null;
@@ -82,9 +86,16 @@
  }
  function showEditor(){inputs.forEach((input,i)=>{input.value=messages[i];});}
  function closePanel(focus=true){
+  if(!opened)return;
   opened=false;openedSession=null;panel.hidden=true;
+  window.fuckballQuickCallsOpen=false;
+  // Quick Actions may have opened through a user-initiated panel switch:
+  // never clear the other panel's active input ownership.
+  window.fuckballQuickActionsOpen=!quickSheet.hidden;
+  if(typeof releaseInputs==='function')releaseInputs();
   if(focus&&!launch.hidden&&match.hidden===false)launch.focus({preventScroll:true});
  }
+ window.fuckballCloseQuickCalls=closePanel;
  function drawOptions(){
   options.replaceChildren();
   for(const [i,msg] of messages.entries()){
@@ -105,7 +116,9 @@
    lastSession=link;sent=[];
    if(opened)closePanel(false);
   }
-  if(opened&&(openedSession!==link||match.hidden||document.hidden))
+  if(opened&&(openedSession!==link||match.hidden||document.hidden||
+     document.getElementById('pauseMenu')?.hidden===false||
+     !!document.querySelector('dialog[open]')))
    closePanel(false);
   if(!opened)return;
   const state=usable(),until=state?.until||0;
@@ -134,9 +147,15 @@
  }
  launch.onclick=()=>{
   const state=usable(false);
-  if(!state)return;
+  if(!state||opened||document.getElementById('pauseMenu')?.hidden===false||
+     document.querySelector('dialog[open]'))return;
   const nativeClose=quickSheet.querySelector('.in-game-quick-heading button');
   if(nativeClose)nativeClose.click();
+  // Close the originating sheet BEFORE acquiring the new input lease, so
+  // its teardown cannot re-enable movement while a chat option is focused.
+  window.fuckballQuickCallsOpen=true;
+  window.fuckballQuickActionsOpen=true;
+  if(typeof releaseInputs==='function')releaseInputs();
   openedSession=state.link;lastSession=state.link;
   opened=true;panel.hidden=false;
   destination.textContent='Sending to this connected public room only · '+
@@ -145,6 +164,16 @@
   close.focus({preventScroll:true});
  };
  close.onclick=()=>closePanel();
+ // An outside tap dismisses the picker. Consume the first pointer event
+ // on the pitch so closing a chat sheet cannot itself kick/move the human.
+ document.addEventListener('pointerdown',event=>{
+  if(!opened||panel.contains(event.target))return;
+  if(match.contains(event.target)){
+   event.preventDefault();
+   event.stopPropagation();
+  }
+  closePanel(false);
+ },true);
  panel.addEventListener('keydown',event=>{
   if(event.key==='Escape'){event.stopPropagation();closePanel();}
  });
