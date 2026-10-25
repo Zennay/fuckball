@@ -213,7 +213,9 @@
   else await applyLandscape();
  });
  document.addEventListener('fullscreenchange',()=>{
-  if(!document.fullscreenElement)unlockOrientation();
+  // Fullscreen can move to a different DOM element without becoming null.
+  // Only the original visible pitch owns this opt-in landscape lock.
+  if(document.fullscreenElement!==match)unlockOrientation();
   restoreDisplayOnLeavingPitch();
   render();
  });
