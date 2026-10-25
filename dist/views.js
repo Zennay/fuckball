@@ -86,12 +86,18 @@ function showView(view){
    }
   }
   $('gameCanvas').focus();renderer.render();
+  // An interrupted solo AI match stays paused until the human chooses Resume.
+  showSoloPauseOnReturn();
  }else{
   if(view==='games'&&typeof renderMyGames==='function')renderMyGames();
   // Only solo sandbox matches are automatically paused on navigation.
   // Never send a host-authorized PAUSE message merely because the owner
   // opens Home or My Games. Server matches stay live until explicitly paused.
-  if(started&&!paused&&!serverLink&&!peerConnected&&!replay)togglePause();
+  if(started&&!paused&&!serverLink&&!peerConnected&&!replay){
+   // Solo AI uses the same interruption receipt as window blur / hidden tab.
+   // Other local multiplayer retains its existing navigation pause behavior.
+   if(!pauseSoloForInterruption('view'))togglePause();
+  }
  }
  if(leavingOnline)notify('Your online room is still running. Return via Kick off to continue playing; pause or leave explicitly.');
 }
