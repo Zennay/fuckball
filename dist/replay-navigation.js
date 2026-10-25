@@ -86,6 +86,8 @@
  const loopStart=document.createElement('button');loopStart.type='button';loopStart.textContent='A · Mark start';
  const loopEnd=document.createElement('button');loopEnd.type='button';loopEnd.textContent='B · Mark end';
  const loopToggle=document.createElement('button');loopToggle.type='button';loopToggle.textContent='▶ Repeat A–B';
+ const loopJumpA=document.createElement('button');loopJumpA.type='button';loopJumpA.textContent='↤ Review A';
+ const loopJumpB=document.createElement('button');loopJumpB.type='button';loopJumpB.textContent='Review B ↦';
  const loopClear=document.createElement('button');loopClear.type='button';loopClear.textContent='Clear loop';
  const loopState=document.createElement('p');loopState.className='replay-navigation-loop-state';
  loopState.setAttribute('role','status');loopState.setAttribute('aria-live','polite');
@@ -110,6 +112,8 @@
  function renderLoop(message){
   const valid=loopA!==null&&loopB!==null&&loopB-loopA>=250;
   loopToggle.disabled=!valid;loopToggle.textContent=loopEnabled?'Ⅱ Stop repeating':'▶ Repeat A–B';
+  loopJumpA.disabled=loopA===null;
+  loopJumpB.disabled=loopB===null;
   loopToggle.setAttribute('aria-pressed',String(loopEnabled));
   loopState.textContent=(message?message+' · ':'')+'A '+clock(loopA)+' / B '+clock(loopB)+
    (valid?' · '+((loopB-loopA)/1000).toFixed(2)+'s clip':' · Set A and B at least 0.25 seconds apart')+
@@ -150,8 +154,22 @@
   }
   renderLoop(loopEnabled?'Loop enabled':'Loop paused');
  };
+ // Review the actual frame at either marked boundary without triggering the
+ // running loop to immediately drag a deliberate B seek back to A.
+ function inspectMarker(which){
+  if(!available())return;
+  if(loopReplay!==replay)return resetLoop('Recording changed');
+  const target=which==='A'?loopA:loopB;
+  if(target===null||!Number.isFinite(target))return;
+  loopEnabled=false;
+  replay.setSpeed(0);toggle.textContent='▶';
+  replay.setTime(Math.min(replay.length(),Math.max(0,target)));
+  renderLoop('Reviewing '+which+' at '+clock(target)+' · paused for inspection');
+ }
+ loopJumpA.onclick=()=>inspectMarker('A');
+ loopJumpB.onclick=()=>inspectMarker('B');
  loopClear.onclick=()=>resetLoop('Loop disabled');
- loopActions.append(loopStart,loopEnd,loopToggle,loopClear);
+ loopActions.append(loopStart,loopEnd,loopToggle,loopJumpA,loopJumpB,loopClear);
  loop.append(loopTitle,loopIntro,loopActions,loopState);
  renderLoop();
  function maintainLoop(){
