@@ -39,16 +39,28 @@
  sendFeedback.setAttribute('aria-live','polite');
  sendFeedback.hidden=true;
  chatForm?.append(sendFeedback);
- let onlineDraftRoom=null;
+ let onlineDraftRoom=null,privateDraft=false;
+ function preserveDraftAudience(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!onlineDraftRoom&&link?.room)onlineDraftRoom=link.room;
+  // Never let a previously team-only draft silently turn public if the
+  // native channel picker resets while a player reconnects or changes teams.
+  if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
+   privateDraft=true;
+ }
  chatInput?.addEventListener('focus',()=>{
-  // Capture the room the player intended to address, not merely whether
-  // any online server will eventually accept the message.
-  if(!onlineDraftRoom&&serverLink?.room)onlineDraftRoom=serverLink.room;
-  sendFeedback.hidden=true;
+  preserveDraftAudience();sendFeedback.hidden=true;
  });
- chatInput?.addEventListener('input',()=>{sendFeedback.hidden=true;});
+ chatInput?.addEventListener('input',()=>{
+  preserveDraftAudience();sendFeedback.hidden=true;
+ });
+ chatForm?.addEventListener('change',()=>{
+  if(chatInput?.value.trim())preserveDraftAudience();
+ });
  chatForm?.addEventListener('focusout',event=>{
-  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget))onlineDraftRoom=null;
+  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget)){
+   onlineDraftRoom=null;privateDraft=false;
+  }
  });
  chatForm?.addEventListener('submit',event=>{
   const link=typeof serverLink!=='undefined'?serverLink:null;
@@ -57,12 +69,14 @@
   const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
   const blocked=link&&(!link.room||link.ws?.readyState!==1)||
     !!onlineDraftRoom&&!link?.room;
+  const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!blocked&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!blocked&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
   event.preventDefault();event.stopImmediatePropagation();
   sendFeedback.textContent=wrongRoom?
    'This draft was written for another room. Close chat and start a new message before sending to these players.':
    blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
+   wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
    'The room host muted your chat. Your unsent draft is still here.';
   sendFeedback.hidden=false;
   chatInput?.focus({preventScroll:true});
