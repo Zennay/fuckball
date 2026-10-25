@@ -37,7 +37,9 @@
  time.value='90';timeLabel.append(time);
  const start=node('button','▶ START BEST-OF SERIES');
  start.type='button';start.className='primary';
- fields.append(opponentLabel,gamesLabel,timeLabel,start);
+ const continueSeries=node('button','↗ Return to paused series','sudden-death-return');
+ continueSeries.type='button';continueSeries.hidden=true;
+ fields.append(opponentLabel,gamesLabel,timeLabel,start,continueSeries);
  const status=node('p','Complete all needed rounds to save a private series result.','sudden-death-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const archive=node('div',null,'sudden-death-history');
@@ -69,6 +71,47 @@
  // A later manual kickoff must never be stopped by a superseded series.
  let nativeEpoch=0;
  window.addEventListener('fuckball:local-match-kickoff',()=>{nativeEpoch++;});
+ const activeSeries=s=>!!s&&['starting','running','between'].includes(s.phase);
+ function stillOwnsSeries(s){
+  return activeSeries(s)&&s.room===room&&s.kickoffEpoch===nativeEpoch&&
+   !!started&&!serverLink&&!peerConnected&&!peer&&!replay;
+ }
+ function paintReturn(){
+  const s=session,owned=stillOwnsSeries(s);
+  continueSeries.hidden=!owned||!pitch.hidden;
+  if(owned){
+   continueSeries.textContent='↗ Return to series · '+
+    (s.rounds.length+1)+' / '+s.bestOf+' rounds';
+  }
+ }
+ continueSeries.addEventListener('click',()=>{
+  if(!stillOwnsSeries(session)){
+   status.textContent='That local series is no longer the current native game.';
+   paintReturn();return;
+  }
+  // Existing local-focus-pause UI owns explicit unpause. Returning to the
+  // pitch must not silently advance time or overwrite the saved round state.
+  showView('play');
+  paintReturn();
+ });
+ function preserveWhenAway(s){
+  if(!stillOwnsSeries(s))return false;
+  if(!paused){
+   try{togglePause();}catch{}
+  }
+  // Fail closed if the native 60 Hz simulation cannot be paused. An offscreen
+  // best-of must never score or time out without its human controller.
+  if(!paused){
+   finalize(s,false);
+   status.textContent='Could not pause this local series safely. It was stopped.';
+   return false;
+  }
+  if(Number.isSafeInteger(room.currentFrameNo))s.frame=room.currentFrameNo;
+  if(s.phase==='starting')s.bootAt=performance.now();
+  status.textContent='Sudden Death '+s.human+'–'+s.other+
+   ' · '+s.rounds.length+' real rounds preserved. Return to the pitch to continue.';
+  paintReturn();return true;
+ }
  const validHistory=x=>{
   if(!x||!Number.isSafeInteger(x.at)||x.at<=0||x.at>Date.now()+86400000||
    !LENGTHS.includes(x.bestOf)||!DURATIONS.includes(x.duration)||
@@ -207,6 +250,7 @@
   stop.hidden=finished;
   retry.hidden=dismiss.hidden=!finished;
   dismiss.textContent=finished&&!started?'↗ Return to Home':'Dismiss';
+  paintReturn();
  }
  function stopOwnedNative(s){
   if(s.room!==room||s.kickoffEpoch!==nativeEpoch||
@@ -299,19 +343,24 @@
  function tick(){
   const s=session;
   if(!s)return;
+  // A different real kickoff, server room or replay invalidates the old
+  // series, even while the user is reading Home/My Games.
+  if(activeSeries(s)&&s.room&&(!stillOwnsSeries(s)||blocked())){
+   finalize(s,false);return;
+  }
+  if(s.phase==='between'){paintReturn();return;}
   if(s.phase==='starting'){
-   if(document.hidden||nativeEpoch!==s.kickoffEpoch||room!==s.room||
-    !started||blocked()){finalize(s,false);return;}
+   if(document.hidden||pitch.hidden){preserveWhenAway(s);return;}
    if(!acceptBoot(s)&&performance.now()-s.bootAt>=1200){
     recoverFailedNextRound(s,'The new native players did not become ready.');
    }
    return;
   }
   if(s.phase!=='running')return;
-  if(document.hidden){finalize(s,false);return;}
+  if(document.hidden||pitch.hidden){preserveWhenAway(s);return;}
   // Disc objects can disappear briefly during the native goal/reset animation.
   // Check stable match authority here, and let the real score settle the round.
-  if(serverLink||peerConnected||replay||!started||pitch.hidden||
+  if(serverLink||peerConnected||peer||replay||!started||
    nativeEpoch!==s.kickoffEpoch||room!==s.room||
    document.getElementById('mode')?.value!==(s.opponent==='human'?'local':'bot')||
    !room?.gameState||!Number.isSafeInteger(room.currentFrameNo)||
@@ -395,10 +444,17 @@
    showView('home');
  };
  window.setInterval(tick,120);
+ // The actual local match is already paused by views.js when changing tabs.
+ // Keep genuine best-of rounds and the precise original kickoff ownership.
  const previousShowView=showView;
  showView=function(view){
-  if(view!=='play'&&session&&['starting','running','between'].includes(session.phase))
-   finalize(session,false);
   previousShowView(view);
+  if(view!=='play'&&activeSeries(session))preserveWhenAway(session);
+  paintReturn();
  };
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&activeSeries(session))preserveWhenAway(session);
+  else paintReturn();
+ });
+ window.addEventListener('focus',paintReturn);
 })();
