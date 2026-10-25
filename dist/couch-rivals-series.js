@@ -286,12 +286,50 @@
  }
  function nextRound(){
   if(!series||series.complete||!series.resolved)return;
-  const prepared=window.fuckballCouchRivals?.prepare?.();
-  if(!prepared?.ok){announce(prepared?.message||'Reconnect both Blue controllers first.');return;}
-  if(typeof resetMatch!=='function'){announce('Native match reset unavailable.');return;}
-  series.round++;series.resolved=false;series.seen=false;series.suspended=false;lastControllerScan=0;
-  resetMatch(true);
-  announce('Round '+series.round+' live · first native goal wins.');
+  // This best-of belongs to the *original* four humans on this device.
+  // In particular, prepare() would silently pick a different connected pad
+  // if a Blue player unplugged theirs between rounds. Only the separate
+  // explicit native seat-rebind action may replace an occupied human seat.
+  const health=window.fuckballCouchRivals?.seatStatus?.();
+  if(!health?.assigned||!health.ok){
+   const missing=health?.missing?.map(id=>'P'+id).join(' and ');
+   announce((missing||'Blue players')+' controller not ready. Restore the original controller or explicitly rebind that seat before Next Round.');
+   display();return;
+  }
+  // Another game, online room or replay must never be reset by a stale
+  // series button, even if its old scorecard is still visible on Home.
+  const sameMatch=document.getElementById('mode')?.value===series.mode&&
+   typeof serverLink!=='undefined'&&!serverLink&&
+   typeof peerConnected!=='undefined'&&!peerConnected&&
+   typeof replay!=='undefined'&&!replay;
+  if(!sameMatch){
+   announce('This four-human series is not the current local match. Return to the original match or end the series.');
+   return;
+  }
+  if(typeof resetMatch!=='function'||typeof showView!=='function'){
+   announce('The original game controls are unavailable. Round not advanced.');return;
+  }
+  // Next Round also lives on Home. Always reveal the real pitch BEFORE a
+  // new game can advance, rather than starting invisible gameplay on Home.
+  const upcoming=series.round+1;
+  try{
+   showView('play');
+   resetMatch(true);
+  }catch(err){
+   announce('Round '+upcoming+' could not start. '+String(err?.message||'Please retry.').slice(0,100));
+   display();return;
+  }
+  if(typeof started==='undefined'||!started||
+     typeof paused==='undefined'||paused||
+     document.getElementById('matchView')?.hidden!==false||
+     document.getElementById('mode')?.value!==series.mode){
+   announce('Native kickoff was not confirmed. Series result preserved; retry Next Round.');
+   display();return;
+  }
+  // Commit the local best-of state only after successful native kickoff.
+  series.round=upcoming;series.resolved=false;series.seen=false;
+  series.suspended=false;lastControllerScan=0;
+  announce('Round '+series.round+' live · original four human seats preserved. First native goal wins.');
   display();
  }
  function exportResult(){
