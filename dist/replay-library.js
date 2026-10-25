@@ -3,7 +3,26 @@
 // result is trusted or uploaded, and nothing is shared between devices.
 const ReplayLibrary=(()=>{
  const DB_NAME='fuckball-local-replays',MAX_FILE=32*1024*1024,MAX_TOTAL=160*1024*1024,MAX_ITEMS=30;
- let database=null;
+ let database=null,opening=null;
+ const CHANGE='fuckball:local-replay-library-change';
+ let changes=null;
+ function refreshFromAnotherTab(){
+  try{window.dispatchEvent(new Event(CHANGE));}catch{}
+ }
+ // A real recording saved, deleted or organized in another open game tab
+ // changes this tab's remaining capacity and visible My Games listing.
+ // Never send recording contents, names, account data or match results.
+ try{
+  if(typeof window.BroadcastChannel==='function'){
+   changes=new window.BroadcastChannel('fuckball-replay-local-v1');
+   changes.onmessage=e=>{if(e.data?.type==='changed')refreshFromAnotherTab();};
+   window.addEventListener('pagehide',()=>{changes?.close();changes=null;},{once:true});
+  }
+ }catch{changes=null;}
+ function notifyChanged(){
+  refreshFromAnotherTab();
+  try{changes?.postMessage({type:'changed'});}catch{}
+ }
  function parseRecording(bytes){
   const data=Replay.readAll(bytes);
   const frames=Number.isSafeInteger(data?.totalFrames)&&data.totalFrames>0?data.totalFrames:0;
@@ -18,19 +37,37 @@ const ReplayLibrary=(()=>{
  async function db(){
   if(!('indexedDB'in window))throw Error('This browser does not support local replay storage.');
   if(database)return database;
-  database=await new Promise((resolve,reject)=>{
+  // Multiple imports, auto-saves and library renders may ask for the database
+  // simultaneously. Share the one opener, rather than leaking orphaned
+  // IndexedDB connections that can block upgrades in other tabs.
+  if(opening)return opening;
+  const pending=new Promise((resolve,reject)=>{
+   let settled=false;
    const open=indexedDB.open(DB_NAME,1);
    open.onupgradeneeded=()=>{
     const d=open.result;
     if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta',{keyPath:'id'});
     if(!d.objectStoreNames.contains('data'))d.createObjectStore('data');
    };
-   open.onsuccess=()=>resolve(open.result);
-   open.onerror=()=>reject(open.error||Error('Cannot open replay storage.'));
-   open.onblocked=()=>reject(Error('Close other game tabs to update replay storage.'));
+   open.onsuccess=()=>{
+    if(settled){open.result.close();return;}
+    settled=true;
+    const next=open.result;
+    database=next;
+    next.onversionchange=()=>{next.close();if(database===next)database=null;};
+    resolve(next);
+   };
+   open.onerror=()=>{
+    if(settled)return;
+    settled=true;reject(open.error||Error('Cannot open replay storage.'));
+   };
+   open.onblocked=()=>{
+    if(settled)return;
+    settled=true;reject(Error('Close other game tabs to update replay storage.'));
+   };
   });
-  database.onversionchange=()=>{database.close();database=null;};
-  return database;
+  opening=pending;
+  try{return await pending;}finally{if(opening===pending)opening=null;}
  }
  async function list(){
   const d=await db(),tx=d.transaction('meta','readonly'),items=await request(tx.objectStore('meta').getAll());
@@ -41,19 +78,38 @@ const ReplayLibrary=(()=>{
   if(!bytes.length||bytes.length>MAX_FILE)throw Error('Replay must be between 1 byte and 32 MB.');
   // Validate HBR2 before committing any bytes; never interpret replay metadata as HTML.
   const recording=parseRecording(bytes);
-  const items=await list(),total=items.reduce((sum,item)=>sum+item.size,0);
-  if(items.length>=MAX_ITEMS||total+bytes.length>MAX_TOTAL)
-   throw Error('My Games is full. Delete an older recording to free space (30 items / 160 MB).');
-  const random=crypto.getRandomValues(new Uint8Array(16));const id=Array.from(random,b=>b.toString(16).padStart(2,'0')).join(''),createdAt=Date.now();
-  const item={id,createdAt,size:bytes.length,name:String(name||'Replay.hbr2').slice(0,100),...recording};
+  const random=crypto.getRandomValues(new Uint8Array(16));
+  const id=Array.from(random,b=>b.toString(16).padStart(2,'0')).join('');
+  const item={id,createdAt:Date.now(),size:bytes.length,
+   name:String(name||'Replay.hbr2').slice(0,100),...recording};
+  const payload=new Blob([bytes],{type:'application/octet-stream'});
   const d=await db();
   await new Promise((resolve,reject)=>{
+   // An old list() snapshot is not a reservation. Two tabs (or concurrent
+   // automatic recording + manual import) could each pass the 30/160MB check
+   // and then both commit. Checking inside this IndexedDB readwrite tx
+   // serializes the capacity decision across every writer on this database.
    const tx=d.transaction(['meta','data'],'readwrite');
-   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||Error('Could not save replay.'));
-   tx.onabort=()=>reject(tx.error||Error('Could not save replay.'));
-   tx.objectStore('meta').add(item);
-   tx.objectStore('data').add(new Blob([bytes],{type:'application/octet-stream'}),id);
+   const meta=tx.objectStore('meta'),data=tx.objectStore('data');
+   let reason=null;
+   const fail=()=>reject(reason||tx.error||Error('Could not save replay.'));
+   tx.oncomplete=resolve;
+   tx.onerror=fail;tx.onabort=fail;
+   const snapshot=meta.getAll();
+   snapshot.onsuccess=()=>{
+    const items=snapshot.result;
+    const total=items.reduce((sum,entry)=>sum+(Number.isSafeInteger(entry.size)?entry.size:0),0);
+    if(items.length>=MAX_ITEMS||total+bytes.length>MAX_TOTAL){
+     reason=Error('My Games is full. Delete an older recording to free space (30 items / 160 MB).');
+     tx.abort();return;
+    }
+    try{
+     meta.add(item);
+     data.add(payload,id);
+    }catch(error){reason=error;tx.abort();}
+   };
   });
+  notifyChanged();
   return item;
  }
  async function get(id){
@@ -73,6 +129,7 @@ const ReplayLibrary=(()=>{
    tx.onabort=()=>reject(tx.error||Error('Could not delete replay.'));
    tx.objectStore('meta').delete(id);tx.objectStore('data').delete(id);
   });
+  notifyChanged();
  }
  async function updateMeta(id,change){
   const d=await db();
@@ -85,7 +142,7 @@ const ReplayLibrary=(()=>{
     saved=change(lookup.result);
     store.put(saved);
    };
-   tx.oncomplete=()=>resolve(saved);
+   tx.oncomplete=()=>{notifyChanged();resolve(saved);};
    tx.onerror=()=>reject(tx.error||Error('Could not update replay.'));
    tx.onabort=()=>reject(Error('Replay missing or could not be updated.'));
   });
@@ -196,6 +253,12 @@ const ReplayLibrary=(()=>{
 const gamesList=$('gamesList'),gamesStatus=$('gamesStatus'),gamesEmpty=$('gamesEmpty');
 const gamesSearch=$('gamesSearch'),gamesSort=$('gamesSort');
 gamesSort.add(new Option('Favorites first','favorites'));
+// Refresh the visible My Games library after an atomic save, removal, rename
+// or metadata update, including another browser tab. Avoid background redraws
+// while playing an active human match.
+window.addEventListener('fuckball:local-replay-library-change',()=>{
+ if(!$('gamesView').hidden)renderMyGames();
+});
 let favoritesOnly=false,activeLocalReplayId=null,selectedTag='all';
 const tagsFilterLabel=document.createElement('label');tagsFilterLabel.textContent='Collection tag';
 const tagsFilter=document.createElement('select');tagsFilter.setAttribute('aria-label','Filter replays by collection tag');
