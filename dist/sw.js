@@ -2,12 +2,16 @@
 // Offline support is EXCLUSIVELY for local, casual browser practice and user-owned
 // replay playback. Do not cache credentials, account APIs, matchmaking, rooms
 // or any live match state. Every online action still requires the actual server.
-const CACHE='fuckball-offline-practice-v152'
+const CACHE='fuckball-offline-practice-v153'
 const CORE=[
  "./",
  "./style.css",
  "./club.css",
  "./play-home.css",
+ "./play-first-home.css",
+ "./play-first-home.js",
+ "./local-focus-pause.css",
+ "./local-focus-pause.js",
  "./verified-queue-status.css",
  "./play-hub.css",
  "./play-hub.js",
@@ -303,10 +307,10 @@ self.addEventListener('fetch',event=>{
   event.respondWith((async()=>{
    try{
     const response=await fetch(request);
-    if(response.ok&&url.pathname===root&&!url.search){
-     const cache=await caches.open(CACHE);
-     await cache.put(shell,response.clone());
-    }
+    // The install snapshot is atomic. Replacing only the cached HTML on a
+    // routine online visit can strand a player offline with new script tags
+    // and old missing assets before the replacement worker is installed.
+    // Leave the installed shell immutable until the next verified install.
     return response;
    }catch{
     if(url.pathname===root&&!url.search){
@@ -326,10 +330,9 @@ self.addEventListener('fetch',event=>{
  event.respondWith((async()=>{
   try{
    const response=await fetch(request);
-   if(response.ok&&response.type==='basic'){
-    const cache=await caches.open(CACHE);
-    await cache.put(request,response.clone());
-   }
+   // Serve fresh assets during a connected session without mutating the
+   // self-consistent, install-time offline bundle one file at a time.
+   // Only an atomically installed new worker upgrades that snapshot.
    return response;
   }catch{
    const cached=await (await caches.open(CACHE)).match(request);
