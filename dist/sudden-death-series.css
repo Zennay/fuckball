@@ -49,3 +49,11 @@
  .sudden-death-hud[data-phase="stopped"]{
   width:min(340px,calc(100vw - 16px))}
 }
+
+/* Native best-of continuity: an explicit return, never an offscreen kickoff. */
+.sudden-death-return[hidden]{display:none!important}
+.sudden-death-return{min-height:48px!important;border:1px solid #b3e7a8;
+ border-radius:9px;background:#284738;color:#ecffe8;font-weight:800;
+ padding:10px 15px;cursor:pointer;max-width:100%;white-space:normal}
+.sudden-death-return:focus-visible{outline:3px solid #e0ff97;outline-offset:3px}
+@media(max-width:600px){.sudden-death-return{flex:1 1 100%;width:100%}}
