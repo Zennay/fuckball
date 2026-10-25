@@ -277,8 +277,27 @@
   }
   const chosen=entries.filter(([kind])=>pending[kind]&&selections.get(kind).checked);
   if(!chosen.length){status.textContent='Select at least one category to restore.';return;}
+  // Import data was previewed earlier. If another tab or menu changed an
+  // affected control in the meantime, never clobber that new live preference.
+  function previewUnchanged(){
+   if(!baseline)return false;
+   try{return chosen.every(([kind])=>baseline.has(kind)&&
+     baseline.get(kind)===snapshot(kind));}
+   catch{return false;}
+  }
+  if(!previewUnchanged()){
+   status.textContent='A selected control layout changed since preview. Re-select the file to review the latest device settings.';
+   return;
+  }
   const types=chosen.map(([,label])=>label).join(', ');
   if(!window.confirm('Replace '+types+' on this device, then reload Fuckball? Your existing account stays signed in.'))return;
+  // The native confirmation can remain open while another browser tab writes.
+  if(!previewUnchanged()){
+   status.textContent='Your existing controls changed during confirmation. Re-select the setup file before replacing them.';
+   return;
+  }
+  const afterConfirm=importBlocker();
+  if(afterConfirm){status.textContent='Setup kept unchanged: '+afterConfirm;return;}
   const backups=new Map(),olderKeys=JSON.parse(JSON.stringify(settings.keys));
   try{
    for(const [kind,,,key] of chosen){
@@ -292,8 +311,10 @@
    }
    for(const [kind,,,key] of chosen)if(key&&localStorage.getItem(key)!==JSON.stringify(pending[kind]))
     throw Error('Storage did not preserve '+kind+'.');
-   status.textContent='Selected settings restored. Reloading to safely activate every control panel.';
-   window.setTimeout(()=>location.reload(),100);
+   status.textContent='Selected settings restored; reloading to activate the original controls.';
+   // Reload immediately after a committed transaction, avoiding a window in
+   // which a player might launch with half of the old/new input mappings.
+   location.reload();
   }catch(error){
    settings.keys=olderKeys;savePrefs();
    for(const [key,value] of backups){
