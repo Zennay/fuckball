@@ -226,6 +226,28 @@ body.lobby .scoreboard{opacity:.35}
 @media(max-width:390px){.native-rematch-dock-actions{grid-template-columns:1fr}
  .native-rematch-dock-actions button:last-child{grid-column:auto}}
 
+/* Room invitation fallback: a rejected invite should not strand the player. */
+.join-alternatives[hidden]{display:none!important}
+.join-alternatives{display:flex;flex-direction:column;gap:11px;padding:13px;
+ border:1px solid #84a4a099;border-radius:12px;background:#1c2d30}
+.join-alternatives>label{display:block;font-size:.81rem;color:#ccdfda}
+.join-alternatives input{width:100%;box-sizing:border-box;letter-spacing:.09em;
+ text-transform:uppercase;font-family:inherit;font-weight:800}
+.join-alternative-actions{display:flex;flex-wrap:wrap;gap:8px}
+.join-alternative-actions button{min-height:44px;flex:1 1 110px;
+ padding:9px 11px;border-radius:9px;border:1px solid #a1bdad;
+ background:#2b433d;color:#f1fff0;font:inherit;font-size:.82rem;
+ font-weight:800;cursor:pointer}
+.join-alternative-actions button:first-child{background:#d7fc96;color:#183123;
+ border-color:#d7fc96}
+.join-alternative-actions button:focus-visible{outline:3px solid #e8ff9b;outline-offset:3px}
+.join-alternative-hint{font-size:.77rem;line-height:1.45;color:#c1d1cf;margin:0}
+@media(max-width:420px){
+ .join-card{padding:18px;max-height:calc(100dvh - 24px);overflow-y:auto}
+ .join-alternative-actions{flex-direction:column}
+ .join-alternative-actions button{flex:1 1 auto;min-height:46px}
+}
+
 /* Human bench substitution requires opt-in, even when the player is on
    My Games or Home. This panel mirrors authoritative native room requests. */
 .native-sub-consent-dock[hidden]{display:none!important}
