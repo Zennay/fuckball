@@ -30,7 +30,37 @@
  const anchor=document.querySelector('#menuMatchPane .native-lobby-ready');
  if(anchor)anchor.insertAdjacentElement('afterend',section);
  else pane.append(section);
- let selected=null,optionSignature='';
+ let selected=null,optionSignature='',ballotLink=null,ballotRound=null,ballotMap=null;
+ let pendingVote=null,pendingApply=null;
+ const connectionOpen=link=>link?.ws?.readyState===1;
+ const humanInRoom=()=>room?.state?.players?.some?.(p=>
+  p.id===networkPlayerId&&!botIds.has(p.id))===true;
+ function clearBallotSession(){
+  selected=null;optionSignature='';ballotLink=null;ballotRound=null;ballotMap=null;
+  pendingVote=null;pendingApply=null;
+ }
+ function currentBallotAction(requireHost=false){
+  const d=native();
+  if(!d||d.link!==ballotLink||d.state.round!==ballotRound||
+     d.state.map!==ballotMap){
+   render();
+   status.textContent='The room or stadium vote changed. Review the current ballot before acting.';
+   return null;
+  }
+  if(!connectionOpen(d.link)){
+   status.textContent='Room connection is not open. No vote was sent.';
+   return null;
+  }
+  if(!humanInRoom()||requireHost&&!d.link.isOwner){
+   status.textContent='Only an admitted human'+(requireHost?' room host':'')+' can take this action.';
+   return null;
+  }
+  if(d.state.kickoff!=null){
+   status.textContent='The server countdown has locked this ballot.';
+   return null;
+  }
+  return d;
+ }
  function native(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const state=link?.roomState;
@@ -44,8 +74,17 @@
  function render(){
   const d=native();
   section.hidden=!d;
-  if(!d)return;
+  if(!d){if(ballotLink)clearBallotSession();return;}
   const {link,state,list}=d;
+  // All rooms expose the same server ballot options. Rebuild the selection
+  // when the real socket/room, round, or selected pitch changes; a choice
+  // made in the previous room must never be carried into the new one.
+  const sessionChanged=ballotLink!==link||ballotRound!==state.round||
+   ballotMap!==state.map;
+  if(sessionChanged){
+   selected=null;optionSignature='';pendingVote=null;pendingApply=null;
+   ballotLink=link;ballotRound=state.round;ballotMap=state.map;
+  }
   const votes=new Map(state.stadiumBallotVotes.filter(v=>
    Array.isArray(v)&&v.length===2&&Number.isSafeInteger(v[0])&&
    Number.isSafeInteger(v[1])&&v[1]>=0&&v[1]<list.length));
@@ -74,39 +113,66 @@
   current.textContent='CURRENT SERVER PITCH · '+String(state.map||'Unknown')+
    ' · '+total+' confirmed vote'+(total===1?'':'s')+
    (mine!==undefined?' · YOUR VOTE: '+list[mine].name:' · you have not voted');
-  const human=room?.state?.players?.some?.(p=>p.id===networkPlayerId&&!botIds.has(p.id))===true;
-  cast.disabled=!human||state.kickoff!=null;
-  retract.disabled=!human||mine===undefined||state.kickoff!=null;
+  const human=humanInRoom(),canSend=human&&connectionOpen(link)&&state.kickoff==null;
+  cast.disabled=!canSend||!!pendingVote;
+  retract.disabled=!canSend||mine===undefined||!!pendingVote;
   const winner=state.stadiumBallotWinner;
   apply.hidden=!link.isOwner;
-  apply.disabled=!link.isOwner||state.kickoff!=null||
+  apply.disabled=!link.isOwner||!canSend||!!pendingApply||
    !Number.isSafeInteger(winner)||winner<0||winner>=list.length;
   apply.textContent=winner===0?'HOST · KEEP CURRENT PITCH':'HOST · APPLY LEADING PITCH';
-  status.textContent=state.kickoff?
+  if(pendingVote){
+   const confirmed=pendingVote.choice===null?mine===undefined:mine===pendingVote.choice;
+   if(confirmed){
+    status.textContent='The server confirmed your '+(mine===undefined?'vote removal.':'vote for '+list[mine].name+'.');
+    pendingVote=null;
+   }else if(Date.now()-pendingVote.sentAt>3500){
+    status.textContent='No server vote receipt arrived. Review your connection and retry manually.';
+    pendingVote=null;
+   }else status.textContent='Vote sent. Awaiting the real server ballot update…';
+  }else if(pendingApply){
+   const confirmed=state.stadiumBallotVotes.length===0&&winner===null;
+   if(confirmed){
+    status.textContent='The server accepted the host action and cleared the ballot.';
+    pendingApply=null;
+   }else if(Date.now()-pendingApply.sentAt>3500){
+    status.textContent='The server has not confirmed the pitch action. Review the vote before retrying.';
+    pendingApply=null;
+   }else status.textContent='Host request sent. Awaiting the server stadium update…';
+  }else status.textContent=state.kickoff?
    'Ballot changes are locked while the native kickoff countdown runs.':
+   !connectionOpen(link)?'The room connection is unavailable. No vote can be sent.':
    Number.isSafeInteger(winner)&&list[winner]?
     'Clear winner: '+list[winner].name+'. Only the host can apply it.':
     'At least two votes and an outright leader are needed before the host can apply a stadium.';
  }
  cast.onclick=()=>{
-  const d=native();if(!d||d.state.kickoff!=null||
-   !Number.isSafeInteger(selected)||selected<0||selected>=d.list.length)return;
-  d.link.send({type:'stadiumBallot',choice:selected});
-  status.textContent='Submitting your vote to the native room…';
+  const d=currentBallotAction();
+  if(!d||pendingVote||!Number.isSafeInteger(selected)||selected<0||
+     selected>=d.list.length)return;
+  const choice=selected;
+  d.link.send({type:'stadiumBallot',choice});
+  pendingVote={choice,sentAt:Date.now()};
+  render();
  };
  retract.onclick=()=>{
-  const d=native();if(!d||d.state.kickoff!=null)return;
+  const d=currentBallotAction();
+  if(!d||pendingVote)return;
+  const hasVote=d.state.stadiumBallotVotes.some(v=>Array.isArray(v)&&
+   v[0]===networkPlayerId);
+  if(!hasVote)return;
   d.link.send({type:'stadiumBallot',choice:null});
-  status.textContent='Requesting native vote removal…';
+  pendingVote={choice:null,sentAt:Date.now()};
+  render();
  };
  apply.onclick=()=>{
-  const d=native(),winner=d?.state.stadiumBallotWinner;
-  if(!d||!d.link.isOwner||d.state.kickoff!=null||
-   !Number.isSafeInteger(winner)||!d.list[winner])return;
+  const d=currentBallotAction(true),winner=d?.state.stadiumBallotWinner;
+  if(!d||pendingApply||!Number.isSafeInteger(winner)||!d.list[winner])return;
   if(!confirm('Apply the voted '+d.list[winner].name+
    ' pitch through the existing native host configuration? This refreshes the waiting room and clears readiness. No match starts automatically.'))return;
   d.link.send({type:'stadiumBallotApply'});
-  status.textContent='Host request sent. The real room server will decide whether this vote can be applied.';
+  pendingApply={sentAt:Date.now()};
+  render();
  };
  setInterval(()=>{if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
   else section.hidden=true;},1100);
