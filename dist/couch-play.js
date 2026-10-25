@@ -225,9 +225,12 @@
  // Reuse of the same Gamepad API port is not proof that the same human returned.
  function selected(){
   if(!seatTwoSession||!activeCouchSession())return candidate();
-  if(!seatTwoLock)return null;
+  if(!seatTwoLock||seatTwoLock.lost)return null;
   const connected=pads().find(p=>p.index===seatTwoLock.index&&p.id===seatTwoLock.id);
-  return connected&&connected.index!==playerOneIndex()?connected:null;
+  // Controller IDs identify models, not people or physical devices. Once
+  // disconnected, never restore P2's kick automatically on a reused port.
+  if(!connected){seatTwoLock.lost=true;return null;}
+  return connected.index!==playerOneIndex()?connected:null;
  }
  function bindSeatTwo(){
   const pad=candidate();
@@ -415,7 +418,11 @@
  }
  window.fuckballCouchPad=Object.freeze({read,reservedPort});
  window.addEventListener('gamepadconnected',()=>{availableSignature='';});
- window.addEventListener('gamepaddisconnected',()=>{
+ window.addEventListener('gamepaddisconnected',event=>{
+  const index=event?.gamepad?.index;
+  if(activeCouchSession()&&seatTwoSession&&seatTwoLock&&
+     Number.isSafeInteger(index)&&seatTwoLock.index===index)
+   seatTwoLock.lost=true;
   lastInput='0:0:false';availableSignature='';
   if(typeof refreshInput==='function'&&isLocal())refreshInput();
  });
