@@ -30,9 +30,10 @@
  // authoritative roster update, not a local "request sent" success claim.
  const RECEIPT_MS=8000;
  function permitted(){
+  // Ownership and authoritative admission are independent of which app
+  // tab is visible. Hiding Match must not destroy a pending server receipt.
   return !!serverLink?.room&&serverLink.isOwner===true&&!serverLink.quickMatchMode&&
-   typeof room!=='undefined'&&room&&
-   !document.getElementById('matchView').hidden;
+   typeof room!=='undefined'&&!!room;
  }
  function players(){
   const all=room?.state?.players;
@@ -109,7 +110,8 @@
  function paint(confirmed=false){
   if(!permitted()){section.hidden=true;base=null;plan.clear();pending=null;return;}
   if(pending)return;
-  section.hidden=false;rowList.replaceChildren();
+  section.hidden=!!document.getElementById('matchView').hidden;
+  rowList.replaceChildren();
   base=current();plan=new Map(base.humans.map(p=>[p.id,p.team.id]));dirty=false;
   refresh.disabled=false;apply.disabled=true;
   if(!base.humans.length){
@@ -186,7 +188,18 @@
    if(!section.hidden){section.hidden=true;base=null;plan.clear();pending=null;}
    return;
   }
-  if(section.hidden){paint();return;}
+  const matchHidden=!!document.getElementById('matchView').hidden;
+  if(matchHidden){
+   section.hidden=true;
+   if(base)updatePreview();
+   return;
+  }
+  if(section.hidden){
+   // Returning from Home/My Games must not discard an unfinished draft.
+   if(base&&(dirty||pending)){section.hidden=false;updatePreview();}
+   else paint();
+   return;
+  }
   if(base){
    const latest=current();
    // New players are visible automatically when no host draft is at risk.
