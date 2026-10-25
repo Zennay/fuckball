@@ -140,6 +140,7 @@
  // invalidate stale completions so they cannot trap an already-exited match.
  let orientationVersion=0,orientationWork=Promise.resolve();
  const wantsLandscape=()=>landscape.checked&&!match.hidden&&!document.hidden&&
+  (typeof document.hasFocus!=='function'||document.hasFocus())&&
   document.fullscreenElement===match;
  function unlockOrientation(){
   ++orientationVersion;
@@ -233,6 +234,13 @@
   }
   if(wantsLandscape()&&!orientationLocked)applyLandscape();
   if(wanted&&active())acquire();else render();
+ });
+ // On desktop/PWA windows, losing focus does not always hide the document.
+ // Relinquish the display-only orientation lock even in that case; reapply
+ // only when the exact same pitch regains focus and the user remains opted in.
+ window.addEventListener('blur',unlockOrientation);
+ window.addEventListener('focus',()=>{
+  if(wantsLandscape()&&!orientationLocked)applyLandscape();
  });
  window.addEventListener('pagehide',()=>{
   wanted=false;
