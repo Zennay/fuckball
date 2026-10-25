@@ -177,3 +177,42 @@ body.menu-open .play-postmatch-ribbon{display:none!important}
  .play-hub-connecting-actions{display:grid;grid-template-columns:1fr 1fr}
 }
 @media(max-width:380px){.play-hub-connecting-actions{grid-template-columns:1fr}}
+
+/* A single admitted-room toolbar: return, invite, share or explicitly leave
+   without navigating a room-options dashboard. All actions remain native. */
+.play-hub-current-room[hidden]{display:none!important}
+.play-hub.is-in-room>.play-hub-grid,.play-hub.is-in-room>.play-hub-extras{display:none!important}
+.play-hub-current-room{display:flex;align-items:center;justify-content:space-between;
+ gap:18px;box-sizing:border-box;margin:0 0 16px;padding:15px 18px;
+ border-radius:15px;border:1px solid rgba(200,250,164,.76);
+ background:linear-gradient(112deg,#234035,#1b363d);color:#f2fff0;
+ box-shadow:0 9px 30px rgba(5,20,24,.36)}
+.play-hub-current-room-copy{min-width:0}
+.play-hub-current-room-copy strong{display:block;color:#e6ffaa;
+ letter-spacing:.07em;font-size:.82rem}
+.play-hub-current-room-detail{font-size:.89rem;line-height:1.45;
+ color:#e1f4e9;margin:5px 0}
+.play-hub-current-room-admission{display:block;font-size:.76rem;
+ color:#b9d8ce;line-height:1.38}
+.play-hub-current-room-actions{display:flex;gap:8px;align-items:center;
+ flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.play-hub .play-hub-current-room-actions button{font-size:.85rem;
+ min-height:48px;padding:10px 14px;background:#2b5045;
+ border:1px solid #86ac9e;color:#f4fff2}
+.play-hub .play-hub-current-room-actions .play-hub-current-room-return{
+ background:#dfff97;color:#203522;border-color:#dfff97}
+.play-hub .play-hub-current-room-actions .play-hub-current-room-leave{
+ color:#ffe7dd;border-color:#cb9f91;background:transparent}
+.play-hub-current-room-actions button:focus-visible{outline:3px solid #f2ff9a;outline-offset:3px}
+@media(max-width:1000px){
+ .play-hub-current-room{flex-direction:column;align-items:stretch;gap:12px}
+ .play-hub-current-room-actions{justify-content:stretch;display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:680px){
+ .play-hub-current-room{padding:14px}
+ .play-hub-current-room-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:380px){
+ .play-hub-current-room-actions{grid-template-columns:1fr}
+}
