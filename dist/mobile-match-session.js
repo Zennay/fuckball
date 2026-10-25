@@ -129,20 +129,45 @@
   if(active())await acquire();
  }
  wake.onclick=toggleWake;quick.onclick=toggleWake;
- async function unlockOrientation(){
-  if(!orientationLocked)return;
+ // Orientation requests are asynchronous, and a phone can leave fullscreen
+ // before a browser finally resolves lock('landscape'). Serialize requests and
+ // invalidate stale completions so they cannot trap an already-exited match.
+ let orientationVersion=0,orientationWork=Promise.resolve();
+ const wantsLandscape=()=>landscape.checked&&!match.hidden&&!document.hidden&&
+  document.fullscreenElement===match;
+ function unlockOrientation(){
+  ++orientationVersion;
   orientationLocked=false;
+  // Always attempt this, even while lock() is still pending. The stale
+  // completion will also unlock before any newer request runs.
   try{screen.orientation?.unlock?.();}catch{}
  }
  async function applyLandscape(){
-  if(!landscape.checked||!document.fullscreenElement)return;
-  try{
-   if(typeof screen.orientation?.lock!=='function')throw Error('unsupported');
-   await screen.orientation.lock('landscape');
-   orientationLocked=true;render('Fullscreen landscape requested on this device.');
-  }catch{
-   orientationLocked=false;render('Fullscreen is active, but this browser did not allow landscape lock.');
+  if(!wantsLandscape()){
+   if(landscape.checked)
+    render('Enter fullscreen on the visible pitch to request landscape. Device orientation remains unchanged.');
+   return;
   }
+  const version=++orientationVersion;
+  orientationWork=orientationWork.catch(()=>{}).then(async()=>{
+   if(version!==orientationVersion||!wantsLandscape())return;
+   try{
+    if(typeof screen.orientation?.lock!=='function')throw Error('unsupported');
+    await screen.orientation.lock('landscape');
+    if(version!==orientationVersion||!wantsLandscape()){
+     try{screen.orientation?.unlock?.();}catch{}
+     orientationLocked=false;
+     return;
+    }
+    orientationLocked=true;
+    render('Fullscreen landscape active. Leaving the pitch returns orientation to device control.');
+   }catch{
+    if(version!==orientationVersion)return;
+    orientationLocked=false;
+    render('Fullscreen is active, but this browser did not allow landscape lock.');
+   }
+  });
+  await orientationWork;
  }
  // A fullscreen match element can be hidden by Home/My Games navigation,
  // room loss, or a native session reset without a fullscreenchange event.
@@ -156,10 +181,12 @@
   }
   if(hiddenFullscreenExitAttempted)return;
   hiddenFullscreenExitAttempted=true;
+  // A hidden pitch is no longer entitled to keep orientation locked even
+  // while exitFullscreen() is pending or rejected by the browser.
+  unlockOrientation();
   try{
    if(typeof document.exitFullscreen!=='function')throw Error('unsupported');
    Promise.resolve(document.exitFullscreen())
-    .then(()=>unlockOrientation())
     .catch(()=>render('Leaving the match could not exit fullscreen. Press Esc or your device back button.'));
   }catch{
    render('Leaving the match could not exit fullscreen. Press Esc or your device back button.');
@@ -168,19 +195,21 @@
  fullscreen.onclick=async()=>{
   try{
    if(document.fullscreenElement){
+    unlockOrientation();
     await document.exitFullscreen();
-    await unlockOrientation();
     render();return;
    }
+   if(match.hidden)throw Error('Pitch is hidden');
    if(typeof match.requestFullscreen!=='function')throw Error('unsupported');
    await match.requestFullscreen();
-   await applyLandscape();render();
+   if(wantsLandscape())await applyLandscape();
+   render();
   }catch{
    render('Fullscreen was declined by this browser or device.');
   }
  };
  landscape.addEventListener('change',async()=>{
-  if(!landscape.checked){await unlockOrientation();render('Orientation returned to device control.');}
+  if(!landscape.checked){unlockOrientation();render('Orientation returned to device control.');}
   else await applyLandscape();
  });
  document.addEventListener('fullscreenchange',()=>{
@@ -189,10 +218,19 @@
   render();
  });
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){release();return;}
+  if(document.hidden){
+   unlockOrientation();
+   release();
+   return;
+  }
+  if(wantsLandscape()&&!orientationLocked)applyLandscape();
   if(wanted&&active())acquire();else render();
  });
- window.addEventListener('pagehide',()=>{wanted=false;release();unlockOrientation();});
+ window.addEventListener('pagehide',()=>{
+  wanted=false;
+  unlockOrientation();
+  release();
+ });
  // Keep power behaviour aligned with the actual foreground match, not a menu
  // setting or an unverified claim that a match is still in progress.
  let lastActive=false,lastReason='';
