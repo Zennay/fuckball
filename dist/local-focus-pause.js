@@ -38,6 +38,8 @@
  function paint(){
   if(pausedByFocus&&(!localSession()||!paused))pausedByFocus=false;
   sheet.hidden=!pausedByFocus||match.hidden||document.hidden;
+  // Do not turn a manual pause into an automatic resume or steal game input.
+  // The resume button remains the only new in-view continuation action.
  }
  function pauseWhenAway(){
   if(!localSession()||paused||match.hidden)return;
@@ -46,8 +48,24 @@
   // pause to a guest/host/room. The user must explicitly resume later.
   togglePause();
   pausedByFocus=paused===true;
+  if(pausedByFocus)reason.textContent='The game lost window focus. Score, players, and unsaved recording are preserved. Resume when ready.';
   paint();
  }
+ // showView already safely pauses local-only matches on Home/My Games, but
+ // the original focus-loss overlay never marked that pause as resumable.
+ // Capture that exact local transition without pausing a server host,
+ // peer match, replay, or an intentionally paused local match.
+ const originalShowView=showView;
+ showView=function(view){
+  const leavingActiveLocal=view!=='play'&&!match.hidden&&localSession()&&!paused;
+  originalShowView(view);
+  if(leavingActiveLocal&&localSession()&&paused){
+   pausedByFocus=true;
+   heading.textContent='LOCAL MATCH PAUSED';
+   reason.textContent='You switched to Home or My Games. Your local score, players, and recording are preserved. Return here to resume intentionally.';
+  }
+  paint();
+ };
  resume.addEventListener('click',()=>{
   if(!pausedByFocus||!localSession()||!paused||document.hidden||match.hidden)return;
   togglePause();
