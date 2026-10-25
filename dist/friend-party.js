@@ -53,6 +53,32 @@
  };
  let busy=false,generation=0,hasJoined=false,lastModeKey='',failedModeKey='',lastQuietPoll=0;
  const knownInvitations=new Set();
+ // Account changes are an authoritative identity boundary. A delayed GET or
+ // POST for the previous account may finish after sign-out/sign-in; its state
+ // must never repaint another user's party, notify about private invitations,
+ // or launch a human matchmaking queue on the newly selected account.
+ let scopeToken=settings.account?.token||null;
+ let scopeName=settings.account?.username?.toLowerCase()||'';
+ let scopeEpoch=0,renderedEpoch=-1,invitationBaseline=false;
+ const accountMatches=epoch=>epoch===scopeEpoch&&
+  (settings.account?.token||null)===scopeToken&&
+  (settings.account?.username?.toLowerCase()||'')===scopeName;
+ function syncAccountScope(){
+  const token=settings.account?.token||null;
+  const name=settings.account?.username?.toLowerCase()||'';
+  if(token===scopeToken&&name===scopeName)return false;
+  scopeToken=token;scopeName=name;scopeEpoch++;generation++;
+  busy=false;hasJoined=false;renderedEpoch=-1;
+  lastModeKey='';failedModeKey='';lastQuietPoll=0;invitationBaseline=false;
+  knownInvitations.clear();
+  statusBar.hidden=true;bannerRetry.hidden=true;
+  body.replaceChildren();
+  entry.textContent='Party';
+  entry.setAttribute('aria-label','Party invitations and matchmaking');
+  notice.textContent=token?'Checking the current account’s private party…':
+   'Sign in to use friend parties.';
+  return true;
+ }
  async function api(data){
   const token=settings.account?.token;
   if(!token)throw Error('Sign in to use friend parties.');
@@ -64,15 +90,30 @@
   return result;
  }
  function act(payload){
+  syncAccountScope();
+  // Stale action buttons from an earlier signed-in identity must never
+  // submit their room/party invitation identifiers as the new account.
+  if(renderedEpoch!==scopeEpoch){
+   notice.textContent='Account changed. Reloading your own party before any action.';
+   refresh();return;
+  }
   if(busy)return;
+  const epoch=scopeEpoch;
   busy=true;notice.textContent='Saving party action…';
   api(payload).then(state=>{
+   if(!accountMatches(epoch)){syncAccountScope();return;}
    render(state);
-   entry.textContent='Party'+(state.invitations?.length?' ('+state.invitations.length+')':'');
+   const invitations=Array.isArray(state.invitations)?state.invitations:[];
+   for(const invitation of invitations)
+    if(typeof invitation.id==='string')knownInvitations.add(invitation.id);
+   invitationBaseline=true;
+   entry.textContent='Party'+(invitations.length?' ('+invitations.length+')':'');
    notice.textContent='Party updated.';
    launchIfReady(state);
-  }).catch(e=>{notice.textContent=e.message||'Party action unavailable.';})
-   .finally(()=>{busy=false;});
+  }).catch(e=>{
+   if(!accountMatches(epoch)){syncAccountScope();return;}
+   notice.textContent=e.message||'Party action unavailable.';
+  }).finally(()=>{if(accountMatches(epoch))busy=false;});
  }
  // Each party launch is server-issued and expires. Keep automatic launch
  // single-shot: a failed local attempt becomes an explicit, revalidated retry,
@@ -121,17 +162,20 @@
   return true;
  }
  async function retryPartySearch(){
+  syncAccountScope();
+  if(renderedEpoch!==scopeEpoch){
+   notice.textContent='Account changed. Recheck your own party before retrying.';
+   refresh();return;
+  }
   if(busy)return;
+  const epoch=scopeEpoch;
   busy=true;notice.textContent='Checking the current server-issued party launch…';
   try{
    // Do not trust stale polling state after a room switch, account change,
    // revoked invite, expiry or a leader relaunch.
-   const accountToken=settings.account?.token;
    const state=await api(null);
-   if(settings.account?.token!==accountToken){
-    bannerRetry.hidden=true;
-    notice.textContent='Your signed-in account changed. Reopen Party to check invitations.';
-    return;
+   if(!accountMatches(epoch)){
+    syncAccountScope();return;
    }
    render(state);
    if(!mayRetryParty(state)){
@@ -141,11 +185,15 @@
     return;
    }
    launchIfReady(state,true);
-  }catch(e){notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';}
-  finally{busy=false;}
+  }catch(e){
+   if(!accountMatches(epoch)){syncAccountScope();return;}
+   notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';
+  }finally{if(accountMatches(epoch))busy=false;}
  }
  bannerRetry.onclick=retryPartySearch;
  function render(state){
+  if(!accountMatches(scopeEpoch))return;
+  renderedEpoch=scopeEpoch;
   body.replaceChildren();
   const p=state?.party;
   bannerText.textContent=p?'PARTY · '+p.members.length+' / 4 · '+p.members.map(m=>m.name).join(', '):'';
@@ -228,7 +276,9 @@
   if(!state?.invitations?.length)invites.append(document.createTextNode('No pending invites.'));
  }
  async function refresh(){
+  syncAccountScope();
   if(busy)return;
+  const epoch=scopeEpoch;
   const quiet=!dialog.open&&!hasJoined;
   if(quiet&&Date.now()-lastQuietPoll<30000)return;
   if(quiet)lastQuietPoll=Date.now();
@@ -238,10 +288,12 @@
    const login=btn('Sign in / create account',()=>{dialog.close();showJoinScreen('');});
    login.className='primary';body.append(login);return;
   }
-  const seq=++generation,token=settings.account.token;
+  const seq=++generation;
   try{
    const state=await api(null);
-   if(seq!==generation||settings.account?.token!==token)return;
+   if(seq!==generation||!accountMatches(epoch)){
+    syncAccountScope();return;
+   }
    // Polling must not erase a teammate's half-typed invitation.
    const typing=dialog.open&&dialog.contains(document.activeElement)&&
     document.activeElement?.tagName==='INPUT';
@@ -256,13 +308,20 @@
     knownInvitations.add(invitation.id);
     // Only surface a toast for newly arrived invitations after the first
     // quiet poll; opening the dialog already displays the invitation details.
-    if(lastQuietPoll&&quiet)notify('You have a new friend party invitation. Open Friends → Party.');
+    if(invitationBaseline&&quiet)
+     notify('You have a new friend party invitation. Open Friends → Party.');
    }
+   invitationBaseline=true;
    launchIfReady(state);
    if(dialog.open&&!typing)notice.textContent=state.party?'Party connected on this server.':'Create a party or accept a friend invitation.';
-  }catch(e){if(seq===generation&&dialog.open)notice.textContent=e.message||'Party temporarily unavailable.';}
+  }catch(e){
+   if(!accountMatches(epoch)){syncAccountScope();return;}
+   if(seq===generation&&dialog.open)
+    notice.textContent=e.message||'Party temporarily unavailable.';
+  }
  }
  function open(){
+  syncAccountScope();
   if(social.open)social.close();
   dialog.showModal();
   notice.textContent='Loading private party…';refresh();
