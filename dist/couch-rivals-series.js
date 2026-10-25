@@ -71,10 +71,16 @@
   const data=JSON.parse(raw);
   if(!data||data.version!==1||!Array.isArray(data.records))
    throw Error('Saved local series history uses an invalid format.');
-  return data.records.filter(validRecord).slice(0,MAX);
+  return data.records.filter(validRecord)
+   .sort((a,b)=>b.created-a.created||seriesIdentity(b).localeCompare(seriesIdentity(a)))
+   .slice(0,MAX);
  }
  function saveArchiveSnapshot(records){
-  const bounded=records.filter(validRecord).slice(0,MAX);
+  // A tab can commit an older finished match *after* a newer one. Sort by
+  // the actual native series completion timestamp rather than lock order.
+  const bounded=records.filter(validRecord)
+   .sort((a,b)=>b.created-a.created||seriesIdentity(b).localeCompare(seriesIdentity(a)))
+   .slice(0,MAX);
   localStorage.setItem(KEY,JSON.stringify({version:1,records:bounded}));
   return bounded;
  }
