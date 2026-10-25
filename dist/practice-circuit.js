@@ -248,7 +248,10 @@
  const elapsed=(from,to)=>Math.max(0,Math.round((to-from)/60000))+' min';
  function renderHistory(){
   const past=readHistory();historyList.replaceChildren();
-  if(!past.length)historyList.append(make('li','','No completed circuits saved on this device.'));
+  if(historyUnreadable())
+   historyList.append(make('li','','Existing private circuit history cannot be read. A raw backup and explicit recovery are available above.'));
+  else if(!past.length)
+   historyList.append(make('li','','No completed circuits saved on this device.'));
   for(const row of past){
    const item=make('li','practice-circuit-record');
    item.append(make('strong','',new Date(row.finishedAt).toLocaleDateString()+' · '+elapsed(row.startedAt,row.finishedAt)),
@@ -380,6 +383,10 @@
   return true;
  }
  start.onclick=()=>{
+  if(renderStorageSafety()){
+   status.textContent='Unreadable previous practice data is protected. Download a raw backup and choose an explicit reset before starting a new circuit.';
+   return;
+  }
   if(!refreshFromStorage()||session)return;
   if(online()){status.textContent='Leave the online room or Quick Match queue before starting offline training.';return;}
   const order=PRESETS[Number(selector.value)]?.order;
@@ -424,7 +431,11 @@
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }
  open.onclick=openDrill;
- refresh.onclick=()=>{if(!completed())render('No new successful saved result for this stage yet.');};
+ refresh.onclick=()=>{
+  if(!completed())render(historyUnreadable()?
+   'The final result cannot be archived while saved history is unreadable. Your active circuit remains intact.':
+   'No new successful saved result for this stage yet.');
+ };
  abandon.onclick=()=>{
   if(!refreshFromStorage()||!session)return;
   if(!confirm('End your unfinished circuit? Local drill results and previous completed circuits stay saved.'))return;
