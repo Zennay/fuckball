@@ -25,6 +25,7 @@
  close.setAttribute('aria-label','Close match scoreboard');
  header.append(heading,close);
  const badge=document.createElement('p');badge.className='match-center-badge';
+ badge.setAttribute('role','status');badge.setAttribute('aria-live','polite');
  const score=document.createElement('div');score.className='match-center-score';
  const redScore=document.createElement('strong'),blueScore=document.createElement('strong');
  redScore.className='red';blueScore.className='blue';
