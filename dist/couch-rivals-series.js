@@ -41,6 +41,14 @@
  const hud=make('aside',null,'couch-series-hud');hud.hidden=true;
  hud.setAttribute('aria-label','Current four-player best-of series score');pitch.append(hud);
  let series=null,message='',archived=[],showAllHistory=false,lastControllerScan=0;
+ // Only the series Next Round action may authorize a new native kickoff.
+ let expectedSeriesKickoff=false,observedSeriesKickoff=false;
+ function abandonSeries(reason){
+  if(!series||series.complete)return;
+  series=null;expectedSeriesKickoff=false;
+  announce(reason+' The unfinished series was not saved or counted as a result.');
+  display();
+ }
  function announce(text){if(text!==message){message=text;status.textContent=text;}}
  function saveArchive(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,records:archived.slice(0,MAX)}));return true;}
@@ -185,6 +193,13 @@
   if(typeof paused!=='undefined'&&!paused&&typeof started!=='undefined'&&started&&room?.gameState)
    togglePause(); // Freeze actual native play until players request another round.
   const ended=Math.max(series.red,series.blue)>=Math.floor(series.bestOf/2)+1;
+  if(!ended&&series.rounds.length>=50){
+   // The device-local archive stores at most fifty native rounds. A longer
+   // series cannot be represented faithfully: do not fabricate a winner or
+   // silently truncate the evidence of real human results.
+   abandonSeries('This best-of reached the fifty-round archive limit without a winner.');
+   return;
+  }
   if(ended){
    series.complete=true;series.final=record();
    announce((series.red>series.blue?'RED':'BLUE')+' WINS THE SERIES · '+
@@ -223,6 +238,10 @@
     typeof peerConnected!=='undefined'&&peerConnected||
     typeof serverLink!=='undefined'&&serverLink){
     series=null;announce('Couch series ended because the local match was left.');display();
+   }else if(typeof started!=='undefined'&&!started){
+    // Native Stop can retain a gameState and previous scores; none of those
+    // values is permission to award the next series point.
+    abandonSeries('The native match was stopped before the series round finished.');
    }else{
     if(now-lastControllerScan>=150){
      lastControllerScan=now;
@@ -286,48 +305,53 @@
  }
  function nextRound(){
   if(!series||series.complete||!series.resolved)return;
-  // This best-of belongs to the *original* four humans on this device.
-  // In particular, prepare() would silently pick a different connected pad
-  // if a Blue player unplugged theirs between rounds. Only the separate
-  // explicit native seat-rebind action may replace an occupied human seat.
-  const health=window.fuckballCouchRivals?.seatStatus?.();
-  if(!health?.assigned||!health.ok){
-   const missing=health?.missing?.map(id=>'P'+id).join(' and ');
-   announce((missing||'Blue players')+' controller not ready. Restore the original controller or explicitly rebind that seat before Next Round.');
-   display();return;
-  }
-  // Another game, online room or replay must never be reset by a stale
-  // series button, even if its old scorecard is still visible on Home.
+  // Do not restart an unrelated game, network room, replay or a different
+  // local team size from a stale series button on Home.
   const sameMatch=document.getElementById('mode')?.value===series.mode&&
    typeof serverLink!=='undefined'&&!serverLink&&
    typeof peerConnected!=='undefined'&&!peerConnected&&
    typeof replay!=='undefined'&&!replay;
   if(!sameMatch){
-   announce('This four-human series is not the current local match. Return to the original match or end the series.');
+   announce('This series is not the current local match. Return to the original game or end the series.');
+   return;
+  }
+  // Preserve the *original* four humans' controller ownership between
+  // rounds. A new connected pad must never silently inherit a Blue seat.
+  const prior=window.fuckballCouchRivals?.seatStatus?.();
+  if(!prior?.ok||!prior.assigned){
+   announce('The original Blue controllers must own their seats. Reconnect or explicitly rebind before Next Round.');
+   display();return;
+  }
+  const originalPorts=(prior.seats||[]).map(seat=>seat.port);
+  const prepared=window.fuckballCouchRivals?.prepare?.();
+  if(!prepared?.ok){announce(prepared?.message||'Reconnect both Blue controllers first.');return;}
+  const afterPrepare=window.fuckballCouchRivals?.seatStatus?.();
+  if(!afterPrepare?.ok||(afterPrepare.seats||[]).some((seat,i)=>seat.port!==originalPorts[i])){
+   abandonSeries('Controller seat ownership changed between rounds.');
    return;
   }
   if(typeof resetMatch!=='function'||typeof showView!=='function'){
-   announce('The original game controls are unavailable. Round not advanced.');return;
+   announce('The native match controls are unavailable. Round not advanced.');return;
   }
-  // Next Round also lives on Home. Always reveal the real pitch BEFORE a
-  // new game can advance, rather than starting invisible gameplay on Home.
-  const upcoming=series.round+1;
+  // Reveal the real pitch before triggering native gameplay. The kickoff
+  // event is mandatory evidence before committing a new series round.
+  const nextNumber=series.round+1;
+  expectedSeriesKickoff=true;observedSeriesKickoff=false;
   try{
    showView('play');
    resetMatch(true);
-  }catch(err){
-   announce('Round '+upcoming+' could not start. '+String(err?.message||'Please retry.').slice(0,100));
-   display();return;
-  }
-  if(typeof started==='undefined'||!started||
+  }catch(error){
+   abandonSeries('The native next-round kickoff failed: '+String(error?.message||'Unknown error').slice(0,100)+'.');
+   return;
+  }finally{expectedSeriesKickoff=false;}
+  if(!observedSeriesKickoff||typeof started==='undefined'||!started||
      typeof paused==='undefined'||paused||
      document.getElementById('matchView')?.hidden!==false||
      document.getElementById('mode')?.value!==series.mode){
-   announce('Native kickoff was not confirmed. Series result preserved; retry Next Round.');
-   display();return;
+   abandonSeries('The next round did not visibly start in the original native match.');
+   return;
   }
-  // Commit the local best-of state only after successful native kickoff.
-  series.round=upcoming;series.resolved=false;series.seen=false;
+  series.round=nextNumber;series.resolved=false;series.seen=false;
   series.suspended=false;lastControllerScan=0;
   announce('Round '+series.round+' live · original four human seats preserved. First native goal wins.');
   display();
@@ -344,6 +368,13 @@
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   announce('Private unverified series result downloaded. No online upload or rating change.');
  }
+ // A normal match-menu restart is not a series Next Round. Do not carry
+ // the old scorecard into a newly started local match.
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  if(!series||series.complete)return;
+  if(expectedSeriesKickoff){observedSeriesKickoff=true;return;}
+  abandonSeries('A new native match started outside the series Next Round action.');
+ });
  // Use the real native goal callback as the authoritative first-goal signal.
  // Defer until the engine completes its current physics callback before pausing.
  window.addEventListener('fuckball:local-couch-goal',event=>{
@@ -352,9 +383,10 @@
    event.detail?.room!==room)return;
   const team=event.detail?.team;
   if(team!==1&&team!==2)return;
-  const source=series;
+  const source=series,round=source.round;
   queueMicrotask(()=>{
-   if(series===source&&!source.resolved&&!source.complete&&!source.suspended)
+   if(series===source&&source.round===round&&!source.resolved&&!source.complete&&
+      !source.suspended&&typeof started!=='undefined'&&started)
     resolve(team===1?'red':'blue');
   });
  });

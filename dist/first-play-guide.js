@@ -29,6 +29,8 @@
  const step=document.createElement('span');step.className='first-play-step';
  const detail=document.createElement('p');detail.className='first-play-detail';
  detail.setAttribute('role','status');detail.setAttribute('aria-live','polite');
+ const controlsHint=document.createElement('p');controlsHint.className='first-play-controls-hint';
+ controlsHint.setAttribute('aria-label','Controls for the current First Touch challenge');
  const bar=document.createElement('div');bar.className='first-play-bar';
  bar.setAttribute('role','progressbar');bar.setAttribute('aria-label','First match coaching progress');
  bar.setAttribute('aria-valuemin','0');bar.setAttribute('aria-valuemax','3');
@@ -37,14 +39,23 @@
  const restart=document.createElement('button');restart.type='button';restart.textContent='Try again';
  const quit=document.createElement('button');quit.type='button';quit.textContent='Leave guide';
  const online=document.createElement('button');online.type='button';online.className='primary';online.textContent='Find real players';online.hidden=true;
- actions.append(restart,quit,online);hud.append(heading,step,detail,bar,actions);
+ actions.append(restart,quit,online);hud.append(heading,step,detail,controlsHint,bar,actions);
  match.append(hud);
  const stages=[
-  ['01 / 03 · MOVE','Move around the pitch using your movement keys. Reach 70 field units of real player movement.'],
+  ['01 / 03 · MOVE','Move your own player 70 field units with your controls. Getting pushed by the AI does not count.'],
   ['02 / 03 · KICK','Get close to the ball and kick it using your Kick control. This step counts a kick reported by the actual game engine.'],
-  ['03 / 03 · SCORE','Score one goal for your own team against the AI. The scoreboard must register it.']
+  ['03 / 03 · SCORE','Score for your own team against the AI. Only the real match scoreboard can complete this step.']
  ];
- let session=null;
+ let session=null,lessonParked=false;
+ // Track one actual engine match. Visiting Home/My Games is not a new
+ // session and never grants progress; only the same real room may resume.
+ function sameLessonMatch(){
+  const s=session;
+  if(!s||s.room!==room||serverLink||peerConnected||replay||!started||
+     !room?.gameState||room.currentFrameNo<s.frame)return false;
+  const player=room.state?.players?.find?.(p=>p.id===1);
+  return !!player?.disc&&player.team?.id===s.side;
+ }
  function localRoom(){
   if(serverLink||peerConnected||replay||!room||!room.gameState||!started||paused||match.hidden)return null;
   const player=room.state?.players?.find?.(p=>p.id===1);
@@ -58,14 +69,51 @@
  function updateHome(){
   const at=completedAt();
   badge.textContent=at?'Completed on '+new Date(at).toLocaleDateString()+'. Replay this guide whenever you like.':'Local solo lesson · 3 real gameplay challenges · no ranked stats.';
+  const current=session&&sameLessonMatch();
+  card.classList.toggle('first-play-active',!!current);
+  if(current){
+   const stage=session.stage===3?'COMPLETE':(session.stage+1)+' / 3';
+   start.textContent='↗ Continue First Touch';
+   start.setAttribute('aria-label','Continue First Touch stage '+stage+' in your existing local match');
+   result.textContent='First Touch · stage '+stage+' preserved in your existing match'+
+    (paused?' · paused, use the normal Resume control on the pitch.':
+     ' · return to the pitch to continue.');
+  }else{
+   start.textContent='▶ START FIRST MATCH';
+   start.setAttribute('aria-label','Start a new local First Touch match');
+  }
  }
  updateHome();
  function progress(stage){
   const count=Math.min(3,Math.max(0,stage));
   bar.setAttribute('aria-valuenow',String(count));fill.style.width=count/3*100+'%';
  }
+ function readableKey(key){
+  const named={Space:'Space',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',
+   ShiftLeft:'Shift',ShiftRight:'Shift',ControlLeft:'Ctrl',ControlRight:'Ctrl',
+   Numpad0:'Num 0',Enter:'Enter'};
+  if(named[key])return named[key];
+  if(/^Key[A-Z]$/.test(key))return key.slice(3);
+  if(/^Digit[0-9]$/.test(key))return key.slice(5);
+  return typeof key==='string'&&key.length<=14?key:'key';
+ }
+ function configuredKey(action){
+  try{
+   const keys=typeof bound==='function'?bound(action):settings?.keys?.[action];
+   return readableKey(Array.isArray(keys)?keys[0]:keys);
+  }catch{return 'key';}
+ }
+ function lessonControls(stage){
+  if(stage===0)return 'Keyboard: '+['up','left','down','right'].map(configuredKey).join(' · ')+
+   ' | Controller: stick / D-pad | Touch: move joystick';
+  if(stage===1)return 'Kick: '+configuredKey('kick')+' | Controller: kick button | Touch: Kick';
+  if(stage===2)return 'Move and kick toward the AI goal. Only a real goal counts.';
+  return 'Challenge complete. Practice again or choose to play with humans.';
+ }
  function render(){
   const s=session;if(!s)return;
+  const hint=lessonControls(s.stage);
+  if(controlsHint.textContent!==hint)controlsHint.textContent=hint;
   progress(s.stage);
   if(s.stage===3){
    heading.textContent='FIRST TOUCH · COMPLETE';
@@ -79,7 +127,9 @@
   online.hidden=true;
  }
  function finish(why){
-  session=null;hud.hidden=true;result.textContent=why||'Guide ended. The local game can continue.';
+  session=null;lessonParked=false;hud.hidden=true;
+  updateHome();
+  result.textContent=why||'Guide ended. The local game can continue.';
  }
  function unavailable(){
   if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
@@ -111,9 +161,11 @@
    document.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])'));
  }
  function refreshSessionReturn(){
+  updateHome();
   const visible=sessionPresent();
   resume.hidden=!visible;
-  resume.textContent=typeof roomRecovery!=='undefined'&&roomRecovery.context?
+  resume.textContent=sameLessonMatch()?'↗ Resume First Touch lesson':
+   typeof roomRecovery!=='undefined'&&roomRecovery.context?
    '↗ View original room recovery':
    document.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])')?
    '↗ View human match confirmation':'↗ Return to existing game';
@@ -121,6 +173,13 @@
  function returnToSession(){
   refreshSessionReturn();
   if(resume.hidden){result.textContent='There is no ongoing session to return to.';return;}
+  if(sameLessonMatch()){
+   if(typeof showView==='function')showView('play');
+   else document.getElementById('tabPlay')?.click();
+   lessonParked=false;hud.hidden=false;render();
+   result.textContent='The same First Touch lesson is open. Resume the paused match using its normal controls when ready.';
+   return;
+  }
   const recovery=document.querySelector('.native-room-recovery:not([hidden])');
   if(recovery){
    recovery.focus?.({preventScroll:true});
@@ -141,7 +200,11 @@
   result.textContent='Returned to the existing game or connection. No new session was created.';
  }
  resume.addEventListener('click',returnToSession);
- function launch(){
+ function launch(forceRestart=false){
+  // Home's Start action resumes the same exercise. In contrast, the HUD's
+  // explicit Try again requests a fresh match and its existing consent prompt.
+  if(!forceRestart&&sameLessonMatch()){returnToSession();return;}
+  if(session&&!sameLessonMatch())finish('The original match was replaced. Start a new lesson explicitly.');
   const blocked=unavailable();if(blocked){
    result.textContent=blocked;refreshSessionReturn();return;
   }
@@ -156,16 +219,17 @@
   if(!player){result.textContent='Local practice did not start. Please try the Solo Practice button.';return;}
   session={room,stage:0,moved:0,lastPos:{x:player.disc.pos.x,y:player.disc.pos.y},
    frame:room.currentFrameNo,side:player.team.id,score:null};
+  lessonParked=false;
   result.textContent='Guide running in the local pitch.';
   hud.hidden=false;render();refreshSessionReturn();
  }
- start.addEventListener('click',launch);
+ start.addEventListener('click',()=>launch(false));
  document.getElementById('tabHome')?.addEventListener('click',refreshSessionReturn);
  window.addEventListener('focus',refreshSessionReturn);
  window.addEventListener('fuckball:native-session-state',refreshSessionReturn);
  setInterval(()=>{if(!home.hidden)refreshSessionReturn();},1800);
  refreshSessionReturn();
- restart.addEventListener('click',launch);
+ restart.addEventListener('click',()=>launch(true));
  quit.addEventListener('click',()=>finish('First Touch closed; your local match stays available.'));
  online.addEventListener('click',()=>{
   if(!session||session.stage!==3)return;
@@ -184,7 +248,19 @@
  function tick(){
   const s=session;if(!s)return;
   if(document.hidden)return;
-  if(match.hidden){finish('Lesson closed after leaving the pitch. Start again from Home.');return;}
+  if(match.hidden){
+   // showView() pauses offline games when leaving the pitch; preserve
+   // exact-session lesson milestones while reading Home or My Games.
+   if(!sameLessonMatch()){
+    finish('The local match was replaced while away. Start a new First Touch lesson.');return;
+   }
+   if(!lessonParked){lessonParked=true;hud.hidden=true;updateHome();}
+   return;
+  }
+  if(!sameLessonMatch()){
+   finish('The local match was replaced or restarted. Begin a new First Touch lesson.');return;
+  }
+  if(lessonParked){lessonParked=false;hud.hidden=false;render();}
   const p=localRoom();
   if(!p){ // A normal manual pause is not a failed lesson.
    if(paused&&!peerConnected&&!serverLink){detail.textContent='Match paused. Resume to continue the lesson.';return;}
@@ -197,10 +273,24 @@
   if(s.stage===0&&frame>s.frame){
    const current=p.disc.pos,dx=current.x-s.lastPos.x,dy=current.y-s.lastPos.y;
    const displacement=Math.hypot(dx,dy);
-   if(Number.isFinite(displacement)&&displacement<75)s.moved+=displacement;
+   // The local engine exposes P1's actual key-state input, shared by
+   // keyboard, controller and touch. A bot collision can move the disc even
+   // while P1 is idle; never count that displacement as learned movement.
+   const humanMoving=Number.isSafeInteger(p.input)&&(p.input&15)!==0&&
+    (typeof canControlLiveMatch!=='function'||canControlLiveMatch());
+   if(humanMoving&&Number.isFinite(displacement)&&displacement<75)
+    s.moved+=displacement;
+   // Always follow the authoritative position even when idle, otherwise a
+   // knockback gets counted on the next actual player keypress.
    s.lastPos={x:current.x,y:current.y};
    if(s.moved>=70){s.stage=1;render();}
-   else detail.textContent=stages[0][1]+' · '+Math.floor(s.moved)+'/70';
+   else{
+    const hint=humanMoving?'Move with your controls':'Move yourself; AI bumps do not count';
+    const label=stages[0][1]+' · '+Math.floor(s.moved)+'/70 · '+hint;
+    if(detail.textContent!==label)detail.textContent=label;
+    const controlLabel=lessonControls(0);
+    if(controlsHint.textContent!==controlLabel)controlsHint.textContent=controlLabel;
+   }
   }
   if(s.stage===2){
    const score=s.side===1?room.gameState.redScore:room.gameState.blueScore;

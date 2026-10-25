@@ -1,0 +1,27 @@
+/* Native WebRTC direct-1v1 signaling always retains an explicit cancel path. */
+.direct-peer-pending[hidden]{display:none!important}
+.direct-peer-pending{position:fixed;z-index:113;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);box-sizing:border-box;width:min(930px,calc(100vw - 20px));display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-radius:15px;border:2px solid #bfe4ff;background:#183137;color:#f1fbff;box-shadow:0 14px 44px #081821dc}
+.direct-peer-pending strong{font-size:.81rem;letter-spacing:.07em;color:#d2eefe}
+.direct-peer-pending p{margin:6px 0 0;font-size:.87rem;color:#d7e7e9;line-height:1.5;overflow-wrap:anywhere}
+.direct-peer-pending-actions{display:flex;gap:9px;flex-shrink:0}
+.direct-peer-pending-actions button{font:inherit;font-weight:800;font-size:.86rem;min-height:48px;padding:10px 13px;border-radius:9px;border:1px solid #9ebfc9;background:transparent;color:#edfafb;cursor:pointer}
+.direct-peer-pending-actions button.primary{background:#d6f9a1;color:#1c3226;border-color:#d6f9a1}
+.direct-peer-pending-actions button:focus-visible{outline:3px solid #f5ffc0;outline-offset:3px}
+@media(max-width:740px){.direct-peer-pending{flex-direction:column;align-items:stretch;padding:14px}.direct-peer-pending-actions{display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:400px){.direct-peer-pending-actions{grid-template-columns:1fr}}
+
+/* WebRTC failure is not an active human game. Keep fresh-code retry explicit. */
+.direct-peer-pending-actions{flex-wrap:wrap;justify-content:flex-end}
+.direct-peer-pending-actions button[hidden]{display:none!important}
+.direct-peer-pending-actions button:disabled{opacity:.55;cursor:not-allowed}
+.direct-peer-pending-actions button:nth-child(3){border-color:#f1cf8e;color:#fff2cc}
+.direct-peer-pending:has(.direct-peer-pending-actions button:nth-child(3):not([hidden])){
+ border-color:#f1cf8e;background:#383027
+}
+@media(max-width:740px){
+ .direct-peer-pending-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .direct-peer-pending-actions button{width:100%;white-space:normal}
+}
+@media(max-width:400px){
+ .direct-peer-pending-actions{grid-template-columns:1fr}
+}

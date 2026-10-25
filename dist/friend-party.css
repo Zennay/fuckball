@@ -44,3 +44,15 @@
 .friend-party-club p{margin:0;color:#c9e4d0;font-size:12px;line-height:1.55}
 .friend-party-club button{min-height:44px;width:100%;font-weight:800}
 .friend-party-club button:disabled{opacity:.55;cursor:not-allowed}
+
+/* A failed but still authorized party launch is a human action, not a
+   polling retry. Keep the original retry affordance visible and accessible. */
+.friend-party-banner .friend-party-retry[hidden]{display:none!important}
+.friend-party-banner .friend-party-retry{min-height:46px;min-width:168px;
+ border-color:#e0ff9c!important;background:#dfff95!important;
+ color:#183126!important;font-weight:900!important}
+.friend-party-banner .friend-party-retry:focus-visible{outline:3px solid #ffffff;
+ outline-offset:3px}
+@media(max-width:470px){
+ .friend-party-banner .friend-party-retry{width:100%;flex:1 1 100%}
+}

@@ -32,7 +32,26 @@ function makeRoom(){
  room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');if(!serverLink&&!peerConnected&&!replay&&['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
   Number.isInteger(args[0])&&[1,2].includes(args[0])&&
   typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(
-   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();}},2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
+   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);
+ log(team===1?'Red wins':team===2?'Blue wins':'Draw');
+ // Present the local result directly, without granting any rematch or
+ // fabricating a score. Only the existing offline engine certifies full-time.
+ if(!serverLink&&!peerConnected&&!peer&&!replay&&started&&[0,1,2].includes(team)&&
+    typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function'){
+  const score=room?.gameState;
+  const red=Number.isSafeInteger(score?.redScore)&&score.redScore>=0?score.redScore:null;
+  const blue=Number.isSafeInteger(score?.blueScore)&&score.blueScore>=0?score.blueScore:null;
+  window.dispatchEvent(new window.CustomEvent('fuckball:local-fulltime',{
+   detail:{room,winner:team,red,blue,mode:$('mode').value}}));
+ }
+ const finishedRoom=room;
+ setTimeout(()=>{
+  // Ignore an old victory timer after starting another room or a replay.
+  if(room===finishedRoom&&!replay&&started&&!room.gameState){
+   started=false;setButtons();
+   if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();
+  }
+ },2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
  roomStart=performance.now();
  renderer.room=room;renderer.initialize();renderer.zoomCoeff=settings.zoom;renderer.followPlayerId=1;renderer.currentPlayerDistinction=true;room.initialize();
  room.setCurrentStadium(stadium,0);room.setScoreLimit(+$('scoreLimit').value,0);room.setTimeLimit(timeLimitValue(),0);configurePlayers();room.startGame(0);room.setGamePaused(true,0);updateRoster();
@@ -141,6 +160,9 @@ function gameplayInputSurfaceActive(){
  return windowInputFocused&&!document.hidden&&!$('matchView').hidden&&
   $('joinScreen').hidden&&$('chatForm').hidden&&
   (typeof menuOpen==='undefined'||!menuOpen)&&
+  // The lightweight Quick Actions panel is not a dialog. An open panel
+  // still owns focus and must neutralize ALL human input seats.
+  window.fuckballQuickActionsOpen!==true&&
   !document.querySelector('dialog[open]');
 }
 function canControlLiveMatch(){
@@ -360,9 +382,87 @@ document.addEventListener('keyup',e=>{
  // Forget held movement, but never write to a hidden or blocked match.
  if(keys.delete(e.code))refreshInput();
 });
-window.addEventListener('blur',()=>{windowInputFocused=false;releaseInputs();});
-window.addEventListener('focus',()=>{windowInputFocused=true;});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseInputs();});
+// In solo bot/practice matches, blur already releases input. Without also
+// pausing the original offline simulation, AI keeps scoring while the human
+// cannot control anyone. Couch games have separately owned seat/pad recovery;
+// native and peer matches must NEVER pause because one client loses focus.
+const soloFocusModes=new Set(['bot','practice','2v2','4v4']);
+let soloPausedForFocus=false;
+const soloFocusBanner=document.createElement('aside');
+soloFocusBanner.className='solo-focus-banner';
+soloFocusBanner.hidden=true;
+soloFocusBanner.setAttribute('role','region');
+soloFocusBanner.setAttribute('aria-label','Solo match paused while away');
+const soloFocusCopy=document.createElement('div');
+const soloFocusTitle=document.createElement('strong');
+soloFocusTitle.textContent='SOLO MATCH PAUSED';
+const soloFocusText=document.createElement('p');
+soloFocusText.textContent='Your score and match clock are preserved while this window is inactive. Return to the pitch, then choose Resume.';
+soloFocusCopy.append(soloFocusTitle,soloFocusText);
+const soloFocusActions=document.createElement('div');
+soloFocusActions.className='solo-focus-actions';
+const soloFocusReturn=document.createElement('button');
+soloFocusReturn.type='button';
+soloFocusReturn.textContent='↗ Return to pitch';
+const soloFocusResume=document.createElement('button');
+soloFocusResume.type='button';
+soloFocusResume.className='primary';
+soloFocusResume.textContent='▶ Resume solo match';
+soloFocusActions.append(soloFocusReturn,soloFocusResume);
+soloFocusBanner.append(soloFocusCopy,soloFocusActions);
+document.body.append(soloFocusBanner);
+function soloFocusEligible(){
+ return started&&!paused&&!replay&&!serverLink&&!peerConnected&&!peer&&
+  soloFocusModes.has($('mode').value)&&!$('matchView').hidden;
+}
+function pauseSoloOnLostFocus(){
+ if(!soloFocusEligible())return;
+ togglePause(); // Native local pause: stops the match clock and clears inputs.
+ if(paused)soloPausedForFocus=true;
+ refreshSoloFocusBanner();
+}
+function refreshSoloFocusBanner(){
+ if(soloPausedForFocus&&(!started||!paused||replay||serverLink||peerConnected||
+  !soloFocusModes.has($('mode').value)))soloPausedForFocus=false;
+ soloFocusBanner.hidden=!soloPausedForFocus||document.hidden;
+ if(soloFocusBanner.hidden)return;
+ const onPitch=!$('matchView').hidden;
+ soloFocusReturn.hidden=onPitch;
+ // Never auto-resume on focus. A conscious click on a visible, focused
+ // pitch is required; hidden tabs, room menus and dialogs remain protected.
+ soloFocusResume.disabled=!onPitch||!windowInputFocused||
+  !!(typeof menuOpen!=='undefined'&&menuOpen)||
+  !($('chatForm').hidden);
+}
+soloFocusReturn.addEventListener('click',()=>{
+ if(!soloPausedForFocus)return;
+ $('tabPlay').click();
+ refreshSoloFocusBanner();
+});
+soloFocusResume.addEventListener('click',()=>{
+ refreshSoloFocusBanner();
+ if(!soloPausedForFocus||soloFocusResume.disabled)return;
+ if(started&&paused&&!serverLink&&!peerConnected&&!replay&&
+    !document.hidden&&!$('matchView').hidden&&windowInputFocused){
+  togglePause(); // Original local resume; no new game/replay is created.
+  refreshSoloFocusBanner();
+ }
+});
+window.addEventListener('blur',()=>{
+ windowInputFocused=false;
+ pauseSoloOnLostFocus();
+ releaseInputs();
+});
+window.addEventListener('focus',()=>{
+ windowInputFocused=true;
+ refreshSoloFocusBanner();
+});
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){pauseSoloOnLostFocus();releaseInputs();}
+ refreshSoloFocusBanner();
+});
+const soloFocusNoticeTick=setInterval(refreshSoloFocusBanner,900);
+soloFocusNoticeTick?.unref?.();
 $('gameCanvas').addEventListener('pointerdown',()=>{$('gameCanvas').focus();});
 function moveStick(e){if(stickPointer!==e.pointerId||!canControlLiveMatch())return;const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,d=Math.hypot(dx,dy);const layout=window.touchControlSettings||{scale:1,deadzone:10},scale=Number.isFinite(layout.scale)?Math.max(.75,Math.min(1.5,layout.scale)):1,reach=27*scale,deadzone=Math.max(4,Math.min(24,Number(layout.deadzone)||10))*scale,f=d>reach?reach/d:1;$('stick').style.transform=`translate(${dx*f}px,${dy*f}px)`;touch.x=Math.abs(dx)>deadzone?Math.sign(dx):0;touch.y=Math.abs(dy)>deadzone?Math.sign(dy):0;refreshInput();}
 // Each physical touch owns exactly one gameplay control until it releases.

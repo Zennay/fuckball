@@ -6,9 +6,15 @@
  if(!home||!social)return;
  const statusBar=document.createElement('section');statusBar.className='friend-party-banner';
  statusBar.hidden=true;statusBar.setAttribute('aria-label','Active friends party');
- const bannerText=document.createElement('strong');const bannerOpen=document.createElement('button');
+ const bannerText=document.createElement('strong');
+ bannerText.setAttribute('role','status');bannerText.setAttribute('aria-live','polite');
+ const bannerOpen=document.createElement('button');
  bannerOpen.type='button';bannerOpen.textContent='Open party →';
- statusBar.append(bannerText,bannerOpen);
+ const bannerRetry=document.createElement('button');
+ bannerRetry.type='button';bannerRetry.textContent='↻ Retry party search';
+ bannerRetry.className='friend-party-retry';bannerRetry.hidden=true;
+ bannerRetry.setAttribute('aria-label','Retry the current authorized friends party search');
+ statusBar.append(bannerText,bannerOpen,bannerRetry);
  (home.querySelector('.quick-queue-panel')||home.querySelector('.mode-cards'))?.insertAdjacentElement('beforebegin',statusBar);
  const entry=document.createElement('button');entry.type='button';
  entry.textContent='Party';entry.className='friend-party-entry';
@@ -45,7 +51,7 @@
   for(const action of actions)buttons.append(action);
   line.append(t,buttons);box.append(line);
  };
- let busy=false,generation=0,hasJoined=false,lastModeKey='',lastQuietPoll=0;
+ let busy=false,generation=0,hasJoined=false,lastModeKey='',failedModeKey='',lastQuietPoll=0;
  const knownInvitations=new Set();
  async function api(data){
   const token=settings.account?.token;
@@ -68,24 +74,83 @@
   }).catch(e=>{notice.textContent=e.message||'Party action unavailable.';})
    .finally(()=>{busy=false;});
  }
- function launchIfReady(state){
-  const p=state?.party,mode=p?.launchMode,user=settings.account?.username?.toLowerCase();
-  if(!mode||!p?.members?.some(m=>m.name===user&&m.ready))return;
-  const key=p.id+':'+p.launchExpires+':'+mode;
-  if(key===lastModeKey||Date.now()>=p.launchExpires)return;
-  if(serverLink?.room){notice.textContent='Leave your current room before joining the party queue.';return;}
-  lastModeKey=key;
-  if(typeof window.startPartyQuickMatch!=='function'||!window.startPartyQuickMatch(mode)){
-   notice.textContent='Could not start your party search. Leave any active search and try again.';
-   return;
-  }
-  if(dialog.open)dialog.close();
+ // Each party launch is server-issued and expires. Keep automatic launch
+ // single-shot: a failed local attempt becomes an explicit, revalidated retry,
+ // never a silent polling loop or a fictitious successful team queue.
+ function partyLaunchKey(p){
+  return p?.launchMode&&Number.isFinite(p.launchExpires)?
+   p.id+':'+p.launchExpires+':'+p.launchMode+':'+
+   (settings.account?.username||'').toLowerCase():'';
  }
+ function mayRetryParty(state){
+  const p=state?.party,key=partyLaunchKey(p);
+  const user=settings.account?.username?.toLowerCase();
+  return !!key&&key===failedModeKey&&key!==lastModeKey&&
+   Date.now()<p.launchExpires&&
+   p.members?.some(m=>m.name===user&&m.ready)===true;
+ }
+ function syncRetryButton(state){
+  const actionable=mayRetryParty(state),p=state?.party;
+  bannerRetry.hidden=!actionable;
+  if(actionable&&p)bannerText.textContent='PARTY SEARCH NEEDS ACTION · '+
+   p.members.length+' / 4 members · Retry before the server deadline';
+  else if(p)bannerText.textContent='PARTY · '+p.members.length+' / 4 · '+
+   p.members.map(m=>m.name).join(', ');
+ }
+ function launchIfReady(state,explicit=false){
+  const p=state?.party,mode=p?.launchMode,user=settings.account?.username?.toLowerCase();
+  const key=partyLaunchKey(p);
+  if(!key||!p.members?.some(m=>m.name===user&&m.ready))return false;
+  if(key===lastModeKey)return true;
+  if(Date.now()>=p.launchExpires){
+   notice.textContent='This server-issued party launch expired. Ask your leader to start a new search.';
+   syncRetryButton(state);return false;
+  }
+  if(!explicit&&key===failedModeKey)return false;
+  const fail=message=>{
+   failedModeKey=key;notice.textContent=message;
+   syncRetryButton(state);return false;
+  };
+  if(serverLink?.room)return fail('Leave your current room, then retry this party search explicitly.');
+  if(typeof window.startPartyQuickMatch!=='function'||!window.startPartyQuickMatch(mode))
+   return fail('Party search did not start. Check your current online queue or server, then press Retry party search.');
+  lastModeKey=key;failedModeKey='';
+  syncRetryButton(state);
+  notice.textContent='The party search started on your configured game server.';
+  if(dialog.open)dialog.close();
+  return true;
+ }
+ async function retryPartySearch(){
+  if(busy)return;
+  busy=true;notice.textContent='Checking the current server-issued party launch…';
+  try{
+   // Do not trust stale polling state after a room switch, account change,
+   // revoked invite, expiry or a leader relaunch.
+   const accountToken=settings.account?.token;
+   const state=await api(null);
+   if(settings.account?.token!==accountToken){
+    bannerRetry.hidden=true;
+    notice.textContent='Your signed-in account changed. Reopen Party to check invitations.';
+    return;
+   }
+   render(state);
+   if(!mayRetryParty(state)){
+    notice.textContent=partyLaunchKey(state?.party)===lastModeKey?
+     'You already joined this party search.':
+     'That party launch is no longer available to you. Ask the leader to retry.';
+    return;
+   }
+   launchIfReady(state,true);
+  }catch(e){notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';}
+  finally{busy=false;}
+ }
+ bannerRetry.onclick=retryPartySearch;
  function render(state){
   body.replaceChildren();
   const p=state?.party;
   bannerText.textContent=p?'PARTY · '+p.members.length+' / 4 · '+p.members.map(m=>m.name).join(', '):'';
   statusBar.hidden=!p;hasJoined=!!p;
+  syncRetryButton(state);
   if(!p){
    const create=label('MAKE A PARTY','Invite up to three accepted friends and search together. The room stays private.');
    create.append(btn('Create party',()=>act({action:'create'})));
@@ -140,6 +205,13 @@
    }else{
     const searching=label('CONNECTING YOUR PARTY',
      'Playlist '+(p.launchMode==='club4v4'?'Club vs Club 4v4':p.launchMode)+' · every approved teammate must join this same server within 30 seconds.');
+    if(mayRetryParty(state)){
+     const retry=btn('↻ Retry joining party search',retryPartySearch);
+     retry.className='primary';
+     searching.append(retry);
+     searching.append(document.createTextNode(
+      'Your first attempt did not start. This retries only after you press the button and the server confirms this launch is still yours.'));
+    }
     if(leader)searching.append(btn('Cancel party search',()=>act({action:'cancel'}),true));
    }
    if(!p.launchMode)body.append(btn(leader?'Disband / leave party':'Leave party',()=>{
@@ -161,7 +233,7 @@
   if(quiet&&Date.now()-lastQuietPoll<30000)return;
   if(quiet)lastQuietPoll=Date.now();
   if(!settings.account?.token){
-   body.replaceChildren();statusBar.hidden=true;hasJoined=false;
+   body.replaceChildren();statusBar.hidden=true;bannerRetry.hidden=true;hasJoined=false;
    notice.textContent='Sign in with a Fuckball account to use parties.';
    const login=btn('Sign in / create account',()=>{dialog.close();showJoinScreen('');});
    login.className='primary';body.append(login);return;

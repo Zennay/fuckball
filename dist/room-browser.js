@@ -13,7 +13,7 @@
  const badge=document.createElement('span');badge.textContent='HOST-APPROVED LISTINGS';
  heading.append(h,badge);
  const intro=document.createElement('p');
- intro.textContent='Discover rooms whose hosts chose to be visible. Private links never appear here. Rooms may fill or close after this list loads.';
+ intro.textContent='Only rooms their hosts choose to list appear here. Joining still requires server approval.';
  const toolbar=document.createElement('div');toolbar.className='room-browser-tools';
  const toggle=document.createElement('button');toggle.type='button';toggle.textContent='Browse rooms';
  toggle.className='primary';toggle.setAttribute('aria-expanded','false');
@@ -80,6 +80,23 @@
  body.append(bookmarkBar,watchBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ // A closed/hidden directory cannot own a live request. The cancel token
+ // also prevents an old request's finally block from changing a new one's UI.
+ let activeRequest=null;
+ const ROOM_DIRECTORY_TIMEOUT_MS=10000;
+ function cancelDirectoryRequest(){
+  sequence++;
+  const request=activeRequest;
+  activeRequest=null;
+  busy=false;refresh.disabled=false;
+  if(request){
+   clearTimeout(request.timer);
+   request.controller?.abort();
+  }
+ }
+ // A directory left expanded on a hidden Home screen must not keep polling
+ // the game server or advertising an active watch during live gameplay.
+ const directoryVisible=()=>shown&&!home.hidden&&document.visibilityState!=='hidden';
  let watching=false,sawSnapshot=false,previousAvailable=new Set();
  const PUBLIC_LISTING_MAX_AGE=45000;
  const listingFresh=()=>lastLoadedAt>0&&Date.now()-lastLoadedAt<=PUBLIC_LISTING_MAX_AGE;
@@ -151,15 +168,18 @@
    status.textContent='Imported '+proposal.length+' pinned room codes on this device; join still requires server admission.';
   }catch(error){status.textContent='Import refused: '+(error.message||'Invalid bookmark file.');}
  };
- function busyWithMatch(){
-  // The same native session admission rule protects saved/private/public
-  // room shortcuts, including a timed room reconnect with no active socket.
-  return typeof onlineSessionConflict==='function'?
-   !!onlineSessionConflict():!!serverLink||!!peerConnected;
+ function sessionBlock(){
+  // Every entry point must share native ownership/queue/reconnect admission.
+  // A room listing is not permission to replace a human's existing session.
+  if(typeof onlineSessionConflict==='function')return onlineSessionConflict();
+  if(serverLink||peerConnected||typeof peer!=='undefined'&&peer)
+   return 'Leave the current connection before opening another room.';
+  return '';
  }
+ function busyWithMatch(){return !!sessionBlock();}
  function openSavedRoom(code){
   if(busyWithMatch()){
-   status.textContent='Finish your active game or cancel the Quick Match queue/ready-check first.';
+   status.textContent=sessionBlock()||'Finish your current game before opening another room.';
    return;
   }
   // A pinned code never proves that access is still allowed.
@@ -206,6 +226,12 @@
  function button(label,click){
   const item=document.createElement('button');item.type='button';
   item.textContent=label;item.onclick=click;return item;
+ }
+ const standardRoomModes=['1v1','2v2','3v3','4v4'];
+ function matchesMode(room){
+  const selected=modeFilter.value;
+  return selected==='all'||(selected==='custom'?
+   !standardRoomModes.includes(room.mode):room.mode===selected);
  }
  function capacity(room){return Number.isSafeInteger(room.capacity)&&room.capacity>=1&&room.capacity<=128?room.capacity:null;}
  function freeSeats(room){const cap=capacity(room);return cap===null?null:Math.max(0,cap-room.occupied);}
@@ -255,7 +281,9 @@
    'Watching only while this room directory is open and this tab is visible. Waiting for refreshed public listings.':
    'Watch stopped. Nothing runs in the background.';
   catchupWatchBaseline();
-  if(watching&&listingFresh())watchFreshListing();
+  if(watching&&directoryVisible()&&listingFresh())watchFreshListing();
+  else if(watching&&!directoryVisible())watchText.textContent=
+   'Availability watch paused outside the visible public-room browser.';
  });
  function requestJoin(room){
   if(!canBrowseJoin(room)){
@@ -263,7 +291,7 @@
    return false;
   }
   if(busyWithMatch()){
-   status.textContent='Leave your current match or cancel Quick Match before joining a different room.';
+   status.textContent=sessionBlock()||'Leave your current match before joining another room.';
    return false;
   }
   // A public listing never grants permission. The native join screen and
@@ -289,7 +317,7 @@
   copy.append(title,details);
   const actions=document.createElement('div');actions.className='room-browser-actions';
   const join=button('Join room',()=>requestJoin(room));
-  join.className='primary';
+  join.className='primary';join.dataset.roomAction='join';
   if(!canBrowseJoin(room)){join.disabled=true;join.textContent=freeSeats(room)===0?'Room full':'Availability unknown';}
   else if(room.requiresAccount&&!settings.account?.token){join.textContent='Sign in to join';}
   const share=button('Copy invite',async()=>{
@@ -299,6 +327,7 @@
     await navigator.clipboard.writeText(url);status.textContent='Public room link copied.';
    }catch{status.textContent='Copy this URL to invite a friend: '+url;}
   });
+  share.dataset.roomAction='share';
   const pin=button(pins.includes(room.room)?'★ Unpin room':'☆ Pin room',()=>{
    try{
     const current=readPinned(),exists=current.includes(room.room);
@@ -309,6 +338,7 @@
     status.textContent=(exists?'Unpinned ':'Pinned ')+room.room+' on this device.';
    }catch(e){status.textContent=e.message||'Unable to update pinned rooms.';}
   });
+  pin.dataset.roomAction='pin';
   pin.setAttribute('aria-pressed',String(pins.includes(room.room)));
   actions.append(join,share,pin);card.append(copy,actions);list.append(card);
  }
@@ -326,8 +356,7 @@
     accessFilter.value==='eligible'&&canBrowseJoin(r)&&(!r.requiresAccount||!!settings.account?.token)||
     accessFilter.value==='guest'&&canBrowseJoin(r)&&!r.requiresAccount||
     accessFilter.value==='lobby'&&canBrowseJoin(r)&&!r.started)&&
-   (modeFilter.value==='all'||(modeFilter.value==='custom'?
-    !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value))&&
+   matchesMode(r)&&
    (!needle||r.room.toLocaleLowerCase().includes(needle)||
     r.map.toLocaleLowerCase().includes(needle)));
   if(order.value==='pinned')visible.sort((a,b)=>Number(pins.includes(b.room))-Number(pins.includes(a.room))||a.room.localeCompare(b.room));
@@ -335,8 +364,30 @@
   else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
   else if(order.value==='seats')visible.sort((a,b)=>(freeSeats(b)??-1)-(freeSeats(a)??-1)||a.room.localeCompare(b.room));
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
+  // Twenty-second refreshes must not steal keyboard focus while a player
+  // is about to join, share or pin a listed public room.
+  const active=document.activeElement;
+  let focusRoom=null,focusAction=null;
+  if(active&&active.dataset?.roomAction){
+   for(const card of list.children){
+    if(card.contains(active)){
+     focusRoom=card.dataset.publicRoom;
+     focusAction=active.dataset.roomAction;
+     break;
+    }
+   }
+  }
   list.replaceChildren();
   for(const room of visible)putRoom(room,pins);
+  if(focusRoom&&focusAction){
+   for(const card of list.children){
+    if(card.dataset.publicRoom!==focusRoom)continue;
+    const target=[...card.querySelectorAll('button')].find(
+     button=>button.dataset.roomAction===focusAction&&!button.disabled);
+    target?.focus({preventScroll:true});
+    break;
+   }
+  }
   const age=lastLoadedAt>0?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
   const freshness=age===null?'No current server snapshot':age<45?'Updated '+age+'s ago':'Old snapshot ('+age+'s); refresh before joining';
   status.textContent=roomsCache.length?
@@ -353,14 +404,29 @@
   order.value='default';accessFilter.value='all';renderRooms();
  };
  async function load(){
-  if(!shown||busy)return false;
+  if(!directoryVisible()||busy)return false;
   busy=true;const current=++sequence;refresh.disabled=true;
-  status.textContent='Loading public rooms…';
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  const request={current,controller,timer:null,timedOut:false};
+  activeRequest=request;
+  status.textContent='Loading current public rooms…';
+  // Bound both the HTTP response and JSON decoding. On a rejected or
+  // abandoned request, clear the spinner without accepting stale data.
+  const timeout=new Promise((_,reject)=>{
+   request.timer=setTimeout(()=>{
+    request.timedOut=true;
+    request.controller?.abort();
+    reject(Error('Public room directory took too long. Retry when the server responds.'));
+   },ROOM_DIRECTORY_TIMEOUT_MS);
+  });
   try{
-   const response=await fetch('/api/public-rooms',{cache:'no-store'});
-   if(!response.ok)throw Error('Room directory unavailable.');
-   const result=await response.json();
-   if(!shown||current!==sequence)return;
+   const result=await Promise.race([(async()=>{
+    const response=await fetch('/api/public-rooms',
+     controller?{cache:'no-store',signal:controller.signal}:{cache:'no-store'});
+    if(!response.ok)throw Error('Room directory unavailable.');
+    return await response.json();
+   })(),timeout]);
+   if(activeRequest!==request||!directoryVisible()||current!==sequence)return false;
    if(!Array.isArray(result.rooms)||result.rooms.length>16)throw Error('Unexpected directory response.');
    // Only the already public, host-approved directory enters the local
    // search cache. Never combine it with the broader /api/rooms endpoint.
@@ -375,19 +441,32 @@
    renderRooms();
    return true;
   }catch(e){
-   if(current===sequence&&shown){
-    // Network failure invalidates the directory, but never touches saved pins.
-    // A stale published code must not remain as an actionable public listing.
+   if(activeRequest===request&&current===sequence&&shown){
+    // A disconnected, unresponsive or invalid listing must not leave the
+    // previously public room selectable. Pinned local codes are retained.
     roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();renderRooms();
-    if(watching)watchText.textContent='Public directory is unavailable; no pinned room is confirmed open.';
-    status.textContent=(e.message||'Room directory unavailable.')+' Pinned room codes are kept, but current public availability is unknown.';
+    if(watching)watchText.textContent='Public directory unavailable; no pinned room has verified open seats.';
+    status.textContent=(request.timedOut?
+     'Public room directory timed out. Try Refresh to check again.':
+     e?.name==='AbortError'?'Room directory request interrupted. Refresh to retry.':
+     e?.message||'Room directory unavailable.')+
+     ' Pinned codes were kept; current availability is unknown.';
    }
    return false;
   }
-  finally{busy=false;refresh.disabled=false;}
+  finally{
+   clearTimeout(request.timer);
+   // An obsolete request is never allowed to re-enable/disable controls
+   // belonging to the next directory session.
+   if(activeRequest===request){
+    activeRequest=null;busy=false;refresh.disabled=false;
+   }
+  }
  }
  function close(){
-  shown=false;sequence++;roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
+  shown=false;cancelDirectoryRequest();
+  roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+  body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
  }
@@ -395,16 +474,14 @@
   if(shown){close();return;}
   shown=true;body.hidden=false;refresh.hidden=false;find.hidden=false;filters.hidden=false;
   toggle.textContent='Hide rooms';toggle.setAttribute('aria-expanded','true');
-  renderRooms();load();interval=setInterval(()=>{if(shown&&document.visibilityState==='visible')load();},20000);
+  renderRooms();load();
+  interval=setInterval(()=>{if(directoryVisible())load();},20000);
  };
  refresh.onclick=load;
  find.onclick=async()=>{
-  if(!shown||busy)return;
-  if(serverLink?.room||peerConnected||
-     document.querySelector('.quick-queue-actions button:not([hidden])')||
-     document.querySelector('.quick-ready:not([hidden])')){
-   status.textContent='Leave your active match or cancel Quick Match before choosing a public room.';return;
-  }
+  if(!directoryVisible()||busy)return;
+  const blocked=sessionBlock();
+  if(blocked){status.textContent=blocked;return;}
   find.disabled=true;
   status.textContent='Checking fresh public room listings…';
   try{
@@ -419,8 +496,7 @@
      accessFilter.value==='eligible'&&(loggedIn||!r.requiresAccount)||
      accessFilter.value==='guest'&&!r.requiresAccount||
      accessFilter.value==='lobby'&&!r.started)&&
-    (modeFilter.value==='all'||modeFilter.value==='custom'?
-      !['1v1','2v2','3v3','4v4'].includes(r.mode):r.mode===modeFilter.value)&&
+    matchesMode(r)&&
     (!search.value.trim()||r.room.toLowerCase().includes(search.value.trim().toLowerCase())||
      r.map.toLowerCase().includes(search.value.trim().toLowerCase())));
    if(!candidates.length){
@@ -439,9 +515,38 @@
    status.textContent='Selected public room '+chosen.room+'. The server will check its current access and capacity.';
   }finally{find.disabled=false;}
  };
- document.addEventListener('visibilitychange',()=>{
-  if(shown&&document.visibilityState==='visible')load();
- });
+ function syncDirectoryVisibility(){
+  if(!shown)return;
+  if(!directoryVisible()){
+   // Leaving Home or hiding the tab immediately cancels the foreground-only
+   // directory request and invalidates server availability. Reopening makes
+   // a new request rather than waiting on the old, possibly hung fetch.
+   cancelDirectoryRequest();
+   roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+   // Invalidate already-rendered Join buttons immediately. Although the
+   // admission guard would reject them, stale cards must not appear live
+   // when the player returns before the fresh response.
+   renderRooms();
+   if(watching)watchText.textContent=
+    'Availability watch paused while the public-room browser is not visible. No background refresh or automatic join.';
+   return;
+  }
+  // A cached listing is never proof of availability after returning from
+  // gameplay. Fetch a fresh host-approved snapshot before enabling joins.
+  if(watching){
+   // A fresh snapshot on return becomes the first comparison baseline,
+   // rather than reporting a change that occurred off-screen as a new alert.
+   sawSnapshot=false;previousAvailable=new Set();
+   watchText.textContent='Refreshing host-approved room availability after returning to Home…';
+  }
+  if(!busy)load();
+ }
+ document.addEventListener('visibilitychange',syncDirectoryVisibility);
+ window.addEventListener('focus',syncDirectoryVisibility);
+ // Home navigation uses the existing tab; the 20-second tick handles
+ // programmatic view switches without adding any new game-state polling.
+ document.getElementById('tabHome')?.addEventListener('click',
+  ()=>setTimeout(syncDirectoryVisibility,0));
  window.addEventListener('storage',event=>{
   if(shown&&(event.key===SAVED_KEY||event.key===null))renderRooms();
  });

@@ -62,14 +62,34 @@
  const dockToggle=el('button','✓ I AM READY');dockToggle.type='button';
  dockToggle.className='primary';
  const dockView=el('button','↗ View room');dockView.type='button';
+ // Hosts can operate the same native kickoff controls when the match menu
+ // is hidden; votes and the countdown remain server-authoritative.
+ const dockHost=el('div',null,'native-lobby-ready-dock-host');
+ const dockLengthLabel=el('label','Kickoff countdown');
+ const dockLength=el('select');
+ dockLength.setAttribute('aria-label','Kickoff countdown duration');
+ for(const seconds of [3,5,10]){
+  const option=el('option',seconds+' seconds');option.value=String(seconds);
+  dockLength.append(option);
+ }
+ dockLength.value=length.value;
+ dockLengthLabel.append(dockLength);
+ const dockStart=el('button','Start countdown');
+ dockStart.type='button';dockStart.className='primary';
+ const dockCancel=el('button','Cancel countdown');
+ dockCancel.type='button';
+ const dockHostFeedback=el('span',null,'native-lobby-ready-dock-feedback');
+ dockHostFeedback.setAttribute('role','status');
+ dockHostFeedback.setAttribute('aria-live','polite');
+ dockHost.append(dockLengthLabel,dockStart,dockCancel,dockHostFeedback);
  dockActions.append(dockToggle,dockView);
- dock.append(dockContent,dockActions);
+ dock.append(dockContent,dockActions,dockHost);
  document.body.append(dock);
  let lastSignature='';
  function lobbySummary(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const state=link?.roomState;
-  if(!link?.room||link.quickMatchMode||!state||state.started)return null;
+  if(!link?.room||link.quickMatchMode||!state||state.started||state.lastResult)return null;
   const supported=Array.isArray(state.lobbyReadyIds)&&state.lobbyReadyIds.length<=128;
   const ready=supported?new Set(state.lobbyReadyIds.filter(Number.isSafeInteger)):new Set();
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
@@ -81,7 +101,14 @@
   const countdown=state.kickoff;
   const remaining=countdown&&Number.isSafeInteger(countdown.framesLeft)&&
    countdown.framesLeft>=0?Math.max(1,Math.ceil(countdown.framesLeft/60)):null;
-  return{link,supported,active,own,ready,remaining};
+  const red=active.some(p=>p.team.id===1),blue=active.some(p=>p.team.id===2);
+  const allReady=active.length>=2&&red&&blue&&
+   active.every(p=>ready.has(p.id));
+  const canHost=link.isOwner===true&&Object.hasOwn(state,'kickoff')&&
+   !state.lastResult&&supported;
+  return{link,supported,active,own,ready,remaining,
+   canSchedule:canHost&&allReady&&!countdown,
+   canCancel:canHost&&!!countdown,canHost,allReady};
  }
  function renderGlobalLobby(){
   const state=lobbySummary();
@@ -105,6 +132,21 @@
   dockToggle.hidden=!state.supported||!state.own;
   dockToggle.disabled=state.remaining!==null;
   dockToggle.textContent=ownReady?'✓ READY · CHANGE TO NOT READY':'✓ I AM READY';
+  dockHost.hidden=!state.canHost;
+  dockLengthLabel.hidden=!!state.canCancel;
+  dockStart.hidden=!!state.canCancel;
+  dockStart.disabled=!state.canSchedule;
+  dockLength.disabled=!state.canSchedule;
+  dockCancel.hidden=!state.canCancel;
+  if(state.canCancel){
+   dockHostFeedback.textContent='Server countdown running · '+
+    (state.remaining===null?'check the match for the current count':
+     state.remaining+'s left')+'. Only the host can cancel.';
+  }else if(state.canHost){
+   dockHostFeedback.textContent=state.canSchedule?
+    'Both teams and every connected human are ready. Host may begin.':
+    'Waiting for ready humans on both teams. No countdown started.';
+  }
  }
  dockToggle.addEventListener('click',()=>{
   const snap=lobbySummary();
@@ -115,6 +157,23 @@
   if(!toggle.disabled)toggle.click();
   renderGlobalLobby();
  });
+ function invokeNativeKickoff(cancel){
+  const snapshot=lobbySummary();
+  if(!snapshot?.canHost||
+     cancel&&!snapshot.canCancel||!cancel&&!snapshot.canSchedule)return;
+  // Use the same server-authorized native handlers and verify their actual
+  // disabled state at click time. Never start or cancel on behalf of users.
+  if(!cancel)length.value=dockLength.value;
+  render();
+  const original=cancel?cancelCount:count;
+  if(original.hidden||original.disabled)return;
+  original.click();
+  dockHostFeedback.textContent=cancel?
+   'Cancellation requested · waiting for server state.':
+   'Kickoff requested · waiting for server confirmation.';
+ }
+ dockStart.addEventListener('click',()=>invokeNativeKickoff(false));
+ dockCancel.addEventListener('click',()=>invokeNativeKickoff(true));
  dockView.addEventListener('click',()=>{
   if(!lobbySummary())return;
   document.getElementById('tabPlay')?.click();
@@ -123,6 +182,79 @@
   panel.scrollIntoView?.({behavior:'auto',block:'nearest'});
   const focus=!toggle.disabled?toggle:panel;
   focus.focus?.({preventScroll:true});
+ });
+
+ // Server-confirmed finished rounds need a way back to authentic results from
+ // My Games. The pre-kickoff dock must never overlap a rematch or offer an
+ // irrelevant readiness action after the server has recorded a result.
+ const finishedDock=el('aside',null,'native-finished-round-dock');
+ finishedDock.hidden=true;finishedDock.setAttribute('role','region');
+ finishedDock.setAttribute('aria-label','Your finished Custom Room game');
+ const finishedCopy=el('div',null,'native-finished-round-copy');
+ const finishedTitle=el('strong','ROUND FINISHED');
+ const finishedDetail=el('p',null,'native-finished-round-detail');
+ finishedDetail.setAttribute('role','status');
+ finishedDetail.setAttribute('aria-live','polite');
+ finishedCopy.append(finishedTitle,finishedDetail);
+ const finishedActions=el('div',null,'native-finished-round-actions');
+ const finishedReview=el('button','↗ See result and teams');
+ finishedReview.type='button';finishedReview.className='primary';
+ const finishedRematch=el('button','↻ Request human rematch');
+ finishedRematch.type='button';
+ finishedActions.append(finishedReview,finishedRematch);
+ finishedDock.append(finishedCopy,finishedActions);
+ document.body.append(finishedDock);
+ function finishedRound(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const state=link?.roomState;
+  if(!link?.room||link.quickMatchMode||!state||state.started||
+     !state.lastResult||state.rematch)return null;
+  return{link,state,result:state.lastResult};
+ }
+ function renderFinishedRound(){
+  const current=finishedRound();
+  const nativeMenuVisible=!!match&&!match.hidden&&
+   typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
+  // Home has its own original Play Hub post-match card. Show this short
+  // follow-up only when browsing other views, without overlay duplication.
+  const onHome=document.getElementById('homeView')?.hidden===false;
+  finishedDock.hidden=!current||nativeMenuVisible||onHome;
+  if(finishedDock.hidden)return;
+  const result=current.result;
+  finishedTitle.textContent=Number.isSafeInteger(result.round)&&result.round>0?
+   'ROUND '+result.round+' COMPLETE':'MATCH COMPLETE';
+  const red=Number(result.red),blue=Number(result.blue);
+  const scored=Number.isFinite(red)&&Number.isFinite(blue)&&red>=0&&blue>=0;
+  const detail=scored?'RED '+red+' : '+blue+' BLUE':'The server confirmed the final result';
+  const copy=detail+' · '+(current.link.isOwner?
+   'You can request a new vote with the original room controls.':
+   'Return to the room to review players and the next round.');
+  if(finishedDetail.textContent!==copy)finishedDetail.textContent=copy;
+  finishedRematch.hidden=!current.link.isOwner;
+ }
+ function openFinishedRoom(){
+  if(!finishedRound())return;
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  if(typeof renderNextMatchPanel==='function')renderNextMatchPanel();
+  const original=document.getElementById('nextMatchPanel');
+  original?.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  const action=['rematchRequest','nextGame'].map(id=>document.getElementById(id))
+   .find(node=>node&&!node.hidden&&!node.disabled);
+  (action||original)?.focus?.({preventScroll:true});
+  renderFinishedRound();
+ }
+ finishedReview.addEventListener('click',openFinishedRoom);
+ finishedRematch.addEventListener('click',()=>{
+  const snapshot=finishedRound();
+  if(!snapshot?.link.isOwner||finishedDock.hidden)return;
+  // Native request owns every server permission, proposal ID, and readiness
+  // gate. The dock cannot manufacture a vote or enter an online match.
+  if(typeof renderNextMatchPanel==='function')renderNextMatchPanel();
+  const original=document.getElementById('rematchRequest');
+  if(!original||original.hidden||original.disabled)return;
+  original.click();
+  finishedDetail.textContent='Rematch requested · waiting for the room server.';
  });
 
  function renderCountdown(){
@@ -141,7 +273,9 @@
   if(!link?.room||link.quickMatchMode||!state){
    panel.hidden=true;lastSignature='';return;
   }
-  panel.hidden=!!state.started;
+  // A completed server round belongs to the native results/rematch workflow,
+  // not the pre-kickoff readiness screen.
+  panel.hidden=!!state.started||!!state.lastResult;
   if(panel.hidden)return;
   const available=Array.isArray(state.lobbyReadyIds)&&state.lobbyReadyIds.length<=128;
   if(!available){
@@ -228,6 +362,7 @@
   if(shown())render();
   else{panel.hidden=true;renderCountdown();}
   renderGlobalLobby();
+  renderFinishedRound();
  },750);
- render();renderGlobalLobby();
+ render();renderGlobalLobby();renderFinishedRound();
 })();

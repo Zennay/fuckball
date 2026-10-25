@@ -26,3 +26,9 @@
 .direct-invite-qr-camera p{margin:0;line-height:1.5}
 .direct-invite-join :is(.direct-invite-qr-actions button,.direct-invite-qr-camera button,.direct-invite-qr-actions input):focus-visible{outline:3px solid #ddfaa2;outline-offset:3px}
 @media(max-width:650px){.direct-invite-qr-actions>*{flex:1 1 100%}}
+
+/* A stopped/cancelled local camera must never leave an empty preview
+   floating over Home or reveal a scanner from a hidden game view. */
+.direct-invite-qr-camera[hidden]{display:none!important}
+.direct-invite-qr-camera video{max-width:100%;height:auto}
+.direct-invite-qr-camera button{min-height:48px}

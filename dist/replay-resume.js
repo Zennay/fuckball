@@ -41,7 +41,13 @@
  }
  function forgetPosition(id){
   const live=current();
-  if(live?.id===id)forgottenReplay=live.instance;
+  // My Games hides the pitch, so current() deliberately returns null.
+  // Forget must still suppress the already-loaded replay instance, otherwise
+  // returning to the pitch recreates the just-deleted private checkpoint.
+  const parkedSameReplay=id===activeId&&activeReplay&&
+   typeof replay!=='undefined'&&replay===activeReplay;
+  if(live?.id===id||parkedSameReplay)
+   forgottenReplay=live?.instance||activeReplay;
   return discard(id);
  }
  const section=mk('section',null,'replay-resume-library');
@@ -68,6 +74,7 @@
  panel.append(label,resume,forget);controls.append(panel);
 
  let activeReplay=null,activeId=null,lastSaved=0,lastObserved=0,forgottenReplay=null;
+ let sessionStartedAt=0,sessionStartedAtMs=0,explicitRewind=false;
  let viewToken=0,busy=false,painted='';
  const current=()=>{
   const id=typeof activeLocalReplayId==='string'?activeLocalReplayId:'';
@@ -76,11 +83,16 @@
   if(!Number.isFinite(duration)||!Number.isFinite(ms)||duration<=2000||duration>864000000)return null;
   return {id,instance:replay,ms:Math.max(0,ms),duration};
  };
- function savePlayhead(){
+ // Navigation/closing should save the most recent visible frame before
+ // showView hides the pitch or closeReplay destroys the original instance.
+ // Forced snapshots bypass only the regular write throttle, not validation.
+ function savePlayhead(force=false){
   const s=current();
   if(!s||s.instance===forgottenReplay)return;
   if(activeReplay!==s.instance||activeId!==s.id){
-   activeReplay=s.instance;activeId=s.id;lastSaved=0;lastObserved=s.ms;return;
+   activeReplay=s.instance;activeId=s.id;
+   lastSaved=0;lastObserved=0;
+   sessionStartedAt=Date.now();sessionStartedAtMs=s.ms;explicitRewind=false;
   }
   // Only real locally opened HBR2 playback counts; near-end plays are complete.
   if(s.ms>=s.duration-1500){
@@ -88,14 +100,18 @@
   }
   if(s.ms<2000||s.ms>864000000)return;
   const ms=Math.round(s.ms);
-  if(Math.abs(ms-lastObserved)<250)return;
+  if(!force&&Math.abs(ms-lastObserved)<250)return;
   const existing=lookup(s.id);
-  // Opening a saved HBR2 starts the ordinary viewer at frame zero. Do not
-  // overwrite an older resume marker with the first few seconds of autoplay.
-  // Choosing Forget explicitly opts back into tracking from the beginning.
-  if(existing&&ms<existing.ms)return;
   const now=Date.now();
-  if(existing&&now-lastSaved<4500)return;
+  // A new viewer autoplays at zero even when a later position is saved.
+  // Preserve that position during a brief preview. A deliberate seek or
+  // genuinely rewatching ten seconds and advancing >=3s means the player
+  // chose this earlier position; the saved checkpoint must follow them.
+  const rewatching=now-sessionStartedAt>=10000&&
+   s.ms-sessionStartedAtMs>=3000;
+  if(existing&&ms<existing.ms&&!explicitRewind&&!rewatching)return;
+  if(existing&&now-lastSaved<4500&&!force)return;
+  if(existing&&existing.ms===ms&&existing.duration===Math.round(s.duration))return;
   const entry={id:s.id,ms,duration:Math.round(s.duration),at:now};
   if(persist([entry,...read().filter(x=>x.id!==s.id)])){
    lastSaved=now;lastObserved=ms;
@@ -120,6 +136,7 @@
   if(!s||!saved)return;
   const jump=Math.min(s.duration-500,Math.max(0,saved.ms));
   s.instance.setTime(jump);
+  explicitRewind=true;
   label.textContent='Resumed private HBR2 playback at '+format(jump);
   feedback.textContent='Your local playback position was restored; no recording was modified.';
  };
@@ -137,8 +154,15 @@
   }
   const saved=lookup(id);
   if(!saved){feedback.textContent='This recorded position has already been cleared.';return;}
-  if((typeof started!=='undefined'&&started||typeof replay!=='undefined'&&replay)&&
-   !window.confirm('Open the saved replay? The current local match or replay will be replaced.')){
+  // Saved-position playback already requests consent when replacing an
+  // existing replay. Replacing an unfinished local match *from My Games*
+  // is handled by the single shared replay-loader guard after the async
+  // storage read, so players never receive two overlapping confirmation
+  // prompts and state changes during the read cannot bypass that guard.
+  const activeReplay=typeof replay!=='undefined'&&!!replay;
+  const localOutsideGames=typeof started!=='undefined'&&started&&games.hidden;
+  if((activeReplay||localOutsideGames)&&
+   !window.confirm('Open the saved replay? Your current local match or replay will be replaced.')){
    feedback.textContent='Existing playback preserved.';return;
   }
   busy=true;feedback.textContent='Opening saved HBR2 playback…';
@@ -192,21 +216,28 @@
  }
  window.FuckballReplayResume=Object.freeze({get:lookup,open:openSaved});
  reload.type='button';reload.onclick=renderLibrary;
+ // Capture occurs before the existing tab onclick changes pitch.hidden,
+ // and before Close destroys the replay. No new navigation or playback
+ // hooks are installed on the multiplayer/gameplay engine.
+ for(const id of ['tabHome','tabReplay','replayClose']){
+  document.getElementById(id)?.addEventListener('click',()=>savePlayhead(true),true);
+ }
+ // Native replay Seek sets the real playhead before 'change'; this flags a
+ // conscious rewind even if it lies earlier than an older saved checkpoint.
+ document.getElementById('replaySeek')?.addEventListener('change',()=>{
+  explicitRewind=true;savePlayhead(true);
+ });
  document.getElementById('tabReplay')?.addEventListener('click',()=>renderLibrary());
  window.addEventListener('storage',event=>{
   if(event.key===KEY||event.key===null){painted='';refreshControls();if(!games.hidden)renderLibrary();}
  });
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden)savePlayhead();
+  if(document.hidden)savePlayhead(true);
   else{painted='';refreshControls();}
  });
- window.addEventListener('pagehide',savePlayhead);
+ window.addEventListener('pagehide',()=>savePlayhead(true));
  window.setInterval(()=>{
   if(document.hidden)return;
-  const s=current();
-  if(s&&activeReplay!==s.instance){
-   activeReplay=s.instance;activeId=s.id;lastSaved=Date.now();lastObserved=0;
-  }
   savePlayhead();refreshControls();
  },1200);
  renderLibrary();

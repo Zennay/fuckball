@@ -134,3 +134,9 @@
 }
 @media(max-width:370px){.quick-ready-dock-actions{grid-template-columns:1fr}
  .quick-ready-dock-actions button.primary{grid-column:auto}}
+
+/* A real server receipt changes the card from a consent request to a
+   read-only waiting state: do not suggest players can revoke acceptance. */
+.quick-ready.is-confirmed,.quick-ready-dock.is-confirmed{border-color:#a3d8c5}
+.quick-ready.is-confirmed h3,.quick-ready-dock.is-confirmed strong{color:#c9eedf}
+.quick-ready-actions button[hidden],.quick-ready-dock-actions button[hidden]{display:none!important}

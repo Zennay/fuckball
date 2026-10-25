@@ -129,11 +129,17 @@
  scannerHint.textContent='Point at a QR with a Fuckball invite from this website. Scanning only fills the invitation field; joining requires your own confirmation.';
  scanner.append(video,scannerHint,close);qrActions.insertAdjacentElement('afterend',scanner);
  let stream=null,scanTimer=null,detecting=false,lastInvalid='';
+ // Every request captures an epoch. A slow permission or decoder promise
+ // must never reactivate an abandoned camera after navigating away.
+ let scanEpoch=0,imageEpoch=0;
  function stopScan(){
+  scanEpoch++;
   if(scanTimer!==null){clearInterval(scanTimer);scanTimer=null;}
   const active=stream;stream=null;
   if(active)for(const track of active.getTracks())track.stop();
-  video.srcObject=null;scanner.hidden=true;scan.disabled=false;
+  video.pause?.();
+  video.srcObject=null;scanner.hidden=true;
+  scan.disabled=typeof navigator.mediaDevices?.getUserMedia!=='function';
  }
  function acceptScanned(raw){
   try{
@@ -153,52 +159,89 @@
   status.textContent='QR camera scanning is unavailable in this browser. Pasting the same-site invitation URL or room code still works.';
  }
  scan.onclick=async()=>{
-  if(stream)return;
+  if(stream||scan.disabled||home.hidden||document.hidden)return;
+  const attempt=++scanEpoch;
   scan.disabled=true;lastInvalid='';
+  // Show Stop even while a permission prompt or lazy decoder is outstanding.
+  scanner.hidden=false;
+  scannerHint.textContent='Opening the camera… Choose Stop camera to cancel. No QR will be joined automatically.';
+  status.textContent='Waiting for local QR camera access. Choose Stop camera to cancel.';
   try{
    await readyDecoder();
+   if(attempt!==scanEpoch||home.hidden||document.hidden)return;
    const acquired=await navigator.mediaDevices.getUserMedia({
     audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480}}
    });
-   if(document.hidden){acquired.getTracks().forEach(t=>t.stop());throw Error('Open the Play tab to scan.');}
-   stream=acquired;video.srcObject=acquired;scanner.hidden=false;
+   // A granted browser permission can arrive after the player left Home or
+   // pressed Stop. Immediately release every late track, never attach video.
+   if(attempt!==scanEpoch||home.hidden||document.hidden){
+    acquired.getTracks().forEach(t=>t.stop());return;
+   }
+   stream=acquired;video.srcObject=acquired;
    await video.play();
+   if(attempt!==scanEpoch||home.hidden||document.hidden){stopScan();return;}
+   scannerHint.textContent='Point at a QR from this site. A scan only fills the invite field; you must explicitly choose Join room.';
    status.textContent='Camera active on your device. No footage is uploaded or retained.';
    scanTimer=setInterval(async()=>{
-    if(detecting||!stream||document.hidden||scanner.hidden||video.readyState<2)return;
+    if(detecting||!stream||home.hidden||document.hidden||scanner.hidden||video.readyState<2)return;
     const currentStream=stream;detecting=true;
     try{
      const found=await decodeQR(video);
-     if(stream!==currentStream||document.hidden)return;
+     if(stream!==currentStream||home.hidden||document.hidden)return;
      for(const item of found||[]){if(typeof item.rawValue==='string'&&acceptScanned(item.rawValue))break;}
     }catch{status.textContent='QR detection unavailable. Stop camera and paste the invitation instead.';stopScan();}
     finally{detecting=false;}
    },400);
   }catch(error){
+   // Do not overwrite a deliberate Stop/navigate message with a late error.
+   if(attempt!==scanEpoch)return;
    stopScan();
    status.textContent='Camera could not start: '+(error?.message||'permission denied')+'. Paste the invitation or choose an image.';
   }
  };
- close.onclick=()=>{stopScan();scan.focus();status.textContent='Camera stopped. Paste a link or try another image.';};
+ close.onclick=()=>{
+  stopScan();scan.focus();
+  status.textContent='Camera stopped. Paste a link or try another image.';
+ };
  imageFile.onchange=async()=>{
   const file=imageFile.files?.[0];imageFile.value='';
   if(!file||typeof createImageBitmap!=='function')return;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
+  const request=++imageEpoch;
   imageFile.disabled=true;
   try{
    await readyDecoder();
+   if(request!==imageEpoch||home.hidden||document.hidden)return;
    const bitmap=await createImageBitmap(file);
    try{
     if(bitmap.width>4096||bitmap.height>4096)throw Error('Image dimensions exceed 4096 pixels.');
+    if(request!==imageEpoch||home.hidden||document.hidden)return;
     const found=await decodeQR(bitmap);
+    if(request!==imageEpoch||home.hidden||document.hidden)return;
     if(!found?.some(item=>typeof item.rawValue==='string'&&acceptScanned(item.rawValue)))
      status.textContent='No valid same-site room QR found. Paste a link or use another image.';
    }finally{bitmap.close();}
-  }catch(error){status.textContent=error?.message||'Could not read QR from this image.';}
-  finally{imageFile.disabled=false;}
+  }catch(error){
+   if(request===imageEpoch&&!home.hidden&&!document.hidden)
+    status.textContent=error?.message||'Could not read QR from this image.';
+  }finally{imageFile.disabled=false;}
  };
- document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan();});
- window.addEventListener('pagehide',stopScan);
+ function leaveInviteView(){
+  if(!home.hidden&&!document.hidden)return;
+  imageEpoch++; // Discard any late file decode from the previous view.
+  if(stream||!scanner.hidden){
+   stopScan();
+   status.textContent='Camera stopped when you left the invite screen. Open Home to scan again.';
+  }
+ }
+ document.addEventListener('visibilitychange',leaveInviteView);
+ window.addEventListener('pagehide',()=>{imageEpoch++;stopScan();});
+ // The game navigates between in-page views without hiding the browser tab.
+ // A page-visibility event alone would leave the physical camera capturing.
+ for(const id of ['tabPlay','tabReplay'])
+  document.querySelector('#'+id)?.addEventListener('click',()=>queueMicrotask(leaveInviteView));
+ if(typeof MutationObserver==='function')
+  new MutationObserver(leaveInviteView).observe(home,{attributes:true,attributeFilter:['hidden']});
 })();

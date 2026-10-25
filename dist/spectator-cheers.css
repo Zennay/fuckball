@@ -6,7 +6,11 @@
 .spectator-cheer-actions button{border:1px solid #9cc4b4;border-radius:8px;
  padding:5px 8px;background:#22453d;color:#eefeea;
  min-width:38px;min-height:38px;font-size:19px}
-.spectator-cheer-actions button:hover{background:#39684b}
+.spectator-cheer-actions button:hover:not(:disabled){background:#39684b}
+.spectator-cheer-actions button:disabled{opacity:.52;cursor:not-allowed;
+ background:#243934;border-color:#5e7970}
+.spectator-cheer-status{overflow-wrap:anywhere}
+@media(pointer:coarse){.spectator-cheer-actions button{min-height:44px;min-width:44px}}
 .spectator-cheer-actions button:focus-visible,.spectator-cheer-hide:focus-visible{
  outline:3px solid #c6f38c;outline-offset:2px}
 .spectator-cheer-status{flex:1 1 110px;max-width:205px;min-height:12px;

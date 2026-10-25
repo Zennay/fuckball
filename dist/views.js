@@ -39,7 +39,7 @@ function refreshGamesSession(){
    'Your online lobby is still connected. ')+
   'Leave it explicitly before opening a replay.':
   direct?'Your direct-peer match continues here. Disconnect explicitly before watching a replay.':
-  activeLocal?'Your local game and its current score are preserved while you browse My Games. Return to the pitch, then stop the match explicitly before watching a replay. The local game is paused while this view is open.':
+  activeLocal?'Your local game and its current score are preserved while you browse My Games. Return to the pitch to keep playing, or choose a replay and confirm before replacing this match. The local game stays paused while My Games is open.':
   'Finish or cancel this connection before opening a replay. Nothing will be disconnected automatically.';
  gamesSessionReturn.textContent=activeRoom||direct||activeLocal?'↗ Return to match':'↗ View connection';
  gamesSessionMenu.textContent=activeLocal?'Match controls':'Room controls';
@@ -105,6 +105,8 @@ function pendingSessionBlock(){
   'Leave your current native online room explicitly before changing game modes.':
   'Cancel your current native online connection or human search before changing game modes.';
  if(peerConnected)return 'Disconnect from the current direct-peer match before changing game modes.';
+ if(typeof peer!=='undefined'&&peer)
+  return 'Finish or cancel the pending direct-peer connection before changing local game modes.';
  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
     document.querySelector('.quick-ready:not([hidden])'))
   return 'Finish or cancel the human matchmaking queue or ready check first.';
