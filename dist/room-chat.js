@@ -244,6 +244,11 @@
    '● '+unread+(unread===99?'+':'')+' unread room message'+(unread===1?'':'s')+
    ' · '+(expanded?'Hide':'Read'):
    '◌ Room chat · '+(expanded?'Hide':'Read recent');
+  // A saved draft is discoverable off the pitch, without exposing its
+  // private text or sending it through the room catch-up inbox.
+  const savedDraftHere=isCurrentDraft(unsentSessionDraft);
+  if(savedDraftHere)chatDockSummary.textContent+=' · unsent draft';
+  chatDockReply.textContent=savedDraftHere?'↩ Resume unsent draft':'↩ Reply in match';
   chatDockSummary.setAttribute('aria-expanded',String(!chatDockPanel.hidden));
  }
  chatDockSummary.addEventListener('click',()=>{
