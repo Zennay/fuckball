@@ -48,10 +48,19 @@
  let pending=null,previousRoom=null,previousLink=null,latest='',nextPauseAsk=0;
  let pauseAwaiting=null,hostPauseAwaiting=null;
  const socketOpen=link=>link?.ws?.readyState===1;
+ // The rendered room roster is reused when the game swaps native sessions.
+ // A server welcome and cached roster alone do not prove the player's bench
+ // identity on the *new* connection; wait for its first binary snapshot.
+ function hasCurrentRoster(link){
+  const state=link?.roomState;
+  return socketOpen(link)&&!!state&&(!state.room||state.room===link.room)&&
+   typeof net!=='undefined'&&net.receivedSequence>0&&net.lastSnapshot>0;
+ }
  function native(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!link?.room||link.quickMatchMode||!link.roomState||!validId(networkPlayerId)||
-   !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
+  if(!link?.room||link.quickMatchMode||!hasCurrentRoster(link)||
+   !validId(networkPlayerId)||!Array.isArray(room?.state?.players)||
+   room.state.players.length>128)return null;
   const p=room.state.players.find(x=>x?.id===networkPlayerId);
   if(!p||![0,1,2].includes(teamOf(p))||
    (typeof botIds!=='undefined'&&botIds?.has?.(networkPlayerId)))return null;
@@ -68,8 +77,10 @@
    x&&(x.inId===networkPlayerId||x.outId===networkPlayerId||x.requestedBy===networkPlayerId));
   return{link,side,chosen,ready:ready&&chosen!==0,disconnected,involved,requested,
    online:socketOpen(link),
-   started:typeof started!=='undefined'&&started===true,
-   paused:typeof paused!=='undefined'&&paused===true};
+   // Server-originated match state, not optimistic local controls, is the
+   // only reliable basis for bench eligibility and host pause receipts.
+   started:data.started===true,
+   paused:data.paused===true};
  }
  function reset(){
   pending=null;previousRoom=null;previousLink=null;pauseAwaiting=null;hostPauseAwaiting=null;
@@ -77,8 +88,20 @@
  }
  function render(){
   const data=native();
-  if(!data){if(!panel.hidden)reset();return;}
-  panel.hidden=false;
+  if(!data){
+   if(!panel.hidden)reset();
+   const link=typeof serverLink!=='undefined'?serverLink:null;
+   if(link?.room&&!link.quickMatchMode){
+    panel.hidden=false;
+    buttons.hidden=true;
+    requestBanner.hidden=true;prompt.hidden=true;
+    state.textContent=socketOpen(link)?
+     'Waiting for this room’s current server player snapshot. Bench controls are locked.':
+     'Online room disconnected. Reconnect before using your team bench.';
+   }
+   return;
+  }
+  panel.hidden=false;buttons.hidden=false;
   if(previousRoom!==data.link.room||previousLink!==data.link){
    pending=null;pauseAwaiting=null;hostPauseAwaiting=null;nextPauseAsk=0;
    previousRoom=data.link.room;previousLink=data.link;feedback.textContent='';
@@ -88,10 +111,11 @@
    'Neutral spectator';
   const allowed=data.online&&!data.disconnected&&!data.involved;
   if(hostPauseAwaiting){
-   if(data.link!==hostPauseAwaiting.link||data.link.roomState?.paused===true){
-    if(data.link===hostPauseAwaiting.link&&data.link.roomState?.paused===true)
+   if(data.link!==hostPauseAwaiting.link||data.paused===true){
+    if(data.link===hostPauseAwaiting.link&&data.paused===true){
      feedback.textContent='Room server confirmed the pause. Bench rotation can now proceed.';
      if(typeof notify==='function')notify('Room server confirmed the pause.');
+    }
     hostPauseAwaiting=null;
    }else if(Date.now()-hostPauseAwaiting.at>6500){
     feedback.textContent='The room has not confirmed this pause. Check the original room controls before retrying.';
@@ -218,6 +242,13 @@
   if(!data?.online||!data.link.isOwner||!data.requested||
      !data.started||data.paused||!!hostPauseAwaiting||
      !nativeButton||nativeButton.disabled)return;
+  // The original host pause handler toggles optimistic local state while
+  // awaiting a server echo. Never trigger the *opposite* command when a
+  // previous pause is still pending or the two sources disagree.
+  if(typeof paused==='undefined'||paused!==data.paused){
+   feedback.textContent='Local pause status differs from the server. Wait for room synchronization before sending another pause.';
+   return;
+  }
   hostPauseAwaiting={link:data.link,at:Date.now()};
   // The existing authoritative room handler is still the only sender.
   nativeButton.click();
