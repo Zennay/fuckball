@@ -53,10 +53,16 @@
  editor.append(make('summary','Customize six local phrases · no auto-send'));
  const form=make('div',null,'match-quick-calls-fields');
  const inputs=[];
+ // A concurrent browser tab can save new phrases while the player is
+ // drafting another set. Preserve the human's uncommitted editor values.
+ let editing=false,externalRevision=false;
  for(let i=0;i<6;i++){
   const label=make('label','Quick call '+(i+1)),input=make('input');
   input.type='text';input.maxLength=MAX;input.autocomplete='off';
   input.setAttribute('aria-label','Quick call message '+(i+1));inputs.push(input);
+  input.addEventListener('input',()=>{
+   editing=inputs.some((field,j)=>field.value!==messages[j]);
+  });
   label.append(input);form.append(label);
  }
  const save=make('button','Save these six phrases'),reset=make('button','Restore defaults');
@@ -86,7 +92,12 @@
   const until=Math.max(link.chatMutedUntil||0,link.roomControl?.chatMuteUntil||0);
   return{link,until};
  }
- function showEditor(){inputs.forEach((input,i)=>{input.value=messages[i];});}
+ function showEditor(){
+  // Rerendering the menu during an active edit must never discard inputs.
+  if(editor.open&&editing)return;
+  inputs.forEach((input,i)=>{input.value=messages[i];});
+  editing=false;
+ }
  function closePanel(focus=true){
   if(!opened)return;
   opened=false;openedSession=null;panel.hidden=true;
@@ -142,8 +153,19 @@
   // Actual moderation, bans, server rate limits and transport identity
   // remain authoritative. The client does not claim the room delivered it.
   try{
-   state.link.send({type:'chat',text:messages[i]});sent.push(now);
-   status.textContent='Submitted to native room chat: "'+messages[i]+'". Actual delivery depends on server moderation.';
+   // Native send silently ignores packets whenever WebSocket is not OPEN.
+   // Check the original admitted socket again at the moment of submission;
+   // do not charge the human a cooldown or report a send that never happened.
+   const link=state.link;
+   if(serverLink!==link||openedSession!==link||link.ws?.readyState!==1){
+    status.textContent='Connection changed. No call was submitted; rejoin the room to retry.';
+    update();return;
+   }
+   link.send({type:'chat',text:messages[i]});
+   // Delivery is still subject to the actual server's moderation/receipt;
+   // an OPEN transport only proves a submission attempt, not delivery.
+   sent.push(now);
+   status.textContent='Attempted via this room’s connected chat: "'+messages[i]+'". Delivery is not yet confirmed by the server.';
   }catch{status.textContent='The game server could not accept this call.';}
   update();
  }
@@ -199,19 +221,28 @@
  save.onclick=()=>{
   const next=inputs.map(x=>x.value);
   if(!next.every(valid)){status.textContent='Use six unique or repeated printable lines, each 2–80 characters, without control characters.';return;}
-  messages=next.slice();drawOptions();
-  try{localStorage.setItem(KEY,JSON.stringify({version:1,messages}));status.textContent='Phrases saved only on this device. Nothing was sent.';}
+  messages=next.slice();editing=false;externalRevision=false;drawOptions();
+  try{localStorage.setItem(KEY,JSON.stringify({version:1,messages}));status.textContent='Six phrases saved on this device. Nothing was sent.';}
   catch{status.textContent='Browser storage unavailable. Phrases updated in this tab only.';}
   update();
  };
  reset.onclick=()=>{
-  messages=DEFAULTS.slice();drawOptions();
+  messages=DEFAULTS.slice();editing=false;externalRevision=false;drawOptions();
   try{localStorage.removeItem(KEY);}catch{}
   status.textContent='Default phrases restored on this device. No messages were sent.';
   update();
  };
  window.addEventListener('storage',event=>{
-  if(event.key===KEY){messages=read();if(opened){drawOptions();status.textContent='Local phrases updated from another tab.';update();}}
+  if(event.key!==KEY)return;
+  if(editor.open&&editing){
+   // Do not replace six unsaved human entries with another tab's saved
+   // phrases. The player explicitly chooses Save (overwrite) or Restore.
+   externalRevision=true;
+   if(opened)status.textContent='Another tab changed saved phrases. Your unsaved edits are preserved; Save to replace the saved version, or Restore defaults.';
+   return;
+  }
+  messages=read();editing=false;externalRevision=false;
+  if(opened){drawOptions();status.textContent='Saved phrases updated from another tab. Nothing was sent.';update();}
  });
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&opened)closePanel(false);else update();});
  window.addEventListener('blur',()=>{if(opened)closePanel(false);});
