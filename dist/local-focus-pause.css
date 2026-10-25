@@ -21,3 +21,31 @@
  .local-focus-pause-actions{display:grid;grid-template-columns:1fr 1fr}
 }
 @media(max-width:390px){.local-focus-pause-actions{grid-template-columns:1fr}}
+
+/* Existing local/couch game is suspended while browsing Home / My Games.
+   The original pitch still requires an explicit Resume action. */
+.local-match-return-card[hidden]{display:none!important}
+.local-match-return-card{position:fixed;z-index:92;left:50%;
+ transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));
+ width:min(890px,calc(100vw - 24px));box-sizing:border-box;
+ display:flex;justify-content:space-between;align-items:center;gap:18px;
+ padding:15px 18px;background:#172f29;color:#f2fff1;
+ border:1px solid #c7e9a4;border-radius:14px;
+ box-shadow:0 13px 37px #091b1de0}
+.local-match-return-card strong{font-size:.79rem;letter-spacing:.065em;color:#dafaac}
+.local-match-return-card p{font-size:.84rem;line-height:1.45;
+ margin:6px 0 0;color:#d2e6db;max-width:64ch}
+.local-match-return-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.local-match-return-actions button{font:inherit;font-size:.84rem;font-weight:800;
+ min-height:48px;padding:10px 14px;border:1px solid #9bbaa7;
+ border-radius:9px;color:#eaf8eb;background:#24483a;cursor:pointer}
+.local-match-return-actions button.primary{background:#e1ffad;
+ border-color:#e1ffad;color:#19331d}
+.local-match-return-actions button:focus-visible{outline:3px solid #f9ffb9;
+ outline-offset:3px}
+@media(max-width:740px){
+ .local-match-return-card{flex-direction:column;align-items:stretch;
+  padding:14px;gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .local-match-return-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:400px){.local-match-return-actions{grid-template-columns:1fr}}
