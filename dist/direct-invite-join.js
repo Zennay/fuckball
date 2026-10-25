@@ -57,7 +57,9 @@
   if(conflict){status.textContent=conflict;return;}
   try{
    const code=parseInvite(input.value);
-   if(!defaultServer)throw Error('Connect to a Fuckball multiplayer server to join rooms.');
+   // Hosted pages intentionally do not assume a server endpoint. The native
+   // join form lets the user explicitly choose the host's WebSocket server.
+   // Do not discard an otherwise valid link or create a connection here.
    status.textContent='Opening '+code+' · room admission and account requirements are checked by the server.';
    showJoinScreen(code);
   }catch(error){status.textContent=error?.message||'Could not open the invitation.';}
