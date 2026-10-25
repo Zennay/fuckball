@@ -373,6 +373,14 @@
  }
  launch.onclick=()=>{
   const blocking=denied();if(blocking){message.textContent=blocking;return;}
+  // Never consume a full native drill or replace a player's current game
+  // if its result cannot be recorded without destroying their saved history.
+  if(verifiedHistory()===null){
+   message.textContent='Keep Away results require recovery before a new scored drill can begin. Save the original raw copy or resolve private browser storage first.';
+   renderHistory();
+   backupRaw.focus?.({preventScroll:true});
+   return;
+  }
   if((started||replay)&&!confirm('Start a fresh real offline Keep Away 1v1? Your current unsaved local match or replay will be replaced.')){
    message.textContent='Existing match preserved.';return;
   }
