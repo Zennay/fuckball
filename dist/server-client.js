@@ -351,7 +351,8 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   $('serverRoomStatus').textContent=message;notify(message);
   if(!peerConnected){
    link.failed=true;
-   if(!create&&!link.quickMatchMode&&!link.room&&NATIVE_ROOM_CODE.test(roomId)){
+   if(!create&&!link.quickMatchMode&&!link.room&&NATIVE_ROOM_CODE.test(roomId)&&
+      d.message!=='Room not found.'){
     // A server's denial is not proof of an admitted seat. Immediately clear
     // the rejected socket; preserve the human's invite and explicit retry UI.
     showRejectedRoomJoin(link,roomId,message);
@@ -381,7 +382,16 @@ function inviteError(message){if(message==='Room not found.')return'This invite 
 // the textarea + execCommand fallback (inside the click gesture).
 async function copyText(text){try{if(navigator.clipboard?.writeText&&window.isSecureContext!==false){await navigator.clipboard.writeText(text);return true;}}catch{}try{const t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.position='fixed';t.style.top='0';t.style.opacity='0';document.body.append(t);t.select();t.setSelectionRange?.(0,text.length);let ok=false;try{ok=document.execCommand('copy');}finally{try{t.remove();}catch{}}return !!ok;}catch{return false;}}
 async function copyInvite(silent){const value=$('inviteLink').value;if(!value)return;if(await copyText(value))notify('Room link copied: '+value);else notify(silent?'Room ready · press “Copy room link” to share it':'Copy failed. Link: '+value);}
-$('createServerRoom').onclick=()=>connectServer(true);$('copyInvite').onclick=()=>copyInvite(false);$('inviteButton').onclick=$('menuCopyLink').onclick=()=>copyInvite(false);
+$('createServerRoom').onclick=()=>connectServer(true);
+$('networkBrowsePublicRooms').onclick=()=>{
+ if($('networkDialog').open)$('networkDialog').close();
+ showView('home');
+ const browser=$('homeView').querySelector('.room-browser');
+ const toggle=browser?.querySelector('.room-browser-tools button');
+ if(toggle&&toggle.getAttribute('aria-expanded')==='false')toggle.click();
+ browser?.scrollIntoView?.({behavior:'auto',block:'start'});
+};
+$('copyInvite').onclick=()=>copyInvite(false);$('inviteButton').onclick=$('menuCopyLink').onclick=()=>copyInvite(false);
 $('shareInvite').onclick=async()=>{const url=$('inviteLink').value;if(!url)return;if(navigator.share){try{await navigator.share({title:'Fuckball',text:'Join my Fuckball room',url});}catch{}}else copyInvite(false);};
 const baseDisconnectPeer=$('disconnectPeer').onclick;$('disconnectPeer').onclick=e=>{const leaving=!!serverLink;baseDisconnectPeer?.(e);if(leaving){setRoomParam(null);$('inviteBox').hidden=true;$('inviteLink').value='';$('serverRoomStatus').textContent='Left the room.';}};
 // Match the same canonical 8-character code and one-parameter link format
