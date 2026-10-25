@@ -76,7 +76,9 @@
  }
  function usable(requireOriginal=true){
   const link=actualRoom();
-  if(!link||match.hidden||document.hidden)return null;
+  if(!link||match.hidden||document.hidden||
+     document.getElementById('pauseMenu')?.hidden===false||
+     document.querySelector('dialog[open]'))return null;
   // Only the session on which a person deliberately opened the picker may
   // receive its message. This is independently checked on every send, not
   // just by the 1.2-second presentation refresh.
