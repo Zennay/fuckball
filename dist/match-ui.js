@@ -157,7 +157,7 @@ function publishKeyboardBindings(){
   window.dispatchEvent(new CustomEvent('fuckball:keyboard-bindings-changed'));
 }
 const mandatoryControls=controlActions.filter(action=>action!=='chat');
-const supportedControlCode=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal))$/;
+const supportedControlCode=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal|Equal|Comma)|Backquote|Minus|Equal|Bracket(?:Left|Right)|Backslash|Semicolon|Quote|Comma|Period|Slash|Intl(?:Backslash|Ro|Yen)|F(?:[1-9]|1[0-2])|CapsLock|Insert|Home|End|PageUp|PageDown)$/;
 function usableKeyboardBindings(candidate){
  if(!candidate||typeof candidate!=='object')return false;
  const used=new Set();
