@@ -131,3 +131,17 @@
  .native-room-chat-inbox-actions{grid-template-columns:1fr}
  .native-room-chat-inbox-actions button:first-child{grid-column:auto}
 }
+
+/* Human-room draft recovery: no storage or background chat delivery. */
+.native-chat-draft-notice[hidden],.native-chat-draft-discard[hidden]{display:none!important}
+.native-chat-draft-notice{margin:7px 0 0;padding:9px 12px;
+ border:1px solid #b7d39b;border-radius:8px;background:#233c32;
+ color:#e2f7d6;font-size:.81rem;line-height:1.45;
+ max-width:65ch;overflow-wrap:anywhere}
+.native-chat-draft-discard{min-height:44px;min-width:140px;
+ margin-top:7px;padding:9px 12px;border-radius:8px;
+ font:inherit;font-size:.82rem;font-weight:780;
+ border:1px solid #c1a79f;background:#3d3032;color:#ffede8;
+ cursor:pointer}
+.native-chat-draft-discard:focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
+@media(max-width:480px){.native-chat-draft-discard{min-height:48px;width:100%}}
