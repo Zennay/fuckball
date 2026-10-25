@@ -371,7 +371,29 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    return;
   }
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
- else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
+ else if(d.type==='error'){
+  const message=inviteError(d.message);
+  $('serverRoomStatus').textContent=message;notify(message);
+  if(!peerConnected){
+   link.failed=true;
+   // A rejected first join must return to the SAME invite form, instead of
+   // silently replacing its room/name/role with unrelated network settings.
+   // Only a real server admission permits automatic room recovery.
+   if(!create&&!link.reconnect&&!link.quickMatchMode&&NATIVE_ROOM_CODE.test(roomId)){
+    ws.close();
+    showView('play');
+    showJoinScreen(roomId,message);
+    $('joinSpectator').checked=link.requestedSpectate;
+    if(link.joinName&&!settings.account)$('joinName').value=link.joinName;
+   }else{
+    if(!create){
+     setRoomParam(null);
+     if(!$('networkDialog').open)openDialog('networkDialog');
+    }
+    ws.close();
+   }
+  }
+ }
  else if(d.type==='recordingStatus'){$('recordIndicator').hidden=!d.active;$('recordButton').textContent=d.active?'■ Save recording':'● Record';}
  else if(d.type==='recording'){const decoded=atob(d.bytes);saveBlob(Uint8Array.from(decoded,c=>c.charCodeAt(0)),'fuckball-server-'+Date.now()+'.hbr2','application/octet-stream');notify('Replay saved.');}
  else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
