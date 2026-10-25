@@ -146,7 +146,11 @@
   const human=room.state?.players?.find?.(p=>p.id===1);
   const team=human?.team?.id;
   if(!human?.disc||![1,2].includes(team)||botIds.has(1))return null;
-  if(!room.state.players.some(p=>p.id!==1&&p.team?.id===team&&botIds.has(p.id)))return null;
+  // The drill needs real on-field AI on both sides. A bench-only teammate
+  // or an empty opposing team must never unlock a scored 4v4 possession.
+  const field=room.state.players.filter(p=>p?.disc&&[1,2].includes(p.team?.id));
+  if(!field.some(p=>p.id!==1&&p.team.id===team&&botIds.has(p.id)))return null;
+  if(!field.some(p=>p.team.id!==team&&botIds.has(p.id)))return null;
   return team;
  }
  function ready(){
