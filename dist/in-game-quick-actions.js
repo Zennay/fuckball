@@ -22,7 +22,7 @@
  dismiss.textContent='✕';dismiss.setAttribute('aria-label','Close match quick actions');
  heading.append(title,dismiss);
  const intro=document.createElement('p');intro.textContent=
-  'Open existing match tools. Nothing is uploaded, recorded, shared or paused unless you choose that tool.';
+  'Your player stands still while you choose. The match clock keeps running. Nothing is shared, saved or paused unless you choose that tool.';
  const grid=document.createElement('div');grid.className='in-game-quick-grid';
  const feedback=document.createElement('p');feedback.className='in-game-quick-feedback';
  feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
@@ -33,9 +33,20 @@
    document.getElementById('pauseMenu')?.hidden===false||
    !!document.querySelector('dialog[open]');
  }
+ // A non-modal HUD sheet must still own the human input surface while open.
+ // One global flag is read by the existing shared gameplay input gate, which
+ // covers keyboard, touch, gamepads, P2 and the full four-person couch mode.
  let opened=false;
+ window.fuckballQuickActionsOpen=false;
+ function neutralizeHumanSeats(){
+  if(typeof releaseInputs==='function')releaseInputs();
+ }
  function close(focus=false){
-  opened=false;sheet.hidden=true;trigger.setAttribute('aria-expanded','false');
+  if(!opened)return;
+  opened=false;sheet.hidden=true;window.fuckballQuickActionsOpen=false;
+  trigger.setAttribute('aria-expanded','false');
+  // Never carry a pressed kick/stick/key across a panel boundary.
+  neutralizeHumanSeats();
   if(focus&&!match.hidden)trigger.focus({preventScroll:true});
  }
  function targetClick(selector){
@@ -89,18 +100,24 @@
   if(!count)feedback.textContent='No match shortcuts are available in the current state.';
  }
  function open(){
-  if(busy())return;
+  if(busy()||opened)return;
   render();
+  // Input must be stopped BEFORE focus is transferred: if someone held a
+  // direction/kick while tapping Quick, no movement survives behind the UI.
+  window.fuckballQuickActionsOpen=true;
+  neutralizeHumanSeats();
   opened=true;sheet.hidden=false;
   trigger.setAttribute('aria-expanded','true');
-  feedback.textContent='Choose a tool. Normal game control remains unchanged.';
-  sheet.querySelector('button.in-game-quick-action:not([hidden])')?.focus({preventScroll:true});
+  feedback.textContent='Your player is neutral while choosing. The match clock still runs.';
+  (sheet.querySelector('button.in-game-quick-action:not([hidden])')||dismiss)
+   .focus({preventScroll:true});
  }
  trigger.addEventListener('click',()=>{if(opened)close(true);else open();});
  dismiss.addEventListener('click',()=>close(true));
  document.addEventListener('pointerdown',event=>{
   if(opened&&!sheet.contains(event.target)&&!trigger.contains(event.target))close();
  },{passive:true});
+ window.addEventListener('blur',()=>close());
  window.addEventListener('keydown',event=>{
   if(opened&&event.key==='Escape'){
    event.preventDefault();event.stopImmediatePropagation();close(true);
