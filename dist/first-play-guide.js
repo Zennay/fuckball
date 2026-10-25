@@ -172,10 +172,10 @@
   result.textContent='Returned to the existing game or connection. No new session was created.';
  }
  resume.addEventListener('click',returnToSession);
- function launch(){
-  // The home action is Continue while the exact same exercise still exists;
-  // do not restart bot AI or erase recorded movement/kick/goal progress.
-  if(sameLessonMatch()){returnToSession();return;}
+ function launch(forceRestart=false){
+  // Home's Start action resumes the same exercise. In contrast, the HUD's
+  // explicit Try again requests a fresh match and its existing consent prompt.
+  if(!forceRestart&&sameLessonMatch()){returnToSession();return;}
   if(session&&!sameLessonMatch())finish('The original match was replaced. Start a new lesson explicitly.');
   const blocked=unavailable();if(blocked){
    result.textContent=blocked;refreshSessionReturn();return;
@@ -201,7 +201,7 @@
  window.addEventListener('fuckball:native-session-state',refreshSessionReturn);
  setInterval(()=>{if(!home.hidden)refreshSessionReturn();},1800);
  refreshSessionReturn();
- restart.addEventListener('click',launch);
+ restart.addEventListener('click',()=>launch(true));
  quit.addEventListener('click',()=>finish('First Touch closed; your local match stays available.'));
  online.addEventListener('click',()=>{
   if(!session||session.stage!==3)return;
