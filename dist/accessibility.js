@@ -46,8 +46,8 @@
    return 'The match scoreboard is not available in this view.';
   const red=redScore.textContent.trim(),blue=blueScore.textContent.trim(),
    time=matchClock.textContent.trim();
-  if(!/^\\d{1,3}$/.test(red)||!/^\\d{1,3}$/.test(blue)||
-     !/^\\d{1,3}:[0-5]\\d$/.test(time))
+  if(!/^\d{1,3}$/.test(red)||!/^\d{1,3}$/.test(blue)||
+     !/^\d{1,3}:[0-5]\d$/.test(time))
    return 'The displayed scoreboard is not ready yet.';
   return 'Displayed scoreboard: Red '+red+', Blue '+blue+
    '. Displayed match clock '+time+'.';
