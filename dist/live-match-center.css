@@ -77,3 +77,12 @@
   gap:5px}
  .match-center-feed-list small{grid-column:2/-1;text-align:left}
 }
+
+/* Unknown time away from the pitch is not an observed goal or official event. */
+.match-center-feed-list li.match-center-feed-gap{
+ border:1px dashed #a6bcae;
+ background:#33454b;
+}
+.match-center-feed-list li.match-center-feed-gap span{
+ color:#e4e9dc;
+}
