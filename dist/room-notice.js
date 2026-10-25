@@ -55,7 +55,7 @@
  awayRestore.textContent='📌 Show room briefing';awayRestore.hidden=true;
  document.body.append(awayRestore);
  let activeRoom=null,activeSession=null,hiddenHud=false,seenKey=null,hiddenAwayKey=null;
- let pendingEdit=null;
+ let pendingEdit=null,lastUnconfirmedRoom=null;
  // A room code is a shareable locator, not a unique live WebSocket session.
  // The same code can be joined again with a different verified player/host.
  const noticeKey=data=>data&&Number.isSafeInteger(data.at)?
@@ -71,12 +71,15 @@
    hiddenHud=false;hiddenAwayKey=null;seenKey=null;
    // A prior socket's optimistic server receipt cannot confirm actions in a
    // newly admitted session, even when the visible shareable room code matches.
-   const lostPending=!!pendingEdit;
+   // Keep only the fact that a host action lacked a native server receipt.
+   // The draft/authoritative notice itself must never move across sessions.
+   if(pendingEdit)lastUnconfirmedRoom=pendingEdit.room;
    pendingEdit=null;
-   // Do not move an unsent briefing or its dismissal between connections.
    input.value='';
-   notice.textContent=lostPending&&currentId?
-    'Room connection changed. Your earlier briefing update was not confirmed. Review the current server notice before editing.':'';
+   const unconfirmed=!!currentId&&lastUnconfirmedRoom===currentId;
+   notice.textContent=unconfirmed?
+    'The previous room connection ended before confirming your briefing update. Review the current server notice and retry explicitly.':'';
+   if(currentId)lastUnconfirmedRoom=null;
   }
   const supported=!!currentId&&!link?.quickMatchMode&&
    link.roomControl?.roomNoticeSupported===true;
