@@ -164,7 +164,10 @@
   updateParkedDock();
  }
  function blocked(){
-  if(serverLink||peerConnected)return 'Leave or cancel the active online room or connecting session before starting a local drill.';
+  if(serverLink||peerConnected||typeof peer!=='undefined'&&peer)
+   return 'Leave or cancel the active online room or direct-peer connection before starting a local drill.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Stop the current native room reconnect explicitly before starting a local drill.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])'))return 'Cancel the human Quick Match search before local practice.';
   const readyCheck=document.querySelector('.quick-ready:not([hidden])');
   if(readyCheck)return 'Complete or decline the human matchmaking ready-check first.';
