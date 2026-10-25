@@ -17,3 +17,26 @@
 .gamepad-haptic-options{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px}
 .gamepad-haptic-options label{display:flex;flex:1 1 185px;align-items:center;gap:8px;font-size:11px}
 .gamepad-haptic-options input[type=checkbox]{width:19px;height:19px;accent-color:#c5f3a4}
+
+/* P1 gamepad seat-loss recovery. No new input protocol or automatic pad handoff. */
+.gamepad-seat-recovery[hidden]{display:none!important}
+.gamepad-seat-recovery{position:fixed;z-index:112;
+ right:max(12px,env(safe-area-inset-right));top:max(80px,calc(env(safe-area-inset-top) + 68px));
+ width:min(370px,calc(100vw - 24px));box-sizing:border-box;
+ max-height:calc(100dvh - 115px);overflow-y:auto;padding:15px 17px;
+ border:2px solid #f4ca80;border-radius:15px;
+ background:#2d2920f2;color:#fff8ec;box-shadow:0 12px 38px #0a101be0}
+.gamepad-seat-recovery strong{font-size:.83rem;font-weight:900;letter-spacing:.06em;color:#ffdf9e}
+.gamepad-seat-recovery p{margin:8px 0 13px;font-size:.86rem;line-height:1.5;color:#f0e4cb}
+.gamepad-seat-recovery-actions{display:flex;gap:8px;flex-wrap:wrap}
+.gamepad-seat-recovery-actions button{font:inherit;font-size:.83rem;font-weight:800;
+ min-height:48px;flex:1 1 132px;padding:10px 12px;
+ border:1px solid #d8ba80;background:#4b4030;color:#fff7e7;border-radius:9px;cursor:pointer}
+.gamepad-seat-recovery-actions button.primary{background:#ffe1a0;border-color:#ffe1a0;color:#272016}
+.gamepad-seat-recovery-actions button:focus-visible{outline:3px solid #f1ffb3;outline-offset:3px}
+@media(max-width:600px){
+ .gamepad-seat-recovery{left:50%;right:auto;transform:translateX(-50%);
+ top:max(65px,calc(env(safe-area-inset-top) + 55px));
+ width:calc(100vw - 20px);padding:13px;max-height:calc(100dvh - 82px)}
+}
+@media(max-width:390px){.gamepad-seat-recovery-actions{display:grid;grid-template-columns:1fr}}
