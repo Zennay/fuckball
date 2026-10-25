@@ -141,7 +141,9 @@
    'Draft is private until Apply. Team moves need a subsequent server-confirmed room snapshot.';
   updatePreview();
  }
- refresh.onclick=paint;
+ // Clicking Refresh must not pass a truthy click Event as paint(confirmed).
+ // Only a verified full native roster receipt may display "Confirmed".
+ refresh.onclick=()=>paint(false);
  apply.onclick=()=>{
   if(!permitted()||!base||!dirty||pending||refreshRequired)return;
   if(serverLink?.roomState?.started!==false){
