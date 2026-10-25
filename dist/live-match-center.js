@@ -60,10 +60,27 @@
  feed.append(feedHeading,feedIntro,feedList,feedStatus);
  panel.append(header,badge,score,teams,spectators,feed,footer);match.append(panel);
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
- let timeline=[],snapshot=null,sessionId='',sessionRoom=null,historyInterrupted=false;
+ let timeline=[],snapshot=null,sessionId='',sessionOwner=null,historyInterrupted=false;
+ // Native online admission and the first accepted snapshot are different
+ // events. Never advertise the *previous local match* as a server scoreboard
+ // while the current socket is still joining or awaiting a real game frame.
+ function authoritativePitchReady(){
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return !!serverLink.room&&net.lastSnapshot>0&&net.receivedSequence>0;
+  if(typeof peer!=='undefined'&&peer&&!peerConnected)return false;
+  if(typeof peerConnected!=='undefined'&&peerConnected&&peerRole==='guest')
+   return net.lastSnapshot>0&&net.receivedSequence>0;
+  return true;
+ }
+ function currentSessionOwner(){
+  if(typeof serverLink!=='undefined'&&serverLink)return serverLink;
+  if(typeof peerConnected!=='undefined'&&peerConnected)
+   return typeof peer!=='undefined'&&peer?peer:channel;
+  return room;
+ }
  const MAX_HISTORY=40;
  function liveSnapshot(){
-  if(typeof replay!=='undefined'&&replay)return null;
+  if(typeof replay!=='undefined'&&replay||!authoritativePitchReady())return null;
   const g=room?.gameState;
   if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
     !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
@@ -71,7 +88,8 @@
     g.timeElapsed<0||g.timeElapsed>86400)return null;
   const kind=serverLink?.room?'native online room':peerConnected?'direct peer room':'local practice';
   const key=serverLink?.room?'native:'+serverLink.room:peerConnected?'peer':'local';
-  return {key,kind,red:g.redScore,blue:g.blueScore,elapsed:Math.floor(g.timeElapsed)};
+  return {key,kind,owner:currentSessionOwner(),red:g.redScore,blue:g.blueScore,
+   elapsed:Math.floor(g.timeElapsed)};
  }
  function formatClock(seconds){
   return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
@@ -104,7 +122,7 @@
   downloadFeed.disabled=!timeline.length;
  }
  function resetObservations(){
-  timeline=[];sessionId='';sessionRoom=null;snapshot=null;
+  timeline=[];sessionId='';sessionOwner=null;snapshot=null;
   historyInterrupted=false;lastSignature='';
  }
  function observe(){
@@ -120,8 +138,12 @@
    if(sessionId||timeline.length)resetObservations();
    return;
   }
-  if(sessionRoom!==room||sessionId!==reading.key){
-   sessionRoom=room;sessionId=reading.key;timeline=[];snapshot=null;historyInterrupted=false;
+  // Same room ID may be revisited over a new WebSocket with a different
+  // player slot. Read-only observations from the old connection must never
+  // cross into that new human session just because its text code is equal.
+  if(sessionOwner!==reading.owner||sessionId!==reading.key){
+   sessionOwner=reading.owner;sessionId=reading.key;
+   timeline=[];snapshot=null;historyInterrupted=false;
   }
   const prior=snapshot;
   if(!prior){
@@ -167,6 +189,7 @@
    (typeof room!=='undefined'&&!!room||typeof replay!=='undefined'&&!!replay);
  }
  function roster(){
+  if((typeof replay==='undefined'||!replay)&&!authoritativePitchReady())return [];
   const state=(typeof replay!=='undefined'&&replay)?replay.state:room?.state;
   return Array.isArray(state?.players)?state.players.filter(p=>
    Number.isSafeInteger(p?.id)&&p.id>=0&&[0,1,2].includes(p.team?.id)).slice(0,128):[];
@@ -202,15 +225,21 @@
  }
  function render(force=false){
   if(!eligible())return;
-  const g=(typeof replay!=='undefined'&&replay?replay:room)?.gameState;
+  const live=typeof replay!=='undefined'&&replay;
+  const waiting=!live&&!authoritativePitchReady();
+  const g=waiting?null:(live?replay:room)?.gameState;
   const users=roster();
   const scores=[g?.redScore,g?.blueScore].map(n=>Number.isSafeInteger(n)&&n>=0?n:'—');
-  const elapsed=Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0?Math.floor(g.timeElapsed):0;
-  const time=String(Math.floor(elapsed/60)).padStart(2,'0')+':'+String(elapsed%60).padStart(2,'0');
+  const elapsed=Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0?
+   Math.floor(g.timeElapsed):null;
+  const time=elapsed===null?'—':
+   String(Math.floor(elapsed/60)).padStart(2,'0')+':'+String(elapsed%60).padStart(2,'0');
   const inGame=!!g;
-  const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':serverLink?.room?
+  const mode=live?'LOCAL REPLAY · UNVERIFIED':waiting?
+   'WAITING FOR VERIFIED GAME SNAPSHOT':serverLink?.room?
    'NATIVE ONLINE ROOM · LIVE SNAPSHOT':peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
-  const state=inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
+  const state=waiting?'SCORE AND ROSTER NOT YET RECEIVED':
+   inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
   const signature=JSON.stringify([scores,time,mode,state,timeline.length,users.map(p=>
    [p.id,p.name,p.team.id,p.aiControlled,pingFor(p)]),serverLink?.roomControl?.owner]);
   if(!force&&signature===lastSignature)return;
