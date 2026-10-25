@@ -154,7 +154,7 @@
    // Opening the pitch does not mean its paused simulation has resumed.
    // Keep the lesson parked until the original match resumes, so no hidden
    // movement or goals are credited during a navigation transition.
-   if(paused)hud.hidden=true;
+   if(paused){lessonParked=true;hud.hidden=true;updateHome();}
    else if(!lessonParked){hud.hidden=false;render();}
    result.textContent='The same First Touch lesson is open. Resume the paused match using its normal controls when ready.';
    return;
