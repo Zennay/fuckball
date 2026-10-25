@@ -114,7 +114,7 @@
     (pausePending?' · Awaiting native confirmation.':'');
    dockPause.disabled=!!pausePending;
   }
-  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused,d.online]);
+  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused,d.online,!!pausePending]);
   // Menu-open state changes independently of room packets; keep the optional
   // pitch prompt correct even when the authoritative room data is unchanged.
   pitchPrompt.hidden=!(liveRequest&&
