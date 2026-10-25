@@ -586,7 +586,12 @@ function renderGlobalRematchDock(){
  if(globalRematchDock.hidden)return;
  const vote=state.vote,remaining=state.expires===null?null:
   Math.max(0,Math.ceil((state.expires-Date.now())/1000));
+ const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
+ const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
+  nativeRematchVoteNotice.message:'';
  globalRematchTitle.textContent=state.approved?'YOUR REMATCH VOTE IS CONFIRMED':
+  pending?'VOTE SENT · AWAITING SERVER RECEIPT':
+  notice?'SERVER RECEIPT MISSING · YOU MAY RETRY':
   'HUMAN REMATCH · YOUR DECISION NEEDED';
  const approved=vote.accepted.filter(id=>vote.required.includes(id)).length;
  const text=(state.link.quickMatchMode?'Casual human rematch':'Room rematch')+
@@ -594,15 +599,10 @@ function renderGlobalRematchDock(){
   (remaining===null?'':' · '+remaining+'s left')+
   (state.approved?' · Waiting for remaining players.':
    ' · Accept or decline before the server deadline.');
- if(globalRematchStatus.textContent!==text)globalRematchStatus.textContent=text;
- const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
- const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
-  nativeRematchVoteNotice.message:'';
- if(pending||notice){
-  const feedback=pending?'Vote sent · waiting for server receipt. ':notice+' ';
-  if(!globalRematchStatus.textContent.startsWith(feedback))
-   globalRematchStatus.textContent=feedback+text;
- }
+ const feedback=pending?'Vote sent · waiting for server receipt. ':
+  notice?notice+' ':'';
+ if(globalRematchStatus.textContent!==feedback+text)
+  globalRematchStatus.textContent=feedback+text;
  globalRematchAccept.hidden=state.approved;
  globalRematchDecline.hidden=state.approved;
  globalRematchAccept.disabled=!!pending;
