@@ -37,6 +37,11 @@
   const firstAppearance=panel.hidden;
   hide();handlers=info;panel.hidden=false;
   if(firstAppearance)panel.focus({preventScroll:true});
+  tag.textContent=info.quickMatchMode?'HUMAN QUICK MATCH · '+info.quickMatchMode.toUpperCase():
+   'ROOM CONNECTION';
+  note.textContent=info.quickMatchMode?
+   'This retry uses the server-issued ticket for your original human-only match. Only the server can restore your exact slot; no new search, replacement bot, or new player identity is created.':
+   'Existing room and player identity are requested from the server. A restored slot is never guaranteed; no bot is substituted for you.';
   title.textContent=info.phase==='failed'?'Could not rejoin your room':
    info.phase==='offline'?'Your device is offline':
    info.phase==='connecting'?'Joining your room again…':'Connection interrupted';
