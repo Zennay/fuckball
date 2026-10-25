@@ -154,14 +154,29 @@
  const file=document.createElement('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
  dialog.append(heading,intro,summary,section,status,buttonsRow,file);document.body.append(dialog);
  let pending=null,opener=null;
- function safeImportNow(){
-  return matchViewHidden()&&!(typeof serverLink!=='undefined'&&serverLink?.room)&&
-   !(typeof peerConnected!=='undefined'&&peerConnected)&&
-   !(typeof replay!=='undefined'&&replay)&&
-   !document.querySelector('.quick-queue-actions button:not([hidden])')&&
-   !document.querySelector('.quick-ready:not([hidden])');
+ // A user setting restore reloads this page and destroys every in-flight
+ // WebSocket, WebRTC, native room-recovery timer and local game engine.
+ // Hidden UI never constitutes consent to discard a human or solo session.
+ function importBlocker(){
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return 'Leave or cancel the active online room, join or human search first.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Choose Stop reconnecting in your original room before restoring.';
+  if(typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&peer)
+   return 'Disconnect the current direct-peer match or handshake first.';
+  if(typeof replay!=='undefined'&&replay)
+   return 'Close your replay before changing device controls.';
+  if(typeof started!=='undefined'&&started)
+   return 'Finish and stop your current local match before restoring controls.';
+  if(document.getElementById('matchView')?.hidden===false)
+   return 'Return to Home and leave active play before restoring controls.';
+  if(document.getElementById('joinScreen')?.hidden===false)
+   return 'Finish or close the current room invitation before restoring.';
+  if(document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])'))
+   return 'Cancel the human matchmaking queue or ready check first.';
+  return '';
  }
- function matchViewHidden(){return document.getElementById('matchView')?.hidden!==false;}
  for(const btn of buttons)btn.addEventListener('click',event=>{
   opener=event.currentTarget;pending=null;apply.disabled=true;section.hidden=true;
   status.textContent='Export creates a local private file. Import previews all recognized categories before replacing anything.';
@@ -200,8 +215,9 @@
  });
  apply.onclick=()=>{
   if(!pending)return;
-  if(!safeImportNow()){
-   status.textContent='Finish or leave any match, replay, room and Quick Match queue before restoring device settings.';
+  const blocked=importBlocker();
+  if(blocked){
+   status.textContent='Device setup not changed: '+blocked;
    return;
   }
   const chosen=entries.filter(([kind])=>pending[kind]&&selections.get(kind).checked);
