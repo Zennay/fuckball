@@ -58,15 +58,16 @@
  const tips=document.createElement('section');tips.className='connection-details-tips';
  const tipHeading=document.createElement('strong');tipHeading.textContent='WHAT THESE NUMBERS MEAN';
  const tipText=document.createElement('p');
- tipText.textContent='RTT is the round trip of an actual measured message; lower is generally better. Jitter is variation between measurements. A stale snapshot means the displayed game state may be delayed. Network route, Wi-Fi and other device traffic can affect all three.';
+ tipText.textContent='RTT is a measured round trip, not a connection speed. Native server challenge and peer-host transport are different sources and are labeled separately; only peer transport supplies comparable jitter. Old native ping values expire after 6 seconds without a new server roster. A stale match snapshot means the displayed game may be delayed.';
  const tipHint=document.createElement('p');
  tipHint.textContent='If the connection feels unstable, try a wired connection or stable Wi-Fi, close heavy downloads and check whether other devices share your network. These readings are advisory, not a matchmaking decision or a game result.';
  tips.append(tipHeading,tipText,tipHint);
  const footer=document.createElement('p');footer.className='connection-details-privacy';
- footer.textContent='Private to this tab · Last 45 measurements in memory only · Cleared on disconnect/room switch';
+ footer.textContent='Private to this tab · Last 45 readings in memory · Reset when the connection changes, including rejoining the same room';
  dialog.append(header,state,tiles,chartBox,overview,tips,footer);
  document.body.append(dialog);
  let session=null,history=[],sessionSamples=[],sessionStarted=0;
+ let rosterSource=null,rosterFreshAt=0;
  function num(x){return x===null||!Number.isFinite(x)?null:Math.round(x);}
  function percentile(values,fraction){
   if(!values.length)return null;
@@ -81,7 +82,8 @@
    latency.length+'/'+total+' ticks with real RTT · median '+(latency.length?percentile(latency,.5)+' ms':'unavailable')+
    ' · P95 '+(latency.length?percentile(latency,.95)+' ms':'unavailable')+
    ' · '+stalled+' stale-snapshot observations (≥3.5 s). '+
-   'These are sampled observations, NOT packet-loss or gameplay results.'
+   'Sources are labeled per sample; no RTT is inferred from stale data. '+
+   'These are observations, NOT packet-loss or gameplay results.'
   ):'Waiting for measured match updates.';
   exportButton.disabled=!total;
  }
@@ -98,24 +100,46 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
   exportMessage.textContent='Private metrics saved locally; no upload or room identifier included.';
  });
- const valid=x=>Number.isFinite(x)&&x>=1&&x<=10000;
+ // A zero RTT is this game's unset sentinel after disconnect; never display
+ // it as a genuine 0ms ping. Measured zero jitter remains a valid reading.
+ const validRTT=x=>Number.isFinite(x)&&x>=1&&x<=10000;
+ const validJitter=x=>Number.isFinite(x)&&x>=0&&x<=10000;
  function online(){return !replay&&!match.hidden&&(!!serverLink?.room||peerConnected);}
  function sample(){
-  const native=!!serverLink?.room&&serverLink.serverPings instanceof Map;
-  const serverRTT=native?serverLink.serverPings.get(networkPlayerId):undefined;
-  const fromServer=valid(serverRTT);
-  const ms=fromServer?serverRTT:valid(net.rtt)?net.rtt:null;
-  // Peer-net jitter is not the jitter of server-issued ping samples.
-  const j=valid(net.jitter)?net.jitter:null;
+  const now=performance.now(),native=!!serverLink?.room;
+  const roster=native&&serverLink.serverPings instanceof Map?
+   serverLink.serverPings:null;
+  // Each native latency roster is a new server-issued Map. A ping sample is
+  // not "live" forever merely because its last value is still in that Map.
+  if(roster!==rosterSource){
+   rosterSource=roster;rosterFreshAt=roster?now:0;
+  }
+  const freshRoster=!!roster&&now-rosterFreshAt<=6000;
+  const serverRTT=freshRoster?roster.get(networkPlayerId):null;
+  const fromServer=serverRTT!==null&&validRTT(serverRTT);
+  // Native server RTT and peer-host RTT have different measurement sources.
+  // Never silently substitute an unrelated local transport value as the
+  // server's measured ping; if peer-hosting exists label it explicitly.
+  const peerTransport=!native||!!serverLink?.net;
+  const peerRTT=peerTransport&&validRTT(net.rtt)?net.rtt:null;
+  const ms=fromServer?serverRTT:peerRTT;
+  const fromPeer=!fromServer&&peerRTT!==null;
+  const j=fromPeer&&validJitter(net.jitter)?net.jitter:null;
   const ageMs=net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
-   Math.max(0,performance.now()-net.lastSnapshot):null;
-  return {ms,j,ageMs,source:fromServer?'server challenge':valid(net.rtt)?'peer/direct sample':'unavailable'};
+   Math.max(0,now-net.lastSnapshot):null;
+  const source=fromServer?'fresh server challenge':
+   fromPeer?(native?'peer-host transport':'direct-peer transport'):
+   native&&roster&&!freshRoster?'server RTT stale — awaiting new sample':
+   native?'no current server RTT':'no current direct-peer RTT';
+  return {ms,j,ageMs,source};
  }
  function setStatus(s){
   if(s.ageMs!==null&&s.ageMs>=3500)return ['Delayed snapshots','stalled'];
   if(s.ms!==null&&(s.ms>=220||s.j!==null&&s.j>=85))return ['High delay','poor'];
   if(s.ms!==null&&(s.ms>=140||s.j!==null&&s.j>=45))return ['Elevated latency','slow'];
   if(s.ms!==null)return ['Receiving live match updates','good'];
+  if(s.source.startsWith('server RTT stale'))
+   return ['Server latency sample has expired · waiting for a fresh receipt','unknown'];
   return ['Waiting for reliable RTT data','unknown'];
  }
  function render(s){
@@ -125,9 +149,10 @@
   rtt.val.textContent=s.ms!==null?Math.round(s.ms)+' ms':'—';
   rtt.extra.textContent=s.source;
   jitter.val.textContent=s.j!==null?Math.round(s.j)+' ms':'—';
-  jitter.extra.textContent=s.j!==null?'Existing network variation':'No jitter measurement';
+  jitter.extra.textContent=s.j!==null?'Measured peer transport variation':
+   'No comparable jitter for this RTT source';
   age.val.textContent=s.ageMs!==null?Math.round(s.ageMs)+' ms':'—';
-  age.extra.textContent=s.ageMs!==null?'Since last authoritative update':'No snapshot timestamp yet';
+  age.extra.textContent=s.ageMs!==null?'Time since latest match snapshot':'No snapshot timestamp yet';
   chart.replaceChildren();
   let good=0;
   for(const x of history){
@@ -162,11 +187,18 @@
   button.hidden=!active;
   if(!active){
    session=null;history=[];sessionSamples=[];sessionStarted=0;
+   rosterSource=null;rosterFreshAt=0;
    if(dialog.open)dialog.close();
    return;
   }
-  const key=serverLink?.room?'server:'+serverLink.room:'direct-peer';
-  if(key!==session){history=[];sessionSamples=[];sessionStarted=performance.now();session=key;}
+  // Session identity, not a reusable room code, bounds private observations.
+  // A new socket in the *same room* must not inherit old latency history.
+  const key=serverLink?.room?serverLink:
+   (typeof peer!=='undefined'&&peer?peer:channel);
+  if(key!==session){
+   history=[];sessionSamples=[];sessionStarted=performance.now();session=key;
+   rosterSource=null;rosterFreshAt=0;
+  }
   const s=sample();history.push({ms:s.ms});
   sessionSamples.push({elapsedSeconds:Math.max(0,Math.round((performance.now()-sessionStarted)/1000)),
    rttMs:num(s.ms),jitterMs:num(s.j),snapshotAgeMs:num(s.ageMs),source:s.source});
