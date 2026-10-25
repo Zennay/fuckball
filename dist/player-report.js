@@ -81,6 +81,11 @@
   if(target.dataset.roster!==signature){
    const chosen=target.value;
    target.dataset.roster=signature;target.replaceChildren();
+   // Never silently retarget a moderation report to the first different
+   // player when a teammate leaves or the server roster is refreshed.
+   const choose=document.createElement('option');
+   choose.value='';choose.textContent='Choose a connected player';
+   target.append(choose);
    for(const player of candidates){
     const option=document.createElement('option');
     option.value=String(player.id);
@@ -104,15 +109,16 @@
    status.textContent='The connection is not open. Reconnect before sending a report.';
    return;
   }
-  if(!Number.isSafeInteger(id)||id<1||
-     !connectedCandidates().some(player=>player.id===id)){
+  const chosenPlayer=connectedCandidates().find(player=>player.id===id);
+  if(!Number.isSafeInteger(id)||id<1||!chosenPlayer){
    status.textContent='Choose an available connected player from this room.';return;
   }
   const text=note.value.trim();
   if(text.length>200||/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/.test(text)){
    status.textContent='Details must be 200 printable characters or less.';return;
   }
-  if(!confirm('Submit this report privately to the server operator for review? No automatic punishment will be applied.'))return;
+  const chosenName=String(chosenPlayer.name||'Player').replace(/[\r\n\u202a-\u202e]/g,' ').slice(0,25);
+  if(!confirm('Report '+chosenName+' to this server operator? Your message stays private. No automatic punishment will be applied.'))return;
   if(!sameScope(current,scope())||link.ws?.readyState!==1){
    status.textContent='Your room or connection changed. Review the report before retrying.';render();return;
   }
