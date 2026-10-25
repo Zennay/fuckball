@@ -352,20 +352,51 @@ window.addEventListener('focus',()=>{windowInputFocused=true;});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseInputs();});
 $('gameCanvas').addEventListener('pointerdown',()=>{$('gameCanvas').focus();});
 function moveStick(e){if(stickPointer!==e.pointerId||!canControlLiveMatch())return;const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,d=Math.hypot(dx,dy);const layout=window.touchControlSettings||{scale:1,deadzone:10},scale=Number.isFinite(layout.scale)?Math.max(.75,Math.min(1.5,layout.scale)):1,reach=27*scale,deadzone=Math.max(4,Math.min(24,Number(layout.deadzone)||10))*scale,f=d>reach?reach/d:1;$('stick').style.transform=`translate(${dx*f}px,${dy*f}px)`;touch.x=Math.abs(dx)>deadzone?Math.sign(dx):0;touch.y=Math.abs(dy)>deadzone?Math.sign(dy):0;refreshInput();}
+// Each physical touch owns exactly one gameplay control until it releases.
+// In a two-thumb game, a stray additional finger on the same surface must
+// not steal movement/kick or clear the input from the actual owner.
 $('joystick').onpointerdown=e=>{
- if(!canControlLiveMatch())return;
- e.preventDefault();stickPointer=e.pointerId;
- $('joystick').setPointerCapture(e.pointerId);moveStick(e);
-};$('joystick').onpointermove=moveStick;function stopStick(){stickPointer=null;touch.x=touch.y=0;$('stick').style.transform='';refreshInput();}$('joystick').onpointerup=stopStick;$('joystick').onpointercancel=stopStick;
+ if(!canControlLiveMatch()||stickPointer!==null||kickPointer===e.pointerId)return;
+ e.preventDefault();
+ try{$('joystick').setPointerCapture(e.pointerId);}catch{return;}
+ stickPointer=e.pointerId;
+ moveStick(e);
+};
+$('joystick').onpointermove=moveStick;
+function stopStick(e){
+ if(stickPointer===null||e.pointerId!==stickPointer)return;
+ stickPointer=null;
+ touch.x=touch.y=0;
+ $('stick').style.transform='';
+ refreshInput();
+}
+$('joystick').onpointerup=stopStick;
+$('joystick').onpointercancel=stopStick;
+// Captures can also be lost when the phone rotates, the DOM moves or
+// the browser takes over a system gesture. Clear the actual owner's input.
+$('joystick').onlostpointercapture=stopStick;
 $('touchKick').onpointerdown=e=>{
- if(!canControlLiveMatch())return;
- e.preventDefault();kickPointer=e.pointerId;
- $('touchKick').setPointerCapture(e.pointerId);
+ if(!canControlLiveMatch()||kickPointer!==null||stickPointer===e.pointerId)return;
+ e.preventDefault();
+ try{$('touchKick').setPointerCapture(e.pointerId);}catch{return;}
+ kickPointer=e.pointerId;
  touch.kick=true;refreshInput();
 };
-$('touchKick').onpointerup=$('touchKick').onpointercancel=()=>{
- kickPointer=null;touch.kick=false;refreshInput();
-};
+function stopKick(e){
+ if(kickPointer===null||e.pointerId!==kickPointer)return;
+ kickPointer=null;
+ touch.kick=false;refreshInput();
+}
+$('touchKick').onpointerup=stopKick;
+$('touchKick').onpointercancel=stopKick;
+$('touchKick').onlostpointercapture=stopKick;
+// If the layout geometry changes under the player's thumb, require a new
+// touch instead of retaining a direction/kick from the old hit target.
+function releaseDisplacedTouches(){
+ if(stickPointer!==null||kickPointer!==null)releaseInputs();
+}
+window.addEventListener('resize',releaseDisplacedTouches);
+window.addEventListener('fuckball:touch-layout-applied',releaseDisplacedTouches);
 // Independent peer-to-peer play. No HaxBall service or room protocol is contacted.
 function send(data){if(channel?.readyState==='open'&&channel.bufferedAmount<262144)channel.send(typeof data==='string'?data:JSON.stringify(data));}
 function sendSnapshot(){const target=stateChannel?.readyState==='open'?stateChannel:channel;if(target?.readyState!=='open'||target.bufferedAmount>65536)return;const bytes=Replay.writeAll(Object.assign(new Replay.ReplayData(),{roomData:room.takeSnapshot(),events:[],goalMarkers:[],totalFrames:0,version:3}));if(guestTimeline){const packet=new Uint8Array(bytes.length+20),header=new DataView(packet.buffer),slack=guestTimeline.takeSlack();header.setUint32(0,0x46423203);header.setUint32(4,++net.sequence);header.setUint32(8,guestTimeline.appliedSeq>>>0);header.setUint32(12,room.currentFrameNo>>>0);header.setInt32(16,Number.isFinite(slack)?Math.round(Math.max(-1e6,Math.min(1e6,slack))*1000):-2147483648);packet.set(bytes,20);target.send(packet);return;}const packet=new Uint8Array(bytes.length+16),header=new DataView(packet.buffer);header.setUint32(0,0x46423201);header.setUint32(4,++net.sequence);header.setUint32(8,net.ack);header.setUint32(12,room.currentFrameNo>>>0);packet.set(bytes,16);target.send(packet);}
