@@ -216,3 +216,31 @@ body.menu-open .play-postmatch-ribbon{display:none!important}
 @media(max-width:380px){
  .play-hub-current-room-actions{grid-template-columns:1fr}
 }
+
+/* Native local full-time receipt. Offline rematch only uses the original
+   Start game control; no synthetic multiplayer or ranked result. */
+.play-local-fulltime[hidden]{display:none!important}
+.play-local-fulltime{box-sizing:border-box;display:flex;align-items:center;
+ justify-content:space-between;gap:16px;margin:14px 0;padding:16px 18px;
+ border:1px solid #d3ed94;border-radius:15px;
+ background:linear-gradient(125deg,#1b352e,#263831);color:#f5ffef;
+ box-shadow:0 14px 34px #0b181a69}
+.play-local-fulltime-content{min-width:0}
+.play-local-fulltime-label{font-size:.71rem;font-weight:900;letter-spacing:.08em;color:#c9f6a3}
+.play-local-fulltime-score{display:block;font-size:clamp(1.15rem,2vw,1.6rem);line-height:1.3}
+.play-local-fulltime-detail{margin:5px 0 0;color:#ccdfd0;font-size:.84rem;line-height:1.5}
+.play-local-fulltime-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.play-local-fulltime-actions button{min-height:46px;cursor:pointer;font:inherit;
+ font-weight:800;font-size:.84rem;padding:9px 13px;border-radius:9px;
+ background:#2b453b;color:#f6fff3;border:1px solid #94b2a0}
+.play-local-fulltime-actions button.primary{background:#d8fc91;color:#1a3321;border-color:#d8fc91}
+.play-local-fulltime-actions button:disabled{opacity:.55;cursor:not-allowed}
+.play-local-fulltime-actions button:focus-visible{outline:3px solid #ecffad;outline-offset:3px}
+.play-local-fulltime-menu{margin:10px 0;border-color:#bfe78a}
+@media(max-width:700px){
+ .play-local-fulltime{flex-direction:column;align-items:stretch;padding:14px;gap:12px}
+ .play-local-fulltime-actions{display:grid;grid-template-columns:1fr 1fr}
+ .play-local-fulltime-actions button.primary{grid-column:1/-1}
+}
+@media(max-width:380px){.play-local-fulltime-actions{grid-template-columns:1fr}
+ .play-local-fulltime-actions button.primary{grid-column:auto}}
