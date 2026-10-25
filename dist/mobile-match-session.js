@@ -30,11 +30,46 @@
  corner.append(quick);
  let wanted=false,sentinel=null,pending=false,generation=0,orientationLocked=false;
  const supported=!!navigator.wakeLock?.request;
- const active=()=>!document.hidden&&!match.hidden&&typeof started!=='undefined'&&started===true;
+ // An opt-in wake lock should follow actual foreground gameplay, not merely
+ // an old started flag left behind by pause, playback or a spectator seat.
+ function powerEligibility(){
+  if(document.hidden||match.hidden)return{active:false,reason:'return to the visible pitch'};
+  if(typeof document.hasFocus==='function'&&!document.hasFocus())
+   return{active:false,reason:'focus the game window'};
+  if(typeof started==='undefined'||started!==true)
+   return{active:false,reason:'start a live match'};
+  if(typeof paused!=='undefined'&&paused)
+   return{active:false,reason:'resume the paused match'};
+  if(typeof replay!=='undefined'&&replay)
+   return{active:false,reason:'leave replay playback'};
+  if(typeof menuOpen!=='undefined'&&menuOpen)
+   return{active:false,reason:'close the match menu'};
+  if(document.querySelector?.('dialog[open]'))
+   return{active:false,reason:'close the open dialog'};
+  if(document.getElementById('mode')?.value==='watch')
+   return{active:false,reason:'switch from watching to playing'};
+  // Never keep an online spectator device awake just because the server
+  // match continues. Native server admission and team state stay authoritative.
+  const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
+  const guest=typeof peerConnected!=='undefined'&&peerConnected&&
+   typeof peerRole!=='undefined'&&peerRole==='guest';
+  if(online||guest){
+   const mine=typeof networkPlayerId!=='undefined'?networkPlayerId:1;
+   const players=typeof room!=='undefined'?room?.state?.players:null;
+   if(!Array.isArray(players))return{active:false,reason:'wait for the active player roster'};
+   const player=players.find(p=>p.id===mine);
+   if(!player||![1,2].includes(player.team?.id))
+    return{active:false,reason:'enter an active playing team'};
+  }
+  return{active:true,reason:'playing on the visible pitch'};
+ }
+ const active=()=>powerEligibility().active;
  function render(message){
   wake.disabled=quick.disabled=!supported;
   wake.textContent=wanted?'Allow normal screen sleep':'Keep screen awake';
-  quick.textContent=!supported?'☀ UNAVAILABLE':sentinel?'☀ AWAKE ON':wanted?'☀ ARMED':'☀ AWAKE OFF';
+  const eligibility=powerEligibility();
+  quick.textContent=!supported?'☀ UNAVAILABLE':sentinel?'☀ AWAKE ON':
+   wanted?'☀ ARMED':'☀ AWAKE OFF';
   quick.setAttribute('aria-pressed',String(wanted));
   quick.title=!supported?'Screen Wake Lock is unavailable here':wanted?
    'Disable opt-in screen wake protection':'Enable screen protection for this match';
@@ -42,7 +77,9 @@
   if(message)status.textContent=message;
   else if(!supported)status.textContent='Screen Wake Lock is unavailable in this browser or context. Fullscreen may still work.';
   else if(sentinel)status.textContent='Screen stay-awake active on the visible match. Device may revoke it.';
-  else if(wanted)status.textContent=pending?'Requesting display access…':'Armed · starts when the match is visible and running.';
+  else if(wanted)status.textContent=pending?'Requesting display access…':
+   'Armed · '+(eligibility.active?'waiting for device activation':
+    eligibility.reason)+'. Screen wake protection resumes automatically only during active play.';
   else status.textContent='Off · normal device sleep rules apply.';
  }
  async function release(){
@@ -132,11 +169,21 @@
  // Keep power behaviour aligned with the actual foreground match, not a menu
  // setting or an unverified claim that a match is still in progress.
  let lastActive=false;
- setInterval(()=>{
+ function syncMatchPower(){
   const now=active();
-  if(!now&&lastActive&&sentinel)release();
-  if(now&&!lastActive&&wanted&&!sentinel)acquire();
+  if(!now&&(sentinel||pending))release();
+  else if(now&&wanted&&!sentinel&&!pending)acquire();
+  else if(now!==lastActive)render();
   lastActive=now;
- },1600);
+ }
+ // The client can pause, switch team, enter replay, navigate home or lose
+ // server admission without a document visibility event. Synchronize locally
+ // without messages, storage, an extra server timer or gameplay changes.
+ setInterval(syncMatchPower,900);
+ window.addEventListener('focus',syncMatchPower);
+ window.addEventListener('blur',syncMatchPower);
+ window.addEventListener('fuckball:native-session-state',syncMatchPower);
+ for(const id of ['pauseButton','startButton','tabHome','tabPlay','tabGames'])
+  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(syncMatchPower));
  render();
 })();
