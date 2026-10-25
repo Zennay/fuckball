@@ -31,12 +31,26 @@
    if(!result[key].some(Boolean))throw Error('Movement and kick actions each need a key.');
   return result;
  }
- let saved=[null,null,null];
- try{
-  const parsed=JSON.parse(localStorage.getItem(storeKey)||'null');
-  if(parsed?.version===1&&Array.isArray(parsed.slots)&&parsed.slots.length===3)
-   saved=parsed.slots.map(item=>{try{return item?validate(item):null;}catch{return null;}});
- }catch{}
+ // Each tab starts with a snapshot but must never overwrite slots changed by
+ // another tab. Reading latest storage immediately before each mutation also
+ // catches missed/delayed storage events. Invalid storage is not erased.
+ const emptySlots=()=>[null,null,null];
+ function decodeSlots(raw){
+  if(raw===null)return emptySlots();
+  try{
+   const parsed=JSON.parse(raw);
+   if(parsed?.version!==1||!Array.isArray(parsed.slots)||parsed.slots.length!==3)
+    return null;
+   return parsed.slots.map(item=>item===null?null:validate(item));
+  }catch{return null;}
+ }
+ function readLatestSlots(){
+  try{return decodeSlots(localStorage.getItem(storeKey));}
+  catch{return undefined;} // unavailable storage: retain session-only edits
+ }
+ const initialSlots=readLatestSlots();
+ let saved=Array.isArray(initialSlots)?initialSlots:emptySlots();
+ let storageUnavailable=initialSlots===undefined;
  const panel=document.createElement('section');panel.className='keyboard-layouts';
  panel.setAttribute('aria-label','Keyboard layout presets');
  const title=document.createElement('h3');title.textContent='KEYBOARD PROFILES.';
@@ -104,8 +118,54 @@
   updateHomeKeys();
  }
  function persist(){
-  try{localStorage.setItem(storeKey,JSON.stringify({version:1,slots:saved}));return true;}
-  catch{return false;}
+  try{
+   localStorage.setItem(storeKey,JSON.stringify({version:1,slots:saved}));
+   storageUnavailable=false;
+   return true;
+  }catch{
+   storageUnavailable=true;
+   return false;
+  }
+ }
+ const slotIdentity=value=>JSON.stringify(value);
+ function syncSavedProfiles(announce=false){
+  const latest=readLatestSlots();
+  if(latest===undefined)return true;
+  if(latest===null){
+   if(announce)message('Saved profiles have an invalid format. They were not replaced; resolve the stored data before editing slots.',true);
+   return false;
+  }
+  if(slotIdentity(latest)===slotIdentity(saved))return true;
+  saved=latest;
+  refreshSlots();
+  if(announce)message('Saved keyboard profiles changed in another tab. Slots refreshed; your active game keys were not changed.');
+  return true;
+ }
+ function slotIsCurrent(index){
+  const latest=readLatestSlots();
+  if(latest===undefined)return true;
+  if(latest===null){
+   message('Saved profile storage has invalid data. No slots were overwritten.',true);
+   return false;
+  }
+  if(slotIdentity(latest[index])!==slotIdentity(saved[index])){
+   saved=latest;refreshSlots();
+   message('Slot '+(index+1)+' changed in another tab. Review the refreshed slot and click again.',true);
+   return false;
+  }
+  // Merge edits to *other* slots from the latest on-disk snapshot, rather
+  // than persisting the stale whole-array snapshot from this tab.
+  saved=latest;
+  return true;
+ }
+ function commitSlot(index,value,action){
+  if(!slotIsCurrent(index))return false;
+  saved[index]=value;
+  const persisted=persist();
+  refreshSlots();
+  message(persisted?'Slot '+(index+1)+' '+action+'.':
+   'Slot '+(index+1)+' updated for this visit only; browser storage is unavailable.',!persisted);
+  return true;
  }
  function apply(source,name){
   let mapping;
@@ -121,24 +181,23 @@
   let current;
   try{current=validate(settings.keys);}catch(e){message(e.message,true);return;}
   const index=Number(slot.value);
+  if(!slotIsCurrent(index))return;
   if(saved[index]&&!window.confirm('Replace your previously saved layout in Slot '+(index+1)+'?'))return;
-  saved[index]=current;
-  message(persist()?'Slot '+(index+1)+' saved on this device.':'Saved for this visit; browser storage is unavailable.',false);
-  refreshSlots();
+  commitSlot(index,current,'saved on this device');
  }
  button('Save current',saveCurrent);
  button('Load slot',()=>{
   const index=Number(slot.value);
+  if(!syncSavedProfiles(true))return;
   if(!saved[index]){message('Nothing saved in this slot yet.',true);return;}
   apply(saved[index],'Slot '+(index+1));
  });
  button('Delete slot',()=>{
   const index=Number(slot.value);
+  if(!slotIsCurrent(index))return;
   if(!saved[index]){message('Slot already empty.');return;}
   if(!window.confirm('Permanently delete the local keyboard layout in Slot '+(index+1)+'?'))return;
-  saved[index]=null;
-  message(persist()?'Slot deleted.':'Slot cleared for this visit; browser storage is unavailable.');
-  refreshSlots();
+  commitSlot(index,null,'deleted');
  });
  const shareRow=document.createElement('div');shareRow.className='keyboard-layout-share';
  button('Export current .json',()=>{
@@ -198,6 +257,7 @@
   const load=document.createElement('button');load.type='button';load.textContent='Load personal slot';
   load.onclick=()=>{
    const index=Number(homeSlot.value);
+   if(!syncSavedProfiles(true))return;
    if(!saved[index]){message('Selected personal slot is empty.',true);return;}
    apply(saved[index],'Personal slot '+(index+1));
   };
@@ -236,8 +296,17 @@
    updateHomeKeys();
    if(quickStatus)quickStatus.textContent='Native keyboard controls updated. Current keys above are now authoritative.';
   });
-  window.addEventListener('focus',()=>{if(!home.hidden)updateHomeKeys();});
+  window.addEventListener('focus',()=>{
+   if(!home.hidden){syncSavedProfiles(true);updateHomeKeys();}
+  });
  }
+ // A second tab may rename, delete or save a personal slot while this one
+ // remains open. Refresh only the saved presets; never override the active
+ // keyboard bindings or a running human's input on a storage event.
+ window.addEventListener('storage',event=>{
+  if(event.key!==storeKey&&event.key!==null)return;
+  syncSavedProfiles(true);
+ });
  const subtitle=document.createElement('p');subtitle.className='keyboard-layout-disclaimer';
  subtitle.textContent='Import files contain keyboard codes only. Avoid loading layout files from sources you do not trust.';
  panel.append(subtitle);
