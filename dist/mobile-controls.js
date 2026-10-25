@@ -90,7 +90,7 @@
   const viewport=window.visualViewport?.width;
   const width=Math.max(180,Math.min(window.innerWidth||320,
    Number.isFinite(viewport)&&viewport>0?viewport:Infinity));
-  const reserved=32; // responsive horizontal padding + minimum free space
+  const reserved=40; // maximum 2×16px padding + 8px flex gap
   const minSize=.75*(88+72);
   const edge=Math.min(config.edge,Math.max(8,
    Math.floor((width-minSize-reserved)/2)));
