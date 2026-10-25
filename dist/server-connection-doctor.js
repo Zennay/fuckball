@@ -70,13 +70,19 @@
   Object.values(slots).forEach(node=>node.textContent='—');
   slots.target.textContent=text||'Not configured';
  }
- address.addEventListener('input',()=>{
+ const changedAddress=()=>{
   cancel();publishHealthReceipt(false);
   const s=selected();blank(s.ok?s.display:'Different/invalid server');
   status.textContent=s.ok?original:s.message;
- });
+ };
+ address.addEventListener('input',changedAddress);
+ address.addEventListener('change',changedAddress);
  dialog.addEventListener('close',()=>{
-  cancel();status.textContent='Check cancelled or cleared when the dialog closed.';
+  // A closed diagnostic is no longer an active check for the player's next
+  // session. Revoke the optional Home receipt before another server is chosen.
+  cancel();publishHealthReceipt(false);
+  blank('Not verified');
+  status.textContent='Check cancelled or cleared when the dialog closed.';
  });
  function validHealth(d){
   return d?.ok===true&&d.engine==='node-haxball-2.3.1'&&
@@ -188,6 +194,10 @@
    check.click();
    return true;
   }
+ });
+ window.addEventListener('pagehide',()=>{
+  // Never keep a pending status request alive beyond this page session.
+  cancel();publishHealthReceipt(false);
  });
  const initial=selected();blank(initial.ok?initial.display:'Unverified server');
  status.textContent=initial.ok?original:initial.message;
