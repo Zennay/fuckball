@@ -180,9 +180,26 @@
   setTimeout(()=>URL.revokeObjectURL(url),60000);
  }
  function filename(v){return 'fuckball-'+v.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,40).replace(/^-|-$/g,'')||'series';}
- function downloadAll(){
-  if(!healthy)return inform('Cannot export normalized data while series storage is unreadable.');
+ // A download must never claim to include a game that is still awaiting
+ // a queued browser lock. Refresh the source before every portable export.
+ async function freshSeriesForExport(){
+  await pendingWrite;
+  if(!healthy)throw Error('Local series is unreadable; export its untouched bytes instead.');
+  if(localStorage.getItem(KEY)!==snapshot){
+   try{read();healthy=true;errorText='';message='Latest series refreshed before export.';}
+   catch(error){
+    healthy=false;items=[];selected='';
+    errorText=error.message||'Unreadable private series data';
+    render();
+    throw Error('Another tab saved unreadable data. Untouched bytes were preserved.');
+   }
+   render();
+  }
+  return current();
+ }
+ async function downloadAll(){
   try{
+   await freshSeriesForExport();
    download('fuckball-private-series.json',
     JSON.stringify({format:'fuckball-private-series',version:1,exportedAt:Date.now(),series:items},null,2),
     'application/json;charset=utf-8');
@@ -194,8 +211,10 @@
   if(/^[=+\-@\t\r]/.test(s))s="'"+s;
   return '"'+s.replace(/"/g,'""')+'"';
  };
- function downloadCSV(){
-  const v=current();if(!v)return;
+ async function downloadCSV(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('CSV export blocked: '+e.message);}
+  if(!v)return;
   const rows=[['Game','Red','Blue','Red goals','Blue goals','Winner','Kickoff UTC','Venue'],
    ...v.games.map((g,i)=>[i+1,v.red,v.blue,
     g.redScore??'',g.blueScore??'',g.redScore===null?'':g.redScore>g.blueScore?v.red:v.blue,
@@ -204,8 +223,10 @@
    inform('Private game results and dates exported as CSV.');}
   catch(e){inform('CSV export failed: '+e.message);}
  }
- function downloadCalendar(){
-  const v=current();if(!v)return;
+ async function downloadCalendar(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Calendar export blocked: '+e.message);}
+  if(!v)return;
   // A decided series must not export unnecessary future fixtures.
   const state=statusFor(v);
   const rows=v.games.filter((x,i)=>x.kickoff!==null&&(!state.winner||i<state.recorded));
@@ -254,15 +275,19 @@
   return lines;
  }
  async function copySummary(){
-  const v=current();if(!v||!healthy)return;
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Copy blocked: '+e.message);}
+  if(!v||!healthy)return;
   try{
    if(!navigator.clipboard?.writeText)throw Error('Clipboard access is unavailable in this browser.');
    await navigator.clipboard.writeText(shareLines(v,statusFor(v)).join('\n'));
    inform('Series summary copied. Paste it wherever you choose; nothing was uploaded.');
   }catch(e){inform('Copy unavailable: '+e.message+' Use the SVG or CSV export instead.');}
  }
- function downloadScorecard(){
-  const v=current();if(!v||!healthy)return;
+ async function downloadScorecard(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Scorecard export blocked: '+e.message);}
+  if(!v||!healthy)return;
   try{
    const info=statusFor(v);
    const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
