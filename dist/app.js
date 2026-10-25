@@ -360,9 +360,51 @@ document.addEventListener('keyup',e=>{
  // Forget held movement, but never write to a hidden or blocked match.
  if(keys.delete(e.code))refreshInput();
 });
-window.addEventListener('blur',()=>{windowInputFocused=false;releaseInputs();});
-window.addEventListener('focus',()=>{windowInputFocused=true;});
-document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseInputs();});
+// A lone human facing AI must not concede while their inputs are neutralized
+// because the browser lost focus. Existing server/peer and multi-human local
+// matches deliberately KEEP their original, manually controlled pause policy.
+let soloInterruption=null;
+function soloAiMatchCanPause(){
+ if(!started||paused||replay||serverLink||peerConnected||peer||!room)return false;
+ const mode=$('mode').value;
+ if(!['bot','2v2','4v4'].includes(mode))return false;
+ const humans=roster.filter(p=>!p.bot&&[1,2].includes(p.team));
+ return humans.length===1&&roster.some(p=>p.bot&&[1,2].includes(p.team));
+}
+function pauseSoloForInterruption(reason){
+ if(!soloAiMatchCanPause())return false;
+ const beforeRoom=room;
+ releaseInputs();
+ togglePause(); // Native offline game pause: stops both bots and match clock.
+ if(!paused||room!==beforeRoom)return false;
+ soloInterruption={room:beforeRoom,reason,announced:false};
+ return true;
+}
+function showSoloPauseOnReturn(){
+ if(!soloInterruption)return;
+ if(!started||!paused||replay||peerConnected||serverLink||peer||
+    soloInterruption.room!==room){soloInterruption=null;return;}
+ if($('matchView').hidden||windowInputFocused===false||document.hidden)return;
+ // No automatic resume or accidental kick: use the existing manual Pause /
+ // Unpause controls. The room menu gives keyboard and touch users access.
+ if(typeof openMatchMenu==='function'&&
+    (typeof menuOpen==='undefined'||!menuOpen))openMatchMenu();
+ if(!soloInterruption.announced){
+  notify('Solo match safely paused when you left. Use ▶ Unpause to resume.');
+  soloInterruption.announced=true;
+ }
+}
+window.addEventListener('blur',()=>{
+ windowInputFocused=false;releaseInputs();
+ pauseSoloForInterruption('window');
+});
+window.addEventListener('focus',()=>{
+ windowInputFocused=true;showSoloPauseOnReturn();
+});
+document.addEventListener('visibilitychange',()=>{
+ if(document.hidden){releaseInputs();pauseSoloForInterruption('tab');}
+ else showSoloPauseOnReturn();
+});
 $('gameCanvas').addEventListener('pointerdown',()=>{$('gameCanvas').focus();});
 function moveStick(e){if(stickPointer!==e.pointerId||!canControlLiveMatch())return;const r=$('joystick').getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,d=Math.hypot(dx,dy);const layout=window.touchControlSettings||{scale:1,deadzone:10},scale=Number.isFinite(layout.scale)?Math.max(.75,Math.min(1.5,layout.scale)):1,reach=27*scale,deadzone=Math.max(4,Math.min(24,Number(layout.deadzone)||10))*scale,f=d>reach?reach/d:1;$('stick').style.transform=`translate(${dx*f}px,${dy*f}px)`;touch.x=Math.abs(dx)>deadzone?Math.sign(dx):0;touch.y=Math.abs(dy)>deadzone?Math.sign(dy):0;refreshInput();}
 // Each physical touch owns exactly one gameplay control until it releases.
