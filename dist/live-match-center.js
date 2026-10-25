@@ -62,16 +62,30 @@
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
  let timeline=[],snapshot=null,sessionId='',sessionRoom=null,historyInterrupted=false;
  const MAX_HISTORY=40;
+ // The room code alone is not proof of the current match/round.
+ // Wait for server-issued room identity and round before showing native scores.
+ function verifiedNativeRound(){
+  if(!serverLink?.room)return null;
+  const info=serverLink.roomState;
+  return info?.room===serverLink.room&&Number.isSafeInteger(info.round)&&
+    info.round>=0&&info.round<=1000000000?info.round:null;
+ }
  function liveSnapshot(){
   if(typeof replay!=='undefined'&&replay)return null;
+  const isNative=!!serverLink?.room;
+  const verifiedRound=isNative?verifiedNativeRound():null;
+  if(isNative&&verifiedRound===null)return null;
   const g=room?.gameState;
   if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
     !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
     g.redScore<0||g.blueScore<0||g.redScore>500||g.blueScore>500||
     g.timeElapsed<0||g.timeElapsed>86400)return null;
-  const kind=serverLink?.room?'native online room':peerConnected?'direct peer room':'local practice';
-  const key=serverLink?.room?'native:'+serverLink.room:peerConnected?'peer':'local';
-  return {key,kind,red:g.redScore,blue:g.blueScore,elapsed:Math.floor(g.timeElapsed)};
+  const kind=isNative?'native online room':peerConnected?'direct peer room':'local practice';
+  // Even a 0-0 restart within three seconds is a different server round.
+  const key=isNative?'native:'+serverLink.room+':round:'+verifiedRound:
+   peerConnected?'peer':'local';
+  return {key,kind,round:verifiedRound,red:g.redScore,blue:g.blueScore,
+   elapsed:Math.floor(g.timeElapsed)};
  }
  function formatClock(seconds){
   return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
@@ -117,7 +131,11 @@
   }
   const reading=liveSnapshot();
   if(!reading){
-   if(sessionId||timeline.length)resetObservations();
+   if(serverLink?.room){
+    // A reconnect may expose the socket before its authoritative room
+    // status. Keep prior notes but never append a stale local snapshot.
+    if(sessionId||timeline.length)historyInterrupted=true;
+   }else if(sessionId||timeline.length)resetObservations();
    return;
   }
   if(sessionRoom!==room||sessionId!==reading.key){
@@ -125,7 +143,8 @@
   }
   const prior=snapshot;
   if(!prior){
-   addObservation('Scoreboard snapshot first observed ('+reading.kind+').',reading);
+   addObservation('Scoreboard snapshot first observed ('+reading.kind+
+    (reading.round===null?'':', server round '+reading.round)+').',reading);
   }else if(reading.elapsed+3<prior.elapsed||reading.red<prior.red||reading.blue<prior.blue){
    timeline=[];addObservation('Match clock or score reset; observation history restarted.',reading);
   }else if(reading.red!==prior.red||reading.blue!==prior.blue){
@@ -146,7 +165,8 @@
   const lines=['# Fuckball local match observations','',
    'Player-owned, unverified scoreboard notes. Not an official match result.',
    'No room identifiers, player names, accounts, chat or authentication data included.','',
-   'Context: '+(snapshot?.kind||'local view'),'',
+   'Context: '+(snapshot?.kind||'local view')+
+    (snapshot?.round===null||snapshot?.round===undefined?'':' · server round '+snapshot.round),'',
    ...timeline.map(x=>'- ['+x.clock+'] '+(x.gap?'[UNOBSERVED INTERVAL] ':'')+
     x.detail+' Score observed: '+x.red+'-'+x.blue)];
   const blob=new Blob([lines.join('\n')+'\n'],{type:'text/markdown'});
@@ -167,6 +187,7 @@
    (typeof room!=='undefined'&&!!room||typeof replay!=='undefined'&&!!replay);
  }
  function roster(){
+  if(serverLink?.room&&verifiedNativeRound()===null)return [];
   const state=(typeof replay!=='undefined'&&replay)?replay.state:room?.state;
   return Array.isArray(state?.players)?state.players.filter(p=>
    Number.isSafeInteger(p?.id)&&p.id>=0&&[0,1,2].includes(p.team?.id)).slice(0,128):[];
@@ -182,7 +203,8 @@
  function pingFor(p){
   if(!serverLink?.room||!(serverLink.serverPings instanceof Map))return null;
   const r=serverLink.serverPings.get(p.id);
-  return Number.isFinite(r)&&r>=1&&r<=10000?Math.round(r):null;
+  // Zero ms is a valid server-measured LAN RTT, unlike a missing sample.
+  return Number.isFinite(r)&&r>=0&&r<=10000?Math.round(r):null;
  }
  function fill(container,list){
   const items=document.createElement('div');items.className='match-center-roster';
@@ -202,14 +224,18 @@
  }
  function render(force=false){
   if(!eligible())return;
-  const g=(typeof replay!=='undefined'&&replay?replay:room)?.gameState;
-  const users=roster();
+  const pendingRound=!!serverLink?.room&&verifiedNativeRound()===null;
+  const g=pendingRound?null:
+   (typeof replay!=='undefined'&&replay?replay:room)?.gameState;
+  const users=pendingRound?[]:roster();
   const scores=[g?.redScore,g?.blueScore].map(n=>Number.isSafeInteger(n)&&n>=0?n:'—');
   const elapsed=Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0?Math.floor(g.timeElapsed):0;
   const time=String(Math.floor(elapsed/60)).padStart(2,'0')+':'+String(elapsed%60).padStart(2,'0');
   const inGame=!!g;
-  const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':serverLink?.room?
-   'NATIVE ONLINE ROOM · LIVE SNAPSHOT':peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
+  const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':
+   serverLink?.room?(pendingRound?'NATIVE ROOM · AWAITING SERVER STATUS':
+    'NATIVE ROOM · VERIFIED ROUND '+verifiedNativeRound()+' · LIVE SNAPSHOT'):
+   peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
   const state=inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
   const signature=JSON.stringify([scores,time,mode,state,timeline.length,users.map(p=>
    [p.id,p.name,p.team.id,p.aiControlled,pingFor(p)]),serverLink?.roomControl?.owner]);
