@@ -201,9 +201,13 @@
   const best=readBest();
   try{
    localStorage.setItem(STORAGE,JSON.stringify(best));
-   localStorage.setItem(CLEARED_AT,String(Date.now()));
+   const cutoff=Date.now();
+   localStorage.setItem(CLEARED_AT,String(cutoff));
    localStorage.removeItem(ATTEMPTS);
-   for(const key of keys(ATTEMPT_ENTRY))localStorage.removeItem(key);
+   // Only delete attempts completed before this explicit clear. An entirely
+   // new drill written by a second tab after the cutoff must not be swept up.
+   for(const {key,item} of storedAttemptEntries())
+    if(item.at<=cutoff)localStorage.removeItem(key);
    journeyNote.textContent='Local attempts cleared. Personal bests are preserved.';
   }catch{journeyNote.textContent='Could not clear all attempts on this device.';}
   renderAttempts();
