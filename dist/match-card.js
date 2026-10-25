@@ -50,28 +50,68 @@
   label('Verified on the originating game server',1120,574,'500 21px system-ui','#b4cbd1','right');
   return canvas;
  }
+ // Native file sharing on mobile requires the actual user-gesture task.
+ // Canvas.toBlob(callback) defers until a later task; calling navigator.share
+ // only after awaiting it loses transient activation on Safari/mobile Chrome.
+ // A local, synchronous PNG path preserves that gesture without uploading
+ // pixels or server/account identifiers anywhere.
+ function immediatePng(canvas){
+  if(typeof canvas.toDataURL!=='function'||typeof atob!=='function')return null;
+  try{
+   const data=canvas.toDataURL('image/png');
+   const prefix='data:image/png;base64,';
+   if(typeof data!=='string'||!data.startsWith(prefix))return null;
+   const raw=atob(data.slice(prefix.length));
+   if(raw.length<8||raw.length>8*1024*1024||
+      raw.charCodeAt(0)!==137||raw.slice(1,4)!=='PNG')return null;
+   const bytes=new Uint8Array(raw.length);
+   for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+   return new Blob([bytes],{type:'image/png'});
+  }catch{return null;}
+ }
+ function savePrivatePng(blob,name){
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');
+  try{
+   anchor.href=url;anchor.download=name;
+   document.body.append(anchor);
+   anchor.click();
+  }finally{
+   anchor.remove(); // Even if a browser rejects the synthetic click.
+   setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+ }
  async function download(item){
+  // Validate the authoritative score *before* drawing or launching any share
+  // sheet. The rendered PNG intentionally omits receipt IDs and usernames.
   const canvas=create(item);
-  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-  if(!blob||blob.type!=='image/png')throw Error('Could not create a PNG image.');
   const date=new Date(item.at).toISOString().slice(0,10);
   const fileName='fuckball-'+item.mode+'-'+date+'.png';
+  const immediate=immediatePng(canvas);
   if(typeof File==='function'&&typeof navigator.share==='function'&&
-    typeof navigator.canShare==='function'){
-   const file=new File([blob],fileName,{type:'image/png'});
+    typeof navigator.canShare==='function'&&immediate){
+   const file=new File([immediate],fileName,{type:'image/png'});
    let supported=false;
    try{supported=navigator.canShare({files:[file]});}catch(_){}
    if(supported){
-    try{await navigator.share({files:[file],title:'Fuckball casual match result'});return 'Shared score card.';}
-    catch(error){if(error?.name==='AbortError')return 'Sharing cancelled.';}
+    try{
+     // This invocation is synchronous with the click, before the first await.
+     await navigator.share({files:[file],title:'Fuckball casual match result'});
+     return 'Shared private score card.';
+    }catch(error){
+     if(error?.name==='AbortError')return 'Sharing cancelled; no file was downloaded.';
+     // A rejected platform share can still fall back to local download,
+     // without sending the receipt or silently changing any match state.
+    }
    }
   }
-  const url=URL.createObjectURL(blob);
-  try{
-   const anchor=document.createElement('a');anchor.href=url;anchor.download=fileName;
-   document.body.append(anchor);anchor.click();anchor.remove();
-  }finally{setTimeout(()=>URL.revokeObjectURL(url),30000);}
-  return 'PNG score card saved. No account information included.';
+  const blob=immediate||await new Promise(resolve=>{
+   try{canvas.toBlob(resolve,'image/png');}catch{resolve(null);}
+  });
+  if(!blob||blob.type!=='image/png'||blob.size===0)
+   throw Error('Could not create a PNG image.');
+  savePrivatePng(blob,fileName);
+  return 'Private PNG score card saved locally; no account information included.';
  }
  Object.defineProperty(window,'FuckballMatchCards',{value:Object.freeze({download}),configurable:false});
 })();
