@@ -47,7 +47,11 @@
  const rebind=make('button','controller-setup-rebind','↻ Bind selected controller to P1');
  rebind.type='button';
  rebind.setAttribute('aria-label','Explicitly bind the selected gamepad to player one');
- deviceLabel.append(deviceSelect,rebind);
+ const bindingStatus=make('small','controller-setup-source-status',
+  'Source selection previews input only. Use Bind selected controller to P1 to change gameplay control.');
+ bindingStatus.setAttribute('role','status');
+ bindingStatus.setAttribute('aria-live','polite');
+ deviceLabel.append(deviceSelect,rebind,bindingStatus);
  const mappingLabel=make('label','','Kick buttons');
  const mapping=make('select');mapping.setAttribute('aria-label','Gamepad kick mapping');
  for(const [v,label] of MODES)mapping.add(new Option(label,v));
@@ -252,6 +256,8 @@
   // Otherwise the previewed controller and the gamepad module's sticky
   // automatic preference could refer to two different connected devices.
   selectedSource=pad.index;boundSource=pad.index;deviceSignature='';refreshSources();
+  bindingStatus.textContent='P1 bound explicitly to port '+(pad.index+1)+
+   ' · '+String(pad.id||'Controller').slice(0,48)+'.';
   // One deliberate P1 authorization; browser/game code owns the live port
   // and hardware-id lock. It neutralizes the old source before any new input.
   window.dispatchEvent(new CustomEvent('fuckball:controller-source',{
@@ -267,6 +273,8 @@
   const next=choice==='auto'?null:Number(choice);
   if(next!==null&&(!Number.isSafeInteger(next)||next<0||next>15))return;
   selectedSource=next;deviceSignature='';
+  bindingStatus.textContent='Preview only · '+(next===null?'automatic':'port '+(next+1))+
+   '. Player 1 gameplay authority is unchanged until you click Bind selected controller to P1.';
   cancelBinding('Controller changed; previous pending binding cancelled.');
   cancelCalibration();
   lastMessage='';
