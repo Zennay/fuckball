@@ -365,31 +365,44 @@
   config.deadzone=suggestion;suggestion=null;apply.disabled=true;
   fill();persist();
  };
+ function returnToPlayingSurface(){
+  // This dialog may have been launched directly from an in-progress match.
+  // Never return keyboard focus to the Configure button on a hidden Home tab.
+  const match=document.getElementById('matchView');
+  if(match?.hidden===false){
+   document.getElementById('gameCanvas')?.focus?.({preventScroll:true});
+  }else if(home.hidden===false)launch.focus();
+ }
  function close(){
   cancelBinding();
   if(dialog.open)dialog.close();
   else dialog.removeAttribute('open');
-  launch.focus();
+  returnToPlayingSurface();
  }
  done.onclick=close;
  dialog.addEventListener('close',()=>{
-  cancelBinding();active=false;sampling=null;calibrate.disabled=false;launch.focus();
+  cancelBinding();active=false;sampling=null;calibrate.disabled=false;
+  returnToPlayingSurface();
  });
  dialog.addEventListener('click',event=>{if(event.target===dialog)close();});
  launch.onclick=()=>{
   if(typeof dialog.showModal!=='function'){
-   state.textContent='Your browser does not support the controller setup dialog.';return;
+   state.textContent='Your browser does not support the controller setup dialog.';return false;
   }
+  // Neutralize the previous input before blocking game keyboard and
+  // controller events with the modal. A held direction cannot continue
+  // behind the setup window during an active online/local match.
+  if(typeof releaseInputs==='function')releaseInputs();
   cancelBinding();fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
   hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
-  dialog.showModal();mapping.focus();
+  dialog.showModal();mapping.focus();return true;
  };
  // The gameplay recovery prompt may open the original setup directly.
  // Opening it is not authorization to change controller ownership: only the
  // player-initiated Bind selected controller to P1 action grants that right.
  window.fuckballControllerSetup={open:()=>{
-  if(dialog.open){mapping.focus();return;}
-  launch.onclick();
+  if(dialog.open){mapping.focus();return true;}
+  return launch.onclick();
  }};
  window.addEventListener('fuckball-gamepad-config',event=>{
   const v=event.detail;
