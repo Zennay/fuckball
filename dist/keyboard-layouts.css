@@ -47,3 +47,10 @@
  .keyboard-quick-presets button{flex:1 1 44%}
 }
 @media print{.keyboard-quick-start{display:none!important}}
+
+/* In couch mode the physical P2 keyboard is reserved; disclose actual P1
+   keys including safe conflict fallbacks before launching a local match. */
+.keyboard-couch-keys{margin:8px 0 12px;padding:11px 13px;border-radius:10px;
+ background:#172e2a;border:1px solid #a3d3bc;color:#e2ffed;
+ font-size:.8rem;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:560px){.keyboard-couch-keys{font-size:.8rem;padding:10px}}
