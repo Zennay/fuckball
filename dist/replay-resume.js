@@ -41,7 +41,13 @@
  }
  function forgetPosition(id){
   const live=current();
-  if(live?.id===id)forgottenReplay=live.instance;
+  // My Games hides the pitch, so current() deliberately returns null.
+  // Forget must still suppress the already-loaded replay instance, otherwise
+  // returning to the pitch recreates the just-deleted private checkpoint.
+  const parkedSameReplay=id===activeId&&activeReplay&&
+   typeof replay!=='undefined'&&replay===activeReplay;
+  if(live?.id===id||parkedSameReplay)
+   forgottenReplay=live?.instance||activeReplay;
   return discard(id);
  }
  const section=mk('section',null,'replay-resume-library');
