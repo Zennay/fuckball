@@ -45,7 +45,10 @@
  chatDockHead.textContent='ROOM CHAT · THIS SESSION';
  const chatDockHelp=document.createElement('p');
  chatDockHelp.className='native-room-chat-inbox-help';
- chatDockHelp.textContent='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox.';
+ const normalInboxHelp='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox. Before replying, check the original ROOM/TEAM recipient.';
+ chatDockHelp.textContent=normalInboxHelp;
+ chatDockHelp.setAttribute('role','status');
+ chatDockHelp.setAttribute('aria-live','polite');
  const chatDockMessages=document.createElement('ol');
  chatDockMessages.className='native-room-chat-inbox-messages';
  chatDockMessages.setAttribute('aria-label','Recent messages from this connected room');
@@ -91,6 +94,10 @@
  }
  function updateRoomChatInbox(){
   const connected=currentRoom();
+  // Transient transport errors must not leave an obsolete reconnect warning
+  // on a restored native room or an entirely new human room.
+  if(serverLink?.ws?.readyState===1&&chatDockHelp.textContent!==normalInboxHelp)
+   chatDockHelp.textContent=normalInboxHelp;
   const match=document.getElementById('matchView');
   const onPitch=match?.hidden===false&&document.hidden!==true;
   // Authoritative ready/rematch/recovery decisions take priority over chat.
