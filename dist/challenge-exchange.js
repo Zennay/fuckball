@@ -43,15 +43,29 @@
  function record(){const def=MODES[mode.value];const options={};
   for(const [key] of def.fields)options[key]=Number(inputs.get(key).value);
   return normalize({version:1,mode:mode.value,name:name.value,options});}
- function storeList(){
-  try{const raw=JSON.parse(localStorage.getItem(KEY)||'null');
-   if(!raw||raw.version!==1||!Array.isArray(raw.items)||raw.items.length>MAX)return[];
-   return raw.items.map(normalize);
-  }catch{return[];}
+ // Corrupted or unavailable storage is NOT an empty collection. Treating it
+ // as [] lets the next save/import overwrite the user's only private presets.
+ function readSnapshot(){
+  const raw=localStorage.getItem(KEY);
+  if(raw===null)return{raw:null,items:[]};
+  if(raw.length>16384)throw Error('Saved challenges exceed the 16 KB limit.');
+  try{
+   const value=JSON.parse(raw);
+   if(!value||value.version!==1||!Array.isArray(value.items)||
+      value.items.length>MAX)throw Error('Invalid version or collection.');
+   return{raw,items:value.items.map(normalize)};
+  }catch{throw Error('Saved challenges cannot be read safely. No presets have been erased.');}
  }
- function store(items){
-  try{localStorage.setItem(KEY,JSON.stringify({version:1,items:items.map(normalize).slice(0,MAX)}));return true;}
-  catch{return false;}
+ function storeList(){return readSnapshot().items;}
+ function store(items,expectedRaw){
+  if(!Array.isArray(items)||items.length>MAX)throw Error('Limit: 16 saved challenges.');
+  const next=JSON.stringify({version:1,items:items.map(normalize)});
+  if(next.length>16384)throw Error('The challenge collection exceeds 16 KB.');
+  // Refuse to overwrite a newer snapshot from another browser tab.
+  if(localStorage.getItem(KEY)!==expectedRaw)
+   throw Error('Saved challenges changed in another tab. Refresh before retrying.');
+  localStorage.setItem(KEY,next);
+  return true;
  }
  function link(item){
   // Never leak a room invite, recovery ticket or other query into a share URL.
