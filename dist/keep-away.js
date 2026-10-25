@@ -136,6 +136,28 @@
   renderHistory();
  };
  renderHistory();
+ // Saved full-clock results are device-local and shared by every same-origin
+ // tab. Refresh the real persisted rows rather than showing an old empty
+ // list, exporting stale entries, or silently making the player restart.
+ // An active in-memory drill never gains kicks/time from this storage event.
+ function refreshPrivateHistory(external=false){
+  const before=attempts.textContent;
+  renderHistory();
+  if(external){
+   const count=read().length;
+   message.textContent=count?
+    'Keep Away results refreshed from another browser tab · '+count+' saved attempt'+
+    (count===1?'':'s')+'.':
+    'Keep Away results changed in another browser tab. Your live drill is unchanged.';
+  }
+ }
+ window.addEventListener('storage',event=>{
+  if(event.key!==KEY)return;
+  refreshPrivateHistory(true);
+ });
+ // On browsers that pause background tabs, focus is a safe opportunity to
+ // re-read the same private storage without touching the native game state.
+ window.addEventListener('focus',()=>refreshPrivateHistory(false));
  const own=()=>room?.state?.players?.find?.(p=>p.id===1);
  // Only the real opposing bot, on the currently visible approved sandbox
  // pitch, can interrupt a player's kick streak. Unknown IDs and spectators
