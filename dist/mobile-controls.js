@@ -84,11 +84,21 @@
   catch{status.textContent='Layout applied for this visit; browser storage unavailable.';return false;}
  }
  function boundedPlacement(){
-  // Preserve space between the two touch controls even on narrow phones.
-  const width=window.innerWidth||320;
-  const actualScale=Math.min(config.scale,Math.max(.75,(width-56)/160));
-  const maxInset=Math.max(8,Math.floor((width-(88+72)*actualScale-36)/2));
-  return {scale:actualScale,edge:Math.min(config.edge,maxInset)};
+  // The visible viewport may be much narrower than window.innerWidth when
+  // browser zoom, split-screen or software chrome is active. Account for
+  // BOTH thumbs, safe outer edges, and the actual flex padding/gap.
+  const viewport=window.visualViewport?.width;
+  const width=Math.max(180,Math.min(window.innerWidth||320,
+   Number.isFinite(viewport)&&viewport>0?viewport:Infinity));
+  const reserved=40; // maximum 2×16px padding + 8px flex gap
+  const minSize=.75*(88+72);
+  const edge=Math.min(config.edge,Math.max(8,
+   Math.floor((width-minSize-reserved)/2)));
+  const actualScale=Math.min(config.scale,Math.max(.75,
+   (width-2*edge-reserved)/(88+72)));
+  const maxInset=Math.max(8,Math.floor(
+   (width-(88+72)*actualScale-reserved)/2));
+  return {scale:actualScale,edge:Math.min(edge,maxInset),width};
  }
  function apply(){
   const placed=boundedPlacement();
@@ -102,6 +112,11 @@
   // Share the *effective* size with the joystick handler, which uses this
   // exact value for its deadzone and travel radius.
   window.touchControlSettings={...config,scale:placed.scale};
+  // The main touch handler already releases ownership on this event.
+  // If an import or layout edit moves targets while a finger is held,
+  // clear the old direction instead of letting it survive into new geometry.
+  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+   window.dispatchEvent(new CustomEvent('fuckball:touch-layout-applied'));
   hand.checked=config.hand==='left';
   for(const [control,key,format] of [
    [size,'scale',v=>Math.round(v*100)+'%'],
@@ -116,7 +131,8 @@
   field.style.setProperty('--preview-scale',String(placed.scale));
   field.style.setProperty('--preview-opacity',String(config.opacity/100));
   status.textContent=(config.hand==='left'?'Kick left':'Kick right')+' · '+Math.round(placed.scale*100)+
-   '% controls · '+config.deadzone+' px deadzone · device only';
+   '% controls'+(placed.scale<config.scale?' (fitted to visible screen)':'')+
+   ' · '+config.deadzone+' px deadzone · device only';
   // Repositioning or swapping controls invalidates an earlier finger's hit
   // target. The live input owner clears those captures; the next deliberate
   // touch starts fresh with the newly applied geometry.
@@ -161,5 +177,6 @@
  section.append(title,intro,presets,preview,previewCaption,grid,actions,status);
  pane.append(section);
  window.addEventListener('resize',apply,{passive:true});
+ window.visualViewport?.addEventListener?.('resize',apply,{passive:true});
  apply();
 })();

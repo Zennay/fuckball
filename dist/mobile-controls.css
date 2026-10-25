@@ -3,6 +3,9 @@
 .touch-controls{
  left:var(--fb-touch-edge,20px)!important;
  right:var(--fb-touch-edge,20px)!important;
+ padding-inline:clamp(8px,3vw,16px)!important;
+ gap:8px!important;
+ box-sizing:border-box;
  bottom:calc(max(46px,env(safe-area-inset-bottom)) + var(--fb-touch-lift,0px))!important;
 }
 .touch-controls>*{opacity:var(--fb-touch-opacity,.85)!important}
