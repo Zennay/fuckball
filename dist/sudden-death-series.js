@@ -184,6 +184,9 @@
  }
  const score=()=>[room.gameState.redScore,room.gameState.blueScore];
  function render(s){
+  // On a phone the active match needs an unobstructed, compact score HUD;
+  // expand the historical rounds and actions when a round finishes.
+  hud.setAttribute('data-phase',s.phase);
   const finished=s.phase==='complete'||s.phase==='stopped';
   const waiting=s.phase==='between';
   title.textContent=s.phase==='complete'?'SERIES COMPLETE · '+(s.opponent==='human'?'TWO PLAYERS':'LOCAL AI'):
@@ -203,6 +206,7 @@
   next.hidden=!waiting;
   stop.hidden=finished;
   retry.hidden=dismiss.hidden=!finished;
+  dismiss.textContent=finished&&!started?'↗ Return to Home':'Dismiss';
  }
  function stopOwnedNative(s){
   if(s.room!==room||s.kickoffEpoch!==nativeEpoch||
@@ -212,17 +216,45 @@
  }
  function finalize(s,complete){
   if(session!==s)return;
-  if(!complete)stopOwnedNative(s);
+  // Finishing a best-of ends the exact native kickoff owned by this series.
+  // Previously completion left the real room started=true and paused=true:
+  // dismissing the HUD revealed a seemingly frozen match. Never stop any
+  // later user-started or online/peer game (stopOwnedNative checks epoch).
+  const stopped=stopOwnedNative(s);
+  const stillOwnsStarted=started&&s.room===room&&
+   s.kickoffEpoch===nativeEpoch&&!serverLink&&!peerConnected&&!replay;
   s.phase=complete?'complete':'stopped';
   if(complete){
    const stored=save(s);
-   status.textContent=stored?
-    'Best-of series complete. Local result saved on this device.':
-    'Best-of series complete, but browser storage could not save your result.';
+   status.textContent=(stored?
+    'Best-of complete. Native game finished and local result saved.':
+    'Best-of complete, but private browser storage could not save your result.')+
+    (stillOwnsStarted&&!stopped?
+     ' The native match could not be stopped; stop it before playing again.':'');
   }else{
-   status.textContent='Series interrupted. Partial rounds were not saved.';
+   status.textContent='Series interrupted. Partial rounds were not saved.'+
+    (stillOwnsStarted&&!stopped?
+     ' Stop the still-active local match before starting another series.':'');
   }
   render(s);
+ }
+ // A failed *next* kickoff should not erase genuine results already played.
+ // Preserve the completed rounds only if the interrupted native kickoff can
+ // be stopped or was never started. Do not retry automatically or invent goals.
+ function recoverFailedNextRound(s,message){
+  if(session!==s)return;
+  const stopped=stopOwnedNative(s);
+  if(s.rounds.length&&(!started||stopped)&&!serverLink&&!peerConnected&&!replay){
+   s.phase='between';
+   hud.hidden=false;
+   render(s);
+   status.textContent=message+' Your previous '+s.rounds.length+
+    ' real round'+(s.rounds.length===1?' is':'s are')+
+    ' preserved. Select Play next round to retry explicitly.';
+   return;
+  }
+  finalize(s,false);
+  status.textContent=message+' Series stopped to protect native match ownership.';
  }
  function roundOver(winner){
   const s=session;
@@ -271,8 +303,7 @@
    if(document.hidden||nativeEpoch!==s.kickoffEpoch||room!==s.room||
     !started||blocked()){finalize(s,false);return;}
    if(!acceptBoot(s)&&performance.now()-s.bootAt>=1200){
-    finalize(s,false);
-    status.textContent='Native offline players did not become ready. The attempted match was stopped.';
+    recoverFailedNextRound(s,'The new native players did not become ready.');
    }
    return;
   }
@@ -333,8 +364,7 @@
    // The native engine may have started before a later startup step failed.
    // Capture that specific kickoff so finalize can stop only our orphan match.
    if(nativeEpoch!==before){s.room=room;s.kickoffEpoch=nativeEpoch;}
-   finalize(s,false);
-   status.textContent=error?.message||'Unable to start native local match.';
+   recoverFailedNextRound(s,error?.message||'Unable to start native local match.');
   }
  }
  start.onclick=()=>{
@@ -356,7 +386,14 @@
  };
  stop.onclick=()=>{if(session&&['starting','running','between'].includes(session.phase))finalize(session,false);};
  retry.onclick=()=>start.click();
- dismiss.onclick=()=>{session=null;hud.hidden=true;};
+ dismiss.onclick=()=>{
+  const finished=!!session&&['complete','stopped'].includes(session.phase);
+  // The completed result has already been recorded. Dismissing must leave a
+  // visible playable choice, not an abandoned paused pitch without controls.
+  session=null;hud.hidden=true;
+  if(finished&&!started&&!serverLink&&!peerConnected&&!replay)
+   showView('home');
+ };
  window.setInterval(tick,120);
  const previousShowView=showView;
  showView=function(view){
