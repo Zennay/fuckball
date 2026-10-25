@@ -33,7 +33,7 @@
 .touch-settings output{font-size:11px;color:#d2f5ac;font-variant-numeric:tabular-nums}
 .touch-layout-presets,.touch-settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 .touch-layout-presets button,.touch-settings-actions button{
- min-height:42px;padding:9px 14px;border:1px solid #77988b;border-radius:8px;
+ min-height:48px;padding:10px 14px;border:1px solid #77988b;border-radius:8px;
  background:#24413d;color:#edffe9;font-weight:800
 }
 .touch-layout-presets button:hover,.touch-settings-actions button:hover{background:#355950}
@@ -59,4 +59,14 @@
 @media(max-width:560px){
  .touch-settings{padding:12px}
  .touch-layout-presets button,.touch-settings-actions button{flex:1 1 130px}
+}
+/* Short landscape phones still need reachable settings and touch targets.
+   Effective in-match size/lift are clamped in the layout controller; CSS
+   avoids scrolling the preview sideways or clipping a preset label. */
+.touch-layout-presets button,.touch-settings-actions button{max-width:100%;white-space:normal}
+.touch-settings output{overflow-wrap:anywhere}
+@media (max-height:390px) and (orientation:landscape){
+ .touch-settings{gap:8px;padding:10px}
+ .touch-layout-preview{height:84px}
+ .touch-layout-field span{transform:scale(calc(var(--preview-scale,1) * .8))}
 }
