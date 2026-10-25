@@ -121,7 +121,9 @@
   const file=upload.files?.[0];upload.value='';if(!file)return;
   // File parsing and confirmation are asynchronous; a second browser tab
   // can save new drills meanwhile. Never overwrite those unseen updates.
-  const original=localStorage.getItem(KEY);
+  let original;
+  try{original=localStorage.getItem(KEY);}
+  catch{feedback.textContent='Cannot access local preset storage. Nothing was changed.';return;}
   if(file.size<=0||file.size>MAX_FILE){feedback.textContent='Import refused: JSON must be at most 12 KB.';return;}
   try{
    const data=JSON.parse(await file.text());
