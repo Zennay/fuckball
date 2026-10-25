@@ -31,6 +31,26 @@
  if(anchor)anchor.insertAdjacentElement('afterend',section);
  else pane.append(section);
  let selected=null,optionSignature='',ballotLink=null,ballotRound=null,ballotMap=null;
+ // Stadium collaboration cannot depend on a player keeping the native room
+ // menu open. Offer a compact read-only server vote summary outside the menu,
+ // with explicit actions forwarded to the original native ballot handlers.
+ const dock=make('aside',null,'native-stadium-dock');dock.hidden=true;
+ dock.setAttribute('role','region');
+ dock.setAttribute('aria-label','Current server stadium ballot');
+ const dockCopy=make('div',null,'native-stadium-dock-copy');
+ const dockTitle=make('strong','YOUR TEAM IS VOTING ON A PITCH');
+ const dockStatus=make('p',null,'native-stadium-dock-status');
+ dockStatus.setAttribute('role','status');dockStatus.setAttribute('aria-live','polite');
+ dockCopy.append(dockTitle,dockStatus);
+ const dockActions=make('div',null,'native-stadium-dock-actions');
+ const dockChoice=make('select');dockChoice.setAttribute('aria-label','Choose the server stadium to vote for');
+ const dockVote=make('button','✓ Vote');dockVote.type='button';dockVote.className='primary';
+ const dockRetract=make('button','Remove vote');dockRetract.type='button';
+ const dockView=make('button','View ballot');dockView.type='button';
+ dockActions.append(dockChoice,dockVote,dockRetract,dockView);
+ dock.append(dockCopy,dockActions);document.body.append(dock);
+ let dockLink=null,dockRound=null,dockMap=null,dockOptions='';
+
  let pendingVote=null,pendingApply=null;
  const connectionOpen=link=>link?.ws?.readyState===1;
  const humanInRoom=()=>room?.state?.players?.some?.(p=>
@@ -174,7 +194,81 @@
   pendingApply={sentAt:Date.now()};
   render();
  };
- setInterval(()=>{if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
-  else section.hidden=true;},1100);
- render();
+ // The dock mirrors the exact current native room ballot. We never
+ // invent a vote, change the host's configuration, or carry a choice across
+ // a room / stadium / round or option-list change.
+ function refreshDock(){
+  const d=native();
+  const roomMenuVisible=typeof menuOpen!=='undefined'&&menuOpen&&
+   !pane.hidden&&!document.getElementById('matchView')?.hidden;
+  const rows=d?.state.stadiumBallotVotes.filter(v=>Array.isArray(v)&&v.length===2&&
+   Number.isSafeInteger(v[0])&&v[0]>0&&Number.isSafeInteger(v[1])&&
+   v[1]>=0&&v[1]<d.list.length)||[];
+  // Don't obstruct play or add a permanent floating dashboard to an empty
+  // room. Once real human votes exist, connected teammates can respond
+  // from Home or My Games, with the full native menu still available.
+  if(!d||!connectionOpen(d.link)||!humanInRoom()||!rows.length||roomMenuVisible){
+   dock.hidden=true;return;
+  }
+  dock.hidden=false;
+  const signature=JSON.stringify(d.list);
+  if(dockLink!==d.link||dockRound!==d.state.round||
+     dockMap!==d.state.map||dockOptions!==signature){
+   dockLink=d.link;dockRound=d.state.round;dockMap=d.state.map;dockOptions=signature;
+   dockChoice.replaceChildren();
+   for(const option of d.list){
+    const el=make('option',option.name);el.value=String(option.id);dockChoice.append(el);
+   }
+   const mine=rows.find(v=>v[0]===networkPlayerId);
+   dockChoice.value=String(mine?.[1]??0);
+  }
+  const counts=d.list.map(()=>0);
+  for(const row of rows)counts[row[1]]++;
+  const mine=rows.find(v=>v[0]===networkPlayerId);
+  const confirmed=d.state.stadiumBallotWinner;
+  dockTitle.textContent=mine?'YOUR STADIUM VOTE IS RECORDED':
+   'YOUR TEAM IS VOTING ON A PITCH';
+  const leader=Number.isSafeInteger(confirmed)&&d.list[confirmed]?
+   d.list[confirmed].name:'No outright winner yet';
+  const message=rows.length+' server-confirmed vote'+(rows.length===1?'':'s')+
+   ' · leader: '+leader+(mine?' · your vote: '+d.list[mine[1]].name:
+    ' · your vote is still needed');
+  if(dockStatus.textContent!==message)dockStatus.textContent=message;
+  dockVote.disabled=!!pendingVote||d.state.kickoff!=null;
+  dockRetract.hidden=!mine;dockRetract.disabled=!!pendingVote||d.state.kickoff!=null;
+ }
+ dockVote.addEventListener('click',()=>{
+  const d=native();
+  if(!d||dock.hidden||!connectionOpen(d.link)||!humanInRoom()||
+     dockLink!==d.link||dockRound!==d.state.round||
+     dockMap!==d.state.map||dockOptions!==JSON.stringify(d.list)){
+   refreshDock();return;
+  }
+  const choice=Number(dockChoice.value);
+  if(!Number.isSafeInteger(choice)||choice<0||choice>=d.list.length)return;
+  // This is the user's actual explicit vote, using the native button
+  // and its room/permission/session and receipt guards.
+  render();selected=choice;cast.click();refreshDock();
+ });
+ dockRetract.addEventListener('click',()=>{
+  const d=native();
+  if(!d||dock.hidden||dockLink!==d.link||!connectionOpen(d.link)||
+     dockRound!==d.state.round||dockMap!==d.state.map)return;
+  render();retract.click();refreshDock();
+ });
+ dockView.addEventListener('click',()=>{
+  if(!native())return;
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  render();
+  section.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  (cast.disabled?section:cast).focus?.({preventScroll:true});
+  refreshDock();
+ });
+ setInterval(()=>{
+  if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
+  else section.hidden=true;
+  refreshDock();
+ },1100);
+ render();refreshDock();
 })();
