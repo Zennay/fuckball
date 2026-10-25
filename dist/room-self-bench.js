@@ -122,7 +122,7 @@
  function renderBenchShortcuts(data){
   for(const item of benchShortcuts){
    item.shortcut.hidden=!data;
-   if(!data)continue;
+   if(!data){item.note.textContent='';continue;}
    const team=data.side===1?'RED · ON THE PITCH':
     data.side===2?'BLUE · ON THE PITCH':
     data.chosen===1?'RED · TEAM BENCH':
@@ -130,13 +130,13 @@
    const phase=data.started?(data.paused?'MATCH PAUSED':'MATCH LIVE'):
     'ROOM LOBBY / BREAK';
    const line=team+' · '+phase+
-    (data.disconnected?' · RECONNECTING':
+    (!data.online?' · CONNECTION LOST':data.disconnected?' · RECONNECTING':
      data.side===0&&data.chosen!==0?
       (data.ready?' · AVAILABLE TO SUB':' · NOT AVAILABLE TO SUB'):'');
    if(item.role.textContent!==line)item.role.textContent=line;
    // Never promise a successful team change before authoritative receipt.
    const message=feedback.textContent;
-   if(message&&item.note.textContent!==message)item.note.textContent=message;
+   if(item.note.textContent!==message)item.note.textContent=message;
    for(const {button,source}of item.buttons){
     button.hidden=source.hidden;
     button.disabled=source.disabled||!data.online||data.disconnected;
