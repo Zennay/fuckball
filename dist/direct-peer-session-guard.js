@@ -8,6 +8,10 @@
  const status=document.getElementById('networkStatus');
  const nativeCancel=document.getElementById('disconnectPeer');
  const dialog=document.getElementById('networkDialog');
+ const nativeHost=document.getElementById('hostPeer');
+ const nativeJoin=document.getElementById('joinPeer');
+ const nativeCopy=document.getElementById('copySignal');
+ const localSignal=document.getElementById('localSignal');
  if(!home||!match||!games||!status||!nativeCancel||typeof beginPeer!=='function')return;
  const pending=()=>typeof peer!=='undefined'&&!!peer&&!peerConnected;
  const liveConflict=()=>{
@@ -54,15 +58,45 @@
  actions.className='direct-peer-pending-actions';
  const view=document.createElement('button');
  view.type='button';view.className='primary';view.textContent='↗ View connection';
+ const copyCode=document.createElement('button');
+ copyCode.type='button';copyCode.textContent='Copy my code';
+ copyCode.hidden=true;
+ const retry=document.createElement('button');
+ retry.type='button';retry.textContent='↻ Retry direct 1v1';retry.hidden=true;
  const cancel=document.createElement('button');
  cancel.type='button';cancel.textContent='× Cancel direct join';
- actions.append(view,cancel);
+ actions.append(view,copyCode,retry,cancel);
  surface.append(copy,actions);
  document.body.append(surface);
  view.addEventListener('click',()=>{
   if(!pending())return;
   if(typeof openDialog==='function'&&!dialog?.open)openDialog('networkDialog');
   status?.focus?.({preventScroll:true});
+ });
+ copyCode.addEventListener('click',()=>{
+  // A direct offer/answer can expose network candidate information. Copy only
+  // on an explicit click; use the original native clipboard/fallback handler.
+  if(!pending()||!localSignal?.value||!nativeCopy||nativeCopy.disabled)return;
+  nativeCopy.click();
+ });
+ const failedHandshake=()=>pending()&&(
+  peer?.connectionState==='failed'||peer?.iceConnectionState==='failed');
+ retry.addEventListener('click',()=>{
+  if(!failedHandshake()||nativeCancel.disabled)return;
+  const role=peerRole;
+  if(!['host','guest'].includes(role))return;
+  const original=role==='host'?nativeHost:nativeJoin;
+  if(!original||original.disabled||serverLink||
+     typeof roomRecovery!=='undefined'&&roomRecovery.context)return;
+  // Explicitly discard only this failed peer via the existing native Cancel
+  // control. Reuse the original Host/Join button for a fresh consented code;
+  // never recycle ICE credentials or start a connection automatically.
+  nativeCancel.click();
+  if(peer||peerConnected||serverLink)return;
+  status.textContent='Starting a fresh '+(role==='host'?'host':'guest')+
+   ' code. The previous failed exchange is no longer valid.';
+  original.click();
+  refresh();
  });
  cancel.addEventListener('click',()=>{
   if(!pending()||nativeCancel.disabled)return;
@@ -91,9 +125,19 @@
   // The network dialog already contains the same original cancellation.
   surface.hidden=!active||!!dialog?.open;
   if(surface.hidden)return;
+  const failed=failedHandshake();
+  heading.textContent=failed?'DIRECT 1v1 · CONNECTION FAILED':
+   'DIRECT 1v1 · CONNECTION PENDING';
+  copyCode.hidden=failed||!localSignal?.value||!nativeCopy;
+  retry.hidden=!failed;
+  retry.textContent=peerRole==='host'?'↻ Retry as host':'↻ Retry as guest';
   const phase=(status.textContent||'').trim().slice(0,185);
-  const text=(phase||'Finish exchanging the two connection codes.')+
-   ' · Keep waiting or cancel explicitly; no new room will be started.';
+  const text=failed?
+   'The direct WebRTC link failed. No match has been joined. '+
+   'Choose Retry for a fresh manual code or Cancel; old codes cannot be reused.':
+   (phase||'Finish exchanging the two connection codes.')+
+   ' · Exchange the private offer/answer only with your intended friend. '+
+   'Keep waiting or cancel explicitly.';
   if(detail.textContent!==text)detail.textContent=text;
  }
  const refreshTimer=setInterval(refresh,950);
