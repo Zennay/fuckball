@@ -42,8 +42,11 @@
   const settings=data.control;
   if(!settings)return 'ROOM VERIFIED · ACCESS RULES PENDING';
   if(settings.locked)return 'LOCKED · no new admissions currently';
-  if(settings.clubOnly)return 'CLUB-ONLY · membership required';
-  if(settings.accountsOnly)return 'ACCOUNT REQUIRED';
+  const requirements=[];
+  if(settings.clubOnly)requirements.push('CLUB MEMBERSHIP REQUIRED');
+  if(settings.accountsOnly)requirements.push('SIGN-IN REQUIRED');
+  if(settings.accessKeyRequired===true)requirements.push('ACCESS KEY REQUIRED');
+  if(requirements.length)return requirements.join(' · ');
   if(settings.listed)return 'PUBLICLY LISTED · server admission required';
   return 'UNLISTED · invite link only';
  }
@@ -51,8 +54,13 @@
   const s=data.control;
   if(!s)return 'The game server has confirmed this room code but has not reported all admission rules yet. Sharing never grants access.';
   if(s.locked)return 'The room is locked. This link will not unlock it or admit new players.';
-  if(s.clubOnly)return 'Only eligible Club members can enter. Sending this link does not grant Club membership.';
-  if(s.accountsOnly)return 'Recipients must sign in. This link does not create an account or grant admission.';
+  const requirements=[];
+  if(s.clubOnly)requirements.push('Recipients must belong to the approved Club.');
+  if(s.accountsOnly)requirements.push('Recipients must sign in.');
+  if(s.accessKeyRequired===true)
+   requirements.push('An access key is also required; share it separately, never inside this invite URL.');
+  if(requirements.length)
+   return requirements.join(' ')+' Only the server can admit visitors.';
   return s.listed?
    'This room is currently public. It can become unlisted, full or closed after sharing.':
    'Unlisted codes may still work until the room closes. Share only with intended recipients.';
