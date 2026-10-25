@@ -12,7 +12,7 @@
   esdf:{up:['KeyE',''],down:['KeyD',''],left:['KeyS',''],right:['KeyF',''],kick:['KeyG',''],chat:['Enter','']},
   numpad:{up:['Numpad8',''],down:['Numpad5',''],left:['Numpad4',''],right:['Numpad6',''],kick:['Numpad0',''],chat:['NumpadEnter','']}
  };
- const codePattern=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal))$/;
+ const codePattern=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal|Equal|Comma)|Backquote|Minus|Equal|Bracket(?:Left|Right)|Backslash|Semicolon|Quote|Comma|Period|Slash|Intl(?:Backslash|Ro|Yen)|F(?:[1-9]|1[0-2])|CapsLock|Insert|Home|End|PageUp|PageDown)$/;
  function validate(source){
   if(!source||typeof source!=='object'||Array.isArray(source))throw Error('Invalid keyboard layout.');
   if(Object.keys(source).some(k=>!actions.includes(k)))throw Error('Unknown keyboard action.');
