@@ -15,7 +15,8 @@
     {captions:x.captions,voice:x.voice,minutes:x.minutes}:{...defaults};
   }catch{return{...defaults};}
  }
- let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null;
+ let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null,
+  previewSpeaking=false;
  const speechAvailable=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance==='function';
  const section=document.createElement('fieldset');section.className='match-audio-guide-options';
  const legend=document.createElement('legend');legend.textContent='LIVE SCORE GUIDE';
@@ -62,7 +63,7 @@
   if(ownSpeech&&speechAvailable){
    try{window.speechSynthesis.cancel();}catch{}
   }
-  ownSpeech=null;
+  ownSpeech=null;previewSpeaking=false;
  }
  function sync(){
   for(const key of Object.keys(controls))controls[key].checked=prefs[key];
@@ -101,13 +102,14 @@
   lastVoice=now;
   try{
    if(ownSpeech)window.speechSynthesis.cancel();
+   previewSpeaking=explicitPreview;
    const utterance=new window.SpeechSynthesisUtterance(text);utterance.lang='en-GB';
    utterance.rate=1;utterance.pitch=1;utterance.volume=.8;
    ownSpeech=utterance;
-   utterance.onend=()=>{if(ownSpeech===utterance)ownSpeech=null;};
-   utterance.onerror=()=>{if(ownSpeech===utterance)ownSpeech=null;};
+   utterance.onend=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
+   utterance.onerror=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
    window.speechSynthesis.speak(utterance);
-  }catch{ownSpeech=null;}
+  }catch{ownSpeech=null;previewSpeaking=false;}
  }
  function show(text){
   if(!prefs.captions)return;
@@ -119,7 +121,12 @@
   if(captionTimer){clearTimeout(captionTimer);captionTimer=0;}
  }
  function poll(){
-  if(!visibleActive()){silenceAndRebaseline();return;}
+  if(!visibleActive()){
+   // An explicit Voice Preview is allowed while the settings menu is open.
+   // It is still cancelled immediately by blur, tab changes or navigation.
+   if(!previewSpeaking)silenceAndRebaseline();
+   return;
+  }
   const current=sample();if(!current){previous=null;return;}
   const last=previous;previous=current;
   if(!last)return;
