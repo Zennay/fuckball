@@ -280,7 +280,9 @@
    openChat();
    // Navigating through native views may close an existing composer; never
    // overwrite or lose the player's unsent local draft.
-   if(savedDraft!==null&&input.value!==savedDraft)input.value=savedDraft;
+   // A freshly restored same-room draft must not be overwritten by the
+   // now-empty composer when navigating here from the off-pitch inbox.
+   if(savedDraft?.trim()&&input.value!==savedDraft)input.value=savedDraft;
    input.focus?.({preventScroll:true});
   }else{
    const original=document.getElementById('chatLog');
