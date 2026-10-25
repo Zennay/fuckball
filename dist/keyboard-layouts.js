@@ -229,6 +229,13 @@
   else home.append(quick);
   updateHomeKeys();
   document.getElementById('tabHome')?.addEventListener('click',updateHomeKeys);
+  // A native Match → Controls rebind may be performed while a local game is
+  // paused. Reflect it in the separate Home profiles immediately, without
+  // replacing someone's saved slot or sending any input to the match.
+  window.addEventListener('fuckball:keyboard-bindings-changed',()=>{
+   updateHomeKeys();
+   if(quickStatus)quickStatus.textContent='Native keyboard controls updated. Current keys above are now authoritative.';
+  });
   window.addEventListener('focus',()=>{if(!home.hidden)updateHomeKeys();});
  }
  const subtitle=document.createElement('p');subtitle.className='keyboard-layout-disclaimer';
