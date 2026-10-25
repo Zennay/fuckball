@@ -66,7 +66,7 @@
  footer.textContent='Private to this tab · Last 45 readings in memory · Reset when the connection changes, including rejoining the same room';
  dialog.append(header,state,tiles,chartBox,overview,tips,footer);
  document.body.append(dialog);
- let session=null,history=[],sessionSamples=[],sessionStarted=0;
+ let session=null,sessionPlayerId=null,history=[],sessionSamples=[],sessionStarted=0;
  let rosterSource=null,rosterFreshAt=0;
  function num(x){return x===null||!Number.isFinite(x)?null:Math.round(x);}
  function percentile(values,fraction){
@@ -125,15 +125,20 @@
   const ms=fromServer?serverRTT:peerRTT;
   const fromPeer=!fromServer&&peerRTT!==null;
   const j=fromPeer&&validJitter(net.jitter)?net.jitter:null;
-  const ageMs=net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
+  // A lobby/paused round is not supposed to deliver new motion snapshots.
+  // The server can still provide valid RTT while play is intentionally held.
+  const playing=native?serverLink.roomState?.started===true&&
+   serverLink.roomState?.paused!==true:started&&!paused;
+  const ageMs=playing&&net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
    Math.max(0,now-net.lastSnapshot):null;
   const source=fromServer?'fresh server challenge':
    fromPeer?(native?'peer-host transport':'direct-peer transport'):
    native&&roster&&!freshRoster?'server RTT stale — awaiting new sample':
    native?'no current server RTT':'no current direct-peer RTT';
-  return {ms,j,ageMs,source};
+  return {ms,j,ageMs,source,playing};
  }
  function setStatus(s){
+  if(!s.playing)return ['Room connected · no live snapshots expected during lobby or pause','idle'];
   if(s.ageMs!==null&&s.ageMs>=3500)return ['Delayed snapshots','stalled'];
   if(s.ms!==null&&(s.ms>=220||s.j!==null&&s.j>=85))return ['High delay','poor'];
   if(s.ms!==null&&(s.ms>=140||s.j!==null&&s.j>=45))return ['Elevated latency','slow'];
@@ -186,7 +191,7 @@
   const active=online()&&!document.hidden;
   button.hidden=!active;
   if(!active){
-   session=null;history=[];sessionSamples=[];sessionStarted=0;
+   session=null;sessionPlayerId=null;history=[];sessionSamples=[];sessionStarted=0;
    rosterSource=null;rosterFreshAt=0;
    if(dialog.open)dialog.close();
    return;
@@ -195,8 +200,10 @@
   // A new socket in the *same room* must not inherit old latency history.
   const key=serverLink?.room?serverLink:
    (typeof peer!=='undefined'&&peer?peer:channel);
-  if(key!==session){
-   history=[];sessionSamples=[];sessionStarted=performance.now();session=key;
+  const playerId=serverLink?.room?networkPlayerId:null;
+  if(key!==session||playerId!==sessionPlayerId){
+   history=[];sessionSamples=[];sessionStarted=performance.now();
+   session=key;sessionPlayerId=playerId;
    rosterSource=null;rosterFreshAt=0;
   }
   const s=sample();history.push({ms:s.ms});

@@ -139,6 +139,16 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ // A seat is healthy only when the exact controller locked to that human
+ // player is still present. Never substitute another person's connected pad.
+ function seatStatus(){
+  const seats=[3,4].map(id=>({
+   seat:id,connected:!!padFor(id),
+   port:assigned?.[id-3]?.index??null
+  }));
+  return {assigned:!!assigned,ok:!!assigned&&seats.every(p=>p.connected),
+   missing:seats.filter(p=>!p.connected).map(p=>p.seat),seats};
+ }
+ window.fuckballCouchRivals=Object.freeze({prepare,preview,seatStatus,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
  requestAnimationFrame(frame);
 })();

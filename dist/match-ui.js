@@ -148,9 +148,89 @@ const actionNames={up:'Move up',down:'Move down',left:'Move left',right:'Move ri
 let binding=null;
 function keyLabel(code){if(!code)return'—';return code.replace(/^Key/,'').replace(/^Digit/,'').replace(/^Arrow(.*)$/,'$1 arrow').replace(/^Numpad/,'Num ').replace(/(Left|Right)$/,' $1').replace(/^Space$/,'Space').toUpperCase();}
 function renderBindings(){const list=$('bindingList');list.replaceChildren();for(const [action,label]of Object.entries(actionNames)){const row=document.createElement('div');row.className='rm-binding';const name=document.createElement('span');name.textContent=label;row.append(name);for(const slot of [0,1]){const b=document.createElement('button');b.className='rm-key'+(binding&&binding.action===action&&binding.slot===slot?' listening':'');b.textContent=binding&&binding.action===action&&binding.slot===slot?'Press a key…':keyLabel(settings.keys[action][slot]);b.onclick=()=>{binding={action,slot};renderBindings();};row.append(b);}list.append(row);}$('chatKeyLabel').textContent=keyLabel(settings.keys.chat.find(Boolean)||'');$('hudChatHint').textContent=keyLabel(settings.keys.chat.find(Boolean)||'')+' · chat';}
+// Safe native rebinds: every real player must retain at least one key for
+// movement and kick. Old saved profiles could contain empty or duplicate
+// actions after an earlier collision/Backspace; repair only unusable slots.
+const controlActions=['up','down','left','right','kick','chat'];
+function publishKeyboardBindings(){
+ if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+  window.dispatchEvent(new CustomEvent('fuckball:keyboard-bindings-changed'));
+}
+const mandatoryControls=controlActions.filter(action=>action!=='chat');
+const supportedControlCode=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal|Equal|Comma)|Backquote|Minus|Equal|Bracket(?:Left|Right)|Backslash|Semicolon|Quote|Comma|Period|Slash|Intl(?:Backslash|Ro|Yen)|F(?:[1-9]|1[0-2])|CapsLock|Insert|Home|End|PageUp|PageDown)$/;
+function usableKeyboardBindings(candidate){
+ if(!candidate||typeof candidate!=='object')return false;
+ const used=new Set();
+ for(const action of controlActions){
+  const values=candidate[action];
+  if(!Array.isArray(values)||values.length!==2)return false;
+  if(action!=='chat'&&!values.some(Boolean))return false;
+  for(const code of values){
+   if(typeof code!=='string'||code&&!supportedControlCode.test(code))return false;
+   if(code&&used.has(code))return false;
+   if(code)used.add(code);
+  }
+ }
+ return true;
+}
+function repairKeyboardBindings(){
+ const next={},used=new Set();
+ let changed=false;
+ for(const action of controlActions){
+  const source=settings.keys[action]||[];
+  next[action]=[0,1].map(i=>{
+   const code=typeof source[i]==='string'?source[i]:'';
+   if(!code)return '';
+   if(!supportedControlCode.test(code)||used.has(code)){changed=true;return '';}
+   used.add(code);return code;
+  });
+ }
+ for(const action of mandatoryControls){
+  if(next[action].some(Boolean))continue;
+  const fallback=[...defaultBindings[action],...(couchP1Fallback?.[action]||[])].find(code=>
+   supportedControlCode.test(code)&&!used.has(code));
+  if(!fallback)continue; // No unsafe fabrication if all known keys are occupied.
+  next[action][0]=fallback;used.add(fallback);changed=true;
+ }
+ if(changed&&usableKeyboardBindings(next)){
+  settings.keys=next;savePrefs();publishKeyboardBindings();
+  notify('Restored missing or overlapping movement/kick keys. Check Controls to customize them.');
+ }
+}
 function cancelBinding(){if(binding){binding=null;renderBindings();}}
-function assignBinding(code){const {action,slot}=binding;binding=null;if(code){for(const a of Object.keys(settings.keys))settings.keys[a]=settings.keys[a].map(c=>c===code?'':c);}settings.keys[action][slot]=code;savePrefs();releaseInputs();renderBindings();}
-$('resetBindings').onclick=()=>{settings.keys=Object.fromEntries(Object.entries(defaultBindings).map(([k,v])=>[k,[...v]]));binding=null;savePrefs();renderBindings();};
+function assignBinding(code){
+ if(!binding)return;
+ const {action,slot}=binding;
+ if(code&&!supportedControlCode.test(code)){
+  notify('Unsupported key for a game control. Use a letter, digit, arrow, Space or Numpad key.');
+  return;
+ }
+ // Build a candidate first. A duplicate key may be moved between actions,
+ // but the original profile is untouched if the move would strand a human
+ // without an essential direction or kick button.
+ const next=Object.fromEntries(controlActions.map(a=>[a,[...settings.keys[a]]]));
+ if(code){
+  for(const a of controlActions)next[a]=next[a].map(c=>c===code?'':c);
+ }
+ next[action][slot]=code;
+ if(!usableKeyboardBindings(next)){
+  notify('Keep at least one unique key for Up, Down, Left, Right and Kick. Assign a replacement before clearing the last key.');
+  return;
+ }
+ settings.keys=next;
+ binding=null;
+ savePrefs();
+ releaseInputs(); // Never carry a held key into a newly assigned action.
+ renderBindings();publishKeyboardBindings();
+ const label=actionNames[action]||action;
+ notify(label+' control updated. New controls are active; the match and player inputs remain unchanged.');
+}
+$('resetBindings').onclick=()=>{
+ settings.keys=Object.fromEntries(Object.entries(defaultBindings).map(([k,v])=>[k,[...v]]));
+ binding=null;savePrefs();releaseInputs();renderBindings();publishKeyboardBindings();
+ notify('Default keyboard controls restored; held movement released.');
+};
+repairKeyboardBindings();
 renderBindings();
 
 // Capture before gameplay input. Menu keys never move a player.

@@ -39,3 +39,9 @@
 .controller-setup-rebind:hover{filter:brightness(1.12)}
 .controller-setup-rebind:focus-visible{outline:3px solid #f3ff9d;
  outline-offset:3px}
+
+/* Keep the difference between previewing and authorizing P1 visible, even if
+   transient controller diagnostics or calibration hints are refreshed. */
+.controller-setup-source-status{display:block;color:#c6ead4;line-height:1.5;
+ font-size:12px;border-left:3px solid #a5d8aa;padding:6px 0 6px 10px;
+ overflow-wrap:anywhere}
