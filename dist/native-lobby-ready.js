@@ -46,7 +46,85 @@
  onPitch.setAttribute('aria-label','Server countdown to kickoff');
  onPitch.setAttribute('role','status');
  if(match)match.append(onPitch);
+ // A Custom Room lobby can remain active while a player browses Home or
+ // My Games. The original readiness controls live inside a hidden menu.
+ // Mirror authoritative server readiness globally; never infer consent from
+ // a click or start a match without the host's existing native control.
+ const dock=el('aside',null,'native-lobby-ready-dock');
+ dock.hidden=true;dock.setAttribute('role','region');
+ dock.setAttribute('aria-label','Current Custom Room kickoff readiness');
+ const dockContent=el('div',null,'native-lobby-ready-dock-content');
+ const dockTitle=el('strong','CUSTOM ROOM · WAITING FOR KICKOFF');
+ const dockProgress=el('p',null,'native-lobby-ready-dock-progress');
+ dockProgress.setAttribute('role','status');dockProgress.setAttribute('aria-live','polite');
+ dockContent.append(dockTitle,dockProgress);
+ const dockActions=el('div',null,'native-lobby-ready-dock-actions');
+ const dockToggle=el('button','✓ I AM READY');dockToggle.type='button';
+ dockToggle.className='primary';
+ const dockView=el('button','↗ View room');dockView.type='button';
+ dockActions.append(dockToggle,dockView);
+ dock.append(dockContent,dockActions);
+ document.body.append(dock);
  let lastSignature='';
+ function lobbySummary(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  const state=link?.roomState;
+  if(!link?.room||link.quickMatchMode||!state||state.started)return null;
+  const supported=Array.isArray(state.lobbyReadyIds)&&state.lobbyReadyIds.length<=128;
+  const ready=supported?new Set(state.lobbyReadyIds.filter(Number.isSafeInteger)):new Set();
+  const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
+  const roster=typeof room!=='undefined'?room?.state?.players:[];
+  const active=(Array.isArray(roster)?roster:[]).filter(p=>
+   Number.isSafeInteger(p?.id)&&!botIds.has(p.id)&&
+   !disconnected.has(p.id)&&[1,2].includes(p?.team?.id));
+  const own=active.find(p=>p.id===networkPlayerId);
+  const countdown=state.kickoff;
+  const remaining=countdown&&Number.isSafeInteger(countdown.framesLeft)&&
+   countdown.framesLeft>=0?Math.max(1,Math.ceil(countdown.framesLeft/60)):null;
+  return{link,supported,active,own,ready,remaining};
+ }
+ function renderGlobalLobby(){
+  const state=lobbySummary();
+  // The authentic menu is visible only when its parent pitch is visible.
+  const nativeVisible=!!match&&!match.hidden&&
+   typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
+  dock.hidden=!state||nativeVisible;
+  if(dock.hidden)return;
+  const confirmed=state.active.filter(p=>state.ready.has(p.id)).length;
+  const ownReady=!!state.own&&state.ready.has(state.own.id);
+  dockTitle.textContent=state.remaining!==null?
+   'KICKOFF IN '+state.remaining+' · SERVER COUNTDOWN':
+   'CUSTOM ROOM · KICKOFF READINESS';
+  const text=!state.supported?
+   'This server has not reported lobby readiness. View the room for the native Start control.':
+   state.active.length===0?'No active human players on Red or Blue yet.':
+   confirmed+' / '+state.active.length+' connected humans confirmed'+
+    (state.own?(ownReady?' · you are server-confirmed ready.':
+     ' · your readiness is needed.'):' · join a team to ready up.');
+  if(dockProgress.textContent!==text)dockProgress.textContent=text;
+  dockToggle.hidden=!state.supported||!state.own;
+  dockToggle.disabled=state.remaining!==null;
+  dockToggle.textContent=ownReady?'✓ READY · CHANGE TO NOT READY':'✓ I AM READY';
+ }
+ dockToggle.addEventListener('click',()=>{
+  const snap=lobbySummary();
+  if(!snap?.supported||!snap.own||snap.remaining!==null)return;
+  // Keep one source of consent. The original handler checks current team,
+  // disconnected state and room authority immediately before sending.
+  render();
+  if(!toggle.disabled)toggle.click();
+  renderGlobalLobby();
+ });
+ dockView.addEventListener('click',()=>{
+  if(!lobbySummary())return;
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  render();renderGlobalLobby();
+  panel.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  const focus=!toggle.disabled?toggle:panel;
+  focus.focus?.({preventScroll:true});
+ });
+
  function renderCountdown(){
   const link=typeof serverLink!=='undefined'?serverLink:null,state=link?.roomState;
   const countdown=state?.kickoff;
@@ -146,6 +224,10 @@
  };
  refresh.onclick=render;
  const shown=()=>typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
- setInterval(()=>{if(shown())render();else panel.hidden=true;renderCountdown();},750);
- render();
+ setInterval(()=>{
+  if(shown())render();
+  else{panel.hidden=true;renderCountdown();}
+  renderGlobalLobby();
+ },750);
+ render();renderGlobalLobby();
 })();
