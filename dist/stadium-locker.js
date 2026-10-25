@@ -97,12 +97,29 @@
    tx.onabort=()=>reject(reason||tx.error||Error('Stadium import cancelled.'));
   });
  }
- async function remove(id){
+ async function savedCardRow(map){
+  const db=await database();
+  const stored=await request(db.transaction(STORE,'readonly').objectStore(STORE).get(map.id));
+  if(!stored||stored.code!==map.code)
+   throw Error('This saved stadium changed in another tab. Refresh the locker before continuing.');
+  return stored;
+ }
+ async function remove(map){
   const db=await database();
   await new Promise((resolve,reject)=>{
-   const tx=db.transaction(STORE,'readwrite');
-   tx.objectStore(STORE).delete(id);
-   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||Error('Could not remove stadium.'));
+   let reason=null;
+   const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);
+   const existing=store.get(map.id);
+   existing.onsuccess=()=>{
+    if(!existing.result||existing.result.code!==map.code){
+     reason=Error('The stadium changed in another tab. Refresh before deleting.');
+     tx.abort();return;
+    }
+    store.delete(map.id);
+   };
+   tx.oncomplete=resolve;
+   tx.onerror=()=>reject(reason||tx.error||Error('Could not remove stadium.'));
+   tx.onabort=()=>reject(reason||tx.error||Error('Delete was cancelled; the saved stadium was not changed.'));
   });
  }
  function download(content,name,type){
@@ -153,11 +170,7 @@
     // A card may be stale after another tab deletes/replaces the map. Read
     // the actual saved row, then validate it with the same parser as import,
     // BEFORE any restart, stadium selection or prompt.
-    const db=await database();
-    const transaction=db.transaction(STORE,'readonly');
-    const saved=await request(transaction.objectStore(STORE).get(map.id));
-    if(!saved||saved.code!==map.code)
-     throw Error('This saved stadium changed in another tab. Refresh the locker before loading it.');
+    const saved=await savedCardRow(map);
     const candidate=normalize(saved.code,saved.alias);
     const beforeConfirm=localRoomFree();
     if(beforeConfirm)throw Error(beforeConfirm);
@@ -173,13 +186,20 @@
     status.textContent='Stadium was not loaded: '+(error.message||'Invalid or unavailable saved map.');
    }finally{busy=false;render();}
   });
-  const exportButton=button('↓ Export .hbs',()=>{
-   download(map.code,safeName(map.alias)+'.hbs','application/json');
-   status.textContent='Local stadium exported. No upload.';
+  const exportButton=button('↓ Export .hbs',async()=>{
+   if(busy)return;
+   busy=true;
+   try{
+    const saved=await savedCardRow(map);
+    const candidate=normalize(saved.code,saved.alias);
+    download(candidate.code,safeName(candidate.alias)+'.hbs','application/json');
+    status.textContent='Validated local stadium exported. No upload.';
+   }catch(error){status.textContent=error.message||'Cannot export a changed saved stadium.';}
+   finally{busy=false;render();}
   });
   const removeButton=button('Delete',async()=>{
    if(busy||!window.confirm('Delete '+map.alias+' from this device? Your game will not be changed.'))return;
-   busy=true;try{await remove(map.id);status.textContent='Deleted saved stadium '+map.alias+'.';}
+   busy=true;try{await remove(map);status.textContent='Deleted saved stadium '+map.alias+'.';}
    catch(error){status.textContent=error.message||'Delete failed.';}
    finally{busy=false;render();}
   });removeButton.className='stadium-locker-delete';
@@ -225,8 +245,11 @@
   if(busy)return;
   busy=true;try{
    const items=await all();if(!items.length)throw Error('Save a stadium before exporting a collection.');
+   // Refuse to back up corrupt or externally modified rows as though they
+   // were playable maps. The backup must round-trip through the real parser.
+   const exported=items.map(x=>normalize(x.code,x.alias));
    const content=JSON.stringify({format:'fuckball-stadium-locker',version:1,
-    stadiums:items.map(x=>({alias:x.alias,code:x.code}))});
+    stadiums:exported.map(x=>({alias:x.alias,code:x.code}))});
    download(content,'fuckball-stadium-collection.json','application/json');
    status.textContent='Saved '+items.length+' personal stadiums to a local JSON backup.';
   }catch(error){status.textContent=error.message||'Collection export failed.';}
