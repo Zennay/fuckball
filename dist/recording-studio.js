@@ -16,12 +16,12 @@
  const root=make('section',null,'recording-studio');
  root.setAttribute('aria-label','Private native recording studio');
  const heading=make('strong','RECORDING STUDIO · MY GAMES');
- const lead=make('p','Record the existing local engine as a genuine HBR2. The original file still downloads; optionally save the same validated recording to My Games on this device. Never uploads or produces ranked results.');
+ const lead=make('p','Record the existing local engine as a genuine HBR2. Original HBR2 downloads are always kept. Saving a second, private copy in My Games requires your explicit choice below. Never uploads or produces ranked results.');
  const choices=make('div',null,'recording-studio-choices');
  const autoLabel=make('label'),auto=make('input');auto.type='checkbox';
  autoLabel.append(auto,document.createTextNode(' Start recording automatically on each new offline kick-off'));
  const libraryLabel=make('label'),library=make('input');library.type='checkbox';
- libraryLabel.append(library,document.createTextNode(' Save finished HBR2 to My Games (also download original)'));
+ libraryLabel.append(library,document.createTextNode(' Also save downloaded HBR2 recordings to My Games (optional)'));
  choices.append(autoLabel,libraryLabel);
  const actions=make('div',null,'recording-studio-actions');
  const toggle=make('button','● Start recording');
@@ -93,13 +93,22 @@
  });
  // An in-progress replay or room never triggers a background recording.
  let pending=Promise.resolve(),saving=0;
- window.addEventListener('fuckball:native-hbr2-finished',event=>{
+ // The native recorder still reports when local capture stops, but the
+ // library receives a single completion event from the original download
+ // function. Do not save again on this second signal.
+ window.addEventListener('fuckball:native-hbr2-finished',refresh);
+ window.addEventListener('fuckball:hbr2-downloaded',event=>{
   const detail=event.detail;
   refresh();
-  if(!library.checked||!detail?.local)return;
+  if(!library.checked){
+   status.textContent='Original HBR2 downloaded. Automatic My Games saving is off. Use Import in My Games whenever you want a local copy.';
+   return;
+  }
+  // Server and offline native HBR2 downloads follow the same explicit
+  // opt-in, one canonical ReplayLibrary.save transaction per download.
   if(!detail||!(detail.bytes instanceof Uint8Array)||!detail.bytes.byteLength||
    detail.bytes.byteLength>MAX_FILE){
-   status.textContent='Original HBR2 downloaded. It could not fit the My Games 32 MB per-file limit.';
+   status.textContent='Original HBR2 downloaded. My Games did not save a copy because this exceeds the 32 MB per-file limit.';
    return;
   }
   if(saving>=2){
