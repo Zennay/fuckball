@@ -18,9 +18,19 @@
  const practice=make('button','','Practice Lab ↗');practice.type='button';
  actions.append(library,practice);heading.append(intro,actions);
  const grid=make('div','continue-playing-grid');
+ const live=make('aside','continue-playing-live');live.hidden=true;
+ live.setAttribute('aria-label','Existing active game or connection');
+ const liveInfo=make('div','continue-playing-live-copy');
+ const liveTitle=make('strong','','MATCH STILL OPEN');
+ const liveDescription=make('p','','Return to your existing session before opening a recording.');
+ liveDescription.setAttribute('role','status');
+ liveInfo.append(liveTitle,liveDescription);
+ const liveReturn=make('button','primary','↗ Return to current game');
+ liveReturn.type='button';
+ live.append(liveInfo,liveReturn);
  const note=make('p','continue-playing-note','No personal data is uploaded by this panel.');
  note.setAttribute('role','status');note.setAttribute('aria-live','polite');
- section.append(heading,grid,note);
+ section.append(heading,live,grid,note);
  const lab=home.querySelector('.practice-lab');
  const cards=home.querySelector('.mode-cards');
  if(lab)lab.insertAdjacentElement('beforebegin',section);
@@ -34,6 +44,58 @@
   document.getElementById('quickPractice')?.click();
  };
  let busy=false,version=0;
+ // The Home shortcuts are read-only observers of server/peer/local authority.
+ function active(){
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return ['recovery','ORIGINAL ROOM RECONNECTING','Use the native reconnect/stop controls before opening a saved recording.'];
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return serverLink.room?['online','ONLINE ROOM STILL OPEN','Your original online game remains connected.']:
+    ['connecting','ONLINE CONNECTION PENDING','Your server handshake or human search is still in progress.'];
+  if(typeof peerConnected!=='undefined'&&peerConnected)
+   return ['peer','DIRECT MATCH STILL OPEN','Your original human peer match is still active.'];
+  if(typeof peer!=='undefined'&&peer)
+   return ['peer-pending','DIRECT CONNECTION PENDING','Cancel or finish your original direct-peer handshake.'];
+  if(home.querySelector('.quick-ready:not([hidden]),.quick-queue-actions button:not([hidden])'))
+   return ['queue','HUMAN MATCH SEARCH ACTIVE','Use the original ready/cancel controls before opening a replay.'];
+  if(typeof replay!=='undefined'&&replay)
+   return ['replay','REPLAY ALREADY OPEN','Return to your recording or close it explicitly.'];
+  if(typeof started!=='undefined'&&started)
+   return ['local','LOCAL MATCH STILL OPEN','Your offline game is preserved. Return or stop it explicitly before watching a saved replay.'];
+  return null;
+ }
+ function refreshSession(){
+  const now=active();
+  live.hidden=!now;
+  if(now){
+   liveTitle.textContent=now[1];
+   liveDescription.textContent=now[2]+
+    (now[0]==='local'&&typeof paused!=='undefined'&&paused?' It is paused; resume from the original pitch controls.':'');
+   liveReturn.textContent=now[0]==='recovery'?'↗ View reconnect controls':
+    now[0]==='queue'?'↗ View ready check':'↗ Return to original session';
+  }
+  for(const button of grid.querySelectorAll('[data-saved-replay]')){
+   button.disabled=!!now;
+   button.title=now?'Finish or explicitly close the current game before opening a saved recording.':'';
+  }
+ }
+ liveReturn.addEventListener('click',()=>{
+  const now=active();if(!now)return refreshSession();
+  if(now[0]==='recovery'){
+   const panel=document.querySelector('.native-room-recovery:not([hidden])');
+   if(panel){panel.focus?.({preventScroll:true});return;}
+  }
+  if(now[0]==='queue'){
+   const panel=home.querySelector('.quick-ready:not([hidden]),.quick-queue-panel:not([hidden])');
+   panel?.scrollIntoView?.({behavior:'auto',block:'center'});
+   (panel?.querySelector('button:not([disabled]):not([hidden])')||panel)
+    ?.focus?.({preventScroll:true});return;
+  }
+  document.getElementById('tabPlay')?.click();
+  if(now[0]==='connecting'&&typeof openDialog==='function'&&
+    document.getElementById('networkDialog')?.open!==true)openDialog('networkDialog');
+  note.textContent='Returned to the existing session. No new match or replay was started.';
+ });
+
  const date=timestamp=>new Date(timestamp).toLocaleDateString(undefined,{month:'short',day:'numeric'});
  const duration=frames=>Number.isSafeInteger(frames)&&frames>0?
   Math.floor(frames/3600)+'m '+String(Math.floor(frames%3600/60)).padStart(2,'0')+'s':'Length unknown';
@@ -90,7 +152,14 @@
   Number.isSafeInteger(r.size)&&r.size>0&&r.size<=32*1048576&&
   Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=86400000;
  async function watch(item){
-  if(busy)return;busy=true;note.textContent='Opening local recording…';
+  if(busy)return;
+  const now=active();
+  if(now){
+   note.textContent='Return to or explicitly close '+now[1].toLowerCase()+
+    ' before opening another saved recording.';
+   refreshSession();return;
+  }
+  busy=true;note.textContent='Opening local recording…';
   try{
    const saved=await ReplayLibrary.get(item.id);
    if(saved.item.id!==item.id||saved.bytes.length>32*1048576)
@@ -101,7 +170,7 @@
    if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    note.textContent='Replay opened from this browser.';
   }catch(error){note.textContent='Could not open replay: '+(error.message||'Storage error');}
-  finally{busy=false;}
+  finally{busy=false;refreshSession();}
  }
  function card(title,subtitle,tag,buttonText,handler){
   const box=make('article','continue-playing-card');
@@ -109,6 +178,7 @@
   const name=make('strong','',title);
   const description=make('p','',subtitle);
   const button=make('button','',buttonText);button.type='button';button.onclick=handler;
+  if(buttonText.startsWith('▶ '))button.setAttribute('data-saved-replay','true');
   box.append(badge,name,description,button);
   return box;
  }
@@ -149,10 +219,16 @@
     'STORAGE UNAVAILABLE','Open My Games',()=>library.click()));
    note.textContent='Could not read browser replay storage: '+(error.message||'Storage unavailable');
   }
+  refreshSession();
  }
- document.getElementById('tabHome')?.addEventListener('click',()=>render());
+ document.getElementById('tabHome')?.addEventListener('click',()=>{
+  refreshSession();render();
+ });
  window.addEventListener('focus',()=>{if(!home.hidden)render();});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!home.hidden)render();});
  window.addEventListener('storage',()=>{if(!home.hidden)render();});
- render();
+ window.addEventListener('fuckball:native-session-state',refreshSession);
+ const sessionTick=setInterval(()=>{if(!home.hidden)refreshSession();},1400);
+ sessionTick?.unref?.();
+ refreshSession();render();
 })();
