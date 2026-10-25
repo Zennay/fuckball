@@ -15,6 +15,29 @@
  bannerRetry.className='friend-party-retry';bannerRetry.hidden=true;
  bannerRetry.setAttribute('aria-label','Retry the current authorized friends party search');
  statusBar.append(bannerText,bannerOpen,bannerRetry);
+ // Party state and 30-second launch retry must not disappear on My Games or
+ // the pitch when Home is hidden. This card is a view of the original private
+ // party API and forwards only explicit actions to the existing handlers.
+ const globalParty=document.createElement('aside');
+ globalParty.className='friend-party-global';globalParty.hidden=true;
+ globalParty.setAttribute('role','region');
+ globalParty.setAttribute('aria-label','Current private friends party');
+ const globalCopy=document.createElement('div');
+ globalCopy.className='friend-party-global-copy';
+ const globalTitle=document.createElement('strong');
+ const globalDetail=document.createElement('p');
+ globalDetail.setAttribute('role','status');
+ globalDetail.setAttribute('aria-live','polite');
+ globalCopy.append(globalTitle,globalDetail);
+ const globalActions=document.createElement('div');
+ globalActions.className='friend-party-global-actions';
+ const globalOpen=document.createElement('button');
+ globalOpen.type='button';globalOpen.textContent='↗ Open party';
+ const globalRetry=document.createElement('button');
+ globalRetry.type='button';globalRetry.textContent='↻ Retry search';
+ globalActions.append(globalOpen,globalRetry);
+ globalParty.append(globalCopy,globalActions);
+ document.body.append(globalParty);
  (home.querySelector('.quick-queue-panel')||home.querySelector('.mode-cards'))?.insertAdjacentElement('beforebegin',statusBar);
  const entry=document.createElement('button');entry.type='button';
  entry.textContent='Party';entry.className='friend-party-entry';
@@ -52,6 +75,32 @@
   line.append(t,buttons);box.append(line);
  };
  let busy=false,generation=0,hasJoined=false,lastModeKey='',failedModeKey='',lastQuietPoll=0;
+ let lastPartyState=null,lastPartyToken=null;
+ function updateGlobalParty(){
+  const currentToken=settings.account?.token;
+  const state=lastPartyToken===currentToken?lastPartyState:null;
+  const party=state?.party;
+  // Give the real active match and server-owned 15s ready-check priority.
+  const activeMatch=!!serverLink?.room||
+   (typeof peerConnected!=='undefined'&&peerConnected===true);
+  const readyCheck=document.querySelector('.quick-ready-dock:not([hidden])');
+  globalParty.hidden=!party||!home.hidden||activeMatch||!!readyCheck;
+  if(globalParty.hidden)return;
+  const now=Date.now(),expires=Number(party.launchExpires);
+  const remaining=Number.isFinite(expires)?Math.max(0,Math.ceil((expires-now)/1000)):null;
+  const canRetry=mayRetryParty(state);
+  globalTitle.textContent=canRetry?'PARTY SEARCH · YOUR ACTION NEEDED':
+   party.launchMode?'PARTY SEARCH IN PROGRESS':'FRIENDS PARTY CONNECTED';
+  const detail=party.launchMode?
+   'Playlist '+party.launchMode+' · '+(remaining===null?'server-issued launch':remaining+'s left')+
+   (canRetry?' · Launch did not start; retry explicitly.':
+    remaining===0?' · Deadline passed; request a new search.':
+    ' · Keep the original server queue or open your party.'):
+   party.members.length+' / 4 signed-in teammates · ready up before searching.';
+  if(globalDetail.textContent!==detail)globalDetail.textContent=detail;
+  globalRetry.hidden=!canRetry;
+  globalRetry.disabled=!canRetry||busy;
+ }
  const knownInvitations=new Set();
  async function api(data){
   const token=settings.account?.token;
@@ -65,14 +114,21 @@
  }
  function act(payload){
   if(busy)return;
+  const token=settings.account?.token;
+  const requestGeneration=++generation;
   busy=true;notice.textContent='Saving party action…';
   api(payload).then(state=>{
+   // Sign-out, account switch or a newer action invalidates the response.
+   // Never render another account's party or launch its human-only queue.
+   if(settings.account?.token!==token||generation!==requestGeneration)return;
    render(state);
    entry.textContent='Party'+(state.invitations?.length?' ('+state.invitations.length+')':'');
    notice.textContent='Party updated.';
    launchIfReady(state);
-  }).catch(e=>{notice.textContent=e.message||'Party action unavailable.';})
-   .finally(()=>{busy=false;});
+  }).catch(e=>{
+   if(settings.account?.token===token&&generation===requestGeneration)
+    notice.textContent=e.message||'Party action unavailable.';
+  }).finally(()=>{busy=false;updateGlobalParty();});
  }
  // Each party launch is server-issued and expires. Keep automatic launch
  // single-shot: a failed local attempt becomes an explicit, revalidated retry,
@@ -145,9 +201,12 @@
   finally{busy=false;}
  }
  bannerRetry.onclick=retryPartySearch;
+ globalRetry.onclick=retryPartySearch;
  function render(state){
+  lastPartyState=state;lastPartyToken=settings.account?.token;
   body.replaceChildren();
   const p=state?.party;
+  updateGlobalParty();
   bannerText.textContent=p?'PARTY · '+p.members.length+' / 4 · '+p.members.map(m=>m.name).join(', '):'';
   statusBar.hidden=!p;hasJoined=!!p;
   syncRetryButton(state);
@@ -234,6 +293,7 @@
   if(quiet)lastQuietPoll=Date.now();
   if(!settings.account?.token){
    body.replaceChildren();statusBar.hidden=true;bannerRetry.hidden=true;hasJoined=false;
+   lastPartyState=null;lastPartyToken=null;globalParty.hidden=true;
    notice.textContent='Sign in with a Fuckball account to use parties.';
    const login=btn('Sign in / create account',()=>{dialog.close();showJoinScreen('');});
    login.className='primary';body.append(login);return;
@@ -268,9 +328,17 @@
   notice.textContent='Loading private party…';refresh();
  }
  bannerOpen.onclick=open;entry.onclick=open;
+ globalOpen.onclick=open;
  window.openFriendParty=open;
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh();});
  setInterval(()=>{if(document.visibilityState==='visible')refresh();},2500);
+ // Lightweight presentational clock: no extra API calls, queues or sockets.
+ const globalPartyTicker=setInterval(updateGlobalParty,1000);
+ globalPartyTicker?.unref?.();
+ for(const id of ['tabHome','tabPlay']){
+  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(updateGlobalParty));
+ }
+ window.addEventListener('focus',updateGlobalParty);
  // Discover invitations without keeping the Friends dialog open.
  if(settings.account?.token)refresh();
 })();
