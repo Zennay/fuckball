@@ -82,7 +82,7 @@
  function persist(list){
   if(!healthy)return Promise.reject(Error('Unreadable private series storage. Download its original bytes first.'));
   // Capture the operator's original view BEFORE waiting for another tab.
-  const before=items,proposed=validateCollection(list).map(x=>x.series);
+  const before=items,expectedSnapshot=snapshot,proposed=validateCollection(list).map(x=>x.series);
   const work=pendingWrite.catch(()=>{}).then(async()=>{
    const commit=()=>{
     const raw=localStorage.getItem(KEY);
@@ -91,7 +91,7 @@
     const latest=validateCollection(raw?JSON.parse(raw):[]).map(x=>x.series);
     // A no-lock browser cannot make a truly atomic multi-tab write. Fall
     // back to refusing even unrelated stale changes, never blindly replacing.
-    if(!navigator.locks?.request&&raw!==snapshot)
+    if(!navigator.locks?.request&&raw!==expectedSnapshot)
      throw Error('Another tab changed series data. Refresh before saving.');
     const oldById=new Map(before.map(x=>[x.id,x]));
     const proposedById=new Map(proposed.map(x=>[x.id,x]));
