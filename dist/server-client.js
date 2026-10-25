@@ -77,7 +77,11 @@ function notifyNativeSessionView(){
  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
   window.dispatchEvent(new CustomEvent('fuckball:native-session-state'));
 }
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();const link=serverLink;clearQuickRematchAlert(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
+function clearNativeAdmissionDeadline(link){
+ if(link?.admissionTimer!=null)clearTimeout(link.admissionTimer);
+ if(link)link.admissionTimer=null;
+}
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();const link=serverLink;clearQuickRematchAlert(link);clearNativeAdmissionDeadline(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
@@ -155,6 +159,22 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   ['1v1','2v2','3v3','4v4','club4v4'].includes(resumeContext.quickMatchMode);
  const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:recoveringHuman?resumeContext.quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  notifyNativeSessionView();
+ // This clock stops as soon as the server actually acknowledges this
+ // admission/queue. A connected WebSocket alone does not prove room entry.
+ // After the bounded wait the normal native onclose path owns recovery.
+ link.admissionStartedAt=Date.now();
+ link.admissionTimer=setTimeout(()=>{
+  if(serverLink!==link||link.room||link.quickQueueAcknowledged)return;
+  link.admissionTimedOut=true;
+  $('serverRoomStatus').textContent='No server response within 20 seconds.';
+  notifyNativeSessionView();
+  try{ws.close();}catch{
+   // If a transport cannot be closed, don't invent a reconnect ticket.
+   // Explicit cancellation remains available in the native room controls.
+   notify('Server connection timed out. Cancel this connection to retry.');
+  }
+ },20000);
+ link.admissionTimer?.unref?.();
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,
@@ -179,8 +199,18 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
- };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room&&!link.reconnect)
-  window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+ };ws.onclose=event=>{
+  if(serverLink!==link)return;
+  clearNativeAdmissionDeadline(link);
+  // Do not discard the original human queue while ticket-based recovery is
+  // reconnecting. The admission deadline concerns only a fresh queue join.
+  if(link.quickMatchMode&&!link.room&&!link.reconnect)window.onQuickMatchEvent?.({
+   type:'queueStatus',status:'disconnected',
+   reason:link.admissionTimedOut?
+    'Server did not acknowledge the human queue within 20 seconds. Retry explicitly.':
+    'Human match connection ended. You can retry.'
+  });
+  if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -217,9 +247,17 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     // No slot was ever admitted, so show a normal (manual) join retry. No
     // ticket is fabricated and no background reconnect is scheduled.
     showView('play');
-    showJoinScreen(roomId,'The server connection ended before joining. Review the room and retry explicitly.');
+    showJoinScreen(roomId,link.admissionTimedOut?
+     'Server did not confirm this room join within 20 seconds. Check the server and retry explicitly.':
+     'The server connection ended before joining. Review the room and retry explicitly.');
     if(retrySpectator)$('joinSpectator').checked=true;
-   }else notify('Disconnected.');
+   }else if(create&&!admitted){
+    showView('home');
+    const reason=link.admissionTimedOut?
+     'Room creation was not confirmed within 20 seconds. Open Online Rooms to retry.':
+     'Room creation connection ended before admission. Open Online Rooms to retry.';
+    $('serverRoomStatus').textContent=reason;notify(reason);
+   }else if(!link.quickMatchMode)notify('Disconnected.');
   };
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(link.spectatorJoinAwaiting){
@@ -233,6 +271,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     'This server cannot guarantee spectator-only entry; no room was joined.');
    return;
   }
+ }
+ // Human matchmaking can legitimately wait much longer than 20 seconds
+ // *after* an authenticated server queue acknowledgement. Do not disconnect
+ // players merely because an empty human-only playlist needs opponents.
+ if(link.quickMatchMode&&['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
+  link.quickQueueAcknowledged=true;clearNativeAdmissionDeadline(link);
  }
  if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
   if(d.type==='quickMatchFound'){link.quickMatchMode=d.mode;link.roomControl={locked:true};}
@@ -313,6 +357,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  }
  if(d.type==='peering'){if(!link.net)startPeering(link,ws);return;}if(link.net&&link.net.handleServer(d))return;
  if(d.type==='welcome'){
+  clearNativeAdmissionDeadline(link);
   // Fail closed: an old server may silently ignore the new spectate option.
   // Never put a player who explicitly selected WATCH into an active lineup.
   if(link.requestedSpectate&&d.spectatorAdmission!==true){
