@@ -228,10 +228,8 @@
      lastControllerScan=now;
      const health=window.fuckballCouchRivals?.seatStatus?.();
      if(health&&!health.ok&&!series.suspended&&typeof started!=='undefined'&&started){
-      // A missing locked pad cannot make a team play 2v1. Freeze original
-      // native local match; do not reassign input, award a goal or auto-resume.
+      // Never silently continue 2v1. Preserve round and locked controllers.
       series.suspended=true;
-      if(typeof paused!=='undefined'&&!paused&&room?.gameState)togglePause();
       announce('Round paused: Blue Player '+health.missing.join(' and Blue Player ')+
        ' lost their assigned gamepad. Reconnect or explicitly rebind, then choose Resume.');
       display();
@@ -240,6 +238,10 @@
       display();
      }
     }
+    // A generic P-pause/menu resume must not bypass the explicit four-human
+    // restart. Re-freeze the original native round while it is suspended.
+    if(series.suspended&&typeof started!=='undefined'&&started&&
+       typeof paused!=='undefined'&&!paused&&room?.gameState)togglePause();
     const state=typeof room!=='undefined'?room?.gameState:null;
     if(state){
      series.seen=true;
