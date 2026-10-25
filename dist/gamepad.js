@@ -129,8 +129,9 @@
  openSetup.addEventListener('click',()=>{
   if(recovery.hidden||!lostPlayerOneSeat())return;
   const open=window.fuckballControllerSetup?.open;
-  if(typeof open==='function')open();
-  else recoveryDetail.textContent='Controller Setup is unavailable here. Open Configure controller on Home to explicitly bind Player 1.';
+  if(typeof open==='function'){
+   if(open()===false)recoveryDetail.textContent='This browser cannot open Controller Setup. Keyboard and touch remain available.';
+  }else recoveryDetail.textContent='Controller Setup is unavailable here. Open Configure controller on Home to explicitly bind Player 1.';
  });
  keepKeyboard.addEventListener('click',()=>{
   acknowledgedLoss=lostPlayerOneSeat();refreshControllerRecovery();
