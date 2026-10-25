@@ -193,3 +193,34 @@ body.lobby .scoreboard{opacity:.35}
 .join-spectator-option input{width:19px;height:19px;accent-color:#c6ff42;flex:none}
 .join-spectator-help{margin:2px 0 11px;color:#bfd4cf;font-size:11px;line-height:1.5}
 .join-spectator-option:focus-within{outline:2px solid #c6ff42;outline-offset:3px}
+
+/* Server-issued rematch votes stay accessible outside the match menu.
+   Buttons forward only explicit human consent to native rematch handlers. */
+.native-rematch-dock[hidden]{display:none!important}
+.native-rematch-dock{position:fixed;z-index:114;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));width:min(950px,calc(100vw - 24px));
+ display:flex;align-items:center;justify-content:space-between;gap:16px;
+ padding:15px 18px;box-sizing:border-box;border-radius:15px;
+ border:2px solid #d7f2a2;background:#18312d;color:#f3fff0;
+ box-shadow:0 16px 46px #06131ae0}
+.native-rematch-dock-copy{min-width:0}
+.native-rematch-dock-copy strong{display:block;font-size:.81rem;
+ letter-spacing:.065em;color:#e1ffaa}
+.native-rematch-dock-copy p{font-size:.85rem;line-height:1.45;
+ color:#d0e5dc;margin:6px 0 0;overflow-wrap:anywhere}
+.native-rematch-dock-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.native-rematch-dock-actions button{min-height:48px;padding:10px 14px;
+ font:inherit;font-size:.83rem;font-weight:800;border-radius:9px;
+ border:1px solid #a0bcb0;background:#29463d;color:#f2fff0;cursor:pointer}
+.native-rematch-dock-actions button.primary{border-color:#ddffa0;
+ background:#ddffa0;color:#153322}
+.native-rematch-dock-actions button[hidden]{display:none}
+.native-rematch-dock-actions button:focus-visible{outline:3px solid #f6ffa8;outline-offset:3px}
+@media(max-width:760px){
+ .native-rematch-dock{flex-direction:column;align-items:stretch;gap:12px;
+ padding:14px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-rematch-dock-actions{display:grid;grid-template-columns:1fr 1fr}
+ .native-rematch-dock-actions button:last-child{grid-column:1/-1}
+}
+@media(max-width:390px){.native-rematch-dock-actions{grid-template-columns:1fr}
+ .native-rematch-dock-actions button:last-child{grid-column:auto}}

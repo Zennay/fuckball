@@ -446,7 +446,7 @@ function populateSubSelect(id,items,empty){
 function renderNextMatchPanel(){
  const panel=$('nextMatchPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state&&!state.started);
- if(panel.hidden)return;
+ if(panel.hidden){renderGlobalRematchDock();return;}
  const result=state.lastResult,quick=!!link.quickMatchMode;
  const request=quick?link.quickRematch:state.rematch;
  $('nextMatchTitle').textContent=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
@@ -472,6 +472,7 @@ function renderNextMatchPanel(){
  const canVote=!!request&&voters.has(networkPlayerId)&&!approved.has(networkPlayerId);
  $('rematchAccept').hidden=!canVote;
  $('rematchDecline').hidden=!canVote;
+ renderGlobalRematchDock();
 }
 $('rematchRequest').onclick=()=>serverLink?.send({type:serverLink?.quickMatchMode?'quickRematchRequest':'rematchRequest'});
 $('nextGame').onclick=()=>serverLink?.send({type:'newGame'});
@@ -485,6 +486,93 @@ $('rematchDecline').onclick=()=>{
  const request=link?.quickMatchMode?link.quickRematch:link?.roomState?.rematch;
  if(link&&request&&Number.isSafeInteger(request.id))link.send({type:link.quickMatchMode?'quickRematchVote':'rematchVote',id:request.id,accept:false});
 };
+// A rematch can be proposed for only 45 seconds. If a human is reading My
+// Games or Home when the server vote arrives, the native menu is invisible.
+// Mirror the existing consent instead of constructing a second voting path.
+const globalRematchDock=document.createElement('aside');
+globalRematchDock.className='native-rematch-dock';
+globalRematchDock.hidden=true;
+globalRematchDock.setAttribute('role','region');
+globalRematchDock.setAttribute('aria-label','Current human rematch vote');
+const globalRematchCopy=document.createElement('div');
+globalRematchCopy.className='native-rematch-dock-copy';
+const globalRematchTitle=document.createElement('strong');
+const globalRematchStatus=document.createElement('p');
+globalRematchStatus.setAttribute('role','status');
+globalRematchStatus.setAttribute('aria-live','polite');
+globalRematchCopy.append(globalRematchTitle,globalRematchStatus);
+const globalRematchActions=document.createElement('div');
+globalRematchActions.className='native-rematch-dock-actions';
+const globalRematchAccept=document.createElement('button');
+globalRematchAccept.type='button';globalRematchAccept.className='primary';
+globalRematchAccept.textContent='✓ Accept rematch';
+const globalRematchDecline=document.createElement('button');
+globalRematchDecline.type='button';globalRematchDecline.textContent='Decline';
+const globalRematchView=document.createElement('button');
+globalRematchView.type='button';globalRematchView.textContent='View match';
+globalRematchActions.append(globalRematchAccept,globalRematchDecline,globalRematchView);
+globalRematchDock.append(globalRematchCopy,globalRematchActions);
+document.body.append(globalRematchDock);
+function currentRematchVote(){
+ const link=serverLink,state=link?.roomState;
+ if(!link?.room||!state?.lastResult||state.started)return null;
+ const vote=link.quickMatchMode?link.quickRematch:state.rematch;
+ if(!vote||!Number.isSafeInteger(vote.id)||!Array.isArray(vote.required)||
+    !Array.isArray(vote.accepted)||!vote.required.includes(networkPlayerId))return null;
+ const expires=Number.isSafeInteger(vote.expiresAt)?vote.expiresAt:null;
+ if(expires!==null&&expires<=Date.now())return null;
+ const approved=vote.accepted.includes(networkPlayerId);
+ return{link,vote,approved,expires};
+}
+function renderGlobalRematchDock(){
+ const state=currentRematchVote();
+ const menuVisible=!$('matchView').hidden&&!$('pauseMenu').hidden&&!$('nextMatchPanel').hidden;
+ globalRematchDock.hidden=!state||menuVisible;
+ if(globalRematchDock.hidden)return;
+ const vote=state.vote,remaining=state.expires===null?null:
+  Math.max(0,Math.ceil((state.expires-Date.now())/1000));
+ globalRematchTitle.textContent=state.approved?'YOUR REMATCH VOTE IS CONFIRMED':
+  'HUMAN REMATCH · YOUR DECISION NEEDED';
+ const approved=vote.accepted.filter(id=>vote.required.includes(id)).length;
+ const text=(state.link.quickMatchMode?'Casual human rematch':'Room rematch')+
+  ' · '+approved+' / '+vote.required.length+' human players confirmed'+
+  (remaining===null?'':' · '+remaining+'s left')+
+  (state.approved?' · Waiting for remaining players.':
+   ' · Accept or decline before the server deadline.');
+ if(globalRematchStatus.textContent!==text)globalRematchStatus.textContent=text;
+ globalRematchAccept.hidden=state.approved;
+ globalRematchDecline.hidden=state.approved;
+}
+function sendGlobalRematchVote(accept){
+ const state=currentRematchVote();
+ if(!state||state.approved||globalRematchDock.hidden)return;
+ // Render the original menu vote before forwarding the user's actual click.
+ // This preserves native proposal-id checks, server permission and protocol.
+ renderNextMatchPanel();
+ const original=$(accept?'rematchAccept':'rematchDecline');
+ if(original.hidden||original.disabled)return;
+ original.click();
+ globalRematchStatus.textContent='Vote sent · waiting for the server to update the player count.';
+}
+globalRematchAccept.addEventListener('click',()=>sendGlobalRematchVote(true));
+globalRematchDecline.addEventListener('click',()=>sendGlobalRematchVote(false));
+globalRematchView.addEventListener('click',()=>{
+ if(!currentRematchVote())return;
+ $('tabPlay').click();
+ if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+ renderNextMatchPanel();
+ $('nextMatchPanel').scrollIntoView?.({behavior:'auto',block:'nearest'});
+ const choice=!$('rematchAccept').hidden?$('rematchAccept'):$('nextMatchPanel');
+ choice.focus?.({preventScroll:true});
+ renderGlobalRematchDock();
+});
+const globalRematchTicker=setInterval(renderGlobalRematchDock,1000);
+globalRematchTicker?.unref?.();
+// Home and Play exist in both the full app and minimal original runtime.
+// My Games is still covered by the one-second view-state refresh tick.
+for(const id of ['tabHome','tabPlay'])
+ $(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalRematchDock));
+
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
