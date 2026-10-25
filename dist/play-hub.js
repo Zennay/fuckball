@@ -372,8 +372,12 @@
   connectionCard.hidden=!state.pending;
   if(state.pending){
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
-   const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
-    ' You can keep waiting, review connection settings or cancel explicitly.';
+   const link=typeof serverLink!=='undefined'?serverLink:null;
+   const awaiting=Number.isFinite(link?.connectionDeadlineAt)&&link.connectionDeadlineAt>Date.now();
+   const countdown=awaiting?' · '+Math.max(1,Math.ceil((link.connectionDeadlineAt-Date.now())/1000))+
+    's until the connection attempt ends.':'';
+   const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+countdown+
+    ' You can review the original connection or cancel explicitly.';
    if(connectionDetail.textContent!==copy)connectionDetail.textContent=copy;
   }
   const canCancel=nativeQueue.searching&&!nativeQueue.ready;
@@ -528,6 +532,12 @@
  if(q)observer.observe(q,{subtree:true,attributes:true,attributeFilter:['hidden']});
  window.addEventListener('online',refresh);window.addEventListener('offline',refresh);
  window.addEventListener('fuckball:native-session-state',refresh);
+ // Only the current Home connection card needs a live countdown. The server
+ // never receives extra messages or automatic retry requests from this timer.
+ const connectingCountdown=setInterval(()=>{
+  if(!connectionCard.hidden&&!home.hidden)refresh();
+ },1000);
+ connectingCountdown?.unref?.();
  document.getElementById('tabHome')?.addEventListener('click',refresh);
  document.getElementById('tabPlay')?.addEventListener('click',refresh);
  window.addEventListener('focus',refresh);
