@@ -121,7 +121,7 @@
  const roomDetail=node('p','','play-hub-current-room-detail');
  const roomAdmission=node('small','Invites use the server’s existing room access rules.','play-hub-current-room-admission');
  roomCopy.append(roomHead,roomDetail,roomAdmission);
- const roomActions=node('div',null,'play-hub-current-room-actions');
+ const currentRoomActions=node('div',null,'play-hub-current-room-actions');
  function currentInvitableRoom(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   if(!link?.room||link.quickMatchMode)return null;
@@ -149,8 +149,8 @@
   nativeRoomAction('disconnectPeer','disconnect');
   announce('Leaving through the original online room controls.');
  },'play-hub-current-room-leave');
- roomActions.append(roomReturn,roomCopyInvite,roomShareInvite,roomLeave);
- activeRoomCard.append(roomCopy,roomActions);
+ currentRoomActions.append(roomReturn,roomCopyInvite,roomShareInvite,roomLeave);
+ activeRoomCard.append(roomCopy,currentRoomActions);
  const grid=node('div',null,'play-hub-grid');
  const human=node('article',null,'play-hub-card play-hub-human');
  const humanCopy=node('div');
