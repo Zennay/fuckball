@@ -140,11 +140,9 @@
    };
    const safeAction=action=>()=>{
     if(!authorized()){message.textContent='Session changed. Reload your own results before exporting.';return;}
-    // Guard even against stale detached controls after user changes the
-    // period/mode. These rows must still belong to the current filter scope.
-    if(rows.some(row=>!scopeIds.has(row.id))){
-     message.textContent='Your filters changed. Refresh this session before exporting.';return;
-    }
+    // Only the filtered session rows captured by this render can be exported.
+    // Authorization is rechecked at click-time, including account changes.
+    if(!rows.length||rows.some(row=>!scopeIds.has(row.id)))return;
     try{action(rows);message.textContent='Private filtered session report generated locally, not uploaded.';}
     catch{message.textContent='Could not export the chosen play grouping.';}
    };
