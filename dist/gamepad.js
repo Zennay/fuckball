@@ -84,6 +84,21 @@
  // couch session. A newly plugged-in controller using the old port cannot
  // silently inherit the first player's movement or kick permission.
  let localSeatOne=null,localSeatLocked=false;
+ // A live P1 session owns its exact Gamepad API port + hardware identity.
+ // Otherwise a disconnected pad could be replaced by a different person's
+ // controller on the same port, unintentionally moving/kicking online.
+ let liveSeatOne=null,liveSeatLocked=false;
+ const isCouchRivals=()=>['couchRivals','couchRivals3v3','couchRivals4v4']
+  .includes($('mode').value);
+ const liveP1Session=()=>typeof started!=='undefined'&&started&&
+  !replay&&!isCouchRivals()&&!localTwoHumanMode();
+ function liveSeatPad(pads){
+  const seat=liveSeatOne;
+  if(!seat)return null;
+  const pad=pads[seat.index];
+  return pad?.connected&&pad.index===seat.index&&
+   pad.id===seat.id&&pad.index!==reservedP2()?pad:null;
+ }
  const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
   !serverLink&&!peerConnected&&!replay&&
   ['local','coop2v2','coop3v3','coop4v4'].includes($('mode').value);
@@ -107,6 +122,22 @@
     const pinned=localSeatOne===null?null:pads[localSeatOne.index];
     return pinned?.connected&&pinned.id===localSeatOne.id&&
      pinned.index!==reservedP2()?pinned:null;
+   }
+   // No live match may auto-handoff movement/kick authority when a gamepad is
+   // unplugged or a new pad occupies the same Gamepad API port. The original
+   // human must choose Bind controller in the setup UI to authorize a change.
+   if(!liveP1Session()){liveSeatLocked=false;liveSeatOne=null;}
+   else{
+    if(!liveSeatLocked){
+     const candidate=chosenIndex===null?
+      (pads[active]?.connected&&pads[active]?.index!==reservedP2()?pads[active]:
+       Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2())):
+      pads[chosenIndex];
+     liveSeatOne=candidate?.connected&&candidate.index!==reservedP2()?
+      {index:candidate.index,id:candidate.id}:null;
+     liveSeatLocked=true;
+    }
+    return liveSeatPad(pads);
    }
    // Explicit choices never fall back to another player's controller on disconnect.
    if(chosenIndex!==null){
@@ -139,8 +170,10 @@
  }
  function read(){return playable()&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)?sample(controller()):neutral();}
  function describe(pad){
+  const seatMissing=!pad&&liveP1Session()&&liveSeatLocked;
   const next=pad?'Connected: '+String(pad.id||'Controller').slice(0,70)+
    ' · stick / D-pad move · configured buttons kick · Start menu.':
+   seatMissing?'Gamepad changed or disconnected. Movement and kick are neutral until you explicitly rebind in Controller Setup.':
    'No controller active. Connect a gamepad and press a button. Keyboard and touch still work.';
   if(next!==connected){connected=next;label.textContent=next;}
  }
@@ -225,6 +258,18 @@
   const index=event.detail?.index;
   if(index!==null&&(!Number.isSafeInteger(index)||index<0||index>15))return;
   chosenIndex=index;active=null;lastSignature='';connected='';
+  // This event is a deliberate player action, including rebinding the same
+  // port. It is the only mid-match way to authorize a different controller.
+  if(liveP1Session()){
+   let pads=[];
+   try{pads=typeof navigator.getGamepads==='function'?navigator.getGamepads():[];}catch{}
+   const selected=index===null?
+    Array.from(pads).find(p=>p?.connected&&p.index!==reservedP2()):
+    pads[index];
+   liveSeatOne=selected?.connected&&selected.index!==reservedP2()?
+    {index:selected.index,id:selected.id}:null;
+   liveSeatLocked=true;
+  }
   if(localSeatLocked&&localTwoHumanMode()){
    const pads=typeof navigator.getGamepads==='function'?navigator.getGamepads():[];
    const chosen=index===null?
@@ -237,9 +282,16 @@
   // the in-game menu just because Start was held during the switch.
   wasStart=true;
  });
- window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null};
+ window.fuckballGamepad={read,sourceIndex:()=>controller()?.index??null,
+  sourceStatus:()=>{
+   if(localSeatLocked&&localTwoHumanMode())return{
+    locked:true,connected:!!controller(),port:localSeatOne?.index??null};
+   return {locked:liveSeatLocked&&liveP1Session(),
+    connected:!!controller(),port:liveSeatOne?.index??null};
+  }};
  window.addEventListener('fuckball:local-match-kickoff',()=>{
   localSeatLocked=false;
+  liveSeatLocked=false;liveSeatOne=null;
   if(!localTwoHumanMode())return;
   const pad=controller();
   localSeatOne=pad?{index:pad.index,id:pad.id}:null;
