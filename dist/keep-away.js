@@ -137,6 +137,16 @@
  };
  renderHistory();
  const own=()=>room?.state?.players?.find?.(p=>p.id===1);
+ // Only the real opposing bot, on the currently visible approved sandbox
+ // pitch, can interrupt a player's kick streak. Unknown IDs and spectators
+ // must not fabricate a lost streak.
+ function opposingBotKick(s,d){
+  if(!Number.isSafeInteger(d.playerId)||d.playerId===1||
+     !botIds?.has?.(d.playerId)||![1,2].includes(d.team)||
+     d.team===s.side)return false;
+  const player=room?.state?.players?.find?.(p=>p.id===d.playerId);
+  return !!player&&player.team?.id===d.team;
+ }
  const ready=()=>!serverLink&&!peerConnected&&!replay&&started&&!pitch.hidden&&
   document.getElementById('mode')?.value==='bot'&&room?.gameState&&
   Number.isSafeInteger(room.currentFrameNo)&&own()?.disc&&[1,2].includes(own()?.team?.id)&&
@@ -152,8 +162,10 @@
  const nativeScore=()=>[room.gameState.redScore,room.gameState.blueScore];
  function paint(s){
   clock.textContent=Math.max(0,Math.ceil((s.duration*60-s.frames)/60))+'s left · '+s.streak+' current / '+s.target+' target';
+  const reason=s.lastBreakReason&&room.currentFrameNo-s.lastBreakFrame<180?
+   ' · Last break: '+s.lastBreakReason:'';
   progress.textContent=(parked||paused?'Paused · explicitly resume the original local match. ':'')+
-   s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks';
+   s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks'+reason;
   bar.value=Math.min(100,Math.round(s.best/s.target*100));
  }
  function finish(label,complete=false){
@@ -174,7 +186,8 @@
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=active,d=event.detail;
   if(!s||!d||document.hidden||!ready()||room!==s.room||d.room!==s.room||
-   !Number.isSafeInteger(d.frame)||d.frame<s.frame||paused||own()?.team?.id!==s.side)return;
+   !Number.isSafeInteger(d.frame)||d.frame<s.frame||
+   d.frame>room.currentFrameNo||paused||own()?.team?.id!==s.side)return;
   // The source event fires only for native physical kicks. Duplicate callbacks
   // by the same player in the same engine frame cannot inflate a streak.
   if(s.lastKickFrame===d.frame&&s.lastKickId===d.playerId)return;
@@ -183,8 +196,9 @@
    s.kicks=Math.min(9999,s.kicks+1);
    s.streak=Math.min(999,s.streak+1);
    s.best=Math.max(s.best,s.streak);
-  }else if(s.streak){
+  }else if(s.streak&&opposingBotKick(s,d)){
    s.streak=0;s.breaks=Math.min(9999,s.breaks+1);
+   s.lastBreakFrame=d.frame;s.lastBreakReason='Opposing AI kick';
   }
   paint(s);
  });
@@ -225,7 +239,10 @@
    finish('KEEP AWAY · MATCH RESTARTED');return;
   }
   if(current[0]!==s.score[0]||current[1]!==s.score[1]){
-   if(s.streak){s.streak=0;s.breaks++;}
+   if(s.streak){
+    s.streak=0;s.breaks=Math.min(9999,s.breaks+1);
+    s.lastBreakFrame=frame;s.lastBreakReason='Native match goal';
+   }
    s.score=current;
   }
   paint(s);
@@ -243,7 +260,7 @@
    if(!quickPlay('bot',true,true)||!ready())throw Error('Native 1v1 local AI practice is unavailable.');
    active={room,side:own().team.id,duration,target:goal,frame:room.currentFrameNo,
     frames:0,score:nativeScore(),kicks:0,streak:0,best:0,breaks:0,
-    lastKickFrame:-1,lastKickId:-1};
+    lastKickFrame:-1,lastKickId:-1,lastBreakFrame:-1,lastBreakReason:''};
    parked=false;updateReturn();
    badge.textContent='KEEP AWAY · LOCAL AI';
    hud.hidden=false;stop.hidden=false;again.hidden=true;dismiss.hidden=true;
