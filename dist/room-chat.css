@@ -109,3 +109,18 @@
  .native-room-chat-inbox-toggle{width:100%;min-height:48px}
  .native-room-chat-inbox-actions button{min-height:48px}
 }
+
+/* Real human off-pitch chat: one-click reply keeps the original moderated
+   composer and sender. The two secondary actions remain visibly distinct. */
+.native-room-chat-inbox-actions button:first-child{flex:1 1 100%;background:#dbff9c;
+ color:#163329;border-color:#dbff9c}
+.native-room-chat-inbox-actions button:not(:first-child){flex:1 1 120px}
+@media(max-width:480px){
+ .native-room-chat-inbox-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+ .native-room-chat-inbox-actions button{width:100%;min-width:0}
+ .native-room-chat-inbox-actions button:first-child{grid-column:1/-1}
+}
+@media(max-width:335px){
+ .native-room-chat-inbox-actions{grid-template-columns:1fr}
+ .native-room-chat-inbox-actions button:first-child{grid-column:auto}
+}
