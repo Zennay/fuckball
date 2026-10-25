@@ -202,13 +202,14 @@
  slider.oninput=()=>{
   const value=Number(slider.value);
   if(!Number.isFinite(value)||value<.15||value>.65)return;
+  clearSuggestion();
   config.deadzone=value;fill();persist();
  };
  reset.onclick=()=>{
-  cancelBinding();
+  cancelBinding();cancelCalibration();
   config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
-   kickPulse:false,goalPulse:false};suggestion=null;
-  apply.disabled=true;fill();persist();
+   kickPulse:false,goalPulse:false};
+  fill();persist();
   hint.textContent='Standard kick mapping and 30% deadzone restored.';
  };
  const held=(pad,i)=>pad.buttons?.[i]?.pressed===true||
@@ -416,7 +417,7 @@
  }
  done.onclick=close;
  dialog.addEventListener('close',()=>{
-  cancelBinding();active=false;sampling=null;calibrate.disabled=false;
+  cancelBinding();cancelCalibration();active=false;
   returnToPlayingSurface();
  });
  dialog.addEventListener('click',event=>{if(event.target===dialog)close();});
@@ -428,7 +429,7 @@
   // controller events with the modal. A held direction cannot continue
   // behind the setup window during an active online/local match.
   if(typeof releaseInputs==='function')releaseInputs();
-  cancelBinding();fill();refreshSources();sampling=null;suggestion=null;apply.disabled=true;active=true;
+  cancelBinding();cancelCalibration();fill();refreshSources();active=true;
   hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
   dialog.showModal();mapping.focus();return true;
  };
@@ -446,6 +447,11 @@
    typeof v.invertX!=='boolean'||typeof v.invertY!=='boolean'||
    (v.kickPulse!==undefined&&typeof v.kickPulse!=='boolean')||
    (v.goalPulse!==undefined&&typeof v.goalPulse!=='boolean'))return;
+  // Another gamepad setting change supersedes the measurement. Do not leave
+  // a now-obsolete recommendation available after a manual slider edit,
+  // reset, or another consumer updates P1 controller settings.
+  if(v.stick!==config.stick||v.deadzone!==config.deadzone)
+   cancelCalibration();
   config={kick:v.kick,deadzone:v.deadzone,stick:v.stick,
    invertX:v.invertX,invertY:v.invertY,kickPulse:v.kickPulse??false,goalPulse:v.goalPulse??false};
   fill();
