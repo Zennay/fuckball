@@ -170,7 +170,9 @@
  // on the pitch so closing a chat sheet cannot itself kick/move the human.
  document.addEventListener('pointerdown',event=>{
   if(!opened||panel.contains(event.target))return;
-  if(match.contains(event.target)){
+  // Consume only genuine human gameplay pointer surfaces. Toolbar/menu
+  // buttons may still open their original controls with one intentional tap.
+  if(event.target.closest?.('#gameCanvas,#joystick,#touchKick')){
    event.preventDefault();
    event.stopPropagation();
   }
