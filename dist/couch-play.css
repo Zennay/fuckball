@@ -24,3 +24,27 @@
 .couch-play-rules select{box-sizing:border-box;width:100%;max-width:460px;min-height:44px;border:1px solid #93b9a1;border-radius:8px;background:#0a242a;color:#f4fcf0;padding:9px 11px}
 .couch-play-rules p{font-size:12px;color:#d0e5d8;margin:4px 0 0;line-height:1.5}
 .couch-play-rules select:focus-visible{outline:3px solid #d8f1ad;outline-offset:3px}
+
+/* Four-human Blue controller recovery: explicit seat selection only.
+   This does not change any approved match input / physics settings. */
+.couch-rivals-recovery[hidden]{display:none!important}
+.couch-rivals-recovery{box-sizing:border-box;margin:14px 0;padding:17px 18px;
+ border:1px solid #accfbc;border-radius:14px;background:#1b3635;color:#f3fff5}
+.couch-rivals-recovery>strong{color:#dcffaa;display:block;
+ font-size:.82rem;letter-spacing:.07em;font-weight:900}
+.couch-rivals-recovery>p{line-height:1.5;font-size:.85rem;margin:7px 0 12px;color:#d3e5db}
+.couch-rivals-recovery-seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.couch-rivals-recovery-seat{display:grid;grid-template-rows:auto auto;gap:8px}
+.couch-rivals-recovery-seat label{display:flex;flex-direction:column;gap:7px;font-weight:800;
+ color:#edfbed;font-size:.85rem}
+.couch-rivals-recovery-seat select{min-width:0;width:100%;min-height:48px;box-sizing:border-box;
+ border-radius:9px;background:#203f3e;border:1px solid #a4c2b3;color:#f1fff5;
+ padding:9px;font:inherit}
+.couch-rivals-recovery-seat button{min-height:48px;font:inherit;font-size:.85rem;
+ font-weight:800;border-radius:9px;border:1px solid #d2f99c;background:#d2f99c;
+ color:#193427;cursor:pointer;padding:10px}
+.couch-rivals-recovery-seat :is(button,select):focus-visible{outline:3px solid #f9ffa6;outline-offset:3px}
+.couch-rivals-recovery .couch-rivals-recovery-message{margin:12px 0 0;
+ font-size:.85rem;color:#e2f8dc;overflow-wrap:anywhere}
+@media(max-width:620px){.couch-rivals-recovery{padding:14px}
+ .couch-rivals-recovery-seats{grid-template-columns:1fr}}

@@ -1,0 +1,23 @@
+/* Only local matches get a manual return-to-play prompt on focus loss. */
+.local-focus-pause[hidden]{display:none!important}
+.local-focus-pause{position:fixed;z-index:90;left:50%;bottom:max(16px,env(safe-area-inset-bottom));
+ transform:translateX(-50%);width:min(900px,calc(100vw - 24px));
+ display:flex;justify-content:space-between;align-items:center;gap:16px;
+ box-sizing:border-box;padding:17px 20px;border-radius:15px;
+ border:2px solid #d8f6aa;background:#18352e;color:#f2ffef;
+ box-shadow:0 14px 45px #081a1ae0}
+.local-focus-pause strong{display:block;font-size:.8rem;letter-spacing:.07em;color:#e5ffaa}
+.local-focus-pause p{margin:6px 0 0;font-size:.86rem;line-height:1.45;
+ color:#d1e5da;max-width:65ch}
+.local-focus-pause-actions{display:flex;gap:9px;flex-shrink:0}
+.local-focus-pause-actions button{min-height:48px;padding:10px 14px;
+ border:1px solid #91b7a2;border-radius:9px;font:inherit;font-weight:800;
+ font-size:.86rem;color:#efffea;background:#25463c;cursor:pointer}
+.local-focus-pause-actions button.primary{color:#163124;background:#defc99;border-color:#defc99}
+.local-focus-pause-actions button:focus-visible{outline:3px solid #faffb7;outline-offset:3px}
+@media(max-width:730px){
+ .local-focus-pause{flex-direction:column;align-items:stretch;gap:13px;padding:15px;
+  bottom:max(8px,env(safe-area-inset-bottom))}
+ .local-focus-pause-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:390px){.local-focus-pause-actions{grid-template-columns:1fr}}

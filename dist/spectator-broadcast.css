@@ -39,3 +39,7 @@
 @media(prefers-reduced-transparency:reduce){
  .spectator-broadcast{backdrop-filter:none;background:#10272c}
 }
+/* A stopped round is a genuine local score snapshot, never a live feed. */
+.spectator-broadcast.between-rounds{border-style:dashed;border-color:#bbafa0;background:rgba(35,39,38,.94)}
+.spectator-broadcast.between-rounds .spectator-broadcast-stamp{color:#f1d5ab;letter-spacing:.055em}
+@media(max-width:640px){.spectator-broadcast.between-rounds .spectator-broadcast-stamp{font-size:.55rem}}

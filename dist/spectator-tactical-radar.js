@@ -55,6 +55,7 @@
  const W=canvas.width,H=canvas.height,PAD=25,INNER_W=W-PAD*2,INNER_H=H-PAD*2;
  const tracks=new Map();
  let open=false,roomRef=null,roomId='',lastSample=0,lastPaint=0,lastNotice=0,hits=[];
+ let previousClock=null,previousScore=null,previousField=null;
  function saveSettings(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,trails:options.trails,side:options.side}));}
   catch{message.textContent='Preferences apply for this visit; local storage unavailable.';}
@@ -66,6 +67,7 @@
  }
  function reset(){
   tracks.clear();hits=[];lastSample=0;lastPaint=0;
+  previousClock=null;previousScore=null;previousField=null;
  }
  function hide(){
   open=false;panel.hidden=true;toggle.setAttribute('aria-expanded','false');
@@ -119,12 +121,37 @@
   download.disabled=false;
   const roomKey=serverLink?.room||'local-spectator';
   if(roomRef!==room||roomId!==roomKey){roomRef=room;roomId=roomKey;reset();}
-  const scale=Math.min(1,Math.max(0,now-lastSample));
+  // Do not connect a previous round's or an unobserved interval's positions
+  // to the new live positions. These trails are explicitly local
+  // observations, not a replay or server-attested player route.
+  const g=room?.gameState;
+  const seconds=Number(g?.timeElapsed);
+  const red=Number(g?.redScore),blue=Number(g?.blueScore);
+  const clock=Number.isFinite(seconds)&&seconds>=0?seconds:null;
+  const score=[red,blue].every(Number.isSafeInteger)&&red>=0&&blue>=0?
+   {red,blue}:null;
+  const field=data.width+':'+data.height;
+  const newRound=clock!==null&&previousClock!==null&&clock+0.5<previousClock||
+   score!==null&&previousScore!==null&&
+    (score.red<previousScore.red||score.blue<previousScore.blue);
+  const newField=previousField!==null&&field!==previousField;
+  const missingTime=lastSample>0&&now-lastSample>3500;
+  if(newRound||newField||missingTime){
+   reset();
+   message.textContent=newRound?'New round or scoreboard reset: older player trails cleared.':
+    newField?'Stadium dimensions changed: old trails cleared.':
+    'Live position updates were missed: older trails cleared rather than inventing paths.';
+  }
+  previousClock=clock;previousScore=score;previousField=field;
   if(now-lastSample>=350){
    lastSample=now;
    const activeIds=new Set(data.players.map(p=>p.id));
    for(const id of tracks.keys())if(!activeIds.has(id))tracks.delete(id);
    for(const player of data.players){
+    // A player switching sides must not draw a false same-team path
+    // linking an old red or blue role to a new formation.
+    if(tracks.has(player.id)&&tracks.get(player.id).at(-1)?.side!==player.side)
+     tracks.delete(player.id);
     if(!tracks.has(player.id))tracks.set(player.id,[]);
     const path=tracks.get(player.id);
     path.push({x:player.x,y:player.y,at:now,side:player.side});

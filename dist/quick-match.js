@@ -298,8 +298,14 @@
     'Your proposed match is waiting for every player to accept.';
   }else if(searching&&queuedAt){
    const duration=Math.max(0,Math.floor((Date.now()-queuedAt)/1000));
-   notice.textContent='Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
-    ' human players available · '+duration+'s elapsed. No bots will be added.';
+   // The client has only *requested* queue admission until the server
+   // answers. Do not display made-up player occupancy while connecting.
+   const acknowledged=serverLink?.quickQueueAcknowledged===true;
+   notice.textContent=acknowledged?
+    'Searching for '+playlistLabel(matchMode)+' · '+waiting+' of '+needed+
+     ' human players available · '+duration+'s elapsed. No bots will be added.':
+    'Connecting to the human-match server · '+duration+
+     's elapsed. Server confirmation required before searching (20s timeout).';
   }
   // A read-only reflection of the real human queue. The Play landing page may
   // display it or forward an *explicit* player click to native ready controls.

@@ -104,6 +104,38 @@ function updateScore(){const g=(replay||room)?.gameState;if(typeof menuOpen!=='u
 function sendInput(id,input){if(inputCache.get(id)===input)return;inputCache.set(id,input);frameStats.inputVersion++;if(peerConnected&&peerRole==='guest')sendGuestInput(input);else room.playerInput(input,id);}
 function sendGuestInput(input){const seq=++net.inputSeq,frame=predictor.input(seq,networkPlayerId,input,performance.now());send(net.v3?{type:'in',c:[[seq,frame,input]]}:{type:'input',value:input,seq});}
 function bound(action){return settings.keys[action].filter(Boolean);}
+// Couch games deliberately reserve Player 2's arrows and kick keys. Earlier
+// Player 1 keyboard profiles changed the preview but local gameplay still
+// hard-coded WASD/F; a custom IJKL or ESDF profile did nothing during play.
+// Keep the original couch defaults unless P1 has actually customized movement.
+const couchModes=new Set(['local','coop2v2','coop3v3','coop4v4',
+ 'couchRivals','couchRivals3v3','couchRivals4v4']);
+const couchP2Keys=new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+ 'Slash','Enter','Numpad0']);
+const couchP1Defaults={
+ up:['KeyW'],down:['KeyS'],left:['KeyA'],right:['KeyD'],kick:['KeyF']
+};
+const couchP1Fallback={
+ up:['KeyI','KeyE'],down:['KeyK','KeyC'],left:['KeyJ','KeyQ'],
+ right:['KeyL','KeyR'],kick:['Space','KeyX','KeyG']
+};
+function localPlayerOneControls(){
+ const actions=['up','down','left','right','kick'];
+ const customized=actions.some(a=>(settings.keys[a]||[]).some((code,i)=>
+  code!==defaultBindings[a][i]));
+ const keys={},used=new Set(),adjusted=[];
+ for(const action of actions){
+  const requested=customized?(settings.keys[action]||[]):couchP1Defaults[action];
+  const safe=code=>typeof code==='string'&&code&&!couchP2Keys.has(code)&&!used.has(code);
+  const chosen=requested.find(safe)||
+   [...couchP1Defaults[action],...couchP1Fallback[action]].find(safe);
+  // Fallbacks never consume P2's physical keys or another P1 action's key.
+  keys[action]=[chosen];
+  used.add(chosen);
+  if(customized&&!requested.includes(chosen))adjusted.push(action);
+ }
+ return{keys,adjusted,customized};
+}
 // Human input belongs to the visible pitch, never to menus, dialogs or chat.
 function gameplayInputSurfaceActive(){
  return windowInputFocused&&!document.hidden&&!$('matchView').hidden&&
@@ -114,7 +146,7 @@ function gameplayInputSurfaceActive(){
 function canControlLiveMatch(){
  return gameplayInputSurfaceActive()&&started&&!paused&&!replay&&$('mode').value!=='watch';
 }
-function refreshInput(){if(!canControlLiveMatch())return;const local=['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),b=a=>k(...bound(a));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(k('KeyD')||touch.x>0||pad.x>0)-+(k('KeyA')||touch.x<0||pad.x<0);y=+(k('KeyS')||touch.y>0||pad.y>0)-+(k('KeyW')||touch.y<0||pad.y<0);kick=touch.kick||k('KeyF')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
+function refreshInput(){if(!canControlLiveMatch())return;const local=couchModes.has($('mode').value);const k=(...c)=>c.some(x=>keys.has(x)),localP1=local?localPlayerOneControls().keys:null,b=a=>k(...(local?localP1[a]:bound(a)));const pad=window.fuckballGamepad?.read?.()||{x:0,y:0,kick:false};let x,y,kick;if(local){x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}else{x=+(b('right')||touch.x>0||pad.x>0)-+(b('left')||touch.x<0||pad.x<0);y=+(b('down')||touch.y>0||pad.y>0)-+(b('up')||touch.y<0||pad.y<0);kick=touch.kick||b('kick')||pad.kick;}sendInput(peerRole==='guest'?networkPlayerId:1,Utils.keyState(Math.sign(x),Math.sign(y),kick));if(local){const other=window.fuckballCouchPad?.read?.()||{x:0,y:0,kick:false};sendInput(2,Utils.keyState(+(k('ArrowRight')||other.x>0)-+(k('ArrowLeft')||other.x<0),+(k('ArrowDown')||other.y>0)-+(k('ArrowUp')||other.y<0),k('Slash','Enter','Numpad0')||other.kick));if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)){for(const id of [3,4]){const blue=window.fuckballCouchRivals?.read?.(id)||{x:0,y:0,kick:false};sendInput(id,Utils.keyState(blue.x,blue.y,blue.kick));}}}}
 function releaseInputs(){
  keys.clear();touch={x:0,y:0,kick:false};inputCache.clear();
  // An interrupted drag may not reactivate after menus or focus changes.
@@ -287,9 +319,17 @@ const commands={
 commands.extrap=commands.extrapolation;
 function runCommand(line){const [name,...args]=line.slice(1).trim().split(/\s+/),cmd=commands[(name||'').toLowerCase()];if(!cmd){log('Unknown command /'+name+'. Type /help');return;}try{const out=cmd.run(args);if(out)log(out);}catch(err){log(err.message);}}
 $('chatInput').addEventListener('keydown',e=>{if(e.code==='Escape'){e.preventDefault();e.stopPropagation?.();closeChat();}});
-const localKeys=new Set(['KeyW','KeyA','KeyS','KeyD','KeyF','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Slash','Numpad0','Enter']);
-function isPlayKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value))return localKeys.has(code);return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));}
-function isChatKey(code){if(['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&localKeys.has(code))return false;return settings.keys.chat.includes(code);}
+function isPlayKey(code){
+ if(couchModes.has($('mode').value)){
+  if(couchP2Keys.has(code))return true;
+  return Object.values(localPlayerOneControls().keys).some(binding=>binding.includes(code));
+ }
+ return ['up','down','left','right','kick'].some(a=>settings.keys[a].includes(code));
+}
+function isChatKey(code){
+ if(couchModes.has($('mode').value)&&isPlayKey(code))return false;
+ return settings.keys.chat.includes(code);
+}
 document.addEventListener('keydown',e=>{
  if(!gameplayInputSurfaceActive()||
     ['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName)||

@@ -44,3 +44,8 @@
 .connection-session-export-status{font-size:11px;min-height:1.2em;color:#d4e3d5;margin:0}
 @media(max-width:530px){.connection-session-overview{padding:12px}
  .connection-session-actions button{width:100%}}
+
+/* Missing or expired RTT is an unknown reading, not a healthy green sample. */
+.connection-details-dialog[data-level=unknown] .connection-details-state{border-left-color:#a4bec9}
+.connection-details-tile small{overflow-wrap:anywhere}
+@media(max-width:530px){.connection-details-tile strong{font-size:19px;overflow-wrap:anywhere}}
