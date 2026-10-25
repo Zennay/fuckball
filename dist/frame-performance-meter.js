@@ -21,6 +21,8 @@
  const title=make('div');
  title.append(make('span','LOCAL RENDER DIAGNOSTICS','frame-meter-eyebrow'),
   make('h2','FRAME PERFORMANCE.'));
+ const sourceLabel=make('p','Waiting for a verified game session…','frame-meter-source');
+ title.append(sourceLabel);
  const close=make('button','✕');close.type='button';close.setAttribute('aria-label','Close frame performance panel');
  top.append(title,close);
  const intro=make('p','Uses the FPS value this game already renders. Observes up to 90 recent foreground seconds; no extra benchmark, server ping, hardware profiling or uploads. FPS is display performance, not the native 60 Hz physics tick.');
@@ -98,6 +100,15 @@
   if(changed)clearData();
   observedSource=next.ref;observedKind=next.kind;
   if(next.round!==null)observedRound=next.round;
+  const label=next.kind==='native'?'Native online match':
+   next.kind==='direct-peer'?'Direct-peer match':
+   next.kind==='replay'?'Local recording playback':
+   next.kind==='connecting'?'Connecting · no FPS measurements':
+   'Offline local match';
+  const copy=label+(next.kind==='native'&&observedRound!==null?
+   ' · server round '+observedRound:'')+
+   (next.kind==='connecting'?'':' · visible, running frames only');
+  if(sourceLabel.textContent!==copy)sourceLabel.textContent=copy;
  }
  function matchClock(){
   const elapsed=typeof replay!=='undefined'&&replay?
