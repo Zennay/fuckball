@@ -345,11 +345,13 @@
   if(!s)return;
   // A different real kickoff, server room or replay invalidates the old
   // series, even while the user is reading Home/My Games.
-  if(activeSeries(s)&&s.room&&(!stillOwnsSeries(s)||blocked())){
+  if(activeSeries(s)&&s.room&&!stillOwnsSeries(s)){
    finalize(s,false);return;
   }
   if(s.phase==='between'){paintReturn();return;}
   if(s.phase==='starting'){
+   // An invite/queue opened during boot must not claim a local 1v1 kickoff.
+   if(blocked()){finalize(s,false);return;}
    if(document.hidden||pitch.hidden){preserveWhenAway(s);return;}
    if(!acceptBoot(s)&&performance.now()-s.bootAt>=1200){
     recoverFailedNextRound(s,'The new native players did not become ready.');
