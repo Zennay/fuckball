@@ -32,7 +32,26 @@ function makeRoom(){
  room=Room.sandbox({onGameTick:gameTick,onTeamGoal:(...args)=>{renderer.onTeamGoal?.(...args);beep(650,.22);log((args[0]===1?'Red':'Blue')+' scores');if(!serverLink&&!peerConnected&&!replay&&['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
   Number.isInteger(args[0])&&[1,2].includes(args[0])&&
   typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function')window.dispatchEvent(
-   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);log((team===1?'Red':'Blue')+' wins');setTimeout(()=>{if(!replay && started && !room.gameState){started=false;setButtons();if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();}},2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
+   new CustomEvent('fuckball:local-couch-goal',{detail:{team:args[0],room}}));},onGameStart:(...args)=>renderer.onGameStart?.(...args),onGameEnd:(team)=>{renderer.onGameEnd?.(team);
+ log(team===1?'Red wins':team===2?'Blue wins':'Draw');
+ // Present the local result directly, without granting any rematch or
+ // fabricating a score. Only the existing offline engine certifies full-time.
+ if(!serverLink&&!peerConnected&&!peer&&!replay&&started&&[0,1,2].includes(team)&&
+    typeof window.CustomEvent==='function'&&typeof window.dispatchEvent==='function'){
+  const score=room?.gameState;
+  const red=Number.isSafeInteger(score?.redScore)&&score.redScore>=0?score.redScore:null;
+  const blue=Number.isSafeInteger(score?.blueScore)&&score.blueScore>=0?score.blueScore:null;
+  window.dispatchEvent(new window.CustomEvent('fuckball:local-fulltime',{
+   detail:{room,winner:team,red,blue,mode:$('mode').value}}));
+ }
+ const finishedRoom=room;
+ setTimeout(()=>{
+  // Ignore an old victory timer after starting another room or a replay.
+  if(room===finishedRoom&&!replay&&started&&!room.gameState){
+   started=false;setButtons();
+   if(typeof openMatchMenu==='function'&&!$('matchView').hidden)openMatchMenu();
+  }
+ },2500);},onPlayerBallKick:(player)=>{beep(220,.035);if(!peerConnected&&!serverLink?.room&&!replay&&Number.isSafeInteger(player?.id)&&[1,2].includes(player?.team?.id)){const detail={room,playerId:player.id,team:player.team.id,frame:room?.currentFrameNo};window.dispatchEvent(new CustomEvent('fuckball:local-native-kick',{detail}));if(player.id===1)window.dispatchEvent(new CustomEvent('fuckball:local-kick',{detail}));}},onPlayerTeamChange:()=>updateRoster(),render:()=>drawFrame()}, {controlledPlayerId:1,delayedInit:true});
  roomStart=performance.now();
  renderer.room=room;renderer.initialize();renderer.zoomCoeff=settings.zoom;renderer.followPlayerId=1;renderer.currentPlayerDistinction=true;room.initialize();
  room.setCurrentStadium(stadium,0);room.setScoreLimit(+$('scoreLimit').value,0);room.setTimeLimit(timeLimitValue(),0);configurePlayers();room.startGame(0);room.setGamePaused(true,0);updateRoster();
