@@ -43,7 +43,8 @@
  const presetOptions=[
   ['Balanced',{scale:1,deadzone:10,edge:20,lift:0,opacity:85}],
   ['Thumb reach',{scale:1.2,deadzone:12,edge:12,lift:48,opacity:95}],
-  ['Compact',{scale:.85,deadzone:8,edge:35,lift:8,opacity:65}]
+  ['Compact',{scale:.85,deadzone:8,edge:35,lift:8,opacity:65}],
+  ['Short landscape',{scale:.85,deadzone:8,edge:8,lift:0,opacity:95}]
  ];
  const preview=document.createElement('div');preview.className='touch-layout-preview';
  preview.setAttribute('aria-hidden','true');
@@ -131,7 +132,7 @@
    [size,'scale',v=>Math.round(v*100)+'%'],
    [zone,'deadzone',v=>v+' px'],
    [edge,'edge',v=>v+' px'+(placed.edge!==v?' · fits at '+placed.edge+' px':'')],
-   [lift,'lift',v=>v+' px'],
+   [lift,'lift',v=>v+' px'+(placed.lift!==v?' · fits at '+placed.lift+' px':'')],
    [opacity,'opacity',v=>v+'%']
   ]){control.input.value=String(config[key]);control.value.textContent=format(config[key]);}
   field.classList.toggle('touch-preview-left',config.hand==='left');
