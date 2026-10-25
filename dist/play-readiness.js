@@ -41,7 +41,9 @@
  const server=node('button','','Configure game server');
  const find=node('button','primary','Open human Quick Match →');
  const invite=node('button','','Join by invite');
- for(const b of [account,server,find,invite]){b.type='button';actions.append(b);}
+ const returnToSession=node('button','play-readiness-resume','↗ Return to current session');
+ returnToSession.hidden=true;
+ for(const b of [account,server,find,invite,returnToSession]){b.type='button';actions.append(b);}
  const message=node('p','play-readiness-message');
  message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const foot=node('p','play-readiness-footnote',
@@ -69,12 +71,19 @@
  }
  function session(){
   const link=typeof serverLink==='undefined'?null:serverLink;
-  const peer=typeof peerConnected!=='undefined'&&peerConnected;
+  const direct=typeof peerConnected!=='undefined'&&peerConnected;
+  const pendingPeer=typeof peer!=='undefined'&&!!peer;
+  const recovering=typeof roomRecovery!=='undefined'&&!!roomRecovery.context;
   const ready=!!home.querySelector('.quick-ready:not([hidden])');
   const queue=!!home.querySelector('.quick-queue-actions button:not([hidden])');
   const playing=typeof started!=='undefined'&&!!started;
   const replaying=typeof replay!=='undefined'&&!!replay;
-  if(link?.room||peer)return{ok:false,label:'ROOM IN PROGRESS',detail:'Leave the existing online room explicitly before searching again.'};
+  if(recovering)return{ok:false,label:'RESTORING ORIGINAL ROOM',
+   detail:'Your previous room is reconnecting. View the recovery controls and explicitly leave before starting new games.'};
+  if(link?.room||direct)return{ok:false,label:'ROOM IN PROGRESS',
+   detail:'Leave the existing online or direct-peer room explicitly before searching again.'};
+  if(pendingPeer)return{ok:false,label:'DIRECT CONNECTION PENDING',
+   detail:'Finish or cancel the direct-peer connection before starting another game.'};
   if(ready||link?.quickMatchMode||queue)
    return {ok:false,label:'HUMAN SEARCH ACTIVE',detail:'Finish or cancel your existing search or ready check.'};
   if(link)return{ok:false,label:'CONNECTING',detail:'An online room handshake is still underway. Cancel before switching.'};
@@ -119,7 +128,11 @@
   prepared=ready;
   headingStatus.textContent=ready?'LOCALLY PREPARED':'SETUP NEEDED';
   headingStatus.dataset.ready=ready?'yes':'no';
-  find.textContent=ready?'Find real humans →':'Configure Quick Match →';
+  find.textContent=ready?'Find real humans →':
+   state.session.ok?'Configure Quick Match →':'Current session · new match blocked';
+  returnToSession.hidden=state.session.ok;
+  returnToSession.textContent=state.session.label==='RESTORING ORIGINAL ROOM'?
+   '↗ View original room recovery':'↗ Return to current session';
   // Account and network details can be viewed even if current socket is busy.
   account.textContent=state.account.ok?'Account session present':'Sign in / create account';
   return state;
@@ -163,6 +176,48 @@
   button?.click();
   message.textContent='Passed control to native human matchmaking. You must still accept any ready check.';
  }
+ function resumeCurrentSession(){
+  const state=update();
+  if(state.session.ok){
+   message.textContent='There is no active session to return to.';
+   return;
+  }
+  // Never schedule reconnection, start a queue, or replace a live match here.
+  // Return only to existing native controls for the original human session.
+  const recovery=document.querySelector('.native-room-recovery:not([hidden])');
+  if(state.session.label==='RESTORING ORIGINAL ROOM'&&recovery){
+   recovery.focus?.({preventScroll:true});
+   message.textContent='The existing room recovery controls are ready. Rejoin or leave explicitly.';
+   return;
+  }
+  const pendingJoin=document.querySelector('#joinScreen:not([hidden])');
+  if(pendingJoin){
+   (pendingJoin.querySelector('input:not([disabled])')||pendingJoin).focus?.({preventScroll:true});
+   message.textContent='Your original room invitation is still open.';
+   return;
+  }
+  const ready=home.querySelector('.quick-ready:not([hidden])');
+  if(ready){
+   (ready.querySelector('button:not([disabled]):not([hidden])')||ready)
+    .focus?.({preventScroll:true});
+   message.textContent='The real human ready-check is here; accept or decline yourself.';
+   return;
+  }
+  const search=home.querySelector('.quick-queue-panel:not([hidden])');
+  if(state.session.label==='HUMAN SEARCH ACTIVE'&&search){
+   search.scrollIntoView?.({block:'nearest',behavior:'auto'});
+   message.textContent='Existing human matchmaking controls are shown. No second search was started.';
+   return;
+  }
+  const connecting=home.querySelector('.play-hub-connecting:not([hidden])');
+  if(connecting){
+   (connecting.querySelector('button:not([disabled])')||connecting).focus?.({preventScroll:true});
+   message.textContent='You can view or cancel the existing pending room from here.';
+   return;
+  }
+  document.getElementById('tabPlay')?.click();
+  message.textContent='Returned to the original match or connection. No new game was started.';
+ }
  function openInvite(){
   const state=update();
   if(!state.session.ok){message.textContent=state.session.detail;return;}
@@ -173,7 +228,8 @@
   target.querySelector('input[type="text"]')?.focus({preventScroll:true});
   message.textContent='Paste your room link or code and confirm yourself. Admission remains server-controlled.';
  }
- account.onclick=showAccount;server.onclick=showServer;find.onclick=openQueue;invite.onclick=openInvite;
+ account.onclick=showAccount;server.onclick=showServer;find.onclick=openQueue;
+ invite.onclick=openInvite;returnToSession.onclick=resumeCurrentSession;
  const watch=()=>{if(!home.hidden&&document.visibilityState==='visible')update();};
  document.getElementById('serverAddress')?.addEventListener('input',update);
  document.addEventListener('visibilitychange',watch);
