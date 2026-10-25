@@ -95,7 +95,7 @@
  const kickValid=k=>MODES.some(([key])=>key===k);
  let config={kick:'default',deadzone:.30,stick:'left',invertX:false,invertY:false,
   kickPulse:false,goalPulse:false},
-  suggestion=null,sampling=null,lastMessage='',active=false;
+  suggestion=null,suggestionIdentity=null,sampling=null,lastMessage='',active=false;
  let selectedSource=null,deviceSignature='',binding=null,boundSource=null;
  const allowedButtons=[0,1,2,3,4,5,6,7,8,10,11];
  function cancelBinding(message){
@@ -138,8 +138,22 @@
   hint.textContent='Release all buttons; then press the desired kick button within eight seconds.';
   requestAnimationFrame(scanBinding);
  };
+ function clearSuggestion(reason){
+  const existed=suggestion!==null||suggestionIdentity!==null;
+  suggestion=null;suggestionIdentity=null;apply.disabled=true;
+  if(existed&&reason)hint.textContent=reason;
+ }
  function cancelCalibration(){
-  sampling=null;calibrate.disabled=false;suggestion=null;apply.disabled=true;
+  sampling=null;calibrate.disabled=false;
+  clearSuggestion();
+ }
+ // Suggestions are not generic controller preferences: the measured resting
+ // axes belong to one currently connected physical source and one stick.
+ function suggestionMatches(pad){
+  return !!pad?.connected&&!!suggestionIdentity&&
+   pad.index===suggestionIdentity.index&&pad.id===suggestionIdentity.id&&
+   config.stick===suggestionIdentity.stick&&
+   (window.fuckballCouchPad?.reservedPort?.()??null)!==pad.index;
  }
  function read(){
   try{
@@ -288,6 +302,8 @@
    ' Press Bind selected controller to P1 to change gameplay input.';
  };
  function present(pad){
+  if(suggestion!==null&&!suggestionMatches(pad))
+   clearSuggestion('The calibrated controller was removed, reassigned or changed. Recalibrate this controller before applying a deadzone.');
   if(!pad){
    if(sampling){
     sampling=null;calibrate.disabled=false;suggestion=null;apply.disabled=true;
@@ -338,13 +354,18 @@
   if(performance.now()-sampling.started<2000)return;
   const sample=sampling;sampling=null;calibrate.disabled=false;
   if(sample.moved||sample.count<6){
-   suggestion=null;apply.disabled=true;
+   clearSuggestion();
    hint.textContent='Calibration cancelled: the stick moved significantly or no stable samples arrived. Leave it centered and retry.';
    return;
   }
   // A little headroom over actual resting drift, within the game's supported limits.
   suggestion=Math.max(.15,Math.min(.65,Math.ceil((sample.max+.08)*20)/20));
   suggestion=Math.round(suggestion*100)/100;
+  suggestionIdentity={index:sample.index,id:sample.id,stick:config.stick};
+  if(!suggestionMatches(controller())){
+   clearSuggestion('Controller selection changed during measurement. Restart calibration with the controller you intend to use.');
+   return;
+  }
   apply.disabled=false;
   hint.textContent='Measured resting drift '+Math.round(sample.max*100)+'%. Recommended deadzone '+
    Math.round(suggestion*100)+'%. Apply it or adjust the slider manually.';
@@ -355,6 +376,11 @@
   if(!pad){
    hint.textContent='Connect a controller and press a button before measuring drift.';return;
   }
+  const reserved=window.fuckballCouchPad?.reservedPort?.()??null;
+  if(pad.index===reserved){
+   hint.textContent='This controller is reserved for Player 2. Select a P1 controller before measuring P1 stick drift.';
+   return;
+  }
   sampling={index:pad.index,id:pad.id,started:performance.now(),
    max:0,moved:false,count:0};
   suggestion=null;apply.disabled=true;calibrate.disabled=true;
@@ -362,8 +388,17 @@
  };
  apply.onclick=()=>{
   if(!Number.isFinite(suggestion)||suggestion<.15||suggestion>.65)return;
-  config.deadzone=suggestion;suggestion=null;apply.disabled=true;
+  // Never apply an old recommendation to a replacement gamepad, after
+  // backgrounding, or when P2 has claimed that controller port. Rechecking
+  // at the actual Apply click also covers a missed device-change event.
+  if(!dialog.open||document.hidden||!suggestionMatches(controller())){
+   clearSuggestion('The calibrated P1 controller is no longer verified. Measure its resting stick again before applying.');
+   return;
+  }
+  config.deadzone=suggestion;
+  clearSuggestion();
   fill();persist();
+  hint.textContent='Measured P1 stick deadzone applied to the current tab; reconnecting or replacing controllers requires a fresh calibration.';
  };
  function returnToPlayingSurface(){
   // This dialog may have been launched directly from an in-progress match.
@@ -417,8 +452,16 @@
  });
  window.setInterval(()=>{if(active&&dialog.open&&!document.hidden){refreshSources();present(controller());}},120);
  window.addEventListener('gamepadconnected',()=>{if(active){refreshSources();present(controller());}});
- window.addEventListener('gamepaddisconnected',()=>{if(active){refreshSources();present(controller());}});
+ window.addEventListener('gamepaddisconnected',event=>{
+  if(suggestionIdentity&&event.gamepad?.index===suggestionIdentity.index)
+   clearSuggestion('The calibrated controller disconnected. Its measured deadzone cannot be used for a replacement controller.');
+  if(active){refreshSources();present(controller());}
+ });
  function suspendCapture(){
+  // A controller may disappear or be replaced while the browser cannot
+  // observe Gamepad API state. Its previous calibration is no longer trusted.
+  if(suggestion!==null)
+   clearSuggestion('Controller calibration expired when game focus was lost. Re-measure before applying.');
   if(binding)cancelBinding('Button binding cancelled because the game is no longer focused.');
   if(sampling){
    cancelCalibration();
