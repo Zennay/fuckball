@@ -24,7 +24,8 @@ function retryRoomRecovery(info,attempt){
  connectServer(false,info.room,info.name,
   {ticket:info.ticket,previousId:info.previousId,retries:attempt,roomRecovery:true});
  if(serverLink?.recoveryAttempt)window.FuckballRoomRecovery?.show({
-  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery
+  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery,
+  quickMatchMode:info.quickMatchMode||null
  });
  else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
 }
@@ -33,7 +34,7 @@ function offerRoomRecovery(info){
  clearRoomRecovery();roomRecovery.context=info;
  if(info.tries>=3){
   window.FuckballRoomRecovery?.show({
-   phase:'failed',attempt:3,max:3,
+   phase:'failed',attempt:3,max:3,quickMatchMode:info.quickMatchMode||null,
    retry:()=>retryRoomRecovery({...info,tries:0},0),cancel:cancelRoomRecovery
   });return;
  }
@@ -41,6 +42,7 @@ function offerRoomRecovery(info){
   roomRecovery.offlineRetry=()=>retryRoomRecovery(info,info.tries+1);
   window.FuckballRoomRecovery?.show({
    phase:'offline',attempt:info.tries+1,max:3,
+   quickMatchMode:info.quickMatchMode||null,
    retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
   });return;
  }
@@ -48,6 +50,7 @@ function offerRoomRecovery(info){
  roomRecovery.timer=setTimeout(()=>retryRoomRecovery(info,attempt),delay);
  window.FuckballRoomRecovery?.show({
   phase:'waiting',attempt,max:3,delay,
+  quickMatchMode:info.quickMatchMode||null,
   retry:()=>retryRoomRecovery(info,attempt),cancel:cancelRoomRecovery
  });
 }
@@ -146,7 +149,11 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  if(replay)closeReplay();
  showView(quickMode?'home':'play');
  if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};
- const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+ // Restore the already-delivered human Quick Match exact-slot recovery
+ // alongside explicit rejected-invite switching, never into a new queue.
+ const recoveringHuman=resumeContext?.roomRecovery===true&&
+  ['1v1','2v2','3v3','4v4','club4v4'].includes(resumeContext.quickMatchMode);
+ const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:recoveringHuman?resumeContext.quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  notifyNativeSessionView();
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
@@ -172,7 +179,8 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
- };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+ };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room&&!link.reconnect)
+  window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -190,10 +198,21 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    const retryJoin=!create&&!link.quickMatchMode&&!admitted&&!retryingOriginal&&
     NATIVE_ROOM_CODE.test(roomId);
    const retrySpectator=link.requestedSpectate;
+   // The native server parks human Quick Match slots using issued tickets.
+   // Without that ticket, claiming the same seat is impossible and MUST NOT
+   // fall back to queueJoin, a new player ID, bots, or a fabricated rematch.
+   const hasTicket=typeof ticket==='string'&&/^[0-9a-f]{64}$/.test(ticket);
+   const canRecover=!!room&&(!link.quickMatchMode||hasTicket);
+   const quickMatchMode=link.quickMatchMode;
    disconnect();if(link.failed)return;
-   if(room&&!link.quickMatchMode){
-    notify('Connection lost. Room recovery available.');
-    offerRoomRecovery({room,tries,previousId,ticket,name});
+   if(canRecover){
+    notify(quickMatchMode?
+     'Human Quick Match interrupted. Reconnecting to your original player slot.':
+     'Connection lost. Room recovery available.');
+    offerRoomRecovery({room,tries,previousId,ticket,name,quickMatchMode});
+   }else if(room&&quickMatchMode&&!hasTicket){
+    showView('home');
+    notify('Cannot restore this human match without a server-issued resume ticket. No replacement player or bot was created.');
    }else if(retryJoin){
     // No slot was ever admitted, so show a normal (manual) join retry. No
     // ticket is fabricated and no background reconnect is scheduled.
