@@ -67,7 +67,8 @@ const panel=document.createElement('dialog');panel.className='match-center';
  feed.append(feedHeading,feedIntro,feedList,feedStatus);
  panel.append(header,badge,controlNotice,score,teams,spectators,feed,footer);match.append(panel);
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
- let timeline=[],snapshot=null,sessionId='',sessionRoom=null,historyInterrupted=false;
+ let timeline=[],snapshot=null,sessionId='',sessionRoom=null;
+ let transportIdentity=null,serverRound=null,historyInterrupted=false,missingSince=0;
  const MAX_HISTORY=40;
  function liveSnapshot(){
   if(typeof replay!=='undefined'&&replay)return null;
@@ -78,7 +79,15 @@ const panel=document.createElement('dialog');panel.className='match-center';
     g.timeElapsed<0||g.timeElapsed>86400)return null;
   const kind=serverLink?.room?'native online room':peerConnected?'direct peer room':'local practice';
   const key=serverLink?.room?'native:'+serverLink.room:peerConnected?'peer':'local';
-  return {key,kind,red:g.redScore,blue:g.blueScore,elapsed:Math.floor(g.timeElapsed)};
+  // The same eight-character room can be rejoined via a NEW WebSocket and
+  // direct-peer identities are reused as the generic label 'peer'. Preserve
+  // observations only for the same transport AND the same server-issued round.
+  // Object identities are kept in memory only and never exported.
+  const transport=serverLink?.room?serverLink:peerConnected?channel:room;
+  const round=serverLink?.room&&Number.isSafeInteger(serverLink.roomState?.round)&&
+    serverLink.roomState.round>=0?serverLink.roomState.round:null;
+  return {key,kind,transport,round,red:g.redScore,blue:g.blueScore,
+   elapsed:Math.floor(g.timeElapsed)};
  }
  function formatClock(seconds){
   return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
@@ -112,7 +121,8 @@ const panel=document.createElement('dialog');panel.className='match-center';
  }
  function resetObservations(){
   timeline=[];sessionId='';sessionRoom=null;snapshot=null;
-  historyInterrupted=false;lastSignature='';
+  transportIdentity=null;serverRound=null;
+  historyInterrupted=false;missingSince=0;lastSignature='';
  }
  function observe(){
   // App navigation hides the pitch but does not end an ongoing game.
@@ -124,27 +134,51 @@ const panel=document.createElement('dialog');panel.className='match-center';
   }
   const reading=liveSnapshot();
   if(!reading){
-   if(sessionId||timeline.length)resetObservations();
+   // A short handover, room intermission or missing authoritative snapshot
+   // is NOT a new game and cannot justify erasing locally observed history.
+   // Mark an unobserved gap rather than inventing goals during the silence.
+   if(sessionId||timeline.length){
+    if(!missingSince)missingSince=Date.now();
+    historyInterrupted=true;
+    if(Date.now()-missingSince>15000&&!serverLink?.room&&!peerConnected)
+     resetObservations();
+   }
    return;
   }
-  if(sessionRoom!==room||sessionId!==reading.key){
-   sessionRoom=room;sessionId=reading.key;timeline=[];snapshot=null;historyInterrupted=false;
+  missingSince=0;
+  const changedTransport=sessionRoom!==room||sessionId!==reading.key||
+   transportIdentity!==reading.transport;
+  const changedRound=!changedTransport&&serverRound!==reading.round;
+  if(changedTransport||changedRound){
+   const wasAway=historyInterrupted;
+   sessionRoom=room;sessionId=reading.key;
+   transportIdentity=reading.transport;serverRound=reading.round;
+   timeline=[];snapshot=null;
+   // Don't infer goals, official scores or player identity while a different
+   // human game or another server-authoritative round was running.
+   historyInterrupted=wasAway&&(changedRound||changedTransport);
   }
   const prior=snapshot;
   if(!prior){
-   addObservation('Scoreboard snapshot first observed ('+reading.kind+').',reading);
-  }else if(reading.elapsed+3<prior.elapsed||reading.red<prior.red||reading.blue<prior.blue){
+   const label=historyInterrupted?
+    'New session or round observed after being away; previous local notes discarded.':
+    'Scoreboard snapshot first observed ('+reading.kind+
+      (reading.round===null?'':', server round '+reading.round)+').';
+   addObservation(label,reading,historyInterrupted);
+  }else if(reading.elapsed+1<prior.elapsed||reading.red<prior.red||reading.blue<prior.blue){
+   // A server correction or very short new round can reset the clock by less
+   // than three seconds; do not append scoreboard changes from the prior game.
    timeline=[];addObservation('Match clock or score reset; observation history restarted.',reading);
   }else if(reading.red!==prior.red||reading.blue!==prior.blue){
    const redDelta=reading.red-prior.red,blueDelta=reading.blue-prior.blue;
    const single=redDelta+blueDelta===1&&(redDelta===1||blueDelta===1);
-   const description=historyInterrupted?'Scoreboard changed while away from the pitch; individual events are unknown.':
+   const description=historyInterrupted?'Scoreboard changed during an unobserved interval; individual events are unknown.':
     single?(redDelta?'Red':'Blue')+' score increased by one (scorer unknown).':
     'Scoreboard changed by multiple points (cause unknown).';
    addObservation(description,reading,historyInterrupted);
   }else if(historyInterrupted&&reading.elapsed-prior.elapsed>=3){
    // An unchanged score never implies no activity while the view was hidden.
-   addObservation('Returned after viewing another screen; activity during the gap was not observed.',reading,true);
+   addObservation('Returned after an unobserved interval; activity during the gap was not observed.',reading,true);
   }
   snapshot=reading;historyInterrupted=false;
  }
@@ -153,7 +187,9 @@ const panel=document.createElement('dialog');panel.className='match-center';
   const lines=['# Fuckball local match observations','',
    'Player-owned, unverified scoreboard notes. Not an official match result.',
    'No room identifiers, player names, accounts, chat or authentication data included.','',
-   'Context: '+(snapshot?.kind||'local view'),'',
+   'Context: '+(snapshot?.kind||'local view'),
+   ...(Number.isSafeInteger(snapshot?.round)?
+    ['Server-issued round: '+snapshot.round]:[]),'',
    ...timeline.map(x=>'- ['+x.clock+'] '+(x.gap?'[UNOBSERVED INTERVAL] ':'')+
     x.detail+' Score observed: '+x.red+'-'+x.blue)];
   const blob=new Blob([lines.join('\n')+'\n'],{type:'text/markdown'});
@@ -218,11 +254,15 @@ const panel=document.createElement('dialog');panel.className='match-center';
   const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':serverLink?.room?
    'NATIVE ONLINE ROOM · LIVE SNAPSHOT':peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
   const state=inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
-  const signature=JSON.stringify([scores,time,mode,state,timeline.length,users.map(p=>
+  const signature=JSON.stringify([scores,time,mode,state,
+   Number.isSafeInteger(serverLink?.roomState?.round)?serverLink.roomState.round:null,
+   timeline.length,users.map(p=>
    [p.id,p.name,p.team.id,p.aiControlled,pingFor(p)]),serverLink?.roomControl?.owner]);
   if(!force&&signature===lastSignature)return;
   lastSignature=signature;
-  badge.textContent=mode+' · '+state;
+  badge.textContent=mode+' · '+state+
+   (serverLink?.room&&Number.isSafeInteger(serverLink.roomState?.round)?
+    ' · SERVER ROUND '+serverLink.roomState.round:'');
   redScore.textContent=String(scores[0]);blueScore.textContent=String(scores[1]);
   clock.textContent=time;
   fill(red,users.filter(p=>p.team.id===1));
