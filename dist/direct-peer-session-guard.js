@@ -29,8 +29,9 @@
    throw Error('WebRTC is unavailable in this browser. Your current match was preserved.');
   if(room?.isRecording?.())
    throw Error('Save your active match recording before changing to direct 1v1.');
-  if((started||replay)&&typeof window.confirm==='function'&&
-     !window.confirm('Leave the current local match or replay and start a direct 1v1 connection?'))
+  if((started||replay)&&
+     (typeof window.confirm!=='function'||
+      !window.confirm('Leave the current local match or replay and start a direct 1v1 connection?')))
    throw Error('Original local game kept. No peer connection was created.');
   // All checks happen before original beginPeer's disconnect/reset. The
   // original browser host/join exchange remains authoritative.
@@ -97,8 +98,8 @@
  }
  const refreshTimer=setInterval(refresh,950);
  refreshTimer.unref?.();
- for(const el of [home,match,games])new MutationObserver(refresh)
-  .observe(el,{attributes:true,attributeFilter:['hidden']});
+ if(typeof MutationObserver==='function')for(const el of [home,match,games])
+  new MutationObserver(refresh).observe(el,{attributes:true,attributeFilter:['hidden']});
  dialog?.addEventListener('close',refresh);
  document.getElementById('tabHome')?.addEventListener('click',()=>queueMicrotask(refresh));
  document.getElementById('tabPlay')?.addEventListener('click',()=>queueMicrotask(refresh));
