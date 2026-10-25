@@ -25,3 +25,12 @@
 @media(max-width:400px){
  .direct-peer-pending-actions{grid-template-columns:1fr}
 }
+
+/* ICE "checking" can stall without triggering the browser's failed event.
+   Make the strictly manual recovery affordance visible but not alarmist. */
+.direct-peer-pending[data-phase="stalled"]{border-color:#ffdb9a}
+.direct-peer-pending[data-phase="stalled"] strong{color:#fff0b7}
+.direct-peer-pending[data-phase="stalled"] .direct-peer-pending-actions button:nth-child(3):not([hidden]){
+ background:#3c3526;border-color:#ffdc92;color:#fff1ca}
+.direct-peer-pending[data-phase="failed"]{border-color:#ffac9e}
+.direct-peer-pending[data-phase="failed"] strong{color:#ffd2c6}
