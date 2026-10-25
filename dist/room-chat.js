@@ -134,7 +134,7 @@
     const channel=chatForm?.querySelector('.team-chat-channel select')?.value;
     unsentSessionDraft={...existing,text:contents.slice(0,140),
      teamOnly:channel==='team'||privateDraft===true};
-   }else if(chatWasSubmitted||!existing)clearUnsentDraft();
+   }else clearUnsentDraft(); // Clearing the field is an explicit discard, too.
    chatWasSubmitted=false;
    return nativeCloseChat(...args);
   };
