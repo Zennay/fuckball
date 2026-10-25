@@ -29,3 +29,11 @@
 @media(max-width:580px){.play-readiness-checks{grid-template-columns:1fr}
  .play-readiness-actions button{flex:1 1 100%}.play-readiness{margin:12px 10px 26px}}
 @media print{.play-readiness-actions{display:none!important}}
+
+/* A busy session is never presented as a ready-to-start human queue. */
+.play-readiness-actions .play-readiness-resume[hidden]{display:none!important}
+.play-readiness-actions .play-readiness-resume{
+ border-color:#b5e4ab;background:#28473c;color:#ddffca;
+ flex:1 1 230px;font-weight:900
+}
+@media(max-width:580px){.play-readiness-actions .play-readiness-resume{width:100%}}
