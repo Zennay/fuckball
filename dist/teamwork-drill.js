@@ -226,7 +226,7 @@
   if(![120,180,300].includes(seconds)||![2,4,6].includes(goal))return;
   session={room,side,duration:seconds,target:goal,frame:room.currentFrameNo,
    frames:0,links:0,streak:0,bestStreak:0,attempts:0,
-   lastKicker:null,lastKickKey:null,
+   lastKicker:null,lastKickKey:null,lastNativeKickFrame:-1,seenKickers:new Set(),
    redScore:room.gameState.redScore,blueScore:room.gameState.blueScore,parked:false};
   hud.hidden=false;status.textContent='Teamwork training running in local 4v4.';
   paint();
@@ -243,9 +243,17 @@
      !Number.isSafeInteger(d.frame)||d.frame<s.frame||
      !Number.isSafeInteger(d.playerId)||d.playerId<1||
      ![1,2].includes(d.team))return;
-  const key=d.frame+':'+d.playerId;
-  if(key===s.lastKickKey)return; // duplicate event != second native kick
-  s.lastKickKey=key;
+  // Native events can repeat non-adjacently within a single physics frame:
+  // human A, bot B, duplicate human A must not manufacture a second link.
+  // Preserve one unique kick receipt per player per actual 60 Hz frame.
+  if(d.frame<s.lastNativeKickFrame)return;
+  if(d.frame!==s.lastNativeKickFrame){
+   s.lastNativeKickFrame=d.frame;
+   s.seenKickers.clear();
+  }
+  if(s.seenKickers.has(d.playerId))return;
+  s.seenKickers.add(d.playerId);
+  s.lastKickKey=d.frame+':'+d.playerId;
   if(d.team!==s.side){
    s.streak=0;s.lastKicker=null;paint();return;
   }
@@ -256,8 +264,10 @@
   if(s.lastKicker!==null&&s.lastKicker!==d.playerId){
    s.streak++;s.links++;s.bestStreak=Math.max(s.bestStreak,s.streak);
   }else if(s.lastKicker===d.playerId){
-   // Two successive touches from the same person are not team links.
+   // Repeating a teammate cannot seed a new all-bot streak after the reset.
+   // Only the actual human may restart a genuine possession chain.
    s.streak=0;
+   if(d.playerId!==1)s.lastKicker=null;
   }
   // A bot cannot open the drill's possession: first kick must be the human.
   if(s.lastKicker!==null||d.playerId===1)s.lastKicker=d.playerId;
