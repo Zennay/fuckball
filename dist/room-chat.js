@@ -28,10 +28,103 @@
  const players=document.createElement('div');players.className='native-chat-players';
  panel.append(title,description,focusControls,status,players);settingsPane.append(panel);
  let roomId=null,muted=new Set();
+ // A connected human room stays active while Home/My Games is on screen.
+ // The HUD chat log lives on the hidden pitch; keep a bounded ephemeral
+ // catch-up inbox on this device, without sending or saving chat messages.
+ let unread=0,expanded=false;
+ const recentChat=[];
+ const chatDock=document.createElement('section');
+ chatDock.className='native-room-chat-inbox';chatDock.hidden=true;
+ chatDock.setAttribute('aria-label','Current human room chat');
+ const chatDockSummary=document.createElement('button');
+ chatDockSummary.type='button';chatDockSummary.className='native-room-chat-inbox-toggle';
+ chatDockSummary.setAttribute('aria-expanded','false');
+ const chatDockPanel=document.createElement('div');
+ chatDockPanel.className='native-room-chat-inbox-panel';chatDockPanel.hidden=true;
+ const chatDockHead=document.createElement('strong');
+ chatDockHead.textContent='ROOM CHAT · THIS SESSION';
+ const chatDockHelp=document.createElement('p');
+ chatDockHelp.className='native-room-chat-inbox-help';
+ chatDockHelp.textContent='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox.';
+ const chatDockMessages=document.createElement('ol');
+ chatDockMessages.className='native-room-chat-inbox-messages';
+ chatDockMessages.setAttribute('aria-label','Recent messages from this connected room');
+ const chatDockActions=document.createElement('div');
+ chatDockActions.className='native-room-chat-inbox-actions';
+ const chatDockView=document.createElement('button');
+ chatDockView.type='button';chatDockView.textContent='↗ View match chat';
+ const chatDockClose=document.createElement('button');
+ chatDockClose.type='button';chatDockClose.textContent='Close';
+ chatDockActions.append(chatDockView,chatDockClose);
+ chatDockPanel.append(chatDockHead,chatDockHelp,chatDockMessages,chatDockActions);
+ chatDock.append(chatDockSummary,chatDockPanel);document.body.append(chatDock);
+ function renderInboxMessages(){
+  chatDockMessages.replaceChildren();
+  const displayed=recentChat.filter(entry=>!muted.has(entry.from)&&
+   visibleMessage(entry.from));
+  if(!displayed.length){
+   const empty=document.createElement('li');
+   empty.textContent='No visible room messages yet.';
+   chatDockMessages.append(empty);return;
+  }
+  for(const entry of displayed){
+   const item=document.createElement('li');
+   const label=document.createElement('strong');
+   label.textContent=(entry.channel==='team'?'TEAM · ':'ROOM · ')+entry.name;
+   const content=document.createElement('span');content.textContent=entry.text;
+   item.append(label,content);chatDockMessages.append(item);
+  }
+  chatDockMessages.scrollTop=chatDockMessages.scrollHeight;
+ }
+ function updateRoomChatInbox(){
+  const connected=currentRoom();
+  const match=document.getElementById('matchView');
+  const onPitch=match?.hidden===false&&document.hidden!==true;
+  // Authoritative ready/rematch/recovery decisions take priority over chat.
+  const urgent=document.querySelector('.quick-ready-dock:not([hidden]),.native-rematch-dock:not([hidden]),.native-room-recovery:not([hidden])');
+  if(onPitch){unread=0;expanded=false;}
+  chatDock.hidden=!connected||onPitch||!!urgent;
+  chatDockPanel.hidden=!expanded||chatDock.hidden;
+  chatDockSummary.textContent=unread?
+   '● '+unread+(unread===99?'+':'')+' unread room message'+(unread===1?'':'s')+
+   ' · '+(expanded?'Hide':'Read'):
+   '◌ Room chat · '+(expanded?'Hide':'Read recent');
+  chatDockSummary.setAttribute('aria-expanded',String(!chatDockPanel.hidden));
+ }
+ chatDockSummary.addEventListener('click',()=>{
+  if(!currentRoom()||chatDock.hidden)return;
+  expanded=!expanded;
+  if(expanded){unread=0;renderInboxMessages();}
+  updateRoomChatInbox();
+ });
+ chatDockClose.addEventListener('click',()=>{
+  expanded=false;updateRoomChatInbox();chatDockSummary.focus?.();
+ });
+ chatDockView.addEventListener('click',()=>{
+  if(!currentRoom())return;
+  const go=document.getElementById('tabPlay');
+  go?.click();
+  if(document.getElementById('matchView')?.hidden===false){
+   unread=0;expanded=false;
+   const original=document.getElementById('chatLog');
+   if(original){original.tabIndex=-1;original.focus?.({preventScroll:true});original.scrollTop=original.scrollHeight;}
+   updateRoomChatInbox();
+  }
+ });
+ const inboxTicker=setInterval(updateRoomChatInbox,1400);
+ inboxTicker?.unref?.();
+ for(const id of ['tabHome','tabPlay','tabReplay'])
+  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(updateRoomChatInbox));
+ window.addEventListener('focus',updateRoomChatInbox);
+ window.addEventListener('fuckball:native-session-state',updateRoomChatInbox);
+ document.addEventListener('visibilitychange',updateRoomChatInbox);
  focusSelect.addEventListener('change',()=>{
   if(!Object.hasOwn(FOCUS_MODES,focusSelect.value))return;
   focus=focusSelect.value;
   try{localStorage.setItem(FOCUS_KEY,JSON.stringify({version:1,mode:focus}));}catch{}
+  // Changing what this device may display also clears the temporary catch-up
+  // copy, so previously received content never bypasses a new quiet filter.
+  recentChat.length=0;unread=0;expanded=false;updateRoomChatInbox();
   rows();
  });
  function visibleMessage(sender){
@@ -60,7 +153,9 @@
  };
  function currentRoom(){
   const next=serverLink?.room||null;
-  if(next!==roomId){roomId=next;muted.clear();}
+  if(next!==roomId){
+   roomId=next;muted.clear();recentChat.length=0;unread=0;expanded=false;
+  }
   return roomId;
  }
  function rows(){
@@ -88,6 +183,7 @@
    button.onclick=()=>{
     if(muted.has(player.id))muted.delete(player.id);
     else muted.add(player.id);
+    recentChat.length=0;unread=0;expanded=false;updateRoomChatInbox();
     rows();
    };
    row.append(name,button);
@@ -124,12 +220,24 @@
      typeof message.text!=='string'||message.text.length<1||message.text.length>140||
      /[\u0000-\u001f\u007f-\u009f]/.test(message.text))return;
   if(muted.has(message.from)||!visibleMessage(message.from))return;
+  let channel=null;
   if(message.channel==='team'){
    if(![1,2].includes(message.team))return;
    log('[TEAM · '+(message.team===1?'RED':'BLUE')+'] '+message.name+': '+message.text,false);
    document.querySelector('#chatLog .chat-line:last-child')?.classList.add('native-team-message');
+   channel='team';
   }else if(message.channel===undefined||message.channel==='room'){
    log(message.name+': '+message.text,false);
+   channel='room';
+  }
+  if(channel){
+   recentChat.push({from:message.from,channel,name:message.name,text:message.text});
+   if(recentChat.length>20)recentChat.shift();
+   const match=document.getElementById('matchView');
+   if(message.from!==networkPlayerId&&(match?.hidden!==false||document.hidden===true)&&!expanded)
+    unread=Math.min(99,unread+1);
+   if(expanded)renderInboxMessages();
+   updateRoomChatInbox();
   }
  };
 

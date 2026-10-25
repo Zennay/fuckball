@@ -434,9 +434,10 @@
    const link=typeof serverLink!=='undefined'?serverLink:null;
    const awaiting=Number.isFinite(link?.connectionDeadlineAt)&&link.connectionDeadlineAt>Date.now();
    const countdown=awaiting?' · '+Math.max(1,Math.ceil((link.connectionDeadlineAt-Date.now())/1000))+
-    's until the connection attempt ends.':'';
-   const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+countdown+
-    ' You can review the original connection or cancel explicitly.';
+    's until '+(link.connectionStage==='opening'?'transport opens':'room admission')+'.':'';
+   const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
+    (link?.quickQueueAcknowledged?' The server acknowledged the human-only queue.':countdown)+
+    ' View the original connection or cancel explicitly.';
    if(connectionDetail.textContent!==copy)connectionDetail.textContent=copy;
   }
   const canCancel=nativeQueue.searching&&!nativeQueue.ready;

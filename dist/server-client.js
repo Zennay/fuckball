@@ -91,7 +91,7 @@ function armNativeConnectionTimeout(link,stage){
  link.connectionStage=stage;
  link.connectionDeadlineAt=Date.now()+NATIVE_CONNECTION_TIMEOUT_MS;
  link.connectionTimer=setTimeout(()=>{
-  if(serverLink!==link||link.room)return;
+  if(serverLink!==link||link.room||link.quickQueueAcknowledged)return;
   link.connectionTimer=null;link.connectionDeadlineAt=null;
   link.connectionTimedOut=true;
   $('serverRoomStatus').textContent=stage==='opening'?
@@ -160,6 +160,18 @@ function onlineSessionConflict(resumeContext=null,startingNewQueue=false){
   return 'Cancel the active human queue or ready check before starting another online room.';
  return '';
 }
+// A refused native admission is terminal for that socket. Clear its transport
+// before showing the same safe, explicit room-selection UI; otherwise a fast
+// manual retry sees the rejected socket as an active session.
+function showRejectedRoomJoin(link,code,message){
+ const spectator=link?.requestedSpectate===true;
+ const priorName=link?.joinName;
+ if(link){link.failed=true;if(serverLink===link)disconnect();}
+ showView('play');showJoinScreen(code||'',String(message||'Could not enter room.').slice(0,180));
+ if(spectator)$('joinSpectator').checked=true;
+ if(priorName&&!settings.account&&!/^Guest \d{4}$/.test(priorName))
+  $('joinName').value=priorName;
+}
 function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode=null,partyQueue=false,clubPractice=false,spectate=false){try{const address=$('serverAddress').value.trim();if(!address)throw Error('Enter a server address.');const url=new URL(address);if(!['ws:','wss:'].includes(url.protocol))throw Error('Use a ws:// or wss:// address.');if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('HTTPS requires a wss:// server.');
  // Validate room credentials and current-session ownership BEFORE any
  // destructive disconnect, view change, replay close or local HUD mutation.
@@ -176,14 +188,14 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  if(replay)closeReplay();
  showView(quickMode?'home':'play');
  if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};
- // Preserve the already-created socket (before any destructive game change)
- // and the current main branch's ticket-only human Quick Match resume path.
+ // Socket allocated before local game changes; preserve ticket-only recovery.
  const recoveringHuman=resumeContext?.roomRecovery===true&&
   ['1v1','2v2','3v3','4v4','club4v4'].includes(resumeContext.quickMatchMode);
  const link={ws,requestedRoomId:roomId,connectionTimer:null,connectionDeadlineAt:null,
   connectionStage:'opening',connectionTimedOut:false,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:recoveringHuman?resumeContext.quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  armNativeConnectionTimeout(link,'opening');
  notifyNativeSessionView();
+ // One staged timer handles transport and server admission.
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,
@@ -214,12 +226,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onclose=event=>{
   if(serverLink!==link)return;
   clearNativeConnectionTimeout(link);
-  // Reconnecting a real Quick Match slot must not look like a fresh human
-  // matchmaking failure. Only the original queue reports disconnected.
-  if(link.quickMatchMode&&!link.room&&!link.reconnect)
-   window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected',
-    ...(link.connectionTimedOut?{reason:'The game server did not respond within 20 seconds.'}:{})
-   });if(event?.code===4004){
+  if(link.quickMatchMode&&!link.room&&!link.reconnect)window.onQuickMatchEvent?.({
+   type:'queueStatus',status:'disconnected',reason:link.connectionTimedOut?
+   'Server did not acknowledge the human queue within 20 seconds. Retry explicitly.':
+   'Human match connection ended. You can retry.'
+  });
+  if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -257,13 +269,16 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     // ticket is fabricated and no background reconnect is scheduled.
     showView('play');
     showJoinScreen(roomId,link.connectionTimedOut?
-     'The server did not admit the room within 20 seconds. Review and retry explicitly.':
-     'The server connection ended before joining. Review the room and retry explicitly.');
+     'The server did not admit this room in 20 seconds. Retry explicitly.':
+     'Connection ended before joining. Retry explicitly.');
     if(retrySpectator)$('joinSpectator').checked=true;
-   }else if(link.connectionTimedOut)notify(
-    'The server did not respond within 20 seconds. No room was created. Review your server connection and try again explicitly.'
-   );
-   else notify('Disconnected.');
+   }else if(create&&!admitted){
+    showView('home');
+    const reason=link.connectionTimedOut?
+     'Room creation was not confirmed within 20 seconds. Open Online Rooms to retry.':
+     'Room creation ended before admission. Open Online Rooms to retry.';
+    $('serverRoomStatus').textContent=reason;notify(reason);
+   }else if(!link.quickMatchMode)notify('Disconnected.');
   };
  ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(link.spectatorJoinAwaiting){
@@ -277,6 +292,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     'This server cannot guarantee spectator-only entry; no room was joined.');
    return;
   }
+ }
+ // Human matchmaking can legitimately wait much longer than 20 seconds
+ // *after* an authenticated server queue acknowledgement. Do not disconnect
+ // players merely because an empty human-only playlist needs opponents.
+ if(link.quickMatchMode&&['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
+  link.quickQueueAcknowledged=true;clearNativeConnectionTimeout(link);
  }
  if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
   // The real server replied about the human queue. Waiting for other humans
@@ -360,6 +381,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  }
  if(d.type==='peering'){if(!link.net)startPeering(link,ws);return;}if(link.net&&link.net.handleServer(d))return;
  if(d.type==='welcome'){
+  clearNativeConnectionTimeout(link);
   // Fail closed: an old server may silently ignore the new spectate option.
   // Never put a player who explicitly selected WATCH into an active lineup.
   if(link.requestedSpectate&&d.spectatorAdmission!==true){
@@ -390,10 +412,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   if(Number.isSafeInteger(d.timeLimit)&&d.timeLimit>=0&&d.timeLimit<=99)
    $('timeLimit').value=String(d.timeLimit);
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();
-  // Update the contextual room strip from an actual native server message:
-  // lobby, live match and completed round are not inferred by the UI.
+  // Update the contextual room strip from actual native room status.
   notifyNativeSessionView();}
- else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'', 'Your former player slot expired. Join again to get a new slot.');}
+ else if(d.type==='error'&&link.reconnect&&/^Session (expired|belongs)/.test(d.message)){
+   showRejectedRoomJoin(link,roomId,'Your former player slot expired. Join again to get a new slot.');
+ }
+
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     (d.message.startsWith('This room is not accepting new spectators or bench participants.')||
      d.message.startsWith('This room is full.')||
@@ -402,20 +426,34 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
      d.message.startsWith('This room was locked before you could join.')||
      d.message.startsWith('This room filled while the connection was being prepared.')||
      d.message.startsWith('This room now requires a signed-in account.'))){
-   link.failed=true;ws.close();showJoinScreen(roomId,d.message);
-   if(document.getElementById('joinSpectator'))
-    $('joinSpectator').checked=link.requestedSpectate;
+   showRejectedRoomJoin(link,roomId,d.message);
    return;
   }
  else if(d.type==='error'&&!create&&!link.room&&typeof d.message==='string'&&
     /^(Private room access key required or incorrect\.|Too many room access attempts\.)/.test(d.message)){
-   link.failed=true;ws.close();
-   showJoinScreen(roomId,d.message);
-   if(document.getElementById('joinSpectator'))$('joinSpectator').checked=link.requestedSpectate;
+   showRejectedRoomJoin(link,roomId,d.message);
    return;
   }
- else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
- else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
+ else if(d.type==='error'&&!peerConnected&&!link.room&&/^Name reserved/.test(d.message)){
+  showRejectedRoomJoin(link,roomId,d.message);
+ }
+ else if(d.type==='error'){
+  const message=inviteError(typeof d.message==='string'?d.message.slice(0,180):
+   'The server rejected this room request.');
+  $('serverRoomStatus').textContent=message;notify(message);
+  if(!peerConnected){
+   link.failed=true;
+   if(!create&&!link.quickMatchMode&&!link.room&&NATIVE_ROOM_CODE.test(roomId)&&
+      d.message!=='Room not found.'){
+    // A server's denial is not proof of an admitted seat. Immediately clear
+    // the rejected socket; preserve the human's invite and explicit retry UI.
+    showRejectedRoomJoin(link,roomId,message);
+   }else{
+    if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}
+    ws.close();
+   }
+  }
+ }
  else if(d.type==='recordingStatus'){$('recordIndicator').hidden=!d.active;$('recordButton').textContent=d.active?'■ Save recording':'● Record';}
  else if(d.type==='recording'){const decoded=atob(d.bytes);saveBlob(Uint8Array.from(decoded,c=>c.charCodeAt(0)),'fuckball-server-'+Date.now()+'.hbr2','application/octet-stream');notify('Replay saved.');}
  else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
@@ -436,7 +474,16 @@ function inviteError(message){if(message==='Room not found.')return'This invite 
 // the textarea + execCommand fallback (inside the click gesture).
 async function copyText(text){try{if(navigator.clipboard?.writeText&&window.isSecureContext!==false){await navigator.clipboard.writeText(text);return true;}}catch{}try{const t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.position='fixed';t.style.top='0';t.style.opacity='0';document.body.append(t);t.select();t.setSelectionRange?.(0,text.length);let ok=false;try{ok=document.execCommand('copy');}finally{try{t.remove();}catch{}}return !!ok;}catch{return false;}}
 async function copyInvite(silent){const value=$('inviteLink').value;if(!value)return;if(await copyText(value))notify('Room link copied: '+value);else notify(silent?'Room ready · press “Copy room link” to share it':'Copy failed. Link: '+value);}
-$('createServerRoom').onclick=()=>connectServer(true);$('copyInvite').onclick=()=>copyInvite(false);$('inviteButton').onclick=$('menuCopyLink').onclick=()=>copyInvite(false);
+$('createServerRoom').onclick=()=>connectServer(true);
+$('networkBrowsePublicRooms').onclick=()=>{
+ if($('networkDialog').open)$('networkDialog').close();
+ showView('home');
+ const browser=$('homeView').querySelector('.room-browser');
+ const toggle=browser?.querySelector('.room-browser-tools button');
+ if(toggle&&toggle.getAttribute('aria-expanded')==='false')toggle.click();
+ browser?.scrollIntoView?.({behavior:'auto',block:'start'});
+};
+$('copyInvite').onclick=()=>copyInvite(false);$('inviteButton').onclick=$('menuCopyLink').onclick=()=>copyInvite(false);
 $('shareInvite').onclick=async()=>{const url=$('inviteLink').value;if(!url)return;if(navigator.share){try{await navigator.share({title:'Fuckball',text:'Join my Fuckball room',url});}catch{}}else copyInvite(false);};
 const baseDisconnectPeer=$('disconnectPeer').onclick;$('disconnectPeer').onclick=e=>{const leaving=!!serverLink;baseDisconnectPeer?.(e);if(leaving){setRoomParam(null);$('inviteBox').hidden=true;$('inviteLink').value='';$('serverRoomStatus').textContent='Left the room.';}};
 // Match the same canonical 8-character code and one-parameter link format
@@ -483,8 +530,38 @@ document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState=
 var joinRoomId; // var: the room-link handler above runs before this line
 function showJoinScreen(room,error=''){joinRoomId=room;
  if(document.getElementById('joinRoomAccessKey'))$('joinRoomAccessKey').value='';
- if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;$('joinRoomCode').textContent=room||'';$('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
+ if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;
+ $('joinRoomCode').textContent=room||'';
+ $('joinDifferentCode').value=room||'';
+ $('joinAlternatives').hidden=!room||!error;
+ $('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
 function hideJoinScreen(){$('joinScreen').hidden=true;$('joinError').textContent='';}
+// An expired or mistyped invitation can be replaced deliberately without
+// starting a WebSocket, reusing any temporary access key or inventing a seat.
+$('joinChangeRoom').onclick=()=>{
+ const next=$('joinDifferentCode').value.trim().toUpperCase();
+ if(!NATIVE_ROOM_CODE.test(next)){
+  $('joinError').textContent='Enter a valid eight-character room code before continuing.';
+  return;
+ }
+ const previousName=$('joinName').value,watch=$('joinSpectator').checked;
+ showJoinScreen(next,'Room updated. Select Join or Join as guest to connect.');
+ $('joinName').value=previousName;
+ $('joinSpectator').checked=watch;
+ $('joinDifferentCode').value=next;
+};
+$('joinDifferentCode').addEventListener('keydown',e=>{
+ if(e.key==='Enter'||e.code==='Enter'){e.preventDefault();$('joinChangeRoom').click();}
+});
+$('joinBrowseRooms').onclick=()=>{
+ hideJoinScreen();setRoomParam(null);showView('home');
+ // Browse only existing host-published listings; this is not a room join.
+ const browser=$('homeView').querySelector('.room-browser');
+ const toggle=browser?.querySelector('.room-browser-tools button');
+ if(toggle&&toggle.getAttribute('aria-expanded')==='false')toggle.click();
+ browser?.scrollIntoView?.({behavior:'auto',block:'start'});
+};
+$('joinCancel').onclick=()=>{hideJoinScreen();setRoomParam(null);showView('home');};
 function renderAccount(){const a=settings.account;$('joinAccount').textContent=a?'Logged in as '+a.username+'.':'';$('joinShowLogin').hidden=!!a;$('joinName').disabled=!!a;$('accountStatus').textContent=a?'Logged in as '+a.username:'Not logged in · nickname only';$('accountButton').textContent=a?'Log out':'Log in / create account';}
 function joinRoom(name){
  if(!joinRoomId)return;
@@ -498,6 +575,7 @@ function joinRoom(name){
  if(outcome===false){
   $('joinError').textContent=$('serverRoomStatus').textContent||
    'Could not start the room connection. Check your server and retry.';
+  $('joinAlternatives').hidden=false;
   $('joinName').focus({preventScroll:true});
   return;
  }

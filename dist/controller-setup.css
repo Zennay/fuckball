@@ -30,3 +30,12 @@
 .controller-setup-haptics input[type=checkbox]{width:19px;height:19px;accent-color:#c8f28c}
 .controller-setup-haptics small{grid-column:1/-1;color:#c0ddd1;line-height:1.5}
 @media(max-width:550px){.controller-setup-haptics{grid-template-columns:1fr}}
+
+/* Restoring a live controller is an explicit, player-owned action. */
+.controller-setup-rebind{width:100%;margin-top:4px;
+ min-height:48px!important;background:#274e3d!important;
+ border-color:#a9d896!important;color:#f3ffe8!important;
+ font-weight:850!important;white-space:normal;line-height:1.35}
+.controller-setup-rebind:hover{filter:brightness(1.12)}
+.controller-setup-rebind:focus-visible{outline:3px solid #f3ff9d;
+ outline-offset:3px}
