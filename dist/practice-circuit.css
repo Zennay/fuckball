@@ -11,3 +11,19 @@
 .practice-circuit-busy button:focus-visible{outline:3px solid #f3ffa3;outline-offset:3px}
 @media(max-width:750px){.practice-circuit-busy{flex-direction:column;align-items:stretch}
  .practice-circuit-busy button{width:100%}}
+
+/* Local save corruption is a recoverable player state, never a blank circuit. */
+.practice-circuit-storage-recovery[hidden]{display:none!important}
+.practice-circuit-storage-recovery{margin:16px 0;padding:17px 19px;box-sizing:border-box;
+ border-radius:12px;border:2px solid #f9d396;background:#3b2926;color:#fff2de}
+.practice-circuit-storage-recovery p{font-size:.91rem;line-height:1.55;margin:0 0 13px;
+ max-width:75ch}
+.practice-circuit-storage-recovery .practice-circuit-actions{display:flex;gap:10px;flex-wrap:wrap}
+.practice-circuit-storage-recovery button{min-height:46px;padding:10px 15px;
+ border:1px solid #f4d09c;background:#493530;color:#fff4df;border-radius:9px;
+ font:inherit;font-weight:700;cursor:pointer}
+.practice-circuit-storage-recovery button:first-child{background:#ffe0a5;color:#382119}
+.practice-circuit-storage-recovery button:focus-visible{outline:3px solid #fffbc2;outline-offset:3px}
+@media(max-width:600px){.practice-circuit-storage-recovery{padding:15px}
+ .practice-circuit-storage-recovery .practice-circuit-actions{flex-direction:column}
+ .practice-circuit-storage-recovery button{width:100%}}
