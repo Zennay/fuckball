@@ -303,7 +303,7 @@
   copy.append(title,details);
   const actions=document.createElement('div');actions.className='room-browser-actions';
   const join=button('Join room',()=>requestJoin(room));
-  join.className='primary';
+  join.className='primary';join.dataset.roomAction='join';
   if(!canBrowseJoin(room)){join.disabled=true;join.textContent=freeSeats(room)===0?'Room full':'Availability unknown';}
   else if(room.requiresAccount&&!settings.account?.token){join.textContent='Sign in to join';}
   const share=button('Copy invite',async()=>{
@@ -313,6 +313,7 @@
     await navigator.clipboard.writeText(url);status.textContent='Public room link copied.';
    }catch{status.textContent='Copy this URL to invite a friend: '+url;}
   });
+  share.dataset.roomAction='share';
   const pin=button(pins.includes(room.room)?'★ Unpin room':'☆ Pin room',()=>{
    try{
     const current=readPinned(),exists=current.includes(room.room);
@@ -323,6 +324,7 @@
     status.textContent=(exists?'Unpinned ':'Pinned ')+room.room+' on this device.';
    }catch(e){status.textContent=e.message||'Unable to update pinned rooms.';}
   });
+  pin.dataset.roomAction='pin';
   pin.setAttribute('aria-pressed',String(pins.includes(room.room)));
   actions.append(join,share,pin);card.append(copy,actions);list.append(card);
  }
@@ -348,8 +350,30 @@
   else if(order.value==='fewest')visible.sort((a,b)=>a.players-b.players||a.room.localeCompare(b.room));
   else if(order.value==='seats')visible.sort((a,b)=>(freeSeats(b)??-1)-(freeSeats(a)??-1)||a.room.localeCompare(b.room));
   else if(order.value==='stadium')visible.sort((a,b)=>a.map.localeCompare(b.map)||a.room.localeCompare(b.room));
+  // Twenty-second refreshes must not steal keyboard focus while a player
+  // is about to join, share or pin a listed public room.
+  const active=document.activeElement;
+  let focusRoom=null,focusAction=null;
+  if(active&&active.dataset?.roomAction){
+   for(const card of list.children){
+    if(card.contains(active)){
+     focusRoom=card.dataset.publicRoom;
+     focusAction=active.dataset.roomAction;
+     break;
+    }
+   }
+  }
   list.replaceChildren();
   for(const room of visible)putRoom(room,pins);
+  if(focusRoom&&focusAction){
+   for(const card of list.children){
+    if(card.dataset.publicRoom!==focusRoom)continue;
+    const target=[...card.querySelectorAll('button')].find(
+     button=>button.dataset.roomAction===focusAction&&!button.disabled);
+    target?.focus({preventScroll:true});
+    break;
+   }
+  }
   const age=lastLoadedAt>0?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
   const freshness=age===null?'No current server snapshot':age<45?'Updated '+age+'s ago':'Old snapshot ('+age+'s); refresh before joining';
   status.textContent=roomsCache.length?
@@ -458,7 +482,12 @@
   }
   // A cached listing is never proof of availability after returning from
   // gameplay. Fetch a fresh host-approved snapshot before enabling joins.
-  catchupWatchBaseline();
+  if(watching){
+   // A fresh snapshot on return becomes the first comparison baseline,
+   // rather than reporting a change that occurred off-screen as a new alert.
+   sawSnapshot=false;previousAvailable=new Set();
+   watchText.textContent='Refreshing host-approved room availability after returning to Home…';
+  }
   if(!busy)load();
  }
  document.addEventListener('visibilitychange',syncDirectoryVisibility);
