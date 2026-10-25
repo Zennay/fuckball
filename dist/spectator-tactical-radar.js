@@ -299,9 +299,12 @@
   const sourceCode=serverLink?.room||'local-spectator';
   download.disabled=true;
   canvas.toBlob(blob=>{
-   const stillSame=source===paintGeneration&&link===(serverLink||null)&&
+   // Refresh frame evidence *before* checking the generation: observing a
+   // new connection or kickoff itself invalidates the old export token.
+   const fresh=freshNativeFrame();
+   const stillSame=fresh&&source===paintGeneration&&link===(serverLink||null)&&
     sourceRoom===room&&sourceCode===(serverLink?.room||'local-spectator')&&
-    freshNativeFrame()&&samePaintSource();
+    samePaintSource();
    download.disabled=!stillSame;
    if(!stillSame){
     message.textContent='Radar source changed during export. No old-room image was saved.';
