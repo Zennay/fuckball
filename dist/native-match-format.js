@@ -202,7 +202,7 @@
  dockControls.append(dockSelect,dockVote,dockRemove,dockApply,dockView);
  dock.append(summary,dockControls);
  document.body.append(dock);
- let dockOwner=null,dockRound=null,dockOptions='';
+ let dockOwner=null,dockRoom='',dockRound=null,dockPlayer=null,dockOptions='';
  let dockChoice=2;
  function ballotParticipant(){
   return room?.state?.players?.some?.(p=>
@@ -217,8 +217,10 @@
   if(!live)return;
   const {link,state,list}=d;
   const signature=JSON.stringify(list);
-  if(dockOwner!==link||dockRound!==state.round||dockOptions!==signature){
-   dockOwner=link;dockRound=state.round;dockOptions=signature;
+  if(dockOwner!==link||dockRoom!==link.room||dockRound!==state.round||
+     dockPlayer!==networkPlayerId||dockOptions!==signature){
+   dockOwner=link;dockRoom=link.room;dockRound=state.round;
+   dockPlayer=networkPlayerId;dockOptions=signature;
    const mine=state.matchFormatVotes.find(row=>
     Array.isArray(row)&&row[0]===networkPlayerId&&
     Number.isSafeInteger(row[1])&&row[1]>=0&&row[1]<list.length);
@@ -246,9 +248,12 @@
   const newText='Current: '+rules+' · '+validVotes.length+
    ' human votes'+leader+(mine?' · your vote: '+list[mine[1]].name:
    ' · no confirmed vote from you')+
-   (state.kickoff!=null?' · locked during server kickoff.':'');
+   (state.kickoff!=null?' · locked during server kickoff.':
+    link.ws?.readyState!==1?' · disconnected; no votes can be sent.':
+    pendingVote?' · waiting for a real vote update.':
+    pendingApply?' · awaiting server host-format receipt.':'');
   if(tally.textContent!==newText)tally.textContent=newText;
-  dockSelect.disabled=!canVote;
+  dockSelect.disabled=!canVote||!!pendingVote;
   dockVote.disabled=!canVote||!!pendingVote;
   dockRemove.disabled=!canVote||!mine||!!pendingVote;
   dockApply.hidden=!host;
