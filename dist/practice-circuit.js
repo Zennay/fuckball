@@ -223,7 +223,20 @@
  busyReturn.type='button';
  busyReturn.onclick=()=>document.getElementById('tabPlay')?.click();
  busyCard.append(busyCopy,busyReturn);
- section.append(header,busyCard,live,archive,status);
+ // Browser storage can contain a damaged or older format. Offer an explicit
+ // local-only backup and opt-in reset, not an implicit overwrite on Start,
+ // Complete, Clear or Export.
+ const storageCard=make('aside','practice-circuit-storage-recovery');
+ storageCard.hidden=true;
+ storageCard.setAttribute('role','alert');
+ const storageMessage=make('p','','Stored practice progress cannot be safely read. Changes are blocked to protect the original records.');
+ const storageActions=make('div','practice-circuit-actions');
+ const backupStorage=make('button','','↓ Download raw backup');
+ const resetStorage=make('button','','Reset unreadable data');
+ backupStorage.type=resetStorage.type='button';
+ storageActions.append(backupStorage,resetStorage);
+ storageCard.append(storageMessage,storageActions);
+ section.append(header,busyCard,storageCard,live,archive,status);
  const anchor=home.querySelector('.practice-weekly-plan')||home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=make('aside','practice-circuit-hud'),hudText=make('span','','');
@@ -242,7 +255,7 @@
      make('span','',row.order.map(label).join(' → ')));
    historyList.append(item);
   }
-  download.disabled=clear.disabled=!past.length;
+  download.disabled=clear.disabled=!past.length||historyUnreadable();
  }
  function online(){
   // Pending native joins, timed room reconnects and direct-peer handshakes
@@ -253,16 +266,31 @@
    (typeof peer!=='undefined'&&!!peer)||
    !!document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  }
+ function renderStorageSafety(){
+  const badCircuit=circuitUnreadable(),badHistory=historyUnreadable();
+  storageCard.hidden=!badCircuit&&!badHistory;
+  if(!storageCard.hidden){
+   storageMessage.textContent='Unreadable or expired private '+
+    (badCircuit&&badHistory?'circuit and history':badCircuit?'circuit':'circuit history')+
+    ' data found. Download a raw device-only backup before choosing an explicit reset. New progress will not overwrite these records.';
+  }
+  return badCircuit||badHistory;
+ }
  function renderOnlineSafety(){
-  const busy=online();
+  const busy=online(),unreadable=renderStorageSafety();
   busyCard.hidden=!busy;
-  selector.disabled=start.disabled=!!session||busy;
+  selector.disabled=start.disabled=!!session||busy||unreadable;
   hud.hidden=!session||match.hidden||busy;
  }
  function render(message){
   live.hidden=!session;
   renderOnlineSafety();
-  if(!session){hudText.textContent='';renderHistory();if(message)status.textContent=message;return;}
+  if(!session){
+   hudText.textContent='';renderHistory();
+   if(message)status.textContent=message;
+   else if(!storageCard.hidden)status.textContent='Recovery needed. Your existing device-only data has not been changed.';
+   return;
+  }
   progress.textContent='STAGE '+(session.done+1)+' / 3 · '+session.order.map((key,i)=>i<session.done?'✓':i===session.done?'◉':'○').join('   ');
   rows.replaceChildren();
   session.order.forEach((key,i)=>{
@@ -279,6 +307,31 @@
   hudText.textContent='CIRCUIT '+(session.done+1)+'/3 · '+label(session.order[session.done])+(armed?' · tracking':' · open drill');
   renderHistory();
  }
+ // A backup is only ever created by the player's click, saved locally on
+ // their own device. Never upload raw private practice progress to a server.
+ backupStorage.onclick=()=>{
+  let snapshot;
+  try{snapshot={circuit:localStorage.getItem(STATE),history:localStorage.getItem(HISTORY)};}
+  catch{status.textContent='Browser storage cannot be read. No backup was created.';return;}
+  const blob=new Blob([JSON.stringify({
+   format:'fuckball-practice-recovery',version:1,exportedAt:new Date().toISOString(),
+   source:'private-device-only-raw-backup',...snapshot
+  },null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='fuckball-practice-recovery-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='Raw private practice backup downloaded. Existing records remain unchanged.';
+ };
+ resetStorage.onclick=()=>{
+  const keys=[circuitUnreadable()?STATE:null,historyUnreadable()?HISTORY:null].filter(Boolean);
+  if(!keys.length){render();return;}
+  if(!confirm('Permanently discard the selected unreadable practice records on this device? Download the raw backup first if you might want to recover them. Other drill results remain unchanged.'))return;
+  try{for(const key of keys)localStorage.removeItem(key);}
+  catch{status.textContent='Browser refused the reset. Existing records may remain; check the recovery status.';renderStorageSafety();return;}
+  session=readState();
+  render('Explicit reset finished. Valid individual drill records were not deleted.');
+ };
  function completed(){
   if(!refreshFromStorage()||!session||session.armedStep!==session.done||!session.armedAt)return false;
   const at=latestSuccess(session.order[session.done]);
