@@ -105,6 +105,8 @@ function pendingSessionBlock(){
   'Leave your current native online room explicitly before changing game modes.':
   'Cancel your current native online connection or human search before changing game modes.';
  if(peerConnected)return 'Disconnect from the current direct-peer match before changing game modes.';
+ if(typeof peer!=='undefined'&&peer)
+  return 'Finish or cancel the pending direct-peer connection before changing local game modes.';
  if(document.querySelector('.quick-queue-actions button:not([hidden])')||
     document.querySelector('.quick-ready:not([hidden])'))
   return 'Finish or cancel the human matchmaking queue or ready check first.';
