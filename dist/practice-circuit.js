@@ -339,15 +339,35 @@
   const previous=session;
   const next={...previous,done:previous.done+1,armedStep:null,armedAt:0,baseline:0};
   if(next.done===3){
-   // Delete only the exact finished circuit. The other tab may have
-   // abandoned or replaced it since this tab displayed the result.
+   // Persist the genuine three-stage result BEFORE deleting the active
+   // circuit. A full/quota-blocked or unreadable history must leave the
+   // completed step retriable, instead of silently discarding all progress.
    if(!sameState(readState(),previous)){refreshFromStorage();return false;}
+   if(historyUnreadable()){
+    status.textContent='History cannot be read. Download a raw backup and recover storage before finalizing your circuit.';
+    renderStorageSafety();return false;
+   }
+   const past=readHistory();
+   const existing=past.find(row=>row.startedAt===previous.startedAt&&
+    row.order.every((key,i)=>key===previous.order[i]));
+   const finishedAt=Date.now(),row=existing||{
+    version:1,startedAt:previous.startedAt,finishedAt,order:previous.order
+   };
+   if(!existing&&!saveHistory([row,...past])){
+    status.textContent='Circuit completion not yet saved. Storage is unavailable; active progress was preserved.';
+    return false;
+   }
+   // A previous removal failure can be retried without duplicate rows.
+   if(!sameState(readState(),previous)){
+    refreshFromStorage();return false;
+   }
    try{localStorage.removeItem(STATE);}
-   catch{status.textContent='Could not save circuit completion. Your drill history remains.';return false;}
+   catch{
+    status.textContent='The result was saved, but the active circuit could not be cleared. You can retry safely without another history row.';
+    return false;
+   }
    session=null;
-   const finishedAt=Date.now(),row={version:1,startedAt:previous.startedAt,finishedAt,order:previous.order};
-   const archived=saveHistory([row,...readHistory()]);
-   render(archived?'Circuit completed! Three new real local drill completions saved.':'Circuit completed; history could not be saved in this browser.');
+   render('Circuit completed! Three genuine local drill results are recorded in your private history.');
    return true;
   }
   if(!commitIfUnchanged(next,previous)){
