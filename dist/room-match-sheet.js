@@ -22,15 +22,31 @@
   const item=document.createElement('button');item.type='button';item.textContent=text;
   item.addEventListener('click',fn);buttons.append(item);return item;
  }
- const refresh=button('↻ Refresh lineup',()=>{render();status.textContent='Current visible roster refreshed. No changes were sent to the room.';});
+ const refresh=button('↻ Refresh lineup',()=>{
+  const ready=render();
+  status.textContent=ready?'Current server snapshot refreshed. No changes were sent to the room.':
+   'Waiting for this room’s first server snapshot. No stale roster can be exported.';
+ });
  const copy=button('Copy team list',()=>transfer('copy'));
  const csv=button('↓ Export CSV',()=>transfer('csv'));
  const svg=button('↓ Export lineup card SVG',()=>transfer('svg'));
  panel.append(heading,description,score,counters,rows,buttons,status);
  pane.append(panel);panel.hidden=true;
+ function liveCustomRoom(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  return link?.room&&!link.quickMatchMode?link:null;
+ }
+ function hasFreshRoomSnapshot(link){
+  // A previous offline match and a new online room reuse the same renderer.
+  // Do not mislabel old local players, bot names or scores as live people in
+  // a Custom Room until the server has both admitted this precise room and
+  // delivered its first gameplay snapshot after the network state reset.
+  return link?.ws?.readyState===1&&link.roomState?.room===link.room&&
+   typeof net!=='undefined'&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0;
+ }
  function snapshot(){
-  const live=typeof serverLink!=='undefined'?serverLink:null;
-  if(!live?.room||live.quickMatchMode||!room?.state||
+  const live=liveCustomRoom();
+  if(!live||!hasFreshRoomSnapshot(live)||!room?.state||
      !Array.isArray(room.state.players))return null;
   const players=room.state.players;
   if(players.length>128)return null;
@@ -50,7 +66,8 @@
   const actual=valid(g?.redScore)&&valid(g?.blueScore)&&
    Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0&&g.timeElapsed<=86400;
   const score=actual?{red:g.redScore,blue:g.blueScore,seconds:Math.floor(g.timeElapsed)}:null;
-  return {roster,score,at:new Date(),state:typeof started!=='undefined'&&started?
+  return {roster,score,at:new Date(),session:live,roomId:live.room,
+   snapshotAt:net.lastSnapshot,state:typeof started!=='undefined'&&started?
    (typeof paused!=='undefined'&&paused?'PAUSED':'IN PROGRESS'):'LOBBY / INTERMISSION'};
  }
  function group(roster,team){return roster.filter(x=>x.team===team);}
@@ -63,8 +80,15 @@
    'No active match score available · '+data.state;
  }
  function render(){
-  const data=snapshot();panel.hidden=!data;
-  if(!data){rows.replaceChildren();score.textContent='';counters.textContent='';return;}
+  const data=snapshot(),connected=!!liveCustomRoom();
+  panel.hidden=!connected;
+  if(!data){
+   rows.replaceChildren();score.textContent='';counters.textContent='';
+   copy.disabled=true;csv.disabled=true;svg.disabled=true;
+   if(connected)status.textContent=
+    'Waiting for this room’s first server snapshot. Previous local match players and scores are hidden; exports are disabled.';
+   return false;
+  }
   score.textContent=summary(data);
   counters.textContent='Red '+group(data.roster,1).length+' · Blue '+group(data.roster,2).length+
    ' · inactive '+group(data.roster,0).length+' · '+data.roster.length+' visible players';
@@ -83,6 +107,9 @@
    section.append(title,list);rows.append(section);
   }
   copy.disabled=csv.disabled=svg.disabled=!data.roster.length;
+  if(status.textContent.startsWith('Waiting for this room'))status.textContent=
+   'Live room snapshot received. Exports remain optional and require consent.';
+  return true;
  }
  const permission=()=>window.confirm('Export visible player names and team assignments from your current Custom Room? This data can identify other players. Share only with their consent. No server upload is performed.');
  function textSummary(data){
@@ -145,6 +172,15 @@
    status.textContent='No current Custom Room roster is available.';render();return;
   }
   if(!permission()){status.textContent='Sharing cancelled; no data exported.';return;}
+  // A changed admission or lost first snapshot invalidates the captured
+  // export. Do not retain/share a prior room's participants after navigation.
+  const current=snapshot();
+  if(!current||current.session!==data.session||current.roomId!==data.roomId||
+     current.snapshotAt<data.snapshotAt){
+   status.textContent='Room changed or disconnected. Refresh the current server lineup before exporting.';
+   render();
+   return;
+  }
   try{
    if(type==='copy'){
     if(typeof navigator.clipboard?.writeText!=='function')throw Error('Clipboard unavailable. Use CSV instead.');
