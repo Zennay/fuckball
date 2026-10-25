@@ -65,6 +65,15 @@
     !isSpectatorCamera()||document.getElementById('pauseMenu')?.hidden===false)return false;
   return typeof room!=='undefined'&&!!room;
  }
+ // Only current authoritative WebSocket snapshots can drive a live native
+ // radar. Do not export, follow or trail unobserved server positions.
+ function freshNativeFrame(){
+  if(!serverLink?.room)return true; // Local Watch Bots uses local physics.
+  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
+  const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  const age=performance.now()-at;
+  return Number.isFinite(at)&&at>0&&age>=0&&age<=3500;
+ }
  function reset(){
   tracks.clear();hits=[];lastSample=0;lastPaint=0;
   previousClock=null;previousScore=null;previousField=null;
@@ -76,6 +85,7 @@
   return {x:PAD+(x/width+1)*INNER_W/2,y:PAD+(y/height+1)*INNER_H/2};
  }
  function sample(){
+  if(!freshNativeFrame())return null;
   const current=room;
   const state=current?.state;
   const game=current?.gameState;
@@ -114,8 +124,15 @@
   const data=sample();
   ctx.clearRect(0,0,W,H);field();hits=[];
   if(!data){
+   // A disconnected/paused/ended source must not leave old trails or
+   // selectable hit targets behind a visually updated, frozen radar.
+   reset();
+   const waiting=!!serverLink?.room&&!freshNativeFrame();
+   const detail=waiting?'Waiting for fresh server frames':'Waiting for real match positions';
    ctx.fillStyle='#f5fbf4';ctx.textAlign='center';ctx.font='bold 22px sans-serif';
-   ctx.fillText('Waiting for real match positions',W/2,H/2-10);
+   ctx.fillText(detail,W/2,H/2-10);
+   if(message.textContent!==detail+' · no live positions to follow or export.')
+    message.textContent=detail+' · no live positions to follow or export.';
    download.disabled=true;return;
   }
   download.disabled=false;
@@ -200,7 +217,7 @@
   }
  }
  function followAt(event){
-  if(!eligible()||!open||!hits.length)return;
+  if(!eligible()||!open||!freshNativeFrame()||!hits.length)return;
   const rect=canvas.getBoundingClientRect();
   if(!rect.width||!rect.height)return;
   const x=(event.clientX-rect.left)*W/rect.width,y=(event.clientY-rect.top)*H/rect.height;
@@ -229,10 +246,11 @@
  trails.addEventListener('change',()=>{options.trails=trails.checked;saveSettings();if(open)render(performance.now());});
  side.addEventListener('change',()=>{options.side=side.value;saveSettings();if(open)render(performance.now());});
  download.addEventListener('click',()=>{
-  if(!open||!eligible()||!sample()||typeof canvas.toBlob!=='function')return;
+  if(!open||!eligible()||!freshNativeFrame()||!sample()||typeof canvas.toBlob!=='function')return;
   download.disabled=true;
   canvas.toBlob(blob=>{
-   download.disabled=false;
+   download.disabled=!freshNativeFrame();
+   if(!freshNativeFrame())return;
    if(!blob||!blob.size||blob.size>6*1024*1024){
     message.textContent='Could not save this radar picture.';return;
    }
