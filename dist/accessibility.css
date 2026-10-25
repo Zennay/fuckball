@@ -65,3 +65,13 @@ html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms
  outline:3px solid #ddffae;outline-offset:3px}
 @media(max-width:540px){.setup-passport-dialog{padding:14px}
  .setup-passport-actions button{flex:1 1 100%}}
+
+/* Show exactly which controls follow the device and which are overrides. */
+.fb-access-origin{display:inline-flex;align-items:center;align-self:start;
+ font-size:12px;line-height:1.2;font-style:normal;font-weight:700;
+ padding:4px 8px;border:1px solid #8499a4;border-radius:999px;
+ color:#d9e9e9;background:#172b33}
+.fb-access-origin[data-source="custom"]{border-color:#d6f39f;
+ background:#29452d;color:#e7ffbc}
+.fb-access-dialog .fb-access-message{min-height:1.6em}
+@media(prefers-reduced-motion:reduce){.fb-access-dialog{scroll-behavior:auto}}
