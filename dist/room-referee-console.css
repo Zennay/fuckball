@@ -17,3 +17,35 @@
 .room-referee-pitch-prompt{position:absolute;z-index:31;right:16px;bottom:164px;max-width:230px;padding:12px;border-radius:10px;background:#cdeb96;border:2px solid #48705e;color:#1a3428;font-weight:850;cursor:pointer}
 .room-referee-pitch-prompt[hidden]{display:none}
 @media(max-width:540px){.room-referee-console{padding:10px}.room-referee-pitch-prompt{right:10px;bottom:195px;max-width:170px}}
+
+/* Native referee's time-limited human pause request follows the referee
+   across Home/My Games; no automatic pause or extra protocol is introduced. */
+.room-referee-global[hidden]{display:none!important}
+.room-referee-global{box-sizing:border-box;position:fixed;z-index:116;
+ left:50%;transform:translateX(-50%);
+ bottom:max(12px,env(safe-area-inset-bottom));
+ width:min(920px,calc(100vw - 24px));padding:16px 18px;
+ display:flex;align-items:center;justify-content:space-between;gap:18px;
+ border-radius:15px;border:2px solid #dcefa2;
+ background:#1a332e;box-shadow:0 16px 48px #04131ad8;
+ color:#f2ffed}
+.room-referee-global-copy{min-width:0}
+.room-referee-global-copy strong{display:block;color:#ecffa8;
+ font-size:.84rem;letter-spacing:.06em}
+.room-referee-global-copy p{margin:6px 0 0;font-size:.86rem;
+ color:#d3e6d9;line-height:1.5;overflow-wrap:anywhere}
+.room-referee-global-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.room-referee-global-actions button{min-height:48px;padding:10px 14px;
+ font:inherit;font-weight:800;font-size:.86rem;border-radius:9px;
+ background:#2a4a40;color:#f5ffee;cursor:pointer;
+ border:1px solid #9aaf9d}
+.room-referee-global-actions button.primary{background:#d9ffa2;
+ border-color:#d9ffa2;color:#1a3220}
+.room-referee-global-actions button:disabled{opacity:.55;cursor:not-allowed}
+.room-referee-global-actions button:focus-visible{outline:3px solid #f3ffa4;outline-offset:3px}
+@media(max-width:720px){
+ .room-referee-global{flex-direction:column;align-items:stretch;
+ padding:14px;gap:12px;bottom:max(9px,env(safe-area-inset-bottom))}
+ .room-referee-global-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:375px){.room-referee-global-actions{grid-template-columns:1fr}}
