@@ -88,6 +88,53 @@
  // Otherwise a disconnected pad could be replaced by a different person's
  // controller on the same port, unintentionally moving/kicking online.
  let liveSeatOne=null,liveSeatLocked=false;
+ // The live-seat lock correctly rejects an unplugged/replaced controller,
+ // but its warning used to exist only deep inside Video Settings. Give the
+ // player a safe, visible recovery path without automatically authorizing a
+ // newly connected controller (or stealing Player 2's physical port).
+ const recovery=document.createElement('aside');
+ recovery.className='gamepad-seat-recovery';
+ recovery.hidden=true;recovery.setAttribute('role','region');
+ recovery.setAttribute('aria-label','Gamepad disconnected during live match');
+ const recoveryTitle=document.createElement('strong');
+ recoveryTitle.textContent='CONTROLLER LOST · P1 INPUT NEUTRAL';
+ const recoveryDetail=document.createElement('p');
+ recoveryDetail.textContent='This controller stopped controlling Player 1. Keyboard and touch remain available. Rebind explicitly to use a controller again.';
+ const recoveryActions=document.createElement('div');
+ recoveryActions.className='gamepad-seat-recovery-actions';
+ const openSetup=document.createElement('button');
+ openSetup.type='button';openSetup.className='primary';
+ openSetup.textContent='↻ Rebind controller';
+ const keepKeyboard=document.createElement('button');
+ keepKeyboard.type='button';keepKeyboard.textContent='Use keyboard / touch';
+ recoveryActions.append(openSetup,keepKeyboard);
+ recovery.append(recoveryTitle,recoveryDetail,recoveryActions);
+ document.body.append(recovery);
+ let acknowledgedLoss=null;
+ function lostPlayerOneSeat(){
+  const seat=localSeatLocked&&localTwoHumanMode()?localSeatOne:
+   liveSeatLocked&&liveP1Session()?liveSeatOne:null;
+  return seat?.lost===true?seat:null;
+ }
+ function refreshControllerRecovery(){
+  const lost=lostPlayerOneSeat();
+  const visible=!!lost&&lost!==acknowledgedLoss&&
+   typeof started!=='undefined'&&started&&
+   !replay&&!document.getElementById('matchView')?.hidden;
+  recovery.hidden=!visible;
+  if(!visible)return;
+  recoveryDetail.textContent='Player 1 controller on port '+(lost.index+1)+
+   ' disconnected or changed. Its movement and kick stay neutral until you explicitly rebind. Keyboard and touch still work.';
+ }
+ openSetup.addEventListener('click',()=>{
+  if(recovery.hidden||!lostPlayerOneSeat())return;
+  const open=window.fuckballControllerSetup?.open;
+  if(typeof open==='function')open();
+  else recoveryDetail.textContent='Controller Setup is unavailable here. Open Configure controller on Home to explicitly bind Player 1.';
+ });
+ keepKeyboard.addEventListener('click',()=>{
+  acknowledgedLoss=lostPlayerOneSeat();refreshControllerRecovery();
+ });
  const isCouchRivals=()=>['couchRivals','couchRivals3v3','couchRivals4v4']
   .includes($('mode').value);
  const liveP1Session=()=>typeof started!=='undefined'&&started&&
@@ -218,6 +265,7 @@
  }
  function frame(){
   const pad=controller();
+  refreshControllerRecovery();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
   if(start&&!wasStart&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
@@ -316,6 +364,7 @@
   if(liveSeatLocked&&liveSeatOne?.index===index)liveSeatOne.lost=true;
   if(localSeatLocked&&localSeatOne?.index===index)localSeatOne.lost=true;
   lastSignature='';wasStart=true;
+  refreshControllerRecovery();
   if(typeof refreshInput==='function'&&typeof started!=='undefined'&&started)
    refreshInput();
  });
