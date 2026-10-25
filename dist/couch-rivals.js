@@ -73,6 +73,35 @@
   return {ok:true,message:'Blue controllers locked to ports '+
    assigned.map(p=>p.index+1).join(' and ')+'. P1/P2 use the shared keyboard.'};
  }
+ // An unplugged pad stays neutral until the human explicitly selects a
+ // replacement. Never auto-assign the other Blue player's controller.
+ function rebind(id,source='auto'){
+  if(![3,4].includes(id)||!assigned||!isMode()||
+     typeof started==='undefined'||!started||
+     typeof replay!=='undefined'&&replay||
+     typeof peerConnected!=='undefined'&&peerConnected||
+     typeof serverLink!=='undefined'&&serverLink)
+   return {ok:false,message:'Start an offline four-human match before replacing a Blue controller.'};
+  const slot=id-3,other=assigned[1-slot];
+  const candidates=pads().filter(p=>p.index!==other.index);
+  let selected=null;
+  if(source==='auto'){
+   if(candidates.length!==1)return{ok:false,message:candidates.length?
+    'Choose a specific free controller port before replacing Player '+id+'.':
+    'Connect another standard controller. The other Blue player keeps their pad.'};
+   selected=candidates[0];
+  }else if(Number.isSafeInteger(source)&&source>=0&&source<=15)
+   selected=candidates.find(p=>p.index===source)||null;
+  if(!selected)return{ok:false,message:'That controller is unavailable or already belongs to the other Blue player.'};
+  assigned[slot]={index:selected.index,id:selected.id};
+  // Reset cached local command immediately. The original game engine still
+  // owns input refresh, all match physics and all player permissions.
+  last='';
+  if(typeof refreshInput==='function')refreshInput();
+  return{ok:true,message:'Blue Player '+id+' explicitly bound to port '+
+   (selected.index+1)+' · '+String(selected.id||'Gamepad').slice(0,55)+
+   '. The other human seat was not changed.'};
+ }
  function padFor(id){
   const slot=id-3,choice=assigned?.[slot];
   if(!choice)return null;
@@ -110,6 +139,6 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
  requestAnimationFrame(frame);
 })();
