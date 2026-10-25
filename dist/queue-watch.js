@@ -116,7 +116,7 @@
  // A queue snapshot may expire without any new server event. Update only
  // local presentation/CTA eligibility, never send a periodic network request.
  const freshnessClock=setInterval(()=>{
-  if(watching)render();
+  if(watching)onForegroundTransition();
  },2500);
  function onForegroundTransition(){
   const visible=foreground();
@@ -136,6 +136,10 @@
  // My Games is handled by foreground detection when returning to Home.
  document.getElementById('tabHome')?.addEventListener('click',onForegroundTransition);
  document.getElementById('tabPlay')?.addEventListener('click',onForegroundTransition);
+ // The full app's library navigation is optional in the minimal runtime.
+ // Observe it if present so even a very quick Games→Home round-trip
+ // invalidates occupancy before a delayed clock tick.
+ document.querySelector('#tabGames')?.addEventListener('click',onForegroundTransition);
  document.getElementById('serverAddress')?.addEventListener('input',clear);
  document.getElementById('serverAddress')?.addEventListener('change',clear);
  window.addEventListener('pagehide',()=>clearInterval(freshnessClock),{once:true});
