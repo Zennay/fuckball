@@ -16,7 +16,7 @@
   }catch{return{...defaults};}
  }
  let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null,
-  previewSpeaking=false,observedSource=null;
+  previewSpeaking=false,observedSource=null,lastSampleSequence=null;
  function sourceLabel(text){
   if(provenance.textContent!==text)provenance.textContent=text;
  }
@@ -24,7 +24,7 @@
  const section=document.createElement('fieldset');section.className='match-audio-guide-options';
  const legend=document.createElement('legend');legend.textContent='LIVE SCORE GUIDE';
  const note=document.createElement('p');
- note.textContent='Optional local goal captions, spoken score and minute reminders from the real displayed scoreboard. OFF by default. Never claims who scored, never reads chat and never changes gameplay.';
+ note.textContent='Optional goal captions, spoken score and minute reminders from the live scoreboard. OFF by default. Online cues stop when fresh game frames stop arriving. Never claims who scored, reads chat or changes gameplay.';
  const controls={};
  for(const [key,title,hint] of [
   ['captions','Goal captions','Readable short-lived pitch caption when the displayed native score increases.'],
@@ -101,26 +101,40 @@
  // game, and key each observation to its transport and server-issued round.
  // Numeric player IDs, room codes and a reused clock are not enough to
  // distinguish different human matches.
+// A snapshot received once is not proof a multiplayer score is still live.
+ // Only a recently applied actual frame may ground further speech/captions.
+ function freshReceivedFrame(){
+  if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+     net.receivedSequence<1||!Number.isFinite(net.lastSnapshot)||
+     net.lastSnapshot<=0)return false;
+  const elapsed=performance.now()-net.lastSnapshot;
+  return elapsed>=0&&elapsed<=1600;
+ }
  function currentScoreSource(){
   if(typeof serverLink!=='undefined'&&serverLink){
    const link=serverLink;
    if(!link.room||link.ws?.readyState!==1||link.roomState?.started!==true)
     return null;
-   if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
-      net.receivedSequence<1)return null;
+   if(!freshReceivedFrame())return null;
    if(link.roomState.room&&link.roomState.room!==link.room)return null;
    const round=Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0?
     link.roomState.round:null;
-   return{kind:'native',transport:link,room:link.room,round};
+   return{kind:'native',transport:link,room:link.room,round,
+    sequence:net.receivedSequence};
   }
   if(typeof peerConnected!=='undefined'&&peerConnected){
    const transport=typeof channel!=='undefined'&&channel?channel:
     typeof peer!=='undefined'?peer:null;
    if(!transport)return null;
-   return{kind:'peer',transport,room:null,round:null};
+   // Hosts have locally authoritative physics; direct-peer guests need
+   // fresh actual input snapshots rather than a stored scoreboard.
+   const guest=typeof peerRole!=='undefined'&&peerRole==='guest';
+   if(guest&&!freshReceivedFrame())return null;
+   return{kind:'peer',transport,room:null,round:null,
+    sequence:guest?net.receivedSequence:null};
   }
   if(typeof room==='undefined'||!room)return null;
-  return{kind:'local',transport:room,room:null,round:null};
+  return{kind:'local',transport:room,room:null,round:null,sequence:null};
  }
  function sameScoreSource(a,b){
   return !!a&&!!b&&a.kind===b.kind&&a.transport===b.transport&&
@@ -155,10 +169,14 @@
   captionTimer=setTimeout(()=>{caption.hidden=true;},4200);
  }
  function silenceAndRebaseline(){
-  previous=null;stopSpeech();caption.hidden=true;
+  previous=null;lastSampleSequence=null;stopSpeech();caption.hidden=true;
   if(captionTimer){clearTimeout(captionTimer);captionTimer=0;}
  }
  function poll(){
+  if(visibleActive()&&previewSpeaking){
+   // A settings voice preview must never talk over a resumed real match.
+   stopSpeech();
+  }
   if(!visibleActive()){
    // An explicit Voice Preview is allowed while settings are open. It is
    // cancelled by navigation, focus/visibility loss and session changes.
@@ -171,7 +189,7 @@
   if(!identity){
    observedSource=null;
    silenceAndRebaseline();
-   sourceLabel('Waiting for this live room’s verified server snapshot.');
+   sourceLabel('Waiting for fresh verified match frames · no score cues while the connection is stale.');
    return;
   }
   const current=sample();
@@ -187,6 +205,7 @@
    silenceAndRebaseline();
    observedSource=identity;
    previous=current;
+   lastSampleSequence=identity.sequence;
    sourceLabel(identity.kind==='native'?
     'Current admitted online room · '+(identity.round===null?
      'server round not supplied':'server round '+identity.round)+
@@ -194,6 +213,16 @@
     identity.kind==='peer'?'Current direct-peer match · live scoreboard.':
      'Current local match · live scoreboard.');
    return;
+  }
+  if(identity.sequence!==null){
+   // Re-reading the same scoreboard without a new native/guest packet
+   // cannot justify another spoken human goal.
+   if(identity.sequence===lastSampleSequence)return;
+   if(lastSampleSequence!==null&&identity.sequence<lastSampleSequence){
+    silenceAndRebaseline();previous=current;
+    lastSampleSequence=identity.sequence;return;
+   }
+   lastSampleSequence=identity.sequence;
   }
   const last=previous;previous=current;
   if(!last)return;
