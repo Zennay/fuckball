@@ -27,8 +27,9 @@
  let recent=-Infinity;
  let current=null;
  function link(){return typeof serverLink!=='undefined'?serverLink:null;}
+ function liveTransport(l){return !!l?.room&&l.ws?.readyState===1;}
  function eligible(l){
-  return !!l?.room&&!l.quickMatchMode&&l.roomControl?.teamChatSupported===true;
+  return liveTransport(l)&&!l.quickMatchMode&&l.roomControl?.teamChatSupported===true;
  }
  function side(l){
   if(!eligible(l))return 0;
@@ -50,7 +51,11 @@
   const supported=eligible(l),joinedSide=side(l);
   privateOption.disabled=!supported||!joinedSide;
   actions.hidden=!supported||!joinedSide||!l?.room;
-  if(choice.value==='team'){
+  if(!liveTransport(l)){
+   note.textContent=l?.room?
+    'Connection lost · team messages cannot be sent until this room reconnects. Your draft is preserved.':
+    'Join an online room to send authenticated chat.';
+  }else if(choice.value==='team'){
    note.textContent=supported&&joinedSide?
     (joinedSide===1?'RED':'BLUE')+' only · server-routed, no opponent/spectator delivery.':
     'Team membership changed or server unsupported. Send blocked until you select ROOM.';
@@ -75,20 +80,27 @@
   button.setAttribute('aria-label','Send private team chat: '+phrase);
   button.addEventListener('click',()=>{
    const l=link();
+   if(!liveTransport(l)){
+    status.textContent='Room connection is not open; no team call sent. Reconnect first.';
+    sync();return;
+   }
    if(!eligible(l)||!side(l)){status.textContent='Join a Red or Blue team first.';sync();return;}
    if(input.value.trim()){status.textContent='Finish your current chat draft first.';return;}
-   if((l.roomControl?.chatMuteUntil||l.chatMutedUntil||0)>Date.now()){
+   if(Math.max(l.roomControl?.chatMuteUntil||0,l.chatMutedUntil||0)>Date.now()){
     status.textContent='Your chat is muted by the host.';return;
    }
    const now=performance.now();
    if(now-recent<2500){status.textContent='Slow down: one team call every 2.5 seconds.';return;}
    choice.value='team';sync();
    if(audience(l)!=='team'){status.textContent='Team chat unavailable; nothing sent.';return;}
+   if(typeof form.requestSubmit!=='function'){
+    status.textContent='Native chat submission is unavailable; no call sent.';return;
+   }
    input.value=phrase;
    try{
     form.requestSubmit();
     recent=now;
-    status.textContent='Submitted to server · delivery depends on room moderation.';
+    status.textContent='Submitted on the open team channel · server moderation and delivery remain authoritative.';
    }catch{
     input.value='';
     status.textContent='Could not send team message.';
