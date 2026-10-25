@@ -5,6 +5,15 @@
 .connection-warning[data-level="poor"] strong,.connection-warning[data-level="stalled"] strong{color:#ffc0b4}
 .connection-warning p{font-size:12px;color:#f0f5ef;line-height:1.5;margin:6px 0}
 .connection-warning-metric{display:block;font-size:11px;color:#d3e5e7;font-variant-numeric:tabular-nums}
-.connection-warning button{position:absolute;right:8px;top:7px;padding:5px 8px;font-size:11px;min-height:30px}
-@media(max-width:700px){.connection-warning{bottom:130px;left:10px;width:calc(100vw - 20px);padding:12px 48px 12px 12px;backdrop-filter:none}}
+.connection-warning-actions{display:flex;gap:8px;justify-content:flex-end;
+ align-items:center;flex-wrap:wrap;margin-top:12px}
+.connection-warning-actions button{min-height:44px;padding:8px 12px;font:inherit;
+ font-size:12px;font-weight:700;cursor:pointer;border:1px solid #a9d0c9;
+ border-radius:8px;background:#294851;color:#f1fffa}
+.connection-warning-actions button[hidden]{display:none}
+.connection-warning-actions button:focus-visible{outline:3px solid #e1f4a6;outline-offset:3px}
+@media(max-width:700px){.connection-warning{bottom:max(130px,env(safe-area-inset-bottom));left:10px;width:calc(100vw - 20px);padding:12px;backdrop-filter:none}
+ .connection-warning-actions{display:grid;grid-template-columns:1fr 1fr}
+ .connection-warning-actions button{width:100%}}
+@media(max-width:380px){.connection-warning-actions{grid-template-columns:1fr}}
 @media(prefers-reduced-transparency:reduce){.connection-warning{backdrop-filter:none;background:#122731}}
