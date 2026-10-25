@@ -333,7 +333,24 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    return;
   }
  else if(d.type==='error'&&!peerConnected&&/^Name reserved/.test(d.message)){link.failed=true;ws.close();showJoinScreen(roomId||'',d.message);}
- else if(d.type==='error'){const message=inviteError(d.message);$('serverRoomStatus').textContent=message;notify(message);if(!peerConnected){link.failed=true;if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}ws.close();}}
+ else if(d.type==='error'){
+  const message=inviteError(typeof d.message==='string'?d.message.slice(0,180):
+   'The server rejected this room request.');
+  $('serverRoomStatus').textContent=message;notify(message);
+  if(!peerConnected){
+   link.failed=true;
+   if(!create&&!link.quickMatchMode&&!link.room&&NATIVE_ROOM_CODE.test(roomId)){
+    // A server's denial is not proof of an admitted seat. Immediately clear
+    // the rejected socket; preserve the human's invite and explicit retry UI.
+    const watch=link.requestedSpectate;
+    disconnect();showView('play');showJoinScreen(roomId,message);
+    if(watch)$('joinSpectator').checked=true;
+   }else{
+    if(!create){setRoomParam(null);if(!$('networkDialog').open)openDialog('networkDialog');}
+    ws.close();
+   }
+  }
+ }
  else if(d.type==='recordingStatus'){$('recordIndicator').hidden=!d.active;$('recordButton').textContent=d.active?'■ Save recording':'● Record';}
  else if(d.type==='recording'){const decoded=atob(d.bytes);saveBlob(Uint8Array.from(decoded,c=>c.charCodeAt(0)),'fuckball-server-'+Date.now()+'.hbr2','application/octet-stream');notify('Replay saved.');}
  else if(d.type==='playingTime'){if(link.roomState&&Array.isArray(d.activeFrames)){link.roomState.activeFrames=d.activeFrames;if(menuOpen)renderSubPanel();}}
@@ -401,8 +418,38 @@ document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState=
 var joinRoomId; // var: the room-link handler above runs before this line
 function showJoinScreen(room,error=''){joinRoomId=room;
  if(document.getElementById('joinRoomAccessKey'))$('joinRoomAccessKey').value='';
- if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;$('joinRoomCode').textContent=room||'';$('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
+ if(document.getElementById('joinSpectator'))$('joinSpectator').checked=false;
+ $('joinRoomCode').textContent=room||'';
+ $('joinDifferentCode').value=room||'';
+ $('joinAlternatives').hidden=!room||!error;
+ $('joinScreen').hidden=false;$('joinPlay').hidden=!room;$('joinAuth').hidden=!!room;$('joinError').textContent=error;if(typeof closeMatchMenu==='function')closeMatchMenu();renderAccount();if(room){$('joinName').value=settings.account?.username||(settings.name!=='Player'?settings.name:'');$('joinName').focus();}else $('authUser').focus();}
 function hideJoinScreen(){$('joinScreen').hidden=true;$('joinError').textContent='';}
+// An expired or mistyped invitation can be replaced deliberately without
+// starting a WebSocket, reusing any temporary access key or inventing a seat.
+$('joinChangeRoom').onclick=()=>{
+ const next=$('joinDifferentCode').value.trim().toUpperCase();
+ if(!NATIVE_ROOM_CODE.test(next)){
+  $('joinError').textContent='Enter a valid eight-character room code before continuing.';
+  return;
+ }
+ const previousName=$('joinName').value,watch=$('joinSpectator').checked;
+ showJoinScreen(next,'Room updated. Select Join or Join as guest to connect.');
+ $('joinName').value=previousName;
+ $('joinSpectator').checked=watch;
+ $('joinDifferentCode').value=next;
+};
+$('joinDifferentCode').addEventListener('keydown',e=>{
+ if(e.key==='Enter'||e.code==='Enter'){e.preventDefault();$('joinChangeRoom').click();}
+});
+$('joinBrowseRooms').onclick=()=>{
+ hideJoinScreen();setRoomParam(null);showView('home');
+ // Browse only existing host-published listings; this is not a room join.
+ const browser=$('homeView').querySelector('.room-browser');
+ const toggle=browser?.querySelector('.room-browser-tools button');
+ if(toggle&&toggle.getAttribute('aria-expanded')==='false')toggle.click();
+ browser?.scrollIntoView?.({behavior:'auto',block:'start'});
+};
+$('joinCancel').onclick=()=>{hideJoinScreen();setRoomParam(null);showView('home');};
 function renderAccount(){const a=settings.account;$('joinAccount').textContent=a?'Logged in as '+a.username+'.':'';$('joinShowLogin').hidden=!!a;$('joinName').disabled=!!a;$('accountStatus').textContent=a?'Logged in as '+a.username:'Not logged in · nickname only';$('accountButton').textContent=a?'Log out':'Log in / create account';}
 function joinRoom(name){
  if(!joinRoomId)return;
@@ -416,6 +463,7 @@ function joinRoom(name){
  if(outcome===false){
   $('joinError').textContent=$('serverRoomStatus').textContent||
    'Could not start the room connection. Check your server and retry.';
+  $('joinAlternatives').hidden=false;
   $('joinName').focus({preventScroll:true});
   return;
  }
