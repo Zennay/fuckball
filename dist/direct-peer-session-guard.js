@@ -83,10 +83,11 @@
   peer?.connectionState==='failed'||peer?.iceConnectionState==='failed');
  retry.addEventListener('click',()=>{
   if(!failedHandshake()||nativeCancel.disabled)return;
-  const failedPeer=peer,role=peerRole;
+  const role=peerRole;
   if(!['host','guest'].includes(role))return;
   const original=role==='host'?nativeHost:nativeJoin;
-  if(!original||original.disabled||serverLink||roomRecovery?.context)return;
+  if(!original||original.disabled||serverLink||
+     typeof roomRecovery!=='undefined'&&roomRecovery.context)return;
   // Explicitly discard only this failed peer via the existing native Cancel
   // control. Reuse the original Host/Join button for a fresh consented code;
   // never recycle ICE credentials or start a connection automatically.
