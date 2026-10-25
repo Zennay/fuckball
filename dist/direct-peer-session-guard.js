@@ -148,6 +148,9 @@
   surface.hidden=!active||!!dialog?.open;
   if(surface.hidden)return;
   const failed=failedHandshake(),stalled=!failed&&stalledHandshake();
+  surface.dataset.phase=failed?'failed':stalled?'stalled':'pending';
+  retry.disabled=nativeCancel.disabled;
+  cancel.disabled=nativeCancel.disabled;
   heading.textContent=failed?'DIRECT 1v1 · CONNECTION FAILED':
    stalled?'DIRECT 1v1 · STILL WAITING FOR ICE':'DIRECT 1v1 · CONNECTION PENDING';
   copyCode.hidden=failed||!localSignal?.value||!nativeCopy;
