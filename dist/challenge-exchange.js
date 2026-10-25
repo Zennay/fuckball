@@ -130,10 +130,48 @@
  const fileInput=make('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.hidden=true;
  fileInput.setAttribute('aria-label','Import saved offline practice challenge pack');
  transfers.append(download,upload,fileInput);saved.append(transfers);
+ const recovery=make('section',null,'challenge-exchange-recovery');
+ recovery.hidden=true;recovery.setAttribute('aria-label','Recover damaged private challenge presets');
+ const recoveryNotice=make('p','Your saved presets could not be read. No saved data has been overwritten. Export the original storage first.');
+ const recoveryActions=make('div',null,'challenge-exchange-actions');
+ const recoveryBackup=make('button','↓ Export original recovery copy');
+ const recoveryReset=make('button','Reset damaged presets');
+ recoveryBackup.type=recoveryReset.type='button';recoveryReset.disabled=true;
+ recoveryActions.append(recoveryBackup,recoveryReset);
+ recovery.append(recoveryNotice,recoveryActions);saved.append(recovery);
  root.append(summary,intro,fields,actions,qrPanel,msg,incoming,saved);
  host.prepend(root);
  let inputs=new Map(),preview=null;
+ let damagedSnapshot=null,backupOffered=false;
  function setMsg(t){msg.textContent=t;}
+ function downloadData(filename,content,type='application/json'){
+  const url=URL.createObjectURL(new Blob([content],{type}));
+  try{
+   const a=document.createElement('a');a.href=url;a.download=filename;
+   document.body.append(a);a.click();a.remove();
+  }finally{setTimeout(()=>URL.revokeObjectURL(url),30000);}
+ }
+ recoveryBackup.onclick=()=>{
+  try{
+   if(typeof damagedSnapshot!=='string'||localStorage.getItem(KEY)!==damagedSnapshot)
+    throw Error('The original data changed. Refresh the list before exporting.');
+   downloadData('fuckball-damaged-challenge-presets-recovery.txt',damagedSnapshot,'text/plain;charset=utf-8');
+   backupOffered=true;recoveryReset.disabled=false;
+   setMsg('Original data recovery download requested. Verify your copy before choosing to reset; nothing was erased.');
+  }catch(e){setMsg('Could not export original data: '+(e.message||'Storage error'));}
+ };
+ recoveryReset.onclick=()=>{
+  try{
+   if(!backupOffered||typeof damagedSnapshot!=='string'||
+      localStorage.getItem(KEY)!==damagedSnapshot)
+    throw Error('The saved data changed or a recovery export was not requested.');
+   if(typeof window.confirm!=='function'||!window.confirm(
+    'Only reset damaged private challenge presets after verifying your exported recovery copy. This permanently clears the unreadable preset list, not your practice results. Continue?'))return;
+   if(localStorage.getItem(KEY)!==damagedSnapshot)throw Error('Another tab changed the presets. No data was cleared.');
+   localStorage.removeItem(KEY);damagedSnapshot=null;backupOffered=false;
+   showList();setMsg('Damaged preset list was reset after your confirmation. Other game data was not changed.');
+  }catch(e){setMsg('Reset refused: '+(e.message||'Storage error'));}
+ };
  function rebuild(){
   options.replaceChildren();inputs=new Map();
   for(const [key,label,choices] of MODES[mode.value].fields){
@@ -256,7 +294,20 @@
   }catch{setMsg('Your browser could not save the QR image. Use Copy link instead.');}
  };
  function showList(){
-  const all=storeList();list.replaceChildren();
+  let all;
+  try{all=storeList();}
+  catch(error){
+   list.replaceChildren(make('p','Your local challenge presets are unreadable; they have NOT been deleted.'));
+   recovery.hidden=false;
+   let raw=null;try{raw=localStorage.getItem(KEY);}catch{}
+   if(raw!==damagedSnapshot){damagedSnapshot=raw;backupOffered=false;}
+   recoveryBackup.disabled=typeof damagedSnapshot!=='string';
+   recoveryReset.disabled=!backupOffered;
+   setMsg((error.message||'Browser storage error')+' · Export a recovery copy before considering a reset.');
+   return;
+  }
+  damagedSnapshot=null;backupOffered=false;recovery.hidden=true;
+  list.replaceChildren();
   if(!all.length){list.append(make('p','No saved presets yet.'));return;}
   all.forEach((item,index)=>{
    const row=make('article',null,'challenge-exchange-row');
@@ -268,11 +319,13 @@
    load.onclick=()=>display(item);go.onclick=()=>{display(item);setUp(item);};
    share.onclick=()=>copyLink(item);showCode.onclick=()=>showQr(item);
    remove.onclick=()=>{
-    const current=storeList();const found=current.findIndex(x=>JSON.stringify(x)===JSON.stringify(item));
-    if(found===-1)return;
-    current.splice(found,1);
-    if(store(current)){setMsg('Saved challenge removed from this device.');showList();}
-    else setMsg('Browser storage refused the change.');
+    try{
+     const snapshot=readSnapshot(),current=snapshot.items;
+     const found=current.findIndex(x=>JSON.stringify(x)===JSON.stringify(item));
+     if(found===-1)throw Error('That preset changed; refresh the saved list.');
+     current.splice(found,1);
+     store(current,snapshot.raw);showList();setMsg('Saved challenge removed from this device.');
+    }catch(e){setMsg('Could not remove preset: '+(e.message||'Storage error'));}
    };
    const history=matchingLocalHistory(item);
    const historyNote=make('small',history?
@@ -291,30 +344,35 @@
   const accept=make('button','Use these settings'),saveIncoming=make('button','Save this preset');
   accept.type=saveIncoming.type='button';
   accept.onclick=()=>{display(preview);setUp(preview);};
-  saveIncoming.onclick=()=>{const list=storeList();if(list.length>=MAX){setMsg('Limit: 16 saved local presets. Remove one first.');return;}
-   if(store([preview,...list])){showList();setMsg('Saved shared preset locally. No game was started.');}
-   else setMsg('Browser storage is unavailable.');
+  saveIncoming.onclick=()=>{
+   try{
+    const snapshot=readSnapshot();
+    if(snapshot.items.length>=MAX)throw Error('Limit: 16 saved local presets. Remove one first.');
+    store([preview,...snapshot.items],snapshot.raw);
+    showList();setMsg('Saved shared preset locally. No game was started.');
+   }catch(e){setMsg('Shared preset was not saved: '+(e.message||'Storage error'));}
   };
   pending.append(accept,saveIncoming);
  }
  apply.onclick=()=>{try{setUp(record());}catch(e){setMsg(e.message);}};
- save.onclick=()=>{try{const item=record(),items=storeList();
-  if(items.length>=MAX){setMsg('Limit: 16 saved local presets. Remove one first.');return;}
-  if(store([item,...items])){showList();setMsg('Challenge saved only on this device.');}
-  else setMsg('Browser storage is unavailable.');
- }catch(e){setMsg(e.message);}};
+ save.onclick=()=>{try{
+  const item=record(),snapshot=readSnapshot();
+  if(snapshot.items.length>=MAX)throw Error('Limit: 16 saved local presets. Remove one first.');
+  store([item,...snapshot.items],snapshot.raw);
+  showList();setMsg('Challenge saved only on this device.');
+ }catch(e){setMsg('Challenge was not saved: '+(e.message||'Storage error'));}};
  copy.onclick=()=>{try{copyLink(record());}catch(e){setMsg(e.message);}};
  inspect.onclick=()=>{try{showPreview(parseShare(paste.value));setMsg('Preview only. Select Use or Save to accept.');}
   catch(e){preview=null;pending.hidden=true;pending.replaceChildren();setMsg(e.message);}};
 
  download.onclick=()=>{
-  const items=storeList();
-  if(!items.length){setMsg('No saved challenges to export.');return;}
-  const payload=JSON.stringify({format:'fuckball-practice-challenge-pack',version:1,items},null,2);
-  const url=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
-  const a=document.createElement('a');a.href=url;a.download='fuckball-practice-challenges.json';
-  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
-  setMsg('Exported '+items.length+' private challenge presets. No results or accounts included.');
+  try{
+   const items=storeList();
+   if(!items.length){setMsg('No saved challenges to export.');return;}
+   const payload=JSON.stringify({format:'fuckball-practice-challenge-pack',version:1,items},null,2);
+   downloadData('fuckball-practice-challenges.json',payload);
+   setMsg('Private challenge export requested for '+items.length+' presets. No results or accounts included.');
+  }catch(e){setMsg('Cannot export damaged presets as valid JSON: '+(e.message||'Storage error'));}
  };
  upload.onclick=()=>fileInput.click();
  fileInput.addEventListener('change',async()=>{
@@ -328,14 +386,15 @@
     throw Error('Not a supported challenge pack.');
    // Validate the entire pack before writing a single item. Nothing is trusted
    // about a local file; the native drill selectors remain the final authority.
-   const incoming=source.items.map(normalize),current=storeList(),combined=[...current];
+   const incoming=source.items.map(normalize),snapshot=readSnapshot(),
+    current=snapshot.items,combined=[...current];
    let added=0;
    for(const item of incoming){
     if(combined.some(x=>JSON.stringify(x)===JSON.stringify(item)))continue;
     if(combined.length>=MAX)throw Error('16-preset limit. Remove a local preset before importing.');
     combined.push(item);added++;
    }
-   if(!store(combined))throw Error('Browser storage unavailable; nothing imported.');
+   store(combined,snapshot.raw);
    showList();setMsg(added+' presets imported locally; '+(incoming.length-added)+' exact duplicates skipped. No results imported.');
   }catch(e){setMsg(e.message||'Challenge pack could not be read. Nothing changed.');}
  });
