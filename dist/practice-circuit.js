@@ -37,17 +37,28 @@
   return Array.isArray(order)&&order.length===3&&new Set(order).size===3&&
    order.every(key=>Object.hasOwn(TYPES,key));
  }
+ // A malformed/stale existing snapshot must not masquerade as no data:
+ // writing a new circuit over it would permanently delete player progress.
+ function validCircuit(s){
+  return !!s&&s.version===1&&validOrder(s.order)&&validAt(s.startedAt)&&
+   s.startedAt>=Date.now()-DAY&&Number.isSafeInteger(s.done)&&
+   s.done>=0&&s.done<=2&&(s.armedStep===null||s.armedStep===s.done)&&
+   Number.isSafeInteger(s.armedAt)&&s.armedAt>=0&&
+   Number.isSafeInteger(s.baseline)&&s.baseline>=0;
+ }
+ function storageProblem(key,isValid){
+  let raw;
+  try{raw=localStorage.getItem(key);}catch{return true;}
+  if(raw===null)return false;
+  try{return !isValid(JSON.parse(raw));}catch{return true;}
+ }
+ function circuitUnreadable(){return storageProblem(STATE,validCircuit);}
  function readState(){
   const s=data(STATE);
-  if(!s||s.version!==1||!validOrder(s.order)||!validAt(s.startedAt)||
-   !Number.isSafeInteger(s.done)||s.done<0||s.done>2||
-   !(s.armedStep===null||s.armedStep===s.done)||
-   !Number.isSafeInteger(s.armedAt)||s.armedAt<0||
-   !Number.isSafeInteger(s.baseline)||s.baseline<0)return null;
-  if(s.startedAt<Date.now()-DAY)return null;
-  return s;
+  return validCircuit(s)?s:null;
  }
  function saveState(s){
+  if(circuitUnreadable()||!validCircuit(s))return false;
   try{localStorage.setItem(STATE,JSON.stringify(s));return true;}catch{return false;}
  }
  // The circuit is shared by every tab on this device. Do not let a stale
@@ -69,15 +80,27 @@
   render('Your circuit changed in another tab. Current saved progress is shown.');
   return false;
  }
+ function validHistoryRow(x){
+  return x?.version===1&&validOrder(x.order)&&validAt(x.startedAt)&&
+   validAt(x.finishedAt)&&x.finishedAt>=x.startedAt&&
+   x.finishedAt-x.startedAt<=DAY;
+ }
+ function validHistory(rows){
+  return Array.isArray(rows)&&rows.length<=12&&rows.every(validHistoryRow);
+ }
+ function historyUnreadable(){return storageProblem(HISTORY,validHistory);}
  function readHistory(){
-  const rows=data(HISTORY);if(!Array.isArray(rows))return[];
-  return rows.slice(0,12).filter(x=>x?.version===1&&validOrder(x.order)&&
-   validAt(x.startedAt)&&validAt(x.finishedAt)&&x.finishedAt>=x.startedAt&&
-   x.finishedAt-x.startedAt<=DAY);
+  const rows=data(HISTORY);
+  return validHistory(rows)?rows:[];
  }
  function saveHistory(rows){
-  try{localStorage.setItem(HISTORY,JSON.stringify(rows.slice(0,12)));return true;}
-  catch{return false;}
+  // Never overwrite an unreadable collection with an apparently empty one.
+  if(historyUnreadable()||!validHistory(rows.slice(0,12)))return false;
+  try{
+   const saved=JSON.stringify(rows.slice(0,12));
+   localStorage.setItem(HISTORY,saved);
+   return localStorage.getItem(HISTORY)===saved;
+  }catch{return false;}
  }
  function latestSuccess(type){
   if(type==='comeback'){
