@@ -221,6 +221,14 @@ function replaySessionConflict(){
  if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
  if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
  if(peer)return 'Finish or cancel the direct-peer connection before opening a replay.';
+ // A local/Couch Rivals game still owns the real HaxBall room while My Games
+ // is visible (navigation pauses it, but it remains started). Replay playback
+ // switches the same simulation/render engine; never destroy that ongoing
+ // score, human slots or an unsaved recording without explicit Stop.
+ if(started&&!replay)
+  return 'Your local match is still active. Return to the pitch and choose Stop match before opening a replay.';
+ if(room.isRecording())
+  return 'Finish and save the active local recording before opening a replay.';
  const nativeQueue= document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  if(nativeQueue)return 'Finish or cancel the human matchmaking queue or ready check first.';
  return '';
