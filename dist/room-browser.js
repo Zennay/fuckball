@@ -80,6 +80,20 @@
  body.append(bookmarkBar,watchBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
  let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ // A closed/hidden directory cannot own a live request. The cancel token
+ // also prevents an old request's finally block from changing a new one's UI.
+ let activeRequest=null;
+ const ROOM_DIRECTORY_TIMEOUT_MS=10000;
+ function cancelDirectoryRequest(){
+  sequence++;
+  const request=activeRequest;
+  activeRequest=null;
+  busy=false;refresh.disabled=false;
+  if(request){
+   clearTimeout(request.timer);
+   request.controller?.abort();
+  }
+ }
  // A directory left expanded on a hidden Home screen must not keep polling
  // the game server or advertising an active watch during live gameplay.
  const directoryVisible=()=>shown&&!home.hidden&&document.visibilityState!=='hidden';
@@ -392,12 +406,27 @@
  async function load(){
   if(!directoryVisible()||busy)return false;
   busy=true;const current=++sequence;refresh.disabled=true;
-  status.textContent='Loading public rooms…';
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  const request={current,controller,timer:null,timedOut:false};
+  activeRequest=request;
+  status.textContent='Loading current public rooms…';
+  // Bound both the HTTP response and JSON decoding. On a rejected or
+  // abandoned request, clear the spinner without accepting stale data.
+  const timeout=new Promise((_,reject)=>{
+   request.timer=setTimeout(()=>{
+    request.timedOut=true;
+    request.controller?.abort();
+    reject(Error('Public room directory took too long. Retry when the server responds.'));
+   },ROOM_DIRECTORY_TIMEOUT_MS);
+  });
   try{
-   const response=await fetch('/api/public-rooms',{cache:'no-store'});
-   if(!response.ok)throw Error('Room directory unavailable.');
-   const result=await response.json();
-   if(!directoryVisible()||current!==sequence)return false;
+   const result=await Promise.race([(async()=>{
+    const response=await fetch('/api/public-rooms',
+     controller?{cache:'no-store',signal:controller.signal}:{cache:'no-store'});
+    if(!response.ok)throw Error('Room directory unavailable.');
+    return await response.json();
+   })(),timeout]);
+   if(activeRequest!==request||!directoryVisible()||current!==sequence)return false;
    if(!Array.isArray(result.rooms)||result.rooms.length>16)throw Error('Unexpected directory response.');
    // Only the already public, host-approved directory enters the local
    // search cache. Never combine it with the broader /api/rooms endpoint.
@@ -412,19 +441,32 @@
    renderRooms();
    return true;
   }catch(e){
-   if(current===sequence&&shown){
-    // Network failure invalidates the directory, but never touches saved pins.
-    // A stale published code must not remain as an actionable public listing.
+   if(activeRequest===request&&current===sequence&&shown){
+    // A disconnected, unresponsive or invalid listing must not leave the
+    // previously public room selectable. Pinned local codes are retained.
     roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();renderRooms();
-    if(watching)watchText.textContent='Public directory is unavailable; no pinned room is confirmed open.';
-    status.textContent=(e.message||'Room directory unavailable.')+' Pinned room codes are kept, but current public availability is unknown.';
+    if(watching)watchText.textContent='Public directory unavailable; no pinned room has verified open seats.';
+    status.textContent=(request.timedOut?
+     'Public room directory timed out. Try Refresh to check again.':
+     e?.name==='AbortError'?'Room directory request interrupted. Refresh to retry.':
+     e?.message||'Room directory unavailable.')+
+     ' Pinned codes were kept; current availability is unknown.';
    }
    return false;
   }
-  finally{busy=false;refresh.disabled=false;}
+  finally{
+   clearTimeout(request.timer);
+   // An obsolete request is never allowed to re-enable/disable controls
+   // belonging to the next directory session.
+   if(activeRequest===request){
+    activeRequest=null;busy=false;refresh.disabled=false;
+   }
+  }
  }
  function close(){
-  shown=false;sequence++;roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
+  shown=false;cancelDirectoryRequest();
+  roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+  body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
  }
@@ -476,6 +518,11 @@
  function syncDirectoryVisibility(){
   if(!shown)return;
   if(!directoryVisible()){
+   // Leaving Home or hiding the tab immediately cancels the foreground-only
+   // directory request and invalidates server availability. Reopening makes
+   // a new request rather than waiting on the old, possibly hung fetch.
+   cancelDirectoryRequest();
+   roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
    if(watching)watchText.textContent=
     'Availability watch paused while the public-room browser is not visible. No background refresh or automatic join.';
    return;
