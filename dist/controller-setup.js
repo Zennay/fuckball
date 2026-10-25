@@ -209,7 +209,10 @@
  }
  function controller(){
   const pads=availableControllers();
-  return selectedSource===null?pads[0]||null:
+  // Automatic controller previews cannot offer P2's locked gamepad as P1.
+  const reserved=window.fuckballCouchPad?.reservedPort?.()??null;
+  return selectedSource===null?
+   pads.find(p=>p.index!==reserved)||null:
    pads.find(p=>p.index===selectedSource)||null;
  }
  function refreshSources(){
@@ -226,6 +229,11 @@
   deviceSelect.value=selectedSource===null?'auto':String(selectedSource);
  }
  rebind.onclick=()=>{
+  if(['couchRivals','couchRivals3v3','couchRivals4v4']
+      .includes(document.getElementById('mode')?.value)){
+   hint.textContent='Four-human rivals reserve both gamepads for Blue players. Player 1 uses the keyboard.';
+   return;
+  }
   const pad=controller();
   if(!pad){
    hint.textContent='Connect the chosen controller before binding it to Player 1.';
@@ -234,8 +242,12 @@
   }
   // Only an explicit user click grants a replacement pad live movement/kick
   // authority. An index reused by another hardware model cannot auto-bind.
+  // Convert an automatic preview into an explicit physical port selection.
+  // Otherwise the previewed controller and the gamepad module's sticky
+  // automatic preference could refer to two different connected devices.
+  selectedSource=pad.index;deviceSignature='';refreshSources();
   window.dispatchEvent(new CustomEvent('fuckball:controller-source',{
-   detail:{index:selectedSource}}));
+   detail:{index:pad.index}}));
   cancelBinding();
   cancelCalibration();
   hint.textContent='Player 1 explicitly bound to port '+(pad.index+1)+
