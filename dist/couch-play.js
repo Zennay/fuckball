@@ -128,7 +128,51 @@
   for(const id of [3,4])blueSources[id].disabled=locked;
  }
  namesPanel.append(namesTitle,namesRow,node('strong','Blue · two separate gamepads'),blueRow);
- section.append(title,intro,controls,rulesRow,namesPanel,status);
+ // These are deliberately different from the next-kickoff controller options:
+ // a disconnected four-human match needs an explicit, visible live-seat bind.
+ const blueRecovery=node('section',null,'couch-rivals-recovery');
+ blueRecovery.hidden=true;blueRecovery.setAttribute('aria-label','Replace Blue player controllers during a match');
+ const recoveryTitle=node('strong','BLUE CONTROLLERS · LIVE MATCH');
+ const recoveryHelp=node('p','Lost a controller? Select a connected free port and explicitly bind one Blue player. The other player keeps their original controller.');
+ const recoverySeats=node('div',null,'couch-rivals-recovery-seats');
+ const recoveryMessage=node('p','Controller changes require your confirmation.','couch-rivals-recovery-message');
+ recoveryMessage.setAttribute('role','status');recoveryMessage.setAttribute('aria-live','polite');
+ const recoverySelectors={};let recoverySignature='';
+ for(const id of [3,4]){
+  const group=node('div',null,'couch-rivals-recovery-seat');
+  const label=node('label','Blue Player '+id+' · replacement port');
+  const select=node('select');select.setAttribute('aria-label','Replacement controller port for Blue Player '+id);
+  recoverySelectors[id]=select;label.append(select);
+  const button=node('button','↻ Bind / replace Player '+id+' controller');
+  button.type='button';button.addEventListener('click',()=>{
+   const choice=select.value==='auto'?'auto':Number(select.value);
+   const result=window.fuckballCouchRivals?.rebind?.(id,choice);
+   recoveryMessage.textContent=result?.message||'No valid replacement controller was found.';
+   status.textContent=recoveryMessage.textContent;
+   paint();
+  });
+  group.append(label,button);recoverySeats.append(group);
+ }
+ blueRecovery.append(recoveryTitle,recoveryHelp,recoverySeats,recoveryMessage);
+ function paintBlueRecovery(){
+  const list=window.fuckballCouchRivals?.available?.()||[];
+  const signature=list.map(p=>p.index+':'+p.id).join('|');
+  if(signature!==recoverySignature){
+   recoverySignature=signature;
+   for(const id of [3,4]){
+    const select=recoverySelectors[id],old=select.value||'auto';
+    select.replaceChildren(new Option('Automatic · only unassigned controller','auto'));
+    for(const pad of list)
+     select.add(new Option('Port '+(pad.index+1)+' · '+pad.id,String(pad.index)));
+    if(old!=='auto'&&!list.some(p=>String(p.index)===old))
+     select.add(new Option('Port '+(Number(old)+1)+' · disconnected',old));
+    select.value=old;
+   }
+  }
+  blueRecovery.hidden=!(activeCouchSession()&&
+   ['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value));
+ }
+ section.append(title,intro,controls,rulesRow,namesPanel,blueRecovery,status);
  const anchor=home.querySelector('.play-hub')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=node('aside',null,'couch-play-hud');
@@ -237,6 +281,7 @@
    source.value=chosen;
   }
   paintBlueSources();
+  paintBlueRecovery();
   bindP2.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
   // Four-human rivals exclusively reserve both gamepads for Blue.
   source.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
