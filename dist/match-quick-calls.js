@@ -26,7 +26,10 @@
   try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return verified(x)?x.messages.slice():DEFAULTS.slice();}
   catch{return DEFAULTS.slice();}
  }
- let messages=read(),sent=[],lastRoom=null;
+ // A room code is not a connection identity: a quick rejoin can reuse the
+ // same code with a different socket/permissions. Never carry an open public
+ // chat picker or its send action into another session.
+ let messages=read(),sent=[],lastSession=null,openedSession=null;
  const launch=make('button',null,'in-game-quick-action match-quick-call-open');launch.type='button';
  launch.append(make('strong','✦ QUICK CALLS'),make('span','Send one preset line to everyone in this actual online room'));
  launch.setAttribute('aria-label','Open room-wide quick chat calls');
@@ -41,6 +44,8 @@
  const close=make('button','✕');close.type='button';close.setAttribute('aria-label','Close quick calls');
  heading.append(title,close);
  const intro=make('p','Each click sends one real message using this server’s existing public room chat. Opponents and spectators can also see it. Your incoming chat filter does NOT make outgoing calls private; server mute and rate limits still apply.');
+ const destination=make('p',null,'match-quick-calls-destination');
+ destination.setAttribute('role','status');
  const options=make('div',null,'match-quick-calls-options');
  const status=make('p','Select one message to send.','match-quick-calls-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -58,21 +63,26 @@
  save.type=reset.type='button';
  const tools=make('div',null,'match-quick-calls-tools');
  tools.append(save,reset);editor.append(form,tools);
- panel.append(heading,intro,options,status,editor);
+ panel.append(heading,intro,destination,options,status,editor);
  match.append(panel);
  let opened=false;
  function actualRoom(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   return link?.room&&link.ws?.readyState===1?link:null;
  }
- function usable(){
-  const link=actualRoom();if(!link||match.hidden||document.hidden)return null;
+ function usable(requireOriginal=true){
+  const link=actualRoom();
+  if(!link||match.hidden||document.hidden)return null;
+  // Only the session on which a person deliberately opened the picker may
+  // receive its message. This is independently checked on every send, not
+  // just by the 1.2-second presentation refresh.
+  if(requireOriginal&&(!opened||panel.hidden||openedSession!==link))return null;
   const until=Math.max(link.chatMutedUntil||0,link.roomControl?.chatMuteUntil||0);
   return{link,until};
  }
  function showEditor(){inputs.forEach((input,i)=>{input.value=messages[i];});}
  function closePanel(focus=true){
-  opened=false;panel.hidden=true;
+  opened=false;openedSession=null;panel.hidden=true;
   if(focus&&!launch.hidden&&match.hidden===false)launch.focus({preventScroll:true});
  }
  function drawOptions(){
@@ -89,7 +99,14 @@
  function update(){
   const link=actualRoom();
   launch.hidden=!link||match.hidden||document.hidden;
-  if(lastRoom!==link?.room){lastRoom=link?.room||null;sent=[];if(!link&&opened)closePanel(false);}
+  if(lastSession!==link){
+   // Real native disconnect, reconnect, or a different room is a new
+   // messaging audience even when the eight-character room code matches.
+   lastSession=link;sent=[];
+   if(opened)closePanel(false);
+  }
+  if(opened&&(openedSession!==link||match.hidden||document.hidden))
+   closePanel(false);
   if(!opened)return;
   const state=usable(),until=state?.until||0;
   const now=Date.now();
@@ -116,10 +133,15 @@
   update();
  }
  launch.onclick=()=>{
-  if(!usable())return;
+  const state=usable(false);
+  if(!state)return;
   const nativeClose=quickSheet.querySelector('.in-game-quick-heading button');
   if(nativeClose)nativeClose.click();
-  opened=true;panel.hidden=false;drawOptions();update();
+  openedSession=state.link;lastSession=state.link;
+  opened=true;panel.hidden=false;
+  destination.textContent='Sending to this connected public room only · '+
+   state.link.room+' · opponents and spectators can see every message.';
+  drawOptions();update();
   close.focus({preventScroll:true});
  };
  close.onclick=()=>closePanel();
@@ -144,6 +166,15 @@
   if(event.key===KEY){messages=read();if(opened){drawOptions();status.textContent='Local phrases updated from another tab.';update();}}
  });
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&opened)closePanel(false);else update();});
- setInterval(update,1200);
+ window.addEventListener('blur',()=>{if(opened)closePanel(false);});
+ // Native disconnect/admission immediately closes the old sender rather
+ // than waiting for the polling interval. The original room server owns the
+ // event; neither a new channel nor chat request is created here.
+ window.addEventListener('fuckball:native-session-state',update);
+ for(const id of ['tabHome','tabPlay','tabGames']){
+  const tab=document.getElementById(id);
+  tab?.addEventListener('click',()=>queueMicrotask(update));
+ }
+ const poll=setInterval(update,1200);poll?.unref?.();
  update();
 })();
