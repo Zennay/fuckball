@@ -36,10 +36,11 @@
   if(location.protocol!=='https:'&&location.protocol!=='http:')return null;
   const url=new URL(location.pathname,location.origin);
   url.searchParams.set('room',active.room);
-  return {room:active.room,url:url.href,control:active.roomControl||{}};
+  return {room:active.room,url:url.href,control:active.roomControl||null};
  }
  function eligibility(data){
   const settings=data.control;
+  if(!settings)return 'ROOM VERIFIED · ACCESS RULES PENDING';
   if(settings.locked)return 'LOCKED · no new admissions currently';
   if(settings.clubOnly)return 'CLUB-ONLY · membership required';
   if(settings.accountsOnly)return 'ACCOUNT REQUIRED';
@@ -48,6 +49,7 @@
  }
  function warning(data){
   const s=data.control;
+  if(!s)return 'The game server has confirmed this room code but has not reported all admission rules yet. Sharing never grants access.';
   if(s.locked)return 'The room is locked. This link will not unlock it or admit new players.';
   if(s.clubOnly)return 'Only eligible Club members can enter. Sending this link does not grant Club membership.';
   if(s.accountsOnly)return 'Recipients must sign in. This link does not create an account or grant admission.';
@@ -233,6 +235,113 @@
  reload.className='room-invite-center-refresh';
  section.append(heading,description,code,linkLabel,actions,qrPanel,caution,status);
  pane.append(section);section.hidden=true;
+ // One-click invite sharing from both high-traffic views. These are read-only
+ // affordances for the *same* server-confirmed native Custom Room, not another
+ // room directory, public listing, client-owned join or permission override.
+ const shareViews=[];
+ function makeShareView(host,place){
+  if(!host)return;
+  const card=document.createElement('aside');card.className='room-invite-view-card';
+  card.hidden=true;card.setAttribute('aria-label','Share current online Custom Room');
+  const heading=document.createElement('div');heading.className='room-invite-view-heading';
+  const summary=document.createElement('div');summary.className='room-invite-view-summary';
+  const eyebrow=document.createElement('strong');eyebrow.textContent='PLAY WITH FRIENDS';
+  const caption=document.createElement('p');caption.textContent='Share your current, server-confirmed room.';
+  summary.append(eyebrow,caption);
+  const roomTag=document.createElement('code');roomTag.className='room-invite-view-code';
+  heading.append(summary,roomTag);
+  const admission=document.createElement('p');admission.className='room-invite-view-access';
+  const field=document.createElement('input');field.type='text';field.readOnly=true;
+  field.spellcheck=false;field.setAttribute('aria-label','Current online Custom Room invite link');
+  const actionsView=document.createElement('div');actionsView.className='room-invite-view-actions';
+  const message=document.createElement('p');message.className='room-invite-view-message';
+  message.setAttribute('role','status');message.setAttribute('aria-live','polite');
+  function control(label,run){
+   const b=document.createElement('button');b.type='button';b.textContent=label;
+   b.addEventListener('click',run);actionsView.append(b);return b;
+  }
+  const reportChanged=origin=>{
+   const now=snapshot();
+   if(!now||now.room!==origin.room||now.url!==origin.url)
+    message.textContent='The active room changed. Check the new invitation before sharing.';
+  };
+  async function copyChoice(kind){
+   const room=snapshot();
+   if(!room){message.textContent='No active online Custom Room to invite anyone to.';return;}
+   const value=kind==='code'?room.room:room.url;
+   if(typeof navigator.clipboard?.writeText!=='function'){
+    field.value=room.url;field.select?.();
+    message.textContent=kind==='code'?
+     'Clipboard unavailable. Use the visible eight-character room code.':
+     'Clipboard unavailable. The current link is selected for manual copying.';
+    return;
+   }
+   try{
+    await navigator.clipboard.writeText(value);
+    message.textContent=kind==='code'?'Current room code copied.':'Current room invite copied.';
+    reportChanged(room);
+   }catch{
+    field.value=room.url;field.select?.();
+    message.textContent='Clipboard blocked. Select and copy the displayed link instead.';
+   }
+  }
+  control('Copy invite',()=>copyChoice('link'));
+  control('Copy code',()=>copyChoice('code'));
+  control('Share',async()=>{
+   const room=snapshot();
+   if(!room){message.textContent='No current room to share.';return;}
+   if(typeof navigator.share!=='function'){
+    message.textContent='Device sharing is unavailable. Use Copy invite.';return;
+   }
+   try{
+    await navigator.share({title:'Fuckball Custom Room '+room.room,
+     text:'Join our Fuckball room. '+eligibility(room)+'. The server decides admission.',
+     url:room.url});
+    message.textContent='Invite passed to your device share sheet.';
+    reportChanged(room);
+   }catch(e){
+    message.textContent=e?.name==='AbortError'?'Sharing cancelled.':
+     'Device sharing failed. You can still copy the invite.';
+   }
+  });
+  control('Show QR',()=>{
+   const room=snapshot();
+   if(!room){message.textContent='This Custom Room is no longer connected.';return;}
+   document.getElementById('tabPlay')?.click();
+   if(typeof openMatchMenu!=='function'){
+    message.textContent='Open Match menu to view the current room QR.';return;
+   }
+   openMatchMenu('menuMatchPane','menuMatch');
+   refresh();
+   if(snapshot()?.url!==room.url){
+    message.textContent='Room changed. Open the current room invite instead.';return;
+   }
+   if(renderedQrUrl!==room.url)qrButton.click();
+   if(!qrPanel.hidden)qrPanel.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  });
+  card.append(heading,admission,field,actionsView,message);
+  host.prepend(card);shareViews.push({place,host,card,roomTag,admission,field,message,last:''});
+ }
+ makeShareView(document.getElementById('homeView'),'home');
+ makeShareView(document.getElementById('gamesView'),'games');
+ function syncShareViews(){
+  const active=snapshot();
+  for(const view of shareViews){
+   const {host,card,roomTag,admission,field,message}=view;
+   const visible=!!active&&!host.hidden;
+   card.hidden=!visible;
+   if(!visible)continue;
+   const identity=active.room+'|'+active.url;
+   if(view.last!==identity){view.last=identity;message.textContent='';}
+   roomTag.textContent=active.room;
+   field.value=active.url;
+   admission.textContent=eligibility(active)+' · '+warning(active);
+  }
+ }
+ setInterval(syncShareViews,1000);
+ document.getElementById('tabHome')?.addEventListener('click',()=>queueMicrotask(syncShareViews));
+ window.addEventListener('fuckball:native-session-state',syncShareViews);
+ syncShareViews();
  // The menu is controlled by the existing game UI. Refresh only while opened,
  // never fetch a room directory, persist a code or mutate server settings.
  let latestRoom='';
