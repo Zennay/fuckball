@@ -413,6 +413,9 @@
   refreshPostMatch();
   const activeRoom=currentInvitableRoom();
   activeRoomCard.hidden=!activeRoom;
+  // During an admitted friend room, focus Home on that ongoing match instead
+  // of offering duplicate start actions that admission correctly rejects.
+  section.classList.toggle('is-in-room',!!activeRoom);
   if(activeRoom){
    // Distinguish a real admitted lobby, live match and completed round. Never
    // infer server admission, room occupancy or player permissions locally.
