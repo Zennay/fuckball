@@ -204,7 +204,7 @@
  // snapshot, never a background or cross-tab binding restore.
  let previousActiveKeys=null,homeUndo=null;
  const undoControl=button('↶ Undo key change',undoLastLayout);
- undoControl.disabled=true;
+ undoControl.className='keyboard-profile-undo';undoControl.disabled=true;
  function updateUndo(){
   undoControl.disabled=!previousActiveKeys;
   if(homeUndo)homeUndo.disabled=!previousActiveKeys;
@@ -332,7 +332,7 @@
   const save=document.createElement('button');save.type='button';save.textContent='Save current to slot';
   save.onclick=()=>{slot.value=homeSlot.value;saveCurrent();};
   homeUndo=document.createElement('button');homeUndo.type='button';
-  homeUndo.textContent='↶ Undo key change';homeUndo.disabled=true;
+  homeUndo.textContent='↶ Undo key change';homeUndo.className='keyboard-profile-undo';homeUndo.disabled=true;
   homeUndo.addEventListener('click',undoLastLayout);
   slotRow.append(slotName,load,save,homeUndo);
   const currentTitle=document.createElement('h3');currentTitle.textContent='YOUR CURRENT KEYS';
