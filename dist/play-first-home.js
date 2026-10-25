@@ -41,7 +41,7 @@
   'first-play-card','home-bottom'
  ]);
  const optional=new Set();
- let expanded=false;
+ let expanded=false,temporaryExpansion=false;
  try{expanded=localStorage.getItem(key)==='expanded';}catch{}
  function isEssential(el){
   return [...el.classList].some(cls=>keep.has(cls));
@@ -85,6 +85,9 @@
   nav.hidden=!expanded;
  }
  function change(open,store=true){
+  // An explicit Explore/Show-only toggle takes precedence over a temporary
+  // launchpad reveal and is the only action that persists this preference.
+  if(store)temporaryExpansion=false;
   if(expanded&&!open){
    const focused=document.activeElement;
    if(focused&&[...optional].some(el=>el.contains(focused)))toggle.focus();
@@ -93,6 +96,31 @@
   sync();
   if(store)try{localStorage.setItem(key,expanded?'expanded':'focused');}catch{}
  }
+ // Command search is a separate navigator from this progressive disclosure.
+ // Do not let a selected tool remain display:none + inert just because its
+ // existing section was collapsed on Home. A route only reveals the original
+ // section; it never duplicates/activates gameplay, server or file handlers.
+ function revealFeature(target){
+  if(!target||!home.contains(target))return false;
+  const section=[...optional].find(el=>el===target||el.contains(target));
+  if(!section)return !target.closest?.('[hidden]');
+  if(section.hidden||target.closest?.('[hidden]'))return false;
+  if(!expanded){temporaryExpansion=true;change(true,false);}
+  return !section.inert;
+ }
+ function restoreTemporaryExpansion(){
+  if(!temporaryExpansion)return;
+  temporaryExpansion=false;
+  let saved=false;
+  try{saved=localStorage.getItem(key)==='expanded';}catch{}
+  change(saved,false);
+ }
+ window.FuckballHomeFocus={revealFeature};
+ // Return to the user's original focused Home preference only after leaving
+ // Home. A selected tool remains usable until then; the local preference is
+ // never changed by an indirect navigation/search result.
+ for(const id of ['tabPlay','tabReplay'])
+  document.getElementById(id)?.addEventListener('click',restoreTemporaryExpansion);
  toggle.addEventListener('click',()=>change(!expanded));
  setup.addEventListener('click',()=>{
   change(true);
