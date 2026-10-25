@@ -141,6 +141,9 @@ function gameplayInputSurfaceActive(){
  return windowInputFocused&&!document.hidden&&!$('matchView').hidden&&
   $('joinScreen').hidden&&$('chatForm').hidden&&
   (typeof menuOpen==='undefined'||!menuOpen)&&
+  // The lightweight Quick Actions panel is not a dialog. An open panel
+  // still owns focus and must neutralize ALL human input seats.
+  window.fuckballQuickActionsOpen!==true&&
   !document.querySelector('dialog[open]');
 }
 function canControlLiveMatch(){
