@@ -139,7 +139,10 @@ function startNativeCustomRoom(localConsent=false){
     !window.confirm('Leave your current local game or replay to open a new online room? Unsaved progress may be lost.')){
   notify('Current local game or replay kept.');return false;
  }
- if(typeof connectServer==='function'&&defaultServer)connectServer(true);
+ // A human-specified WebSocket endpoint is valid even when this web host
+ // intentionally does not supply a default server. Existing connectServer
+ // still checks protocol, active sessions and server-issued permissions.
+ if(typeof connectServer==='function'&&$('serverAddress').value.trim())connectServer(true);
  else{showView('play');openDialog('networkDialog');}
  return true;
 }
