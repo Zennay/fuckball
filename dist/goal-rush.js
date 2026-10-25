@@ -10,7 +10,7 @@
  card.setAttribute('aria-label','Local goal rush practice');
  const title=document.createElement('h2');title.textContent='GOAL RUSH.';
  const explanation=document.createElement('p');
- explanation.textContent='A timed, offline scoring challenge inside the real 1v1-vs-AI match. The score/time caps are disabled for this drill only, so five real goals are possible; your normal match defaults remain unchanged. No rankings, rewards or changed physics.';
+ explanation.textContent='A timed, offline scoring challenge inside a genuine native 1v1 versus the opposing AI. If the bot or lineup changes, the attempt is discarded. Score/time caps are disabled only for this drill; your usual match settings and physics stay unchanged. No rankings or rewards.';
  const fields=document.createElement('div');fields.className='goal-rush-fields';
  const durationLabel=document.createElement('label');durationLabel.textContent='Drill length';
  const duration=document.createElement('select');duration.setAttribute('aria-label','Goal Rush drill duration');
@@ -157,6 +157,21 @@
   const team=player?.team?.id;
   return [1,2].includes(team)?team:null;
  }
+ // An offline 1v1 result is valid only while the original native game still
+ // has exactly one real human and a genuine AI-controlled opposing player.
+ // Merely choosing Bot mode (or keeping a stale bot ID) is not proof.
+ function genuineSoloOpponent(){
+  if(!localReady()||document.getElementById('mode')?.value!=='bot')return false;
+  const players=room?.state?.players;
+  if(!Array.isArray(players))return false;
+  const own=players.find(p=>p.id===1),side=own?.team?.id;
+  if(!own?.disc||![1,2].includes(side)||botIds.has(1))return false;
+  const field=players.filter(p=>[1,2].includes(p?.team?.id));
+  if(field.length!==2)return false;
+  const opponent=field.find(p=>p.id!==1);
+  return !!opponent?.disc&&opponent.team.id===(side===1?2:1)&&
+   botIds.has(opponent.id)&&opponent.aiControlled===true;
+ }
  function saveRecord(seconds,goals){
   if(![60,120,180].includes(seconds)||!Number.isSafeInteger(goals)||goals<0||goals>999)return;
   const best=readBest();
@@ -204,6 +219,11 @@
   if(ownSide()!==s.goalSide||room!==s.room||room.currentFrameNo<s.frame){
    finish('TEAMS OR MATCH CHANGED',false);return;
   }
+  if(!genuineSoloOpponent()){
+   // Results cannot be earned against an empty goal or friendly/non-AI bot.
+   // Discard the interrupted attempt instead of writing a personal best.
+   finish('OPPOSING AI CHANGED · ATTEMPT DISCARDED',false);return;
+  }
   const frame=room.currentFrameNo;
   // A background or paused interval never accrues challenge time. The first
   // real foreground frame is the new baseline and needs explicit local resume.
@@ -237,6 +257,8 @@
   try{
    if(!quickPlay('bot',true,true))throw Error('Original local 1v1 could not start without preserving your session.');
    if(!localReady()||!started)throw Error('Local 1v1 practice could not start.');
+   if(!genuineSoloOpponent())
+    throw Error('Goal Rush needs exactly one real player and one native AI opponent on the other team.');
    const side=ownSide();
    if(!side)throw Error('Join Red or Blue to start a scoring drill.');
    const seconds=Number(duration.value),count=Number(target.value);
