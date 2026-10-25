@@ -124,7 +124,9 @@
   // A menu over the hidden pitch is not a visible response to the host.
   const pitchVisible=document.getElementById('matchView')?.hidden===false;
   const nativeRequestVisible=pitchVisible&&
-   document.getElementById('pauseMenu')?.hidden===false;
+   document.getElementById('pauseMenu')?.hidden===false&&
+   document.getElementById('menuMatchPane')?.hidden===false&&
+   !requestBanner.hidden;
   const urgent=!!document.querySelector(
    '.quick-ready-dock:not([hidden]),.native-rematch-dock:not([hidden]),.native-room-recovery:not([hidden])');
   prompt.hidden=requestBanner.hidden||nativeRequestVisible||urgent;
