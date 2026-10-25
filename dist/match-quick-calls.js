@@ -30,7 +30,7 @@
  // same code with a different socket/permissions. Never carry an open public
  // chat picker or its send action into another session.
  let messages=read(),sent=[],lastSession=null,openedSession=null;
- let editBaseline=messages.slice();
+ let editBaseline=messages.slice(),editorStarted=false;
  const identical=(a,b)=>a.length===b.length&&a.every((x,i)=>x===b[i]);
  const unsaved=()=>inputs.some((x,i)=>x.value!==editBaseline[i]);
  function showConflict(){
@@ -68,9 +68,10 @@
   label.append(input);form.append(label);
  }
  const save=make('button','Save these six phrases'),reset=make('button','Restore defaults');
- save.type=reset.type='button';
+ const discardEdits=make('button','Discard unsaved edits');
+ save.type=reset.type=discardEdits.type='button';
  const tools=make('div',null,'match-quick-calls-tools');
- tools.append(save,reset);
+ tools.append(save,discardEdits,reset);
  const conflictNotice=make('p','Another tab saved different quick calls. Your unsaved edits are still here. Choose which version to keep.','match-quick-calls-conflict');
  conflictNotice.setAttribute('role','alert');conflictNotice.hidden=true;
  const conflictActions=make('div',null,'match-quick-calls-conflict-actions');
@@ -103,8 +104,19 @@
   return{link,until};
  }
  function showEditor(){
+  // The picker closes when focus leaves the browser or the match changes.
+  // Keep user-typed unsaved preference edits in this tab's memory across that
+  // closure; never persist them, send them or let another tab erase them.
+  if(editorStarted&&unsaved()){
+   if(!identical(messages,editBaseline))showConflict();
+   else hideConflict();
+   status.textContent=conflictNotice.hidden?
+    'Unsaved edits restored in this tab. Save or discard them explicitly; no chat was sent.':
+    'Another tab changed saved presets. Your unsaved edits were preserved.';
+   return;
+  }
   inputs.forEach((input,i)=>{input.value=messages[i];});
-  editBaseline=messages.slice();hideConflict();
+  editBaseline=messages.slice();editorStarted=true;hideConflict();
  }
  function closePanel(focus=true){
   if(!opened)return;
@@ -239,7 +251,7 @@
    // storage event reached it. Keep the typed inputs and ask for a choice.
    messages=stored;drawOptions(true);showConflict();update();return;
   }
-  messages=next.slice();drawOptions();
+  messages=next.slice();editBaseline=messages.slice();drawOptions();
   try{
    localStorage.setItem(KEY,JSON.stringify({version:1,messages}));
    status.textContent=overwrite?
@@ -255,14 +267,21 @@
  loadOther.onclick=()=>{
   // This deliberately discards this tab's unsaved editor fields; the external
   // version is re-read at click time, never copied from an obsolete event.
-  messages=read();drawOptions();
-  status.textContent='Loaded the most recently saved presets from this device. Your prior unsaved edits were not sent.';
+  messages=read();editBaseline=messages.slice();drawOptions();
+  status.textContent='Loaded the most recently saved presets from this device. Your prior unsaved edits were discarded without sending.';
+  update();
+ };
+ discardEdits.onclick=()=>{
+  // This is separate from Reset Defaults: it only loses draft fields and
+  // loads the current committed device values, without modifying storage.
+  messages=read();editBaseline=messages.slice();drawOptions();
+  status.textContent='Unsaved changes discarded. Your previously saved phrases are unchanged.';
   update();
  };
  reset.onclick=()=>{
   // Restore defaults is already an explicit destructive preference action.
   // It never sends chat or touches a match/server session.
-  messages=DEFAULTS.slice();drawOptions();
+  messages=DEFAULTS.slice();editBaseline=messages.slice();drawOptions();
   try{localStorage.removeItem(KEY);}
   catch{status.textContent='Storage unavailable. Defaults apply in this tab only.';update();return;}
   status.textContent='Default phrases restored on this device. No messages were sent.';
@@ -270,7 +289,7 @@
  };
  window.addEventListener('storage',event=>{
   if(event.key!==KEY)return;
-  const keepEditor=opened&&unsaved();
+  const keepEditor=editorStarted&&unsaved();
   messages=read();
   if(opened){
    drawOptions(keepEditor);
