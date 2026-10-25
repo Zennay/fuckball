@@ -12,7 +12,10 @@
  button.setAttribute('aria-label','Open match scoreboard');
  button.setAttribute('aria-expanded','false');
  corner.insertBefore(button,corner.firstChild);
- const panel=document.createElement('section');panel.className='match-center';
+ // A non-modal native dialog participates in the shared gameplay input gate:
+// keyboard/touch/gamepad (all human seats) stop while a player reads scores.
+// It does not pause the simulation or demand focus-trapping modal permission.
+const panel=document.createElement('dialog');panel.className='match-center';
  panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','false');
  panel.setAttribute('aria-label','Live game scoreboard and team roster');
  panel.hidden=true;
@@ -25,6 +28,10 @@
  close.setAttribute('aria-label','Close match scoreboard');
  header.append(heading,close);
  const badge=document.createElement('p');badge.className='match-center-badge';
+ const controlNotice=document.createElement('p');
+ controlNotice.className='match-center-input-status';
+ controlNotice.textContent='CONTROLS NEUTRAL · MATCH CLOCK CONTINUES';
+ controlNotice.setAttribute('role','note');
  const score=document.createElement('div');score.className='match-center-score';
  const redScore=document.createElement('strong'),blueScore=document.createElement('strong');
  redScore.className='red';blueScore.className='blue';
@@ -58,7 +65,7 @@
  const feedStatus=document.createElement('p');feedStatus.className='match-center-feed-status';
  feedStatus.setAttribute('role','status');feedStatus.setAttribute('aria-live','polite');
  feed.append(feedHeading,feedIntro,feedList,feedStatus);
- panel.append(header,badge,score,teams,spectators,feed,footer);match.append(panel);
+ panel.append(header,badge,controlNotice,score,teams,spectators,feed,footer);match.append(panel);
  let sticky=false,holding=false,lastSignature='',wasAvailable=false;
  let timeline=[],snapshot=null,sessionId='',sessionRoom=null,historyInterrupted=false;
  const MAX_HISTORY=40;
@@ -227,8 +234,19 @@
  }
  function setVisible(){
   const visible=(sticky||holding)&&eligible()&&document.getElementById('pauseMenu')?.hidden!==false;
-  panel.hidden=!visible;button.setAttribute('aria-expanded',String(visible));
+  const wasOpen=panel.open===true;
+  // The ordinary (non-modal) dialog 'open' state is already recognized by
+  // gameplayInputSurfaceActive(). No new cross-module flag or event bridge:
+  // all controller seats, guest input and touch/joystick use the same gate.
+  panel.open=visible;
+  panel.hidden=!visible;
+  button.setAttribute('aria-expanded',String(visible));
   button.hidden=match.hidden||!eligible();
+  if(visible&&!wasOpen&&typeof releaseInputs==='function'){
+   // Clear held inputs immediately, rather than waiting for next input poll.
+   // This also releases active touch pointer captures and sends neutral input.
+   releaseInputs();
+  }
   if(visible)render(true);
  }
  function closePanel(){
@@ -238,7 +256,13 @@
   if(!eligible())return;
   sticky=!sticky;holding=false;setVisible();
  });
- close.addEventListener('click',()=>{closePanel();button.focus();});
+ close.addEventListener('click',()=>{
+  closePanel();
+  // Returning from the scoreboard restores the original pitch controls.
+  if(eligible()&&document.getElementById('pauseMenu')?.hidden!==false)
+   canvas.focus();
+  else button.focus();
+ });
  // Tab displays a temporary scoreboard only when canvas itself has keyboard
  // focus. Everywhere else, browser Tab navigation is preserved.
  window.addEventListener('keydown',event=>{
