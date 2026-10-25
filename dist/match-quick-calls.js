@@ -171,7 +171,10 @@
  // than waiting for the polling interval. The original room server owns the
  // event; neither a new channel nor chat request is created here.
  window.addEventListener('fuckball:native-session-state',update);
- for(const id of ['tabHome','tabPlay','tabGames']){
+ // Home and Play are present in both the full app and headless native
+ // browser contract. My Games transitions are guarded by usable() on send
+ // and the existing UI refresh, without assuming an optional tab element.
+ for(const id of ['tabHome','tabPlay']){
   const tab=document.getElementById(id);
   tab?.addEventListener('click',()=>queueMicrotask(update));
  }
