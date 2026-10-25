@@ -152,6 +152,10 @@ function renderBindings(){const list=$('bindingList');list.replaceChildren();for
 // movement and kick. Old saved profiles could contain empty or duplicate
 // actions after an earlier collision/Backspace; repair only unusable slots.
 const controlActions=['up','down','left','right','kick','chat'];
+function publishKeyboardBindings(){
+ if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
+  window.dispatchEvent(new CustomEvent('fuckball:keyboard-bindings-changed'));
+}
 const mandatoryControls=controlActions.filter(action=>action!=='chat');
 const supportedControlCode=/^(?:Key[A-Z]|Digit[0-9]|Arrow(?:Up|Down|Left|Right)|Space|Enter|Shift(?:Left|Right)|Control(?:Left|Right)|Alt(?:Left|Right)|Numpad(?:[0-9]|Enter|Add|Subtract|Multiply|Divide|Decimal))$/;
 function usableKeyboardBindings(candidate){
@@ -189,7 +193,7 @@ function repairKeyboardBindings(){
   next[action][0]=fallback;used.add(fallback);changed=true;
  }
  if(changed&&usableKeyboardBindings(next)){
-  settings.keys=next;savePrefs();
+  settings.keys=next;savePrefs();publishKeyboardBindings();
   notify('Restored missing or overlapping movement/kick keys. Check Controls to customize them.');
  }
 }
@@ -217,13 +221,13 @@ function assignBinding(code){
  binding=null;
  savePrefs();
  releaseInputs(); // Never carry a held key into a newly assigned action.
- renderBindings();
+ renderBindings();publishKeyboardBindings();
  const label=actionNames[action]||action;
  notify(label+' control updated. New controls are active; the match and player inputs remain unchanged.');
 }
 $('resetBindings').onclick=()=>{
  settings.keys=Object.fromEntries(Object.entries(defaultBindings).map(([k,v])=>[k,[...v]]));
- binding=null;savePrefs();releaseInputs();renderBindings();
+ binding=null;savePrefs();releaseInputs();renderBindings();publishKeyboardBindings();
  notify('Default keyboard controls restored; held movement released.');
 };
 repairKeyboardBindings();
