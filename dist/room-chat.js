@@ -41,12 +41,12 @@
  chatForm?.append(sendFeedback);
  let onlineDraft=false;
  chatInput?.addEventListener('focus',()=>{
-  onlineDraft=!!serverLink?.room;
+  onlineDraft=onlineDraft||!!serverLink?.room;
   sendFeedback.hidden=true;
  });
  chatInput?.addEventListener('input',()=>{sendFeedback.hidden=true;});
  chatForm?.addEventListener('focusout',event=>{
-  if(!chatForm.contains(event.relatedTarget))onlineDraft=false;
+  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget))onlineDraft=false;
  });
  chatForm?.addEventListener('submit',event=>{
   const link=typeof serverLink!=='undefined'?serverLink:null;
