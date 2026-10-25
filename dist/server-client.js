@@ -24,7 +24,8 @@ function retryRoomRecovery(info,attempt){
  connectServer(false,info.room,info.name,
   {ticket:info.ticket,previousId:info.previousId,retries:attempt,roomRecovery:true});
  if(serverLink?.recoveryAttempt)window.FuckballRoomRecovery?.show({
-  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery
+  phase:'connecting',attempt:attempt||1,max:3,cancel:cancelRoomRecovery,
+  quickMatchMode:info.quickMatchMode||null
  });
  else if(!serverLink)offerRoomRecovery({...info,tries:3,offline:false});
 }
@@ -33,7 +34,7 @@ function offerRoomRecovery(info){
  clearRoomRecovery();roomRecovery.context=info;
  if(info.tries>=3){
   window.FuckballRoomRecovery?.show({
-   phase:'failed',attempt:3,max:3,
+   phase:'failed',attempt:3,max:3,quickMatchMode:info.quickMatchMode||null,
    retry:()=>retryRoomRecovery({...info,tries:0},0),cancel:cancelRoomRecovery
   });return;
  }
@@ -41,6 +42,7 @@ function offerRoomRecovery(info){
   roomRecovery.offlineRetry=()=>retryRoomRecovery(info,info.tries+1);
   window.FuckballRoomRecovery?.show({
    phase:'offline',attempt:info.tries+1,max:3,
+   quickMatchMode:info.quickMatchMode||null,
    retry:roomRecovery.offlineRetry,cancel:cancelRoomRecovery
   });return;
  }
@@ -48,6 +50,7 @@ function offerRoomRecovery(info){
  roomRecovery.timer=setTimeout(()=>retryRoomRecovery(info,attempt),delay);
  window.FuckballRoomRecovery?.show({
   phase:'waiting',attempt,max:3,delay,
+  quickMatchMode:info.quickMatchMode||null,
   retry:()=>retryRoomRecovery(info,attempt),cancel:cancelRoomRecovery
  });
 }
@@ -134,7 +137,12 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  if(replay)closeReplay();
  showView(quickMode?'home':'play');
  if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};
- const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+ // A Quick Match may be rejoined ONLY using the existing server-issued
+ // resume ticket and the exact original matched-room identity. Its mode is
+ // display context, not permission to enter a fresh human matchmaking queue.
+ const recoveringHuman=resumeContext?.roomRecovery===true&&
+  ['1v1','2v2','3v3','4v4','club4v4'].includes(resumeContext.quickMatchMode);
+ const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:recoveringHuman?resumeContext.quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
  notifyNativeSessionView();
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
@@ -160,7 +168,8 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
- };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+ };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room&&!link.reconnect)
+  window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -178,10 +187,21 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    const retryJoin=!create&&!link.quickMatchMode&&!admitted&&!retryingOriginal&&
     NATIVE_ROOM_CODE.test(roomId);
    const retrySpectator=link.requestedSpectate;
+   // The native server parks human Quick Match slots using issued tickets.
+   // Without that ticket, claiming the same seat is impossible and MUST NOT
+   // fall back to queueJoin, a new player ID, bots, or a fabricated rematch.
+   const hasTicket=typeof ticket==='string'&&/^[0-9a-f]{64}$/.test(ticket);
+   const canRecover=!!room&&(!link.quickMatchMode||hasTicket);
+   const quickMatchMode=link.quickMatchMode;
    disconnect();if(link.failed)return;
-   if(room&&!link.quickMatchMode){
-    notify('Connection lost. Room recovery available.');
-    offerRoomRecovery({room,tries,previousId,ticket,name});
+   if(canRecover){
+    notify(quickMatchMode?
+     'Human Quick Match interrupted. Reconnecting to your original player slot.':
+     'Connection lost. Room recovery available.');
+    offerRoomRecovery({room,tries,previousId,ticket,name,quickMatchMode});
+   }else if(room&&quickMatchMode&&!hasTicket){
+    showView('home');
+    notify('Cannot restore this human match without a server-issued resume ticket. No replacement player or bot was created.');
    }else if(retryJoin){
     // No slot was ever admitted, so show a normal (manual) join retry. No
     // ticket is fabricated and no background reconnect is scheduled.
@@ -688,11 +708,106 @@ globalRematchTicker?.unref?.();
 for(const id of ['tabHome','tabPlay'])
  $(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalRematchDock));
 
+// A bench player may be browsing Home / My Games when the native host
+// proposes a substitution. The only consent source is still the server
+// pendingSubs request; this mirror forwards explicit clicks to native buttons.
+const globalSubConsent=document.createElement('aside');
+globalSubConsent.className='native-sub-consent-dock';
+globalSubConsent.hidden=true;
+globalSubConsent.setAttribute('role','region');
+globalSubConsent.setAttribute('aria-label','Your pending human substitution');
+const globalSubCopy=document.createElement('div');
+globalSubCopy.className='native-sub-consent-copy';
+const globalSubTitle=document.createElement('strong');
+globalSubTitle.textContent='YOUR TEAM NEEDS A DECISION';
+const globalSubStatus=document.createElement('p');
+globalSubStatus.setAttribute('role','status');
+globalSubStatus.setAttribute('aria-live','polite');
+globalSubCopy.append(globalSubTitle,globalSubStatus);
+const globalSubActions=document.createElement('div');
+globalSubActions.className='native-sub-consent-actions';
+const globalSubAccept=document.createElement('button');
+globalSubAccept.type='button';globalSubAccept.className='primary';
+globalSubAccept.textContent='✓ Accept & enter';
+const globalSubDecline=document.createElement('button');
+globalSubDecline.type='button';globalSubDecline.textContent='Decline';
+const globalSubView=document.createElement('button');
+globalSubView.type='button';globalSubView.textContent='View team request';
+globalSubActions.append(globalSubAccept,globalSubDecline,globalSubView);
+globalSubConsent.append(globalSubCopy,globalSubActions);
+document.body.append(globalSubConsent);
+let subConsentReceipt=null;
+function currentSubConsent(){
+ const link=serverLink,state=link?.roomState;
+ if(!link?.room||!state||!Array.isArray(state.pendingSubs))return null;
+ const pending=state.pendingSubs.find(p=>p&&p.inId===networkPlayerId&&
+   p.accepted!==true&&Number.isSafeInteger(p.requestId)&&
+   [1,2].includes(p.team)&&Number.isSafeInteger(p.outId));
+ return pending?{link,pending}:null;
+}
+function renderGlobalSubConsent(){
+ const request=currentSubConsent();
+ if(!request)subConsentReceipt=null;
+ else if(subConsentReceipt&&(
+  subConsentReceipt.link!==request.link||
+  subConsentReceipt.id!==request.pending.requestId||
+  Date.now()-subConsentReceipt.sentAt>=2400))subConsentReceipt=null;
+ const menuVisible=!$('matchView').hidden&&!$('pauseMenu').hidden&&
+  !$('subPanel').hidden&&!$('subConsent').hidden;
+ globalSubConsent.hidden=!request||menuVisible;
+ if(globalSubConsent.hidden)return;
+ const p=request.pending;
+ const roster=Array.isArray(room?.state?.players)?room.state.players:[];
+ const leaving=roster.find(player=>player.id===p.outId);
+ const playerName=leaving?.name||'Player '+p.outId;
+ const waiting=!!subConsentReceipt;
+ const team=p.team===1?'Red':'Blue';
+ globalSubTitle.textContent=waiting?'DECISION SENT · WAITING FOR SERVER':
+  'YOUR '+team.toUpperCase()+' TEAM NEEDS YOU';
+ const description='Enter '+team+' for '+playerName+
+  '? The substitution happens only when the native room approves and applies it.'+
+  (waiting?' Your answer was sent; waiting for the server to update the room.':'');
+ if(globalSubStatus.textContent!==description)globalSubStatus.textContent=description;
+ globalSubAccept.disabled=waiting||request.link.ws?.readyState!==1;
+ globalSubDecline.disabled=waiting||request.link.ws?.readyState!==1;
+}
+function sendGlobalSubConsent(accept){
+ const request=currentSubConsent();
+ if(!request||globalSubConsent.hidden||subConsentReceipt||
+    request.link.ws?.readyState!==1)return;
+ // Use native handlers: they read the current server-owned request ID,
+ // team and player slot immediately before sending.
+ renderSubPanel();
+ const original=$(accept?'subApprove':'subDecline');
+ if(original.hidden||original.disabled)return;
+ subConsentReceipt={link:request.link,id:request.pending.requestId,sentAt:Date.now()};
+ original.click();
+ renderGlobalSubConsent();
+}
+globalSubAccept.addEventListener('click',()=>sendGlobalSubConsent(true));
+globalSubDecline.addEventListener('click',()=>sendGlobalSubConsent(false));
+globalSubView.addEventListener('click',()=>{
+ if(!currentSubConsent())return;
+ $('tabPlay').click();
+ if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+ renderSubPanel();
+ const native=$('subConsent');
+ native.scrollIntoView?.({behavior:'auto',block:'center'});
+ const accept=$('subApprove');
+ if(!accept.hidden&&!accept.disabled)accept.focus?.({preventScroll:true});
+ else native.focus?.({preventScroll:true});
+ renderGlobalSubConsent();
+});
+const globalSubTicker=setInterval(renderGlobalSubConsent,950);
+globalSubTicker?.unref?.();
+for(const id of ['tabHome','tabPlay','tabReplay'])
+ document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalSubConsent));
+
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
  renderNextMatchPanel();
- if(panel.hidden)return;
+ if(panel.hidden){renderGlobalSubConsent();return;}
  const players=(room?.state?.players||[]).filter(p=>Number.isSafeInteger(p.id)&&!botIds.has(p.id));
  const nameOf=id=>players.find(p=>p.id===id)?.name||'Player '+id;
  const team=Number($('subTeam').value)===2?2:1;
@@ -731,6 +846,7 @@ function renderSubPanel(){
  $('subConsent').hidden=!yourRequest;
  $('subConsentText').textContent=yourRequest?
   'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?':'';
+ renderGlobalSubConsent();
 }
 const baseOnlineRefreshMenu=refreshMenu;
 refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};

@@ -384,7 +384,9 @@
   if(!recoveryCard.hidden){
    const text=String(recovery.reason||'The human queue ended. Try again or choose another server.').slice(0,180);
    if(recoveryDetail.textContent!==text)recoveryDetail.textContent=text;
-   retrySearch.textContent='↻ Retry '+recovery.mode+' human match';
+   recoveryHead.textContent=recovery.party?'FRIENDS PARTY SEARCH ENDED':'SEARCH INTERRUPTED';
+   retrySearch.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';
   }
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const postGame=!!link?.room&&!!link.roomState?.lastResult&&!link.roomState?.started&&
@@ -402,7 +404,8 @@
   }else if(state.server||state.peer||state.local||state.playingReplay){
    queueNow.textContent='↗ Return to current game';queueNow.disabled=false;
   }else if(recovery){
-   queueNow.textContent='↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
+   queueNow.textContent=recovery.party?'↗ Return to friends party':
+    '↻ Retry '+recovery.mode+' human match';queueNow.disabled=false;
   }else{
    queueNow.textContent='▶ Find '+playlist+' now';queueNow.disabled=false;
   }
@@ -413,7 +416,8 @@
      'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
-    recovery?'RETRY HUMAN MATCH':'FIND A QUICK MATCH';
+    recovery?(recovery.party?'VIEW FRIENDS PARTY':'RETRY HUMAN MATCH'):
+    'FIND A QUICK MATCH';
    if(heroFind.dataset.playStateLabel!==label){heroFind.textContent=label+' ↗';heroFind.dataset.playStateLabel=label;}
    heroFind.disabled=nativeQueue.ready&&(nativeQueue.accepted||nativeQueue.confirming);
   }
@@ -431,7 +435,9 @@
   }else if(nativeQueue.searching||state.inQueue){
    network.textContent='● HUMAN SEARCH · '+nativeQueue.waiting+' OF '+nativeQueue.needed+' AVAILABLE';
   }else if(recovery){
-   network.textContent='● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
+   network.textContent=recovery.party?
+    '● PARTY SEARCH ENDED · RESTART VIA FRIENDS PARTY':
+    '● SEARCH INTERRUPTED · RETRY OR CHANGE SERVER';
   }else if(state.local||state.playingReplay){
    current.textContent='↗ Return to '+(state.playingReplay?'replay':'local game');
    network.textContent='● LOCAL GAME ACTIVE';
@@ -465,8 +471,10 @@
   const newlyReady=data.ready&&!nativeQueue.ready;
   const newlyAccepted=data.accepted&&!nativeQueue.accepted;
   const safeRecovery=data.recovery&&typeof data.recovery==='object'&&
-   playlists.includes(data.recovery.mode)&&typeof data.recovery.reason==='string'?
-   {mode:data.recovery.mode,reason:data.recovery.reason.slice(0,180)}:null;
+   [...playlists,'club4v4'].includes(data.recovery.mode)&&
+   typeof data.recovery.reason==='string'?
+   {mode:data.recovery.mode,party:data.recovery.party===true,
+    reason:data.recovery.reason.slice(0,180)}:null;
   nativeQueue={...data,recovery:safeRecovery};
   if(newlyReady){
    announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
