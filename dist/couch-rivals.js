@@ -127,7 +127,13 @@
  function padFor(id){
   const slot=id-3,choice=assigned?.[slot];
   if(!choice)return null;
-  return pads().find(p=>p.index===choice.index&&p.id===choice.id)||null;
+  if(choice.lost)return null;
+  const connected=pads().find(p=>p.index===choice.index&&p.id===choice.id)||null;
+  // Two identical model pads can advertise the same ID and port across
+  // reconnects; once P3/P4 is lost, only their own explicit rebind may
+  // authorize movement or kicking again.
+  if(!connected&&activeLockedMatch())choice.lost=true;
+  return connected;
  }
  function usable(){return isMode()&&typeof started!=='undefined'&&started&&
   typeof paused!=='undefined'&&!paused&&typeof replay!=='undefined'&&!replay&&
@@ -172,5 +178,16 @@
    missing:seats.filter(p=>!p.connected).map(p=>p.seat),seats};
  }
  window.fuckballCouchRivals=Object.freeze({prepare,preview,seatStatus,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ // A same-model replacement can arrive before the next animation frame.
+ // Latch the exact seat on physical disconnect, even if a new device already
+ // occupies that Gamepad API index when the frame runs.
+ window.addEventListener('gamepaddisconnected',event=>{
+  if(!activeLockedMatch())return;
+  const index=event?.gamepad?.index;
+  if(!Number.isSafeInteger(index))return;
+  for(const seat of assigned||[])if(seat.index===index)seat.lost=true;
+  last='';
+  if(typeof refreshInput==='function')refreshInput();
+ });
  requestAnimationFrame(frame);
 })();
