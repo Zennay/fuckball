@@ -83,22 +83,37 @@
   // control can resume the simulation and the drill clock.
   updateReturn();
  });
- const read=()=>{
+ const validAttempt=a=>a&&DURATIONS.includes(a.duration)&&TARGETS.includes(a.target)&&
+  Number.isSafeInteger(a.at)&&a.at>0&&a.at<Date.now()+86400000&&
+  Number.isSafeInteger(a.best)&&a.best>=0&&a.best<=999&&
+  Number.isSafeInteger(a.kicks)&&a.kicks>=a.best&&a.kicks<=9999&&
+  Number.isSafeInteger(a.breaks)&&a.breaks>=0&&a.breaks<=9999&&
+  Number.isSafeInteger(a.elapsed)&&a.elapsed>=a.duration&&a.elapsed<=a.duration+1&&
+  typeof a.completed==='boolean'&&a.completed===(a.best>=a.target);
+ // Do not convert corrupted private storage into an empty result list before
+ // writing: doing so would silently erase potentially recoverable attempts.
+ // Null means unreadable; [] is a genuine never-saved / cleared history.
+ const verifiedHistory=()=>{
   try{
-   const data=JSON.parse(localStorage.getItem(KEY)||'[]');
-   if(!Array.isArray(data)||data.length>MAX)return[];
-   return data.filter(a=>a&&DURATIONS.includes(a.duration)&&TARGETS.includes(a.target)&&
-    Number.isSafeInteger(a.at)&&a.at>0&&a.at<Date.now()+86400000&&
-    Number.isSafeInteger(a.best)&&a.best>=0&&a.best<=999&&
-    Number.isSafeInteger(a.kicks)&&a.kicks>=a.best&&a.kicks<=9999&&
-    Number.isSafeInteger(a.breaks)&&a.breaks>=0&&a.breaks<=9999&&
-    Number.isSafeInteger(a.elapsed)&&a.elapsed>=a.duration&&a.elapsed<=a.duration+1&&
-    typeof a.completed==='boolean'&&a.completed===(a.best>=a.target));
-  }catch{return[];}
+   const raw=localStorage.getItem(KEY);
+   if(raw===null)return[];
+   const data=JSON.parse(raw);
+   if(!Array.isArray(data)||data.length>MAX||!data.every(validAttempt))return null;
+   return data;
+  }catch{return null;}
  };
+ const read=()=>verifiedHistory()||[];
  function renderHistory(){
-  const rows=read();attempts.replaceChildren();
-  exportButton.disabled=clearButton.disabled=!rows.length;
+  const verified=verifiedHistory(),rows=verified||[];
+  attempts.replaceChildren();
+  exportButton.disabled=!rows.length;
+  // The player may explicitly clear an unreadable local cache, but it must
+  // never be silently replaced by saving the next legitimate attempt.
+  clearButton.disabled=verified!==null&&!rows.length;
+  if(verified===null){
+   attempts.append(el('p','Keep Away saved results could not be verified. They were preserved. Clear only this local Keep Away history explicitly before recording new attempts.'));
+   return;
+  }
   if(!rows.length){
    attempts.append(el('p','Complete a full local Keep Away clock to save your first result.'));
    return;
@@ -114,8 +129,11 @@
  function save(s){
   const entry={at:Date.now(),duration:s.duration,target:s.target,
    best:s.best,kicks:s.kicks,breaks:s.breaks,elapsed:s.duration,completed:s.best>=s.target};
-  try{localStorage.setItem(KEY,JSON.stringify([entry,...read()].slice(0,MAX)));}
-  catch{message.textContent='Drill complete. Browser storage could not save this result.';}
+  try{
+   const old=verifiedHistory();
+   if(old===null)throw Error('Previous local results could not be verified.');
+   localStorage.setItem(KEY,JSON.stringify([entry,...old].slice(0,MAX)));
+  }catch{message.textContent='Drill complete, but results were not saved. Unverified prior Keep Away data was not overwritten; check browser storage before retrying.';}
   renderHistory();
  }
  exportButton.onclick=()=>{
@@ -130,13 +148,50 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  };
  clearButton.onclick=()=>{
-  if(!read().length||!confirm('Remove only the Keep Away practice history on this device? Other drills, replays and online matches are not affected.'))return;
+  const verified=verifiedHistory();
+  if(verified!==null&&!verified.length)return;
+  if(!confirm(verified===null?
+   'The Keep Away results on this device are unreadable. Clear ONLY this Keep Away history? It cannot be recovered from this page. Other drills, replays and online matches are unaffected.':
+   'Remove only the Keep Away practice history on this device? Other drills, replays and online matches are not affected.'))return;
   try{localStorage.removeItem(KEY);message.textContent='Keep Away history cleared on this device.';}
   catch{message.textContent='Could not access browser storage.';}
   renderHistory();
  };
  renderHistory();
+ // Saved full-clock results are device-local and shared by every same-origin
+ // tab. Refresh the real persisted rows rather than showing an old empty
+ // list, exporting stale entries, or silently making the player restart.
+ // An active in-memory drill never gains kicks/time from this storage event.
+ function refreshPrivateHistory(external=false){
+  renderHistory();
+  if(external){
+   const saved=verifiedHistory(),count=saved?.length||0;
+   message.textContent=saved===null?
+    'Another tab changed Keep Away storage, but the result data could not be verified. Nothing was overwritten.':
+    count?
+    'Keep Away results refreshed from another browser tab · '+count+' saved attempt'+
+    (count===1?'':'s')+'.':
+    'Keep Away results changed in another browser tab. Your live drill is unchanged.';
+  }
+ }
+ window.addEventListener('storage',event=>{
+  if(event.key!==KEY)return;
+  refreshPrivateHistory(true);
+ });
+ // On browsers that pause background tabs, focus is a safe opportunity to
+ // re-read the same private storage without touching the native game state.
+ window.addEventListener('focus',()=>refreshPrivateHistory(false));
  const own=()=>room?.state?.players?.find?.(p=>p.id===1);
+ // Only the real opposing bot, on the currently visible approved sandbox
+ // pitch, can interrupt a player's kick streak. Unknown IDs and spectators
+ // must not fabricate a lost streak.
+ function opposingBotKick(s,d){
+  if(!Number.isSafeInteger(d.playerId)||d.playerId===1||
+     !botIds?.has?.(d.playerId)||![1,2].includes(d.team)||
+     d.team===s.side)return false;
+  const player=room?.state?.players?.find?.(p=>p.id===d.playerId);
+  return !!player&&player.team?.id===d.team;
+ }
  const ready=()=>!serverLink&&!peerConnected&&!replay&&started&&!pitch.hidden&&
   document.getElementById('mode')?.value==='bot'&&room?.gameState&&
   Number.isSafeInteger(room.currentFrameNo)&&own()?.disc&&[1,2].includes(own()?.team?.id)&&
@@ -152,8 +207,10 @@
  const nativeScore=()=>[room.gameState.redScore,room.gameState.blueScore];
  function paint(s){
   clock.textContent=Math.max(0,Math.ceil((s.duration*60-s.frames)/60))+'s left · '+s.streak+' current / '+s.target+' target';
+  const reason=s.lastBreakReason&&room.currentFrameNo-s.lastBreakFrame<180?
+   ' · Last break: '+s.lastBreakReason:'';
   progress.textContent=(parked||paused?'Paused · explicitly resume the original local match. ':'')+
-   s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks';
+   s.best+' best streak · '+s.kicks+' actual own kicks · '+s.breaks+' streak breaks'+reason;
   bar.value=Math.min(100,Math.round(s.best/s.target*100));
  }
  function finish(label,complete=false){
@@ -174,7 +231,8 @@
  window.addEventListener('fuckball:local-native-kick',event=>{
   const s=active,d=event.detail;
   if(!s||!d||document.hidden||!ready()||room!==s.room||d.room!==s.room||
-   !Number.isSafeInteger(d.frame)||d.frame<s.frame||paused||own()?.team?.id!==s.side)return;
+   !Number.isSafeInteger(d.frame)||d.frame<s.frame||
+   d.frame>room.currentFrameNo||paused||own()?.team?.id!==s.side)return;
   // The source event fires only for native physical kicks. Duplicate callbacks
   // by the same player in the same engine frame cannot inflate a streak.
   if(s.lastKickFrame===d.frame&&s.lastKickId===d.playerId)return;
@@ -183,8 +241,9 @@
    s.kicks=Math.min(9999,s.kicks+1);
    s.streak=Math.min(999,s.streak+1);
    s.best=Math.max(s.best,s.streak);
-  }else if(s.streak){
+  }else if(s.streak&&opposingBotKick(s,d)){
    s.streak=0;s.breaks=Math.min(9999,s.breaks+1);
+   s.lastBreakFrame=d.frame;s.lastBreakReason='Opposing AI kick';
   }
   paint(s);
  });
@@ -225,7 +284,10 @@
    finish('KEEP AWAY · MATCH RESTARTED');return;
   }
   if(current[0]!==s.score[0]||current[1]!==s.score[1]){
-   if(s.streak){s.streak=0;s.breaks++;}
+   if(s.streak){
+    s.streak=0;s.breaks=Math.min(9999,s.breaks+1);
+    s.lastBreakFrame=frame;s.lastBreakReason='Native match goal';
+   }
    s.score=current;
   }
   paint(s);
@@ -243,7 +305,7 @@
    if(!quickPlay('bot',true,true)||!ready())throw Error('Native 1v1 local AI practice is unavailable.');
    active={room,side:own().team.id,duration,target:goal,frame:room.currentFrameNo,
     frames:0,score:nativeScore(),kicks:0,streak:0,best:0,breaks:0,
-    lastKickFrame:-1,lastKickId:-1};
+    lastKickFrame:-1,lastKickId:-1,lastBreakFrame:-1,lastBreakReason:''};
    parked=false;updateReturn();
    badge.textContent='KEEP AWAY · LOCAL AI';
    hud.hidden=false;stop.hidden=false;again.hidden=true;dismiss.hidden=true;
