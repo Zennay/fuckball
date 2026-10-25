@@ -100,9 +100,125 @@
   d.link.send({type:'matchFormatApply'});
   status.textContent='Host format request sent to native room. Existing server permissions still apply.';
  };
- setInterval(()=>{
+ // A format ballot is a server-owned Custom Room choice. Players who are
+ // browsing Home or My Games must not need to hunt for a hidden match menu.
+ // This compact ballot is a view/controller over the existing native buttons;
+ // it never infers votes from clicks or changes the host's authority.
+ const dock=make('aside',null,'native-format-dock');
+ dock.hidden=true;dock.setAttribute('role','region');
+ dock.setAttribute('aria-label','Live Custom Room match format ballot');
+ const summary=make('div',null,'native-format-dock-summary');
+ const headline=make('strong','CUSTOM ROOM · CHOOSE A MATCH FORMAT');
+ const tally=make('p',null,'native-format-dock-tally');
+ tally.setAttribute('role','status');tally.setAttribute('aria-live','polite');
+ summary.append(headline,tally);
+ const dockControls=make('div',null,'native-format-dock-controls');
+ const dockSelect=make('select');
+ dockSelect.setAttribute('aria-label','Your match format vote');
+ const dockVote=make('button','✓ Vote');dockVote.type='button';dockVote.className='primary';
+ const dockRemove=make('button','Remove vote');dockRemove.type='button';
+ const dockApply=make('button','Host · apply winner');dockApply.type='button';
+ const dockView=make('button','View room');dockView.type='button';
+ dockControls.append(dockSelect,dockVote,dockRemove,dockApply,dockView);
+ dock.append(summary,dockControls);
+ document.body.append(dock);
+ let dockOwner=null,dockRound=null,dockOptions='';
+ let dockChoice=2;
+ function ballotParticipant(){
+  return room?.state?.players?.some?.(p=>
+   p.id===networkPlayerId&&!botIds.has(p.id))===true;
+ }
+ function renderDock(){
+  const d=source();
+  const outsideMatch=document.querySelector('#homeView:not([hidden])')||
+   document.querySelector('#gamesView:not([hidden])');
+  const live=!!d&&!!outsideMatch;
+  dock.hidden=!live;
+  if(!live)return;
+  const {link,state,list}=d;
+  const signature=JSON.stringify(list);
+  if(dockOwner!==link||dockRound!==state.round||dockOptions!==signature){
+   dockOwner=link;dockRound=state.round;dockOptions=signature;
+   const mine=state.matchFormatVotes.find(row=>
+    Array.isArray(row)&&row[0]===networkPlayerId&&
+    Number.isSafeInteger(row[1])&&row[1]>=0&&row[1]<list.length);
+   dockChoice=mine?mine[1]:2;
+   dockSelect.replaceChildren();
+   for(const option of list){
+    const item=new Option(option.name,String(option.id));
+    dockSelect.add(item);
+   }
+  }
+  dockSelect.value=String(dockChoice);
+  const validVotes=state.matchFormatVotes.filter(row=>Array.isArray(row)&&
+   row.length===2&&Number.isSafeInteger(row[0])&&
+   Number.isSafeInteger(row[1])&&row[1]>=0&&row[1]<list.length);
+  const mine=validVotes.find(row=>row[0]===networkPlayerId);
+  const winner=state.matchFormatWinner;
+  const host=link.isOwner===true;
+  const connected=link.ws?.readyState===1;
+  const canVote=ballotParticipant()&&connected&&state.kickoff==null;
+  const rules=Number.isSafeInteger(state.timeLimit)&&
+   Number.isSafeInteger(state.scoreLimit)?
+   state.timeLimit+' min / '+state.scoreLimit+' goals':'rules pending';
+  const leader=Number.isSafeInteger(winner)&&list[winner]?
+   ' · winner: '+list[winner].name:' · no clear winner yet';
+  const newText='Current: '+rules+' · '+validVotes.length+
+   ' human votes'+leader+(mine?' · your vote: '+list[mine[1]].name:
+   ' · no confirmed vote from you')+
+   (state.kickoff!=null?' · locked during server kickoff.':'');
+  if(tally.textContent!==newText)tally.textContent=newText;
+  dockSelect.disabled=!canVote;
+  dockVote.disabled=!canVote;
+  dockRemove.disabled=!canVote||!mine;
+  dockApply.hidden=!host;
+  dockApply.disabled=!host||!connected||state.kickoff!=null||
+   !Number.isSafeInteger(winner)||!list[winner];
+ }
+ dockSelect.addEventListener('change',()=>{
+  dockChoice=Number(dockSelect.value);renderDock();
+ });
+ function delegateBallot(action){
+  const d=source();
+  if(!d||!ballotParticipant()||d.link.ws?.readyState!==1||
+     d.state.kickoff!=null)return;
+  // Synchronize the hidden native input state, then delegate to the
+  // identical original handler that submits the current player vote.
+  render();
+  if(action==='cast'){
+   if(!Number.isSafeInteger(dockChoice)||!d.list[dockChoice])return;
+   selected=dockChoice;
+   for(const input of choices.querySelectorAll('input')){
+    input.checked=Number(input.value)===selected;
+   }
+   if(!cast.disabled)cast.click();
+  }else if(action==='remove'&&!remove.disabled)remove.click();
+  tally.textContent='Request sent to the room server · waiting for its vote update.';
+ }
+ dockVote.addEventListener('click',()=>delegateBallot('cast'));
+ dockRemove.addEventListener('click',()=>delegateBallot('remove'));
+ dockApply.addEventListener('click',()=>{
+  const d=source(),winner=d?.state.matchFormatWinner;
+  if(!d||!d.link.isOwner||d.link.ws?.readyState!==1||
+     d.state.kickoff!=null||!Number.isSafeInteger(winner)||!d.list[winner])return;
+  render();
+  if(!apply.disabled)apply.click(); // Includes original host confirmation.
+ });
+ dockView.addEventListener('click',()=>{
+  if(!source())return;
+  document.querySelector('#tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  render();section.scrollIntoView?.({block:'nearest',behavior:'auto'});
+  (cast.disabled?section:cast).focus?.({preventScroll:true});
+ });
+ const tick=setInterval(()=>{
   if(typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden)render();
   else section.hidden=true;
+  renderDock();
  },1000);
- render();
+ tick?.unref?.();
+ for(const id of ['tabHome','tabPlay','tabGames']){
+  document.querySelector('#'+id)?.addEventListener('click',()=>queueMicrotask(renderDock));
+ }
+ render();renderDock();
 })();
