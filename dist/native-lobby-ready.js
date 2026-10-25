@@ -62,8 +62,28 @@
  const dockToggle=el('button','✓ I AM READY');dockToggle.type='button';
  dockToggle.className='primary';
  const dockView=el('button','↗ View room');dockView.type='button';
+ // Hosts can operate the same native kickoff controls when the match menu
+ // is hidden; votes and the countdown remain server-authoritative.
+ const dockHost=el('div',null,'native-lobby-ready-dock-host');
+ const dockLengthLabel=el('label','Kickoff countdown');
+ const dockLength=el('select');
+ dockLength.setAttribute('aria-label','Kickoff countdown duration');
+ for(const seconds of [3,5,10]){
+  const option=el('option',seconds+' seconds');option.value=String(seconds);
+  dockLength.append(option);
+ }
+ dockLength.value=length.value;
+ dockLengthLabel.append(dockLength);
+ const dockStart=el('button','Start countdown');
+ dockStart.type='button';dockStart.className='primary';
+ const dockCancel=el('button','Cancel countdown');
+ dockCancel.type='button';
+ const dockHostFeedback=el('span',null,'native-lobby-ready-dock-feedback');
+ dockHostFeedback.setAttribute('role','status');
+ dockHostFeedback.setAttribute('aria-live','polite');
+ dockHost.append(dockLengthLabel,dockStart,dockCancel,dockHostFeedback);
  dockActions.append(dockToggle,dockView);
- dock.append(dockContent,dockActions);
+ dock.append(dockContent,dockActions,dockHost);
  document.body.append(dock);
  let lastSignature='';
  function lobbySummary(){
@@ -81,7 +101,14 @@
   const countdown=state.kickoff;
   const remaining=countdown&&Number.isSafeInteger(countdown.framesLeft)&&
    countdown.framesLeft>=0?Math.max(1,Math.ceil(countdown.framesLeft/60)):null;
-  return{link,supported,active,own,ready,remaining};
+  const red=active.some(p=>p.team.id===1),blue=active.some(p=>p.team.id===2);
+  const allReady=active.length>=2&&red&&blue&&
+   active.every(p=>ready.has(p.id));
+  const canHost=link.isOwner===true&&Object.hasOwn(state,'kickoff')&&
+   !state.lastResult&&supported;
+  return{link,supported,active,own,ready,remaining,
+   canSchedule:canHost&&allReady&&!countdown,
+   canCancel:canHost&&!!countdown,canHost,allReady};
  }
  function renderGlobalLobby(){
   const state=lobbySummary();
@@ -105,6 +132,21 @@
   dockToggle.hidden=!state.supported||!state.own;
   dockToggle.disabled=state.remaining!==null;
   dockToggle.textContent=ownReady?'✓ READY · CHANGE TO NOT READY':'✓ I AM READY';
+  dockHost.hidden=!state.canHost;
+  dockLengthLabel.hidden=!!state.canCancel;
+  dockStart.hidden=!!state.canCancel;
+  dockStart.disabled=!state.canSchedule;
+  dockLength.disabled=!state.canSchedule;
+  dockCancel.hidden=!state.canCancel;
+  if(state.canCancel){
+   dockHostFeedback.textContent='Server countdown running · '+
+    (state.remaining===null?'check the match for the current count':
+     state.remaining+'s left')+'. Only the host can cancel.';
+  }else if(state.canHost){
+   dockHostFeedback.textContent=state.canSchedule?
+    'Both teams and every connected human are ready. Host may begin.':
+    'Waiting for ready humans on both teams. No countdown started.';
+  }
  }
  dockToggle.addEventListener('click',()=>{
   const snap=lobbySummary();
@@ -115,6 +157,23 @@
   if(!toggle.disabled)toggle.click();
   renderGlobalLobby();
  });
+ function invokeNativeKickoff(cancel){
+  const snapshot=lobbySummary();
+  if(!snapshot?.canHost||
+     cancel&&!snapshot.canCancel||!cancel&&!snapshot.canSchedule)return;
+  // Use the same server-authorized native handlers and verify their actual
+  // disabled state at click time. Never start or cancel on behalf of users.
+  if(!cancel)length.value=dockLength.value;
+  render();
+  const original=cancel?cancelCount:count;
+  if(original.hidden||original.disabled)return;
+  original.click();
+  dockHostFeedback.textContent=cancel?
+   'Cancellation requested · waiting for server state.':
+   'Kickoff requested · waiting for server confirmation.';
+ }
+ dockStart.addEventListener('click',()=>invokeNativeKickoff(false));
+ dockCancel.addEventListener('click',()=>invokeNativeKickoff(true));
  dockView.addEventListener('click',()=>{
   if(!lobbySummary())return;
   document.getElementById('tabPlay')?.click();
