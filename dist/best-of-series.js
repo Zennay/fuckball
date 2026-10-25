@@ -75,14 +75,57 @@
   items=validateCollection(snapshot?JSON.parse(snapshot):[]).map(x=>x.series);
  }
  try{read();}catch(error){healthy=false;errorText=error.message||'Local series unavailable';items=[];}
+ // Serialize each local mutation and (on supported browsers) synchronize all
+ // tabs before touching device-private history. This is not a server result.
+ let pendingWrite=Promise.resolve();
+ const writeLock=KEY+':exclusive-write';
  function persist(list){
-  if(!healthy)throw Error('Unreadable private series storage. Export the original bytes first.');
-  if(localStorage.getItem(KEY)!==snapshot)
-   throw Error('Series data changed in another tab. Refresh the page before saving.');
-  const normalized=validateCollection(list).map(x=>x.series);
-  const next=JSON.stringify(normalized);
-  localStorage.setItem(KEY,next);snapshot=next;items=normalized;
-  window.dispatchEvent(new Event('fuckball:private-competition-change'));
+  if(!healthy)return Promise.reject(Error('Unreadable private series storage. Download its original bytes first.'));
+  // Capture the operator's original view BEFORE waiting for another tab.
+  const before=items,proposed=validateCollection(list).map(x=>x.series);
+  const work=pendingWrite.catch(()=>{}).then(async()=>{
+   const commit=()=>{
+    const raw=localStorage.getItem(KEY);
+    if(raw!==null&&raw.length>MAX_BYTES)
+     throw Error('Stored private series exceeds 128 KiB. No changes were saved.');
+    const latest=validateCollection(raw?JSON.parse(raw):[]).map(x=>x.series);
+    // A no-lock browser cannot make a truly atomic multi-tab write. Fall
+    // back to refusing even unrelated stale changes, never blindly replacing.
+    if(!navigator.locks?.request&&raw!==snapshot)
+     throw Error('Another tab changed series data. Refresh before saving.');
+    const oldById=new Map(before.map(x=>[x.id,x]));
+    const proposedById=new Map(proposed.map(x=>[x.id,x]));
+    const merged=new Map(latest.map(x=>[x.id,x]));
+    // Merge edits to DIFFERENT series; edits to the same series always
+    // fail closed if the authoritative stored version has changed.
+    for(const previous of before){
+     const next=proposedById.get(previous.id);
+     if(next&&JSON.stringify(next)===JSON.stringify(previous))continue;
+     const current=merged.get(previous.id);
+     if(!current||JSON.stringify(current)!==JSON.stringify(previous))
+      throw Error('This series changed in another tab. Refresh before editing that series.');
+     if(next)merged.set(previous.id,next);
+     else merged.delete(previous.id);
+    }
+    for(const next of proposed){
+     if(oldById.has(next.id))continue;
+     if(merged.has(next.id))
+      throw Error('Another tab already uses this series identity. Try creating it again.');
+     merged.set(next.id,next);
+    }
+    // Keep the unchanged historical records; refuse overflow or corruption.
+    const normalized=validateCollection([...merged.values()]).map(x=>x.series);
+    const next=JSON.stringify(normalized);
+    localStorage.setItem(KEY,next);
+    snapshot=next;items=normalized;
+    window.dispatchEvent(new Event('fuckball:private-competition-change'));
+   };
+   if(typeof navigator!=='undefined'&&navigator.locks?.request)
+    return navigator.locks.request(writeLock,{mode:'exclusive'},commit);
+   return commit();
+  });
+  pendingWrite=work.catch(()=>{});
+  return work;
  }
  const section=text('section',null,'best-of-series');
  const details=text('details');const summary=text('summary','⚔ BEST-OF SERIES · OPEN');
