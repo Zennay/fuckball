@@ -94,10 +94,15 @@
   !replay&&!isCouchRivals()&&!localTwoHumanMode();
  function liveSeatPad(pads){
   const seat=liveSeatOne;
-  if(!seat)return null;
+  if(!seat||seat.lost)return null;
   const pad=pads[seat.index];
-  return pad?.connected&&pad.index===seat.index&&
-   pad.id===seat.id&&pad.index!==reservedP2()?pad:null;
+  // A pad model's ID is not a unique physical identity. Once a live seat
+  // disappears, a different pad with the same model on the same port must
+  // not recover kick/movement without the player's explicit Bind action.
+  if(!pad?.connected||pad.index!==seat.index||pad.id!==seat.id){
+   seat.lost=true;return null;
+  }
+  return pad.index!==reservedP2()?pad:null;
  }
  const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
   !serverLink&&!peerConnected&&!replay&&
@@ -119,9 +124,13 @@
   try{
    const pads=navigator.getGamepads();
    if(localSeatLocked&&localTwoHumanMode()){
-    const pinned=localSeatOne===null?null:pads[localSeatOne.index];
-    return pinned?.connected&&pinned.id===localSeatOne.id&&
-     pinned.index!==reservedP2()?pinned:null;
+    if(!localSeatOne||localSeatOne.lost)return null;
+    const pinned=pads[localSeatOne.index];
+    if(!pinned?.connected||pinned.id!==localSeatOne.id||
+       pinned.index!==localSeatOne.index){
+     localSeatOne.lost=true;return null;
+    }
+    return pinned.index!==reservedP2()?pinned:null;
    }
    // No live match may auto-handoff movement/kick authority when a gamepad is
    // unplugged or a new pad occupies the same Gamepad API port. The original
@@ -297,6 +306,18 @@
   localSeatOne=pad?{index:pad.index,id:pad.id}:null;
   localSeatLocked=true;
   lastSignature='';
+ });
+ // Some browsers disconnect and reconnect an identical controller between
+ // two animation frames. Observe the disconnect event too so port+model ID
+ // reuse never inherits P1's human seat without an explicit rebind.
+ window.addEventListener('gamepaddisconnected',event=>{
+  const index=event?.gamepad?.index;
+  if(!Number.isSafeInteger(index))return;
+  if(liveSeatLocked&&liveSeatOne?.index===index)liveSeatOne.lost=true;
+  if(localSeatLocked&&localSeatOne?.index===index)localSeatOne.lost=true;
+  lastSignature='';wasStart=true;
+  if(typeof refreshInput==='function'&&typeof started!=='undefined'&&started)
+   refreshInput();
  });
  // App blur/visibility handlers deliberately release input; reapply the
  // held controller state after focus even when its axes never changed.
