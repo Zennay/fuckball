@@ -74,7 +74,43 @@ function notifyNativeSessionView(){
  if(typeof CustomEvent==='function'&&typeof window.dispatchEvent==='function')
   window.dispatchEvent(new CustomEvent('fuckball:native-session-state'));
 }
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();const link=serverLink;clearQuickRematchAlert(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
+// Pending sockets and server admission are never unlimited UI states.
+const NATIVE_CONNECTION_TIMEOUT_MS=20000;
+function clearNativeConnectionTimeout(link){
+ if(!link)return;
+ if(link.connectionTimer!==null&&link.connectionTimer!==undefined){
+  clearTimeout(link.connectionTimer);link.connectionTimer=null;
+ }
+ link.connectionDeadlineAt=null;
+}
+function armNativeConnectionTimeout(link,stage){
+ clearNativeConnectionTimeout(link);
+ link.connectionStage=stage;
+ link.connectionDeadlineAt=Date.now()+NATIVE_CONNECTION_TIMEOUT_MS;
+ link.connectionTimer=setTimeout(()=>{
+  if(serverLink!==link||link.room)return;
+  link.connectionTimer=null;link.connectionDeadlineAt=null;
+  link.connectionTimedOut=true;
+  $('serverRoomStatus').textContent=stage==='opening'?
+   'Could not open the game server connection (20s timeout).':
+   'The server did not admit this connection within 20s.';
+  notifyNativeSessionView();
+  // Closing the original socket lets the existing onclose path distinguish:
+  // a failed first join (manual retry), a genuine authorized room recovery,
+  // and a queued human search. No background join or seat is invented.
+  try{link.ws.close(1000,'Connection timed out');}
+  catch{
+   const room=link.requestedRoomId;
+   disconnect();
+   if(room&&NATIVE_ROOM_CODE.test(room))showJoinScreen(room,
+    'The server did not respond. Review this room and retry explicitly.');
+   else notify('Server connection timed out. Choose an explicit retry.');
+  }
+ },NATIVE_CONNECTION_TIMEOUT_MS);
+ link.connectionTimer?.unref?.();
+ notifyNativeSessionView();
+}
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();const link=serverLink;clearNativeConnectionTimeout(link);clearQuickRematchAlert(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
@@ -130,12 +166,16 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  (document.getElementById('joinRoomAccessKey')?.value||''):'';
  if(accessKey&&url.protocol!=='wss:'&&!['localhost','127.0.0.1','::1'].includes(url.hostname))
   throw Error('Room access keys require a secure WSS connection.');
+ // A browser may reject construction (unsupported URL, policy, unavailable
+ // transport). Allocate the new socket BEFORE mutating a local game/replay.
+ const ws=new WebSocket(url);
  disconnect();
  if(replay)closeReplay();
  showView(quickMode?'home':'play');
  if(!offlineRoomLimits)offlineRoomLimits={time:$('timeLimit').value,score:$('scoreLimit').value};
- const ws=new WebSocket(url),link={ws,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
- notifyNativeSessionView();
+ const link={ws,requestedRoomId:roomId,connectionTimer:null,connectionDeadlineAt:null,
+  connectionStage:'opening',connectionTimedOut:false,temporaryRoomKey:accessKey||null,authToken:settings.account?.token||null,isOwner:false,quickMatchMode:quickMode||null,partyQueue:partyQueue===true,reconnect:!!resumeContext,recoveryAttempt:resumeContext?.roomRecovery===true,requestedSpectate:spectate===true&&!create&&!resumeContext&&!quickMode,joinName:joinName||settings.name,retries:resumeContext?.retries||0,previousId:resumeContext?.previousId,resumeTicket:resumeContext?.ticket||null,send:data=>{if(ws.readyState===1)ws.send(JSON.stringify(data));}};serverLink=link;ws.binaryType='arraybuffer';$('serverRoomStatus').textContent='Connecting…';
+ armNativeConnectionTimeout(link,'opening');
  $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,
@@ -147,6 +187,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  if(keyInput)keyInput.value='';
  };
  ws.onopen=()=>{
+  if(serverLink!==link)return;
+  $('serverRoomStatus').textContent='Connected · waiting for server admission…';
+  armNativeConnectionTimeout(link,'admission');
   if(!link.requestedSpectate){sendJoin();return;}
   // Require a successful pre-join capability exchange: old room servers
   // must never receive a WATCH join that they would treat as a player.
@@ -160,7 +203,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
- };ws.onclose=event=>{if(serverLink!==link)return;if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({type:'queueStatus',status:'disconnected'});if(event?.code===4004){
+ };ws.onclose=event=>{
+  if(serverLink!==link)return;
+  clearNativeConnectionTimeout(link);
+  if(link.quickMatchMode&&!link.room)window.onQuickMatchEvent?.({
+   type:'queueStatus',status:'disconnected',
+   ...(link.connectionTimedOut?{reason:'The game server did not respond within 20 seconds.'}:{})
+  });if(event?.code===4004){
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
@@ -186,7 +235,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     // No slot was ever admitted, so show a normal (manual) join retry. No
     // ticket is fabricated and no background reconnect is scheduled.
     showView('play');
-    showJoinScreen(roomId,'The server connection ended before joining. Review the room and retry explicitly.');
+    showJoinScreen(roomId,link.connectionTimedOut?
+     'The server did not admit the room within 20 seconds. Review and retry explicitly.':
+     'The server connection ended before joining. Review the room and retry explicitly.');
     if(retrySpectator)$('joinSpectator').checked=true;
    }else notify('Disconnected.');
   };
@@ -204,6 +255,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   }
  }
  if(['queueStatus','queueReady','queueReadyAccepted','queueReadyProgress','queueReadyAborted','quickMatchFound','quickMatchCancelled'].includes(d.type)){
+  // The real server replied about the human queue. Waiting for other humans
+  // may legitimately last longer than 20s, and must never auto-timeout.
+  clearNativeConnectionTimeout(link);
   if(d.type==='quickMatchFound'){link.quickMatchMode=d.mode;link.roomControl={locked:true};}
   if(d.type==='quickMatchCancelled')notify(d.reason||'Quick Match cancelled.');
   window.onQuickMatchEvent?.(d);
@@ -288,6 +342,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    link.failed=true;disconnect();showJoinScreen(roomId||d.room,
     'This server cannot guarantee spectator entry. The join was cancelled.');return;
   }
+  clearNativeConnectionTimeout(link);
   link.recoveryAttempt=false;window.FuckballRoomRecovery?.hide();if(link.quickMatchMode)showView('play');link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id&&!link.quickMatchMode;link.room=d.room;
   notifyNativeSessionView();peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=!!link.quickMatchMode;$('inviteButton').hidden=!!link.quickMatchMode;if(!link.quickMatchMode)setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else if(!link.quickMatchMode)openMatchMenu();else if(menuOpen)closeMatchMenu();if(create)copyInvite(true);else if(!link.reconnect&&!link.quickMatchMode)notify(d.spectatorAdmission?
  'Joined as spectator. Ask the host for a team or bench slot.':'Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
