@@ -68,6 +68,8 @@
   join.hidden=!eligible;join.disabled=!eligible;
   join.textContent=eligible?'▶ Search '+mode.value+' with real humans':'';
   refresh.hidden=!watching;refresh.disabled=!foreground()||!serverValid();
+  panel.dataset.watchState=!watching?'idle':!foreground()||!serverValid()?'paused':
+   !fresh?'stale':eligible?'ready':'observing';
   if(!watching)status.textContent='Not watching. Choose a threshold and start.';
   else if(!foreground())status.textContent='Paused: return to the visible Play tab for new human queue counts.';
   else if(!serverValid())status.textContent='Paused: selected game server is not this website’s server.';
