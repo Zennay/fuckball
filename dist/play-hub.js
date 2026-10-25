@@ -563,11 +563,17 @@
   const vote=link.quickMatchMode?link.quickRematch:state.rematch;
   const waiting=Array.isArray(vote?.required)?vote.required.length:0;
   const accepted=Array.isArray(vote?.accepted)?vote.accepted.length:0;
-  const detail=vote&&waiting>0?
-   'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.' :
+  const requesting=typeof postgameRequestPending!=='undefined'&&
+   postgameRequestPending?.link===link;
+  const retry=typeof postgameRequestNotice!=='undefined'&&
+   postgameRequestNotice?.link===link;
+  const detail=requesting?'Server response pending · your request was sent; do not resubmit.':
+   vote&&waiting>0?'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.':
+   retry?postgameRequestNotice.message:
    'Official room result · next match remains server-controlled.';
   if(postMatchInfo.textContent!==detail)postMatchInfo.textContent=detail;
-  postMatchOpen.textContent=vote?'Review rematch consent →':'Review result & rematch →';
+  postMatchOpen.textContent=requesting?'View pending server request →':
+   vote?'Review rematch consent →':'Review result & rematch →';
  }
  const observer=new MutationObserver(()=>refresh());
  const match=document.getElementById('matchView');
