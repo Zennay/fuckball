@@ -52,14 +52,20 @@
   if(players.length>128)return null;
   const roster=[];
   const seen=new Set();
+  // The room event is authoritative for who owns this room and which
+  // player IDs are bots. Old offline botIds / client role hints must not
+  // color a snapshot or identify the wrong host after room migration.
+  const actualOwner=Number.isSafeInteger(live.roomState.owner)?live.roomState.owner:null;
+  const actualBots=new Set(Array.isArray(live.roomState.botIds)?
+   live.roomState.botIds.filter(id=>Number.isSafeInteger(id)&&id>=0):[]);
   for(const p of players){
    if(!Number.isSafeInteger(p?.id)||p.id<0||seen.has(p.id)||
       ![0,1,2].includes(p.team?.id))continue;
    seen.add(p.id);
    const raw=typeof p.name==='string'?p.name.trim():'Player';
    const name=raw.slice(0,32).replace(/[\u0000-\u001f\u007f-\u009f]/g,'').trim()||'Player';
-   const bot=p.aiControlled===true||(typeof botIds!=='undefined'&&botIds?.has?.(p.id));
-   roster.push({name,team:p.team.id,bot,host:p.id===live.roomControl?.owner});
+   const bot=actualBots.has(p.id)||p.aiControlled===true;
+   roster.push({name,team:p.team.id,bot,host:actualOwner!==null&&p.id===actualOwner});
   }
   const g=room.gameState;
   const valid=n=>Number.isSafeInteger(n)&&n>=0&&n<=999;
