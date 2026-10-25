@@ -6,7 +6,9 @@
  if(!home||!social)return;
  const statusBar=document.createElement('section');statusBar.className='friend-party-banner';
  statusBar.hidden=true;statusBar.setAttribute('aria-label','Active friends party');
- const bannerText=document.createElement('strong');const bannerOpen=document.createElement('button');
+ const bannerText=document.createElement('strong');
+ bannerText.setAttribute('role','status');bannerText.setAttribute('aria-live','polite');
+ const bannerOpen=document.createElement('button');
  bannerOpen.type='button';bannerOpen.textContent='Open party →';
  const bannerRetry=document.createElement('button');
  bannerRetry.type='button';bannerRetry.textContent='↻ Retry party search';
@@ -87,7 +89,12 @@
    p.members?.some(m=>m.name===user&&m.ready)===true;
  }
  function syncRetryButton(state){
-  bannerRetry.hidden=!mayRetryParty(state);
+  const actionable=mayRetryParty(state),p=state?.party;
+  bannerRetry.hidden=!actionable;
+  if(actionable&&p)bannerText.textContent='PARTY SEARCH NEEDS ACTION · '+
+   p.members.length+' / 4 members · Retry before the server deadline';
+  else if(p)bannerText.textContent='PARTY · '+p.members.length+' / 4 · '+
+   p.members.map(m=>m.name).join(', ');
  }
  function launchIfReady(state,explicit=false){
   const p=state?.party,mode=p?.launchMode,user=settings.account?.username?.toLowerCase();
