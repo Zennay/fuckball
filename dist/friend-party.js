@@ -80,12 +80,23 @@
   const currentToken=settings.account?.token;
   const state=lastPartyToken===currentToken?lastPartyState:null;
   const party=state?.party;
+  const invites=Array.isArray(state?.invitations)?state.invitations:[];
   // Give the real active match and server-owned 15s ready-check priority.
   const activeMatch=!!serverLink?.room||
    (typeof peerConnected!=='undefined'&&peerConnected===true);
   const readyCheck=document.querySelector('.quick-ready-dock:not([hidden])');
-  globalParty.hidden=!party||!home.hidden||activeMatch||!!readyCheck;
+  globalParty.hidden=(!party&&!invites.length)||!home.hidden||activeMatch||!!readyCheck;
   if(globalParty.hidden)return;
+  if(!party){
+   globalTitle.textContent=invites.length===1?'PRIVATE FRIEND INVITATION':
+    invites.length+' PRIVATE FRIEND INVITATIONS';
+   const copy=invites.length+' server-issued invitation'+(invites.length===1?'':'s')+
+    ' · Review the sender and accept or decline in your original Party panel.';
+   if(globalDetail.textContent!==copy)globalDetail.textContent=copy;
+   globalOpen.textContent='↗ Review invitation';
+   globalRetry.hidden=true;return;
+  }
+  globalOpen.textContent='↗ Open party';
   const now=Date.now(),expires=Number(party.launchExpires);
   const remaining=Number.isFinite(expires)?Math.max(0,Math.ceil((expires-now)/1000)):null;
   const canRetry=mayRetryParty(state);
@@ -305,8 +316,9 @@
    // Polling must not erase a teammate's half-typed invitation.
    const typing=dialog.open&&dialog.contains(document.activeElement)&&
     document.activeElement?.tagName==='INPUT';
-   if(!typing&&(dialog.open||hasJoined||state.party))render(state);
    const invitations=Array.isArray(state.invitations)?state.invitations:[];
+   if(!typing&&(dialog.open||hasJoined||state.party||invitations.length))
+    render(state);
    entry.textContent='Party'+(invitations.length?' ('+invitations.length+')':'');
    entry.setAttribute('aria-label',invitations.length?
     invitations.length+' party invitation'+(invitations.length===1?'':'s')+' awaiting your response':
