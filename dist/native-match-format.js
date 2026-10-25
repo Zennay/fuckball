@@ -25,7 +25,26 @@
   make('small','No votes start, pause or rank a game. Applying a format invokes the existing native host configuration, leaving the room waiting for kickoff.'));
  const after=pane.querySelector('.native-stadium-ballot')||pane.querySelector('.native-lobby-ready');
  if(after)after.insertAdjacentElement('afterend',section);else pane.append(section);
- let signature='',selected=2;
+ let signature='',selected=2,ballotLink=null,ballotRound=null,ballotRoom=null;
+ let pendingVote=null,pendingApply=null;
+ const connected=link=>link?.ws?.readyState===1;
+ function activeBallot(host=false){
+  const d=source();
+  if(!d||d.link!==ballotLink||d.link.room!==ballotRoom||
+     d.state.round!==ballotRound){
+   render();status.textContent='The room or voting round changed. Review the current options first.';
+   return null;
+  }
+  if(!connected(d.link)){
+   status.textContent='The room connection is not open. No vote was sent.';
+   return null;
+  }
+  if(d.state.kickoff!=null||host&&!d.link.isOwner){
+   status.textContent='This ballot is locked or only the real host can change the format.';
+   return null;
+  }
+  return d;
+ }
  function source(){
   const link=typeof serverLink!=='undefined'?serverLink:null,state=link?.roomState;
   if(!link?.room||link.quickMatchMode||!state||state.started||state.lastResult||
@@ -38,8 +57,16 @@
   return{link,state,list};
  }
  function render(){
-  const d=source();section.hidden=!d;if(!d){signature='';return;}
+  const d=source();section.hidden=!d;
+  if(!d){signature='';ballotLink=null;ballotRound=null;ballotRoom=null;
+   pendingVote=null;pendingApply=null;return;}
   const {link,state,list}=d;
+  // Every room uses the same options: refresh selection on native room/round
+  // changes instead of carrying another player's previous choice forward.
+  if(ballotLink!==link||ballotRoom!==link.room||ballotRound!==state.round){
+   signature='';selected=2;pendingVote=null;pendingApply=null;
+   ballotLink=link;ballotRoom=link.room;ballotRound=state.round;
+  }
   const limits=Number.isSafeInteger(state.scoreLimit)&&state.scoreLimit>=0&&
    Number.isSafeInteger(state.timeLimit)&&state.timeLimit>=0;
   currentRules.textContent=limits?
@@ -66,13 +93,15 @@
    row.classList.toggle('native-match-format-winning',state.matchFormatWinner===i);
   });
   const human=room?.state?.players?.some?.(p=>p.id===networkPlayerId&&!botIds.has(p.id))===true;
-  cast.disabled=!human||state.kickoff!=null;
-  remove.disabled=!human||mine===undefined||state.kickoff!=null;
+  const open=connected(link);
+  cast.disabled=!open||!human||state.kickoff!=null||!!pendingVote;
+  remove.disabled=!open||!human||mine===undefined||state.kickoff!=null||!!pendingVote;
   apply.hidden=!link.isOwner;
   const winner=state.matchFormatWinner;
-  apply.disabled=!link.isOwner||state.kickoff!=null||!Number.isSafeInteger(winner)||
-   winner<0||winner>=list.length;
-  status.textContent=state.kickoff?
+  apply.disabled=!open||!link.isOwner||state.kickoff!=null||!!pendingApply||
+   !Number.isSafeInteger(winner)||winner<0||winner>=list.length;
+  status.textContent=!open?'The original room connection is offline. Nothing can be sent.':
+   state.kickoff?
    'Format voting is locked during the server kickoff countdown.':
    Number.isSafeInteger(winner)&&list[winner]?
     'Clear leader: '+list[winner].name+' · '+counts.reduce((a,b)=>a+b,0)+' actual votes.':
@@ -80,25 +109,36 @@
      (mine!==undefined?' Your vote: '+list[mine].name+'.':'');
  }
  cast.onclick=()=>{
-  const d=source();if(!d||d.state.kickoff!=null||
-   !Number.isSafeInteger(selected)||selected<0||selected>=d.list.length)return;
+  const d=activeBallot();
+  if(!d||pendingVote||!Number.isSafeInteger(selected)||
+     selected<0||selected>=d.list.length)return;
   d.link.send({type:'matchFormatVote',choice:selected});
+  pendingVote={link:d.link,round:d.state.round,choice:selected,sentAt:Date.now()};
   status.textContent='Submitting your match format choice to the real room server…';
  };
  remove.onclick=()=>{
-  const d=source();if(!d||d.state.kickoff!=null)return;
+  const d=activeBallot();
+  if(!d||pendingVote)return;
   d.link.send({type:'matchFormatVote',choice:null});
+  pendingVote={link:d.link,round:d.state.round,choice:null,sentAt:Date.now()};
   status.textContent='Removing your native match format vote…';
  };
  apply.onclick=()=>{
-  const d=source(),winner=d?.state.matchFormatWinner;
-  if(!d||!d.link.isOwner||d.state.kickoff!=null||
-   !Number.isSafeInteger(winner)||!d.list[winner])return;
+  const d=activeBallot(true),winner=d?.state.matchFormatWinner;
+  if(!d||pendingApply||!Number.isSafeInteger(winner)||!d.list[winner])return;
   const selectedFormat=d.list[winner];
   if(!confirm('Apply '+selectedFormat.name+
    ' using the original host configuration? This refreshes the idle room and clears ready flags, without starting the game.'))return;
-  d.link.send({type:'matchFormatApply'});
-  status.textContent='Host format request sent to native room. Existing server permissions still apply.';
+  // A blocking confirmation dialog can outlive the room or winning vote.
+  const latest=activeBallot(true);
+  if(!latest||latest.link!==d.link||latest.state.matchFormatWinner!==winner){
+   status.textContent='The winning vote changed during confirmation. Review it again.';
+   return;
+  }
+  latest.link.send({type:'matchFormatApply'});
+  pendingApply={link:d.link,round:d.state.round,minutes:selectedFormat.minutes,
+   goals:selectedFormat.goals,sentAt:Date.now()};
+  status.textContent='Host format request sent; waiting for server confirmation.';
  };
  // A format ballot is a server-owned Custom Room choice. Players who are
  // browsing Home or My Games must not need to hunt for a hidden match menu.
