@@ -317,8 +317,10 @@
    const typing=dialog.open&&dialog.contains(document.activeElement)&&
     document.activeElement?.tagName==='INPUT';
    const invitations=Array.isArray(state.invitations)?state.invitations:[];
-   if(!typing&&(dialog.open||hasJoined||state.party||invitations.length))
-    render(state);
+   // Also render the first empty receipt after all invitations disappear;
+   // otherwise a cross-view badge would continue advertising revoked invites.
+   if(!typing&&(dialog.open||hasJoined||state.party||invitations.length||
+      lastPartyState?.invitations?.length))render(state);
    entry.textContent='Party'+(invitations.length?' ('+invitations.length+')':'');
    entry.setAttribute('aria-label',invitations.length?
     invitations.length+' party invitation'+(invitations.length===1?'':'s')+' awaiting your response':
