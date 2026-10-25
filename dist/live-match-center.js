@@ -53,7 +53,7 @@
  downloadFeed.textContent='↓ Save my notes';downloadFeed.title='Download only observed changes on this device';
  const clearFeed=document.createElement('button');clearFeed.type='button';clearFeed.textContent='Clear';
  feedActions.append(downloadFeed,clearFeed);feedHeading.append(feedTitle,feedActions);
- const feedIntro=document.createElement('p');feedIntro.textContent='Observed scoreboard changes while this tab is open. This is NOT an official game event feed: scorer identity, fouls, assists and match results are not inferred.';
+ const feedIntro=document.createElement('p');feedIntro.textContent='Local, observed scoreboard changes follow the same match when you visit Home or My Games. While away, events cannot be reconstructed. This is NOT an official event feed; scorer identity, fouls, assists and match results are never inferred.';
  const feedList=document.createElement('ol');feedList.className='match-center-feed-list';
  const feedStatus=document.createElement('p');feedStatus.className='match-center-feed-status';
  feedStatus.setAttribute('role','status');feedStatus.setAttribute('aria-live','polite');
@@ -99,12 +99,21 @@
   feedStatus.textContent=timeline.length+' read-only observations in this tab. No server upload, official scoring or persistent tracking.';
   downloadFeed.disabled=!timeline.length;
  }
+ function resetObservations(){
+  timeline=[];sessionId='';sessionRoom=null;snapshot=null;
+  historyInterrupted=false;lastSignature='';
+ }
  function observe(){
-  if(match.hidden){if(sessionId||timeline.length){timeline=[];sessionId='';sessionRoom=null;snapshot=null;lastSignature='';}return;}
-  if(document.hidden){historyInterrupted=true;return;}
+  // App navigation hides the pitch but does not end an ongoing game.
+  // Preserve authentic, local observations until the next visible snapshot
+  // proves we have changed rooms, started another session or lost game data.
+  if(match.hidden||document.hidden){
+   if(sessionId||timeline.length)historyInterrupted=true;
+   return;
+  }
   const reading=liveSnapshot();
   if(!reading){
-   if(sessionId||timeline.length){timeline=[];sessionId='';sessionRoom=null;snapshot=null;lastSignature='';}
+   if(sessionId||timeline.length)resetObservations();
    return;
   }
   if(sessionRoom!==room||sessionId!==reading.key){
@@ -118,10 +127,13 @@
   }else if(reading.red!==prior.red||reading.blue!==prior.blue){
    const redDelta=reading.red-prior.red,blueDelta=reading.blue-prior.blue;
    const single=redDelta+blueDelta===1&&(redDelta===1||blueDelta===1);
-   const description=historyInterrupted?'Scoreboard changed while this tab was hidden.':
+   const description=historyInterrupted?'Scoreboard changed while away from the pitch; individual events are unknown.':
     single?(redDelta?'Red':'Blue')+' score increased by one (scorer unknown).':
     'Scoreboard changed by multiple points (cause unknown).';
    addObservation(description,reading);
+  }else if(historyInterrupted&&reading.elapsed-prior.elapsed>=3){
+   // An unchanged score never implies no activity while the view was hidden.
+   addObservation('Returned after viewing another screen; activity during the gap was not observed.',reading);
   }
   snapshot=reading;historyInterrupted=false;
  }
