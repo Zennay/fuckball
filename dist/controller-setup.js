@@ -384,6 +384,13 @@
   hint.textContent='Only the chosen stick is calibrated. Inverting axes affects analog movement, while D-pad directions stay unchanged. This preview never joins a room.';
   dialog.showModal();mapping.focus();
  };
+ // The gameplay recovery prompt may open the original setup directly.
+ // Opening it is not authorization to change controller ownership: only the
+ // player-initiated Bind selected controller to P1 action grants that right.
+ window.fuckballControllerSetup={open:()=>{
+  if(dialog.open){mapping.focus();return;}
+  launch.onclick();
+ }};
  window.addEventListener('fuckball-gamepad-config',event=>{
   const v=event.detail;
   if(!v||!kickValid(v.kick)||!Number.isFinite(v.deadzone)||v.deadzone<.15||
