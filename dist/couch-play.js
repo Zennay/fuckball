@@ -151,13 +151,13 @@
  let chosen='auto',availableSignature='',lastInput='0:0:false';
  let seatTwoLock=null,seatTwoSession=false;
  const neutral=()=>({x:0,y:0,kick:false});
- const isLocal=()=>typeof started!=='undefined'&&started&&
+ const activeCouchSession=()=>typeof started!=='undefined'&&started&&
   typeof replay!=='undefined'&&!replay&&
   typeof serverLink!=='undefined'&&!serverLink&&
   typeof peerConnected!=='undefined'&&!peerConnected&&
-  ['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value)&&
-  document.getElementById('joinScreen')?.hidden!==false&&
-  !pitch.hidden;
+  ['local','coop2v2','coop3v3','coop4v4','couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
+ const isLocal=()=>activeCouchSession()&&
+  document.getElementById('joinScreen')?.hidden!==false&&!pitch.hidden;
  function pads(){
   if(typeof navigator.getGamepads!=='function')return [];
   try{return Array.from(navigator.getGamepads()).filter(p=>p?.connected&&
@@ -180,7 +180,7 @@
  }
  // Reuse of the same Gamepad API port is not proof that the same human returned.
  function selected(){
-  if(!seatTwoSession||!isLocal())return candidate();
+  if(!seatTwoSession||!activeCouchSession())return candidate();
   if(!seatTwoLock)return null;
   const connected=pads().find(p=>p.index===seatTwoLock.index&&p.id===seatTwoLock.id);
   return connected&&connected.index!==playerOneIndex()?connected:null;
@@ -198,7 +198,7 @@
    '. Disconnecting or replacing it makes P2 neutral until you rebind explicitly.';
   return true;
  }
- const reservedPort=()=>seatTwoSession&&isLocal()?seatTwoLock?.index??null:null;
+ const reservedPort=()=>seatTwoSession&&activeCouchSession()?seatTwoLock?.index??null:null;
  const held=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const axis=n=>Number.isFinite(n)&&Math.abs(n)>=.30?Math.sign(n):0;
@@ -264,14 +264,14 @@
    availableSignature='';paint();return;
   }
   chosen=next;lastInput='0:0:false';availableSignature='';
-  if(seatTwoSession&&isLocal())bindSeatTwo();
+  if(seatTwoSession&&activeCouchSession())bindSeatTwo();
   paint();
   status.textContent=next==='auto'?
    'Player 2 will use the first connected controller not assigned to Player 1.':
    'Player 2 is assigned to controller port '+(Number(next)+1)+
     '. Disconnecting it will not reassign Player 1’s controller.';
  };
- bindP2.onclick=()=>{if(seatTwoSession&&isLocal())bindSeatTwo();else status.textContent=
+ bindP2.onclick=()=>{if(seatTwoSession&&activeCouchSession())bindSeatTwo();else status.textContent=
   'Choose a controller port and start local football; the game locks it at kickoff.';};
  function startMode(mode){
   if(typeof pendingSessionBlock==='function'){
