@@ -28,10 +28,22 @@
  const svg=button('↓ Export lineup card SVG',()=>transfer('svg'));
  panel.append(heading,description,score,counters,rows,buttons,status);
  pane.append(panel);panel.hidden=true;
+ // The renderer can briefly keep the previous room's player names after
+ // disconnect and during the next room's welcome. An admitted room code
+ // alone is not a fresh roster; both authoritative room metadata AND a new
+ // network snapshot must belong to this exact session before display/export.
+ function roomSession(){
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  return link?.room&&!link.quickMatchMode?link:null;
+ }
+ function hasFreshRoomSnapshot(link){
+  return !!link&&link.roomState?.room===link.room&&
+   typeof net!=='undefined'&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0&&
+   room?.state&&Array.isArray(room.state.players);
+ }
  function snapshot(){
-  const live=typeof serverLink!=='undefined'?serverLink:null;
-  if(!live?.room||live.quickMatchMode||!room?.state||
-     !Array.isArray(room.state.players))return null;
+  const live=roomSession();
+  if(!hasFreshRoomSnapshot(live))return null;
   const players=room.state.players;
   if(players.length>128)return null;
   const roster=[];
@@ -63,8 +75,22 @@
    'No active match score available · '+data.state;
  }
  function render(){
-  const data=snapshot();panel.hidden=!data;
-  if(!data){rows.replaceChildren();score.textContent='';counters.textContent='';return;}
+  const data=snapshot();
+  const waiting=!!roomSession()&&!data;
+  panel.hidden=!data&&!waiting;
+  if(!data){
+   // Never retain a prior room's player names or score while waiting for
+   // the next server snapshot, including a same-code room reconnect.
+   rows.replaceChildren();score.textContent='';counters.textContent='';
+   copy.disabled=csv.disabled=svg.disabled=true;
+   panel.dataset.snapshotState=waiting?'waiting':'unavailable';
+   status.textContent=waiting?
+    'Waiting for this room’s first server snapshot. Player names and exports stay hidden until it arrives.':'';
+   return;
+  }
+  panel.dataset.snapshotState='fresh';
+  if(status.textContent.startsWith('Waiting for this room'))status.textContent=
+   'Current room snapshot received. Exports still require your confirmation.';
   score.textContent=summary(data);
   counters.textContent='Red '+group(data.roster,1).length+' · Blue '+group(data.roster,2).length+
    ' · inactive '+group(data.roster,0).length+' · '+data.roster.length+' visible players';
@@ -140,32 +166,48 @@
   return image;
  }
  async function transfer(type){
-  const data=snapshot();
+  const data=snapshot(),sourceLink=roomSession();
   if(!data||!data.roster.length){
-   status.textContent='No current Custom Room roster is available.';render();return;
+   render();
+   status.textContent='No fresh current Custom Room roster is available. Wait for this room’s first server snapshot.';
+   return;
   }
   if(!permission()){status.textContent='Sharing cancelled; no data exported.';return;}
+  // The confirmation dialog can outlive the connection it describes.
+  // Revalidate session identity and roster freshness before sending names
+  // to the clipboard or building a shareable file.
+  const current=snapshot();
+  if(!current||roomSession()!==sourceLink){
+   render();status.textContent='Room changed during confirmation. Nothing exported.';
+   return;
+  }
   try{
    if(type==='copy'){
     if(typeof navigator.clipboard?.writeText!=='function')throw Error('Clipboard unavailable. Use CSV instead.');
-    await navigator.clipboard.writeText(textSummary(data));
+    await navigator.clipboard.writeText(textSummary(current));
     status.textContent='The current team list was copied locally. Names are shared only when you paste it.';
    }else if(type==='csv'){
     const output=[['Observed UTC','Snapshot phase','Red score','Blue score','Elapsed seconds','Team','Player label','Type','Host'],
-     ...data.roster.map(p=>[data.at.toISOString(),data.state,data.score?.red??'',
-      data.score?.blue??'',data.score?.seconds??'',mode(p.team),p.name,p.bot?'Bot':'Human',
+     ...current.roster.map(p=>[current.at.toISOString(),current.state,current.score?.red??'',
+      current.score?.blue??'',current.score?.seconds??'',mode(p.team),p.name,p.bot?'Bot':'Human',
       p.host?'Yes':'No'])];
     const eol=String.fromCharCode(13,10);
     download('fuckball-current-room-sheet.csv',String.fromCharCode(0xFEFF)+
       output.map(row=>row.map(csvValue).join(',')).join(eol)+eol,'text/csv;charset=utf-8');
     status.textContent='Current team sheet CSV exported locally. Do not share names without consent.';
    }else if(type==='svg'){
-    download('fuckball-current-room-sheet.svg',svgCard(data),'image/svg+xml;charset=utf-8');
+    download('fuckball-current-room-sheet.svg',svgCard(current),'image/svg+xml;charset=utf-8');
     status.textContent='Shareable snapshot card exported locally. Changes after capture are not tracked.';
    }
   }catch(e){status.textContent='Export failed: '+(e.message||'Browser access unavailable');}
  }
  const shown=()=>typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
  setInterval(()=>{if(shown())render();else panel.hidden=true;},1500);
+ // Native join/leave/reconnect emits this existing event synchronously;
+ // clear stale on-screen names immediately instead of for up to 1.5 seconds.
+ window.addEventListener('fuckball:native-session-state',render);
+ document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&shown())render();
+ });
  render();
 })();
