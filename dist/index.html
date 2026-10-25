@@ -98,7 +98,19 @@
 <section id="joinScreen" class="join-screen" hidden><div class="join-card"><span class="eyebrow">FUCKBALL ROOM</span><h2>Join room <b id="joinRoomCode"></b></h2>
 <div id="joinPlay"><label>Nickname<input id="joinName" maxlength="25" autocomplete="nickname" placeholder="Your name"></label><label class="join-room-key">Private room access key (when required)<input id="joinRoomAccessKey" type="password" maxlength="64" autocomplete="off" placeholder="Shared separately by the host"></label><p class="join-room-key-hint">The key is never stored or included in room links. Use HTTPS/WSS for private rooms.</p><label class="join-spectator-option"><input id="joinSpectator" type="checkbox"> Watch first · join as spectator</label><p class="join-spectator-help">Watch first is always spectator-only. During a live human-v-human match, newcomers watch; a solo practice host may still welcome a first challenger. The host can arrange a later bench or team slot.</p><button id="joinWithName" class="primary">Join</button><button id="joinGuest">Join as guest</button><p class="join-or">or</p><button id="joinShowLogin" class="subtle">Log in / create account</button></div>
 <form id="joinAuth" hidden><label>Username<input id="authUser" maxlength="20" autocomplete="username"></label><label>Password<input id="authPass" type="password" maxlength="100" autocomplete="current-password"></label><div class="two-buttons"><button id="authLogin" class="primary" type="submit">Log in</button><button id="authRegister" type="button">Create account</button></div><button id="authBack" class="subtle" type="button">← Back</button></form>
-<p id="joinError" class="error" role="alert"></p><p id="joinAccount" class="join-account"></p></div></section>
+<p id="joinError" class="error" role="alert"></p>
+<div id="joinAlternatives" class="join-alternatives" hidden>
+ <label for="joinDifferentCode">Wrong or expired invitation? Enter another room code
+ <input id="joinDifferentCode" type="text" inputmode="text" maxlength="8"
+  autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Another eight-character room code" placeholder="8-character room code"></label>
+ <div class="join-alternative-actions">
+  <button id="joinChangeRoom" type="button">Use this code</button>
+  <button id="joinBrowseRooms" type="button">Browse public rooms</button>
+  <button id="joinCancel" type="button">Back to Home</button>
+ </div>
+ <p class="join-alternative-hint">Changing rooms starts no connection. You choose when to join; private rooms still require host permission.</p>
+</div>
+<p id="joinAccount" class="join-account"></p></div></section>
 <div id="toast" role="status" hidden></div>
 <dialog id="settingsDialog"><div class="dialog-head"><h2>Settings</h2><button data-close>×</button></div><label>Player name<input id="nickname" maxlength="25" value="Player"></label><label>Zoom<input id="zoom" type="range" min="0.6" max="2" step="0.05" value="1"></label><label class="check"><input id="soundEnabled" type="checkbox" checked> Sound effects</label><label class="check"><input id="preserveGuestSlot" type="checkbox"> Keep my guest player slot for 30s after a connection drop</label><p class="tiny">Signed-in players reconnect automatically. Guest recovery uses a private, temporary session ticket on this device.</p><button id="saveSettings" class="primary">Save</button></dialog>
 <dialog id="editorDialog" class="wide"><div class="dialog-head"><h2>Edit stadium</h2><button data-close>×</button></div><p>.hbs / JSON5. Applying a stadium restarts the match.</p><textarea id="stadiumCode" spellcheck="false" aria-label="Stadium code"></textarea><div id="editorError" class="error"></div><button id="applyStadium" class="primary">Apply stadium</button></dialog>
