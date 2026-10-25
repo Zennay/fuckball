@@ -17,7 +17,7 @@
  panel.append(heading,description,metric,dismiss);
  const hud=document.getElementById('hudCorner');
  (hud?.parentElement||match).append(panel);
- let current='clear',dismissed=null,latestRoom=null;
+ let current='clear',dismissed=null,session=null,roster=null,rosterFreshAt=0;
  function clear(){
   panel.hidden=true;current='clear';dismissed=null;
  }
@@ -26,26 +26,37 @@
  });
  const healthy=ms=>Number.isFinite(ms)&&ms>=1&&ms<=10000;
  const readings=()=>{
-  // Native server-issued RTT and direct-peer RTT are different instruments.
-  // Never blend peer jitter or stale peer metrics into a native room indicator.
-  const native=!!serverLink?.room;
-  const nativeSample=native&&serverLink.serverPings instanceof Map?
-   serverLink.serverPings.get(networkPlayerId):null;
+  // Server latencyRoster produces a fresh Map on every server-issued sample.
+  // Its previous values are not valid indefinitely: the connection details
+  // pane also expires old native server challenge receipts after six seconds.
+  const native=!!serverLink?.room,now=performance.now();
+  const sampleMap=native&&serverLink.serverPings instanceof Map?
+   serverLink.serverPings:null;
+  if(sampleMap!==roster){roster=sampleMap;rosterFreshAt=roster?now:0;}
+  const fresh=!!roster&&now-rosterFreshAt<=6000;
+  const nativeSample=fresh?roster.get(networkPlayerId):null;
   const ms=native?(healthy(nativeSample)?nativeSample:null):
    (healthy(net.rtt)?net.rtt:null);
   const source=native?'server':'peer';
   const jitter=!native&&healthy(net.jitter)?net.jitter:null;
-  const recent=net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)
-   ?Math.max(0,performance.now()-net.lastSnapshot):null;
+  // A stopped/paused round is intentionally not sending match snapshots.
+  // Do not label ordinary lobby or pause as an interrupted connection.
+  const running=native?serverLink.roomState?.started===true&&
+   serverLink.roomState?.paused!==true:started&&!paused;
+  const recent=running&&net.lastSnapshot>0&&Number.isFinite(net.lastSnapshot)?
+   Math.max(0,now-net.lastSnapshot):null;
   return {ms,source,jitter,recent};
  };
  function refresh(){
   const native=!!serverLink?.room;
   if(document.hidden||match.hidden||replay||(!native&&!peerConnected)){
-   clear();latestRoom=null;return;
+   clear();session=null;roster=null;rosterFreshAt=0;return;
   }
-  const roomId=native?'server:'+serverLink.room:'peer';
-  if(roomId!==latestRoom){latestRoom=roomId;clear();}
+  // A room code can be reused by a new socket/player. Warnings dismissed in
+  // the previous session must not hide a real new-session warning.
+  const key=native?serverLink:
+   (typeof peer!=='undefined'&&peer?peer:channel);
+  if(key!==session){session=key;clear();roster=null;rosterFreshAt=0;}
   const {ms,source,jitter,recent}=readings();
   panel.dataset.transport=native?'native':'peer';
   let severity='clear';

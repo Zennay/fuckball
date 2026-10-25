@@ -57,11 +57,33 @@
   }
   return {ok:true,pads:[byId[3],byId[4]]};
  }
+ // Readiness in a live match describes the EXACT already locked human
+ // seats, never a fresh pool of currently available gamepads. Otherwise a new
+ // stranger's pad could make a disconnected P3/P4 appear "READY 2/2" even
+ // while actual gameplay correctly kept that original seat neutral.
+ const activeLockedMatch=()=>isMode()&&typeof started!=='undefined'&&started&&
+  typeof replay!=='undefined'&&!replay&&
+  typeof serverLink!=='undefined'&&!serverLink&&
+  typeof peerConnected!=='undefined'&&!peerConnected;
  function preview(){
+  if(activeLockedMatch()){
+   const players=[3,4].map(id=>{
+    const original=assigned?.[id-3]||null;
+    const live=padFor(id);
+    return{seat:id,index:original?.index??null,
+     id:String(original?.id||'Not assigned').slice(0,60),
+     connected:!!live};
+   });
+   const missing=players.filter(p=>!p.connected).map(p=>'P'+p.seat);
+   return{ok:missing.length===0,locked:true,players,
+    message:missing.length?
+     missing.join(' and ')+' controller disconnected or replaced. Input stays neutral until you explicitly rebind the original seat.':
+     'Blue P3 and P4 remain locked to their original two controllers.'};
+  }
   const result=choosePads();
-  if(!result.ok)return {ok:false,message:result.message,players:[]};
-  return {ok:true,players:result.pads.map((p,i)=>({seat:i+3,index:p.index,
-   id:String(p.id||'Controller').slice(0,60)})),
+  if(!result.ok)return {ok:false,locked:false,message:result.message,players:[]};
+  return {ok:true,locked:false,players:result.pads.map((p,i)=>({seat:i+3,index:p.index,
+   id:String(p.id||'Controller').slice(0,60),connected:true})),
    message:'Blue Player 3 and Player 4 have separate ready controllers.'};
  }
  function prepare(){
@@ -139,6 +161,16 @@
   }else last='';
   requestAnimationFrame(frame);
  }
- window.fuckballCouchRivals=Object.freeze({prepare,preview,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
+ // A seat is healthy only when the exact controller locked to that human
+ // player is still present. Never substitute another person's connected pad.
+ function seatStatus(){
+  const seats=[3,4].map(id=>({
+   seat:id,connected:!!padFor(id),
+   port:assigned?.[id-3]?.index??null
+  }));
+  return {assigned:!!assigned,ok:!!assigned&&seats.every(p=>p.connected),
+   missing:seats.filter(p=>!p.connected).map(p=>p.seat),seats};
+ }
+ window.fuckballCouchRivals=Object.freeze({prepare,preview,seatStatus,read,describe,rebind,names,setNames,setSources,available:()=>pads().map(p=>({index:p.index,id:String(p.id||'Gamepad').slice(0,45)}))});
  requestAnimationFrame(frame);
 })();

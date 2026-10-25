@@ -31,22 +31,33 @@
   if(document.hidden||!panel.open||home.hidden||now-lastTime<120)return;
   lastTime=now;
   const selection=window.fuckballCouchRivals.preview();
-  const status=selection.ok?'BLUE READY · 2 / 2 separate standard gamepads':
-   (selection.message||'Waiting for two separate controllers');
+  const status=selection.locked?
+   (selection.ok?'BLUE LIVE · BOTH ORIGINAL CONTROLLERS CONNECTED':
+    'BLUE LIVE · LOST SEAT · REBIND REQUIRED · '+selection.message):
+   selection.ok?'BLUE READY · 2 / 2 separate standard gamepads':
+    (selection.message||'Waiting for two separate controllers');
   if(status!==lastStatus){lastStatus=status;info.textContent=status;}
   let attached=[];
   try{attached=Array.from(navigator.getGamepads?.()||[]);}catch{}
   for(const id of [3,4]){
    const row=rows.get(id),choice=selection.players?.find(p=>p.seat===id);
-   const pad=choice&&attached[choice.index];
-   if(!pad||!pad.connected||String(pad.id||'Controller').slice(0,60)!==choice.id){
+   // A new gamepad with another hardware identity is NOT the locked seat.
+   // Prefer the authoritative lock receipt over the live free-port preview.
+   const pad=choice&&Number.isSafeInteger(choice.index)?attached[choice.index]:null;
+   if(!choice||choice.connected===false||!pad||!pad.connected||
+      String(pad.id||'Controller').slice(0,60)!==choice.id){
     row.row.classList.remove('ready');
-    row.location.textContent='NO RESERVED CONTROLLER';
-    row.activity.textContent='Connect a standard controller and assign a unique port.';
+    const previous=choice&&Number.isSafeInteger(choice.index)?
+     'PORT '+(choice.index+1)+' · ORIGINAL CONTROLLER LOST':'NO RESERVED CONTROLLER';
+    row.location.textContent=previous;
+    row.activity.textContent=selection.locked?
+     'P'+id+' input is NEUTRAL. Reconnect the original device or choose Bind / replace Player '+id+'.':
+     'Connect a standard controller and assign a unique port.';
     continue;
    }
    row.row.classList.add('ready');
-   row.location.textContent='PORT '+(pad.index+1)+' · '+choice.id.slice(0,32);
+   row.location.textContent='PORT '+(pad.index+1)+' · '+choice.id.slice(0,32)+
+    (selection.locked?' · LOCKED P'+id:' · PREVIEW');
    let x=Number(pad.axes?.[0])||0,y=Number(pad.axes?.[1])||0;
    x=Math.abs(x)<.3?0:Math.sign(x);y=Math.abs(y)<.3?0:Math.sign(y);
    if(held(pad,14))x=-1;if(held(pad,15))x=1;

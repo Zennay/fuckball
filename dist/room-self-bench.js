@@ -29,12 +29,16 @@
  requestBanner.append(requestText,hostPause);
  const prompt=make('button','Pause requested · Open room controls','self-bench-pause-prompt');
  prompt.type='button';prompt.hidden=true;prompt.setAttribute('aria-label','Open native room controls to review pause request');
- const match=document.getElementById('matchView');if(match)match.append(prompt);
+ // The 30-second authoritative pause request stays visible on Home/My Games.
+ // It only opens existing native room controls; it never pauses automatically.
+ document.body.append(prompt);
  panel.append(title,description,state,buttons,requestBanner,feedback,rules);
  host.prepend(panel);
  const validId=id=>Number.isSafeInteger(id)&&id>0;
  const teamOf=p=>typeof p?.team==='number'?p.team:p?.team?.id;
- let pending=null,previousRoom=null,latest='',nextPauseAsk=0;
+ let pending=null,previousRoom=null,previousLink=null,latest='',nextPauseAsk=0;
+ let pauseAwaiting=null;
+ const socketOpen=link=>link?.ws?.readyState===1;
  function native(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   if(!link?.room||link.quickMatchMode||!link.roomState||!validId(networkPlayerId)||
@@ -54,40 +58,56 @@
   const involved=Array.isArray(data.pendingSubs)&&data.pendingSubs.some(x=>
    x&&(x.inId===networkPlayerId||x.outId===networkPlayerId||x.requestedBy===networkPlayerId));
   return{link,side,chosen,ready:ready&&chosen!==0,disconnected,involved,requested,
+   online:socketOpen(link),
    started:typeof started!=='undefined'&&started===true,
    paused:typeof paused!=='undefined'&&paused===true};
  }
  function reset(){
-  pending=null;previousRoom=null;latest='';
-  panel.hidden=true;requestBanner.hidden=true;prompt.hidden=true;feedback.textContent='';
+  pending=null;previousRoom=null;previousLink=null;pauseAwaiting=null;
+  nextPauseAsk=0;latest='';panel.hidden=true;requestBanner.hidden=true;prompt.hidden=true;feedback.textContent='';
  }
  function render(){
   const data=native();
   if(!data){if(!panel.hidden)reset();return;}
   panel.hidden=false;
-  if(previousRoom!==data.link.room){
-   pending=null;nextPauseAsk=0;previousRoom=data.link.room;feedback.textContent='';
+  if(previousRoom!==data.link.room||previousLink!==data.link){
+   pending=null;pauseAwaiting=null;nextPauseAsk=0;
+   previousRoom=data.link.room;previousLink=data.link;feedback.textContent='';
   }
   const role=data.side===1?'Playing for Red':data.side===2?'Playing for Blue':
    data.chosen===1?'Waiting on Red bench':data.chosen===2?'Waiting on Blue bench':
    'Neutral spectator';
-  const allowed=!data.disconnected&&!data.involved;
+  const allowed=data.online&&!data.disconnected&&!data.involved;
+  if(pauseAwaiting){
+   if(data.requested?.by===networkPlayerId){
+    nextPauseAsk=Date.now()+45000;
+    feedback.textContent='Native room confirmed your pause request. Only the host can pause.';
+    pauseAwaiting=null;
+   }else if(!data.online||Date.now()-pauseAwaiting.at>=6500){
+    feedback.textContent=data.online?
+     'No server receipt for the pause request. Check room status before trying again.':
+     'The connection closed before the pause request was confirmed. Reconnect first.';
+    pauseAwaiting=null;
+   }
+  }
   state.textContent=role+
    (data.started?(data.paused?' · match paused':' · match in progress'):' · lobby / break')+
    (data.side===0&&data.chosen!==0?(data.ready?' · AVAILABLE FOR SUB':' · NOT MARKED AVAILABLE'):'')+
    (data.involved?' · active substitution request':'')+
-   (data.disconnected?' · reconnecting':'');
+   (data.disconnected?' · reconnecting':'')+
+   (!data.online?' · room connection not open':'');
   red.hidden=blue.hidden=spec.hidden=data.side!==0;
   sit.hidden=data.side===0;
   askPause.hidden=!(data.side>0&&data.started&&!data.paused&&!data.link.isOwner);
-  askPause.disabled=data.disconnected||!!data.requested||Date.now()<nextPauseAsk;
+  askPause.disabled=!data.online||data.disconnected||!!data.requested||
+   !!pauseAwaiting||Date.now()<nextPauseAsk;
   requestBanner.hidden=!(data.link.isOwner&&data.requested&&data.started&&!data.paused);
   prompt.hidden=requestBanner.hidden||!!document.getElementById('pauseMenu')&&!document.getElementById('pauseMenu').hidden;
   if(!requestBanner.hidden){
    const nativePlayer=room?.state?.players?.find(x=>x.id===data.requested.by);
    const name=typeof nativePlayer?.name==='string'?nativePlayer.name.trim().slice(0,25):'An active player';
    requestText.textContent=name+' requested a real pause for bench rotation. You decide whether to pause.';
-   hostPause.disabled=!data.link.isOwner||!data.started||data.paused;
+   hostPause.disabled=!data.online||!data.link.isOwner||!data.started||data.paused;
   }
   readyButton.hidden=data.side!==0||data.chosen===0;
   readyButton.disabled=!allowed||data.side!==0||data.chosen===0;
@@ -124,7 +144,12 @@
   if(latest!==signature)latest=signature;
  }
  function dispatch(type,team){
-  const data=native();if(!data||data.disconnected||data.involved||pending)return;
+  const data=native();
+  if(!data||!data.online||data.disconnected||data.involved||pending){
+   if(data&&!data.online)feedback.textContent=
+    'Not connected to the native room. Reconnect before changing the bench.';
+   return;
+  }
   if(type==='bench'&&(data.side!==0||![0,1,2].includes(team)||data.chosen===team))return;
   if(type==='sit'&&(![1,2].includes(data.side)||data.started&&!data.paused))return;
   if(type==='ready'&&(data.side!==0||![1,2].includes(data.chosen)))return;
@@ -143,23 +168,30 @@
  spec.onclick=()=>dispatch('bench',0);
  askPause.onclick=()=>{
   const data=native();
-  if(!data||!data.started||data.paused||data.link.isOwner||data.side===0||
-   data.disconnected||data.requested||Date.now()<nextPauseAsk)return;
-  nextPauseAsk=Date.now()+45000;
-  feedback.textContent='Pause requested. Only the host can authorize a game pause; your active slot is unchanged.';
+  if(!data||!data.online||!data.started||data.paused||data.link.isOwner||data.side===0||
+   data.disconnected||data.requested||pauseAwaiting||Date.now()<nextPauseAsk){
+   if(data&&!data.online)feedback.textContent='Room connection unavailable; no pause request was sent.';
+   return;
+  }
+  // Native send does nothing if the socket is closed. A sent request is
+  // not a confirmed request; the room's pauseRequest.by is authoritative.
+  pauseAwaiting={at:Date.now()};
+  feedback.textContent='Pause request sent; awaiting confirmation from the native room.';
   try{data.link.send({type:'selfPauseRequest'});}
-  catch{nextPauseAsk=0;feedback.textContent='Could not contact the room host.';}
+  catch{pauseAwaiting=null;feedback.textContent='Could not contact the room host.';}
  };
  hostPause.onclick=()=>{
   const data=native();
   const nativeButton=document.getElementById('pauseButton');
-  if(!data?.link.isOwner||!data.started||data.paused||!data.requested||!nativeButton||nativeButton.disabled)return;
+  if(!data?.online||!data.link.isOwner||!data.started||data.paused||
+   !data.requested||!nativeButton||nativeButton.disabled)return;
   nativeButton.click();feedback.textContent='Native pause requested by host. Wait for the room server to confirm.';
  };
  prompt.onclick=()=>{
   const data=native();
-  if(!data?.link.isOwner||!data.requested||!data.started||data.paused)return;
+  if(!data?.online||!data.link.isOwner||!data.requested||!data.started||data.paused)return;
   if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  else document.getElementById('tabPlay')?.click();
   hostPause.focus({preventScroll:true});
  };
  sit.onclick=()=>dispatch('sit');
