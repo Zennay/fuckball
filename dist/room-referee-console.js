@@ -35,7 +35,24 @@
  pitchPrompt.type='button';pitchPrompt.hidden=true;
  pitchPrompt.setAttribute('aria-label','Referee: open room menu to consider pause request');
  pitch.append(pitchPrompt);
- let lastRoom=null,lastKey='';
+ // A human-appointed referee can be on Home / My Games when an active team
+ // asks the room for a timed pause. Keep the original permission-bound action
+ // reachable without changing the server's role or pause authority.
+ const dock=make('aside',null,'room-referee-global');
+ dock.hidden=true;dock.setAttribute('role','region');
+ dock.setAttribute('aria-label','Live referee pause request');
+ const dockCopy=make('div',null,'room-referee-global-copy');
+ const dockHeading=make('strong','PAUSE REQUEST · YOU ARE REFEREE');
+ const dockStatus=make('p');
+ dockStatus.setAttribute('role','status');dockStatus.setAttribute('aria-live','polite');
+ dockCopy.append(dockHeading,dockStatus);
+ const dockActions=make('div',null,'room-referee-global-actions');
+ const dockPause=make('button','Ⅱ Pause game','primary');
+ const dockView=make('button','↗ Review match');
+ dockPause.type=dockView.type='button';
+ dockActions.append(dockPause,dockView);dock.append(dockCopy,dockActions);
+ document.body.append(dock);
+ let lastRoom=null,lastLink=null,lastKey='',pausePending=null;
  const validId=v=>Number.isSafeInteger(v)&&v>0;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
  function snapshot(){
@@ -63,20 +80,44 @@
    Number.isSafeInteger(state.pauseRequest.expiresAt)&&
    state.pauseRequest.expiresAt>Date.now()?state.pauseRequest:null;
   return{link,people,referee,refereeName:person?.name||null,
-   isReferee:referee>0&&referee===networkPlayerId,
+   isReferee:!!person&&referee===networkPlayerId,
    isHost:link.isOwner===true,request:req,
-   running:typeof started!=='undefined'&&started===true,
-   paused:typeof paused!=='undefined'&&paused===true};
+   online:link.ws?.readyState===1,
+   // Use the same server-authoritative match snapshot as the actual room.
+   // Stale local solo/playback state cannot authorize a new room's pause.
+   running:state.started===true,paused:state.paused===true};
  }
  function render(){
   const d=snapshot();
-  if(!d){panel.hidden=true;pitchPrompt.hidden=true;lastKey='';lastRoom=null;return;}
+  if(!d){panel.hidden=true;pitchPrompt.hidden=true;dock.hidden=true;
+   lastKey='';lastRoom=null;lastLink=null;pausePending=null;return;}
   panel.hidden=false;
-  if(lastRoom!==d.link.room){lastKey='';lastRoom=d.link.room;notice.textContent='';}
-  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused]);
+  if(lastRoom!==d.link.room||lastLink!==d.link){
+   lastKey='';lastRoom=d.link.room;lastLink=d.link;
+   notice.textContent='';pausePending=null;
+  }
+  if(!d.running||d.paused||!d.online)pausePending=null;
+  if(pausePending&&Date.now()-pausePending.at>3000){
+   pausePending=null;
+   notice.textContent='No server pause confirmation yet. You may explicitly retry.';
+  }
+  const liveRequest=d.isReferee&&!!d.request&&d.running&&!d.paused&&d.online;
+  // The original on-pitch shortcut remains the only prompt on the pitch.
+  // Home and My Games instead expose a body-mounted contextual action.
+  dock.hidden=!liveRequest||!pitch.hidden||document.hidden;
+  if(!dock.hidden){
+   const actor=d.people.find(p=>p.id===d.request.by);
+   const seconds=Math.max(0,Math.ceil((d.request.expiresAt-Date.now())/1000));
+   dockStatus.textContent=(actor?.name||'An active human')+
+    ' asked to pause the current server match · '+seconds+
+    's left. Only your explicit vote can request a pause.'+
+    (pausePending?' · Awaiting native confirmation.':'');
+   dockPause.disabled=!!pausePending;
+  }
+  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused,d.online]);
   // Menu-open state changes independently of room packets; keep the optional
   // pitch prompt correct even when the authoritative room data is unchanged.
-  pitchPrompt.hidden=!(d.isReferee&&d.request&&d.running&&!d.paused&&
+  pitchPrompt.hidden=!(liveRequest&&
    document.getElementById('pauseMenu')?.hidden&&!document.hidden&&!pitch.hidden);
   if(key===lastKey)return;
   lastKey=key;
@@ -95,8 +136,8 @@
   actions.hidden=!d.isReferee;
   pause.hidden=!d.running||d.paused;
   resume.hidden=!d.running||!d.paused;
-  pause.disabled=!d.isReferee||!d.running||d.paused;
-  resume.disabled=!d.isReferee||!d.running||!d.paused;
+  pause.disabled=!d.isReferee||!d.running||d.paused||!d.online||!!pausePending;
+  resume.disabled=!d.isReferee||!d.running||!d.paused||!d.online;
   const pending=d.request&&d.running&&!d.paused;
   promptNote.hidden=!(pending&&(d.isReferee||d.isHost));
   if(!promptNote.hidden){
@@ -122,12 +163,29 @@
  };
  function changePause(value){
   const d=snapshot();
-  if(!d?.isReferee||!d.running||d.paused===value)return;
+  if(!d?.isReferee||!d.running||d.paused===value||!d.online||
+     value&&pausePending)return;
   d.link.send({type:'refereePause',value});
+  if(value)pausePending={link:d.link,at:Date.now()};
   notice.textContent=(value?'Pause':'Resume')+' requested by the appointed referee. Waiting for the native room update.';
  }
  pause.onclick=()=>changePause(true);
  resume.onclick=()=>changePause(false);
+ dockPause.onclick=()=>{
+  const d=snapshot();
+  if(d?.isReferee&&d.request&&d.online&&d.running&&!d.paused){
+   render();if(!pause.disabled)pause.click();
+   render();
+  }
+ };
+ dockView.onclick=()=>{
+  const d=snapshot();if(!d?.isReferee||!d.request)return;
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  render();
+  panel.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  (pause.disabled?panel:pause).focus?.({preventScroll:true});
+ };
  pitchPrompt.onclick=()=>{
   const d=snapshot();
   if(!d?.isReferee||!d.request)return;
@@ -135,6 +193,6 @@
   pause.focus({preventScroll:true});
  };
  setInterval(()=>{if(!document.hidden)render();},1300);
- document.addEventListener('visibilitychange',()=>{if(document.hidden)pitchPrompt.hidden=true;else render();});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){pitchPrompt.hidden=true;dock.hidden=true;}else render();});
  render();
 })();
