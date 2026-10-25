@@ -149,11 +149,19 @@
  }
  // Suggestions are not generic controller preferences: the measured resting
  // axes belong to one currently connected physical source and one stick.
+ // A previewed gamepad can differ from the physical controller that owns
+ // Player 1. Reuse the gameplay module's live index-and-identity seat lock.
+ function isCurrentP1Pad(pad){
+  const game=window.fuckballGamepad;
+  return !!pad?.connected&&game?.sourceIndex?.()===pad.index&&
+   game?.sourceStatus?.()?.connected===true;
+ }
  function suggestionMatches(pad){
   return !!pad?.connected&&!!suggestionIdentity&&
    pad.index===suggestionIdentity.index&&pad.id===suggestionIdentity.id&&
    config.stick===suggestionIdentity.stick&&
-   (window.fuckballCouchPad?.reservedPort?.()??null)!==pad.index;
+   (window.fuckballCouchPad?.reservedPort?.()??null)!==pad.index&&
+   isCurrentP1Pad(pad);
  }
  function read(){
   try{
@@ -380,6 +388,11 @@
   const reserved=window.fuckballCouchPad?.reservedPort?.()??null;
   if(pad.index===reserved){
    hint.textContent='This controller is reserved for Player 2. Select a P1 controller before measuring P1 stick drift.';
+   return;
+  }
+  if(!isCurrentP1Pad(pad)){
+   clearSuggestion();
+   hint.textContent='This controller is only a preview. Bind selected controller to P1 before measuring its live deadzone.';
    return;
   }
   sampling={index:pad.index,id:pad.id,started:performance.now(),
