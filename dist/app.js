@@ -221,6 +221,14 @@ function replaySessionConflict(){
  if(serverLink)return 'Cancel the connecting online room or human search before opening a replay.';
  if(peerConnected)return 'Disconnect from your current direct-peer match before opening a replay.';
  if(peer)return 'Finish or cancel the direct-peer connection before opening a replay.';
+ // Home/My Games can hide a still-running local or Couch Rivals match.
+ // A replay opened from those views would silently replace its current score,
+ // player slots and progress. Block that hidden-match path; a conscious replay
+ // selection from the visible pitch retains the original playback behavior.
+ if(started&&!replay&&$('matchView').hidden)
+  return 'Your local match is still active. Return to the pitch and choose Stop match before opening a replay.';
+ if(room.isRecording())
+  return 'Finish and save the active local recording before opening a replay.';
  const nativeQueue= document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  if(nativeQueue)return 'Finish or cancel the human matchmaking queue or ready check first.';
  return '';
