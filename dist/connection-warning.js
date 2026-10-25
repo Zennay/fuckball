@@ -72,10 +72,13 @@
   // the old warning had no timestamp and stayed permanently silent.
   // Start timing from observed active play, not from stale previous rounds;
   // paused lobbies and hidden/background tabs restart this grace window.
-  const last=running&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
-   Math.max(net.lastSnapshot,playStartedAt):playStartedAt;
-  const recent=running&&last!==null?Math.max(0,now-last):null;
-  const neverReceived=running&&!(Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0);
+  // Only a frame observed during THIS active-play period counts as live.
+  // A cached timestamp from a prior room/paused round must not look current.
+  const liveFrame=running&&Number.isFinite(net.lastSnapshot)&&
+   net.lastSnapshot>=playStartedAt&&net.lastSnapshot<=now;
+  const last=running?(liveFrame?net.lastSnapshot:playStartedAt):null;
+  const recent=last===null?null:Math.max(0,now-last);
+  const neverReceived=running&&!liveFrame;
   return {ms,source,jitter,recent,neverReceived};
  };
  function refresh(){
@@ -103,7 +106,7 @@
    if(severity==='stalled'){
     heading.textContent='GAME UPDATES DELAYED';
     description.textContent=neverReceived?
-     'No live match snapshot has arrived. Check your connection before relying on the displayed position.':
+     'No new live match snapshot has arrived in this play period. Check the connection before relying on displayed positions.':
      'No recent match snapshot. Your connection may be interrupted; avoid relying on the displayed position.';
    }else if(severity==='poor'){
     heading.textContent='POOR CONNECTION';
