@@ -74,8 +74,9 @@
     now[0]==='queue'?'↗ View ready check':'↗ Return to original session';
   }
   for(const button of grid.querySelectorAll('[data-saved-replay]')){
-   button.disabled=!!now;
-   button.title=now?'Finish or explicitly close the current game before opening a saved recording.':'';
+   button.disabled=!!now||busy;
+   button.title=busy?'A saved replay is already loading.':
+    now?'Finish or explicitly close the current game before opening a saved recording.':'';
   }
  }
  liveReturn.addEventListener('click',()=>{
@@ -151,25 +152,42 @@
   Number.isSafeInteger(r.createdAt)&&r.createdAt>0&&r.createdAt<=Date.now()+86400000&&
   Number.isSafeInteger(r.size)&&r.size>0&&r.size<=32*1048576&&
   Number.isSafeInteger(r.frames)&&r.frames>=0&&r.frames<=86400000;
- async function watch(item){
-  if(busy)return;
-  const now=active();
-  if(now){
-   note.textContent='Return to or explicitly close '+now[1].toLowerCase()+
-    ' before opening another saved recording.';
-   refreshSession();return;
-  }
-  busy=true;note.textContent='Opening local recording…';
+ function reportSessionConflict(){
+  const existing=active();
+  if(!existing)return false;
+  note.textContent='Your '+existing[1].toLowerCase()+
+   ' is still active. Finish or explicitly close it before opening another replay.';
+  refreshSession();return true;
+ }
+ async function refreshOpenedAnnotations(){
   try{
-   const saved=await ReplayLibrary.get(item.id);
-   if(saved.item.id!==item.id||saved.bytes.length>32*1048576)
-    throw Error('Saved recording is unavailable.');
-   loadReplay(saved.bytes,item.name);
-   activeLocalReplayId=item.id;
    if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
    if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
    note.textContent='Replay opened from this browser.';
-  }catch(error){note.textContent='Could not open replay: '+(error.message||'Storage error');}
+  }catch{
+   // A failed private notes store must not be reported as a failed HBR2
+   // playback after the engine already switched to the saved recording.
+   note.textContent='Replay opened. Saved notes are temporarily unavailable.';
+  }
+ }
+ async function watch(item){
+  if(busy||reportSessionConflict())return;
+  busy=true;note.textContent='Opening local recording…';refreshSession();
+  try{
+   const saved=await ReplayLibrary.get(item.id);
+   if(!saved?.item||saved.item.id!==item.id||
+      !saved.bytes||!Number.isSafeInteger(saved.bytes.byteLength)||
+      !saved.bytes.byteLength||saved.bytes.byteLength>32*1048576)
+    throw Error('Saved recording is unavailable.');
+   // IndexedDB is async. A real human may start an online search, direct
+   // peer or LOCAL match before it resolves; honor the later live session.
+   const newer=active();
+   if(newer)throw Error('Your '+newer[1].toLowerCase()+
+    ' became active while reading the recording. Nothing was replaced.');
+   loadReplay(saved.bytes,saved.item.name);
+   activeLocalReplayId=item.id;
+   await refreshOpenedAnnotations();
+  }catch(error){note.textContent='Could not open replay: '+(error?.message||'Storage error');}
   finally{busy=false;refreshSession();}
  }
  function card(title,subtitle,tag,buttonText,handler){
@@ -185,10 +203,10 @@
  async function render(){
   const token=++version;
   try{
-   const all=(await ReplayLibrary.list()).filter(validReplay).slice(0,30);
+   const all=(await ReplayLibrary.list()).filter(validReplay);
    if(token!==version)return;
    grid.replaceChildren();
-   const sorted=all.sort((a,b)=>Number(b.favorite===true)-Number(a.favorite===true)||b.createdAt-a.createdAt);
+   const sorted=all.sort((a,b)=>Number(b.favorite===true)-Number(a.favorite===true)||b.createdAt-a.createdAt).slice(0,30);
    // Keep one or two recording shortcuts; no full library duplication on the Play home.
    for(const item of sorted.slice(0,2)){
     const position=window.FuckballReplayResume?.get?.(item.id);
@@ -197,17 +215,18 @@
       (position?' · unfinished at '+clock:''),
      item.favorite===true?'★ FAVORITE REPLAY':'LOCAL HBR2 REPLAY',
      position?'▶ Continue at '+clock:'▶ Watch replay',async()=>{
-      // Resume is a separate launcher from Watch; protect it too, even if
-      // the session became active after this shortcut was first rendered.
-      const current=active();
-      if(current){
-       note.textContent='Return to or explicitly close '+current[1].toLowerCase()+
-        ' before continuing a saved replay.';
-       refreshSession();return;
-      }
+      if(busy)return;
       if(!position)return watch(item);
-      const success=await window.FuckballReplayResume.open(item.id);
-      if(!success)note.textContent='Could not resume. Open My Games to inspect your private saved position.';
+      if(reportSessionConflict())return;
+      // One in-flight Home action at a time; the original resume component
+      // remains authoritative for private seek time and playback admission.
+      busy=true;note.textContent='Restoring saved playback…';refreshSession();
+      try{
+       const success=await window.FuckballReplayResume?.open?.(item.id);
+       note.textContent=success?'Saved playback resumed.':
+        'Could not resume. Open My Games to inspect your private saved position.';
+      }catch(error){note.textContent='Could not resume: '+(error?.message||'Storage error');}
+      finally{busy=false;refreshSession();}
     }));
    }
    const latest=recentPractice();
