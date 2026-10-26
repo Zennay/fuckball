@@ -39,7 +39,17 @@
  let latest=null,signature='',roomToken=null;
  // A reused room code is not a persistent identity: the native socket is.
  // Invalidate selections when a reconnect creates a new admitted session.
- let observedLink=null,sessionGeneration=0;
+ let observedLink=null,sessionGeneration=0,admissionFrameBaseline=0;
+ // Reconnects may reuse a room code and even the same player ID. The very
+ // first *new* physics frame after admission proves the displayed roster was
+ // not left over from the previous socket.
+ function currentFrameEvidence(){
+  if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+     net.receivedSequence<1||net.receivedSequence<=admissionFrameBaseline||
+     !Number.isFinite(net.lastSnapshot)||net.lastSnapshot<=0)return false;
+  const age=performance.now()-net.lastSnapshot;
+  return Number.isFinite(age)&&age>=0&&age<=1600;
+ }
  const validId=n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647;
  const validFrames=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000000;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
@@ -49,15 +59,18 @@
  }
  function snapshot(){
   const link=typeof serverLink==='undefined'?null:serverLink;
-  if(link!==observedLink){observedLink=link;sessionGeneration++;}
+  if(link!==observedLink){
+   observedLink=link;sessionGeneration++;
+   admissionFrameBaseline=typeof net!=='undefined'&&
+    Number.isSafeInteger(net.receivedSequence)?net.receivedSequence:0;
+  }
   const state=link?.roomState;
   // The local room engine can still contain an older room's human names and
   // teams between native welcome and the first NEW server physics snapshot.
   // Never recommend or export those players based on a room code alone.
   if(!link?.room||link.quickMatchMode||!state||
    link.ws?.readyState!==1||state.room!==link.room||
-   typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
-   net.receivedSequence<1||
+   !currentFrameEvidence()||
    !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
   const benches=new Map(Array.isArray(state.benches)?state.benches:[]);
@@ -168,7 +181,9 @@
    const pending=!!link?.room&&!link.quickMatchMode&&link.ws?.readyState===1;
    section.hidden=!pending;clear();
    manual.hidden=true;manualButton.disabled=true;download.disabled=true;
-   if(pending)context.textContent='Waiting for the original online room’s current server roster and physics snapshot. No stale swap suggestion or CSV is available.';
+   if(pending)context.textContent=
+    'Waiting for a new, recent server physics frame in this room. '+
+    'Playing-time suggestions, old selections and player-name exports are unavailable until the live roster is verified.';
    else context.textContent='';
    return;
   }
@@ -213,7 +228,11 @@
   download.disabled=!data.people.length;
  }
  side.onchange=()=>{signature='';render(true);};
- refresh.onclick=()=>{render(true);notice.textContent='Refreshed from the current native room snapshot.';};
+ refresh.onclick=()=>{
+  const actual=snapshot();render(true);
+  notice.textContent=actual?'Refreshed from a recently received server frame.':
+   'No recent admitted-room frame. Refresh after the connection resumes; no recommendation or export was made.';
+ };
  download.onclick=()=>{
   const data=snapshot();if(!data||data.sessionGeneration!==latest?.sessionGeneration||
    data.token!==latest?.token||!data.people.length){
