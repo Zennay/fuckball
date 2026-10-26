@@ -39,13 +39,13 @@
  let latest=null,signature='',roomToken=null;
  // A reused room code is not a persistent identity: the native socket is.
  // Invalidate selections when a reconnect creates a new admitted session.
- let observedLink=null,sessionGeneration=0,admissionFrameBaseline=0;
+ let observedLink=null,sessionGeneration=0,admissionObservedAt=0;
  // Reconnects may reuse a room code and even the same player ID. The very
  // first *new* physics frame after admission proves the displayed roster was
  // not left over from the previous socket.
  function currentFrameEvidence(){
   if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
-     net.receivedSequence<1||net.receivedSequence<=admissionFrameBaseline||
+     net.receivedSequence<1||net.lastSnapshot<=admissionObservedAt||
      !Number.isFinite(net.lastSnapshot)||net.lastSnapshot<=0)return false;
   const age=performance.now()-net.lastSnapshot;
   return Number.isFinite(age)&&age>=0&&age<=1600;
@@ -61,8 +61,7 @@
   const link=typeof serverLink==='undefined'?null:serverLink;
   if(link!==observedLink){
    observedLink=link;sessionGeneration++;
-   admissionFrameBaseline=typeof net!=='undefined'&&
-    Number.isSafeInteger(net.receivedSequence)?net.receivedSequence:0;
+   admissionObservedAt=performance.now();
   }
   const state=link?.roomState;
   // The local room engine can still contain an older room's human names and
