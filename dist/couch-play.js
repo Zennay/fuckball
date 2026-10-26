@@ -206,7 +206,7 @@
  p2RecoveryActions.append(p2RecoveryBind,p2RecoveryKeyboard,p2RecoveryPitch);
  p2Recovery.append(p2RecoveryTitle,p2RecoveryMessage,p2RecoveryLabel,p2RecoveryActions);
  document.body.append(p2Recovery);
- let acknowledgedP2Loss=null,p2RecoveryPorts='';
+ let acknowledgedP2Loss=null,p2RecoveryPorts=null;
  let pendingKickoffRules=null,kickoffObserved=false;
  // Only the native kickoff event confirms which rules the new room captured.
  // Any other local launcher clears this receipt, so it never mislabels a match.
@@ -214,7 +214,7 @@
   seatTwoSession=true;
   const pad=candidate();
   seatTwoLock=pad?{index:pad.index,id:pad.id}:null;
-  acknowledgedP2Loss=null;p2RecoveryPorts='';
+  acknowledgedP2Loss=null;p2RecoveryPorts=null;
   if(pendingKickoffRules)kickoffObserved=true;
   liveRuleHint.textContent=pendingKickoffRules||'';
   liveRuleHint.hidden=!pendingKickoffRules;
@@ -271,7 +271,7 @@
    return false;
   }
   seatTwoLock={index:pad.index,id:pad.id};
-  acknowledgedP2Loss=null;p2RecoveryPorts='';
+  acknowledgedP2Loss=null;p2RecoveryPorts=null;
   seatTwoSession=true;lastInput='';
   if(isLocal()&&typeof refreshInput==='function')refreshInput();
   status.textContent='Player 2 bound to controller port '+(pad.index+1)+
@@ -281,7 +281,7 @@
  const reservedPort=()=>seatTwoSession&&activeCouchSession()?seatTwoLock?.index??null:null;
  function updateP2Recovery(){
   if(!activeCouchSession()||['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value)){
-   p2Recovery.hidden=true;acknowledgedP2Loss=null;p2RecoveryPorts='';return;
+   p2Recovery.hidden=true;acknowledgedP2Loss=null;p2RecoveryPorts=null;return;
   }
   // A hidden-tab browser may omit Gamepad API snapshots. The native focus
   // boundary already neutralizes input; wait for a visible snapshot.
@@ -502,7 +502,7 @@
   requestAnimationFrame(frame);
  }
  window.fuckballCouchPad=Object.freeze({read,reservedPort});
- window.addEventListener('gamepadconnected',()=>{availableSignature='';p2RecoveryPorts='';updateP2Recovery();});
+ window.addEventListener('gamepadconnected',()=>{availableSignature='';p2RecoveryPorts=null;updateP2Recovery();});
  window.addEventListener('gamepaddisconnected',event=>{
   const index=event?.gamepad?.index;
   if(activeCouchSession()&&seatTwoSession&&seatTwoLock&&
