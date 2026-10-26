@@ -49,16 +49,39 @@
   return {at,mode,stadium,side,red,blue,seconds,focus,note,
    aiOpponent:entry.aiOpponent===true};
  }
- function read(){
-  try{
-   const entries=JSON.parse(localStorage.getItem(KEY)||'[]');
-   if(!Array.isArray(entries))return[];
-   return entries.slice(0,MAX).map(clean).filter(Boolean);
-  }catch{return[];}
+ // Invalid or unreadable storage is not an empty journal. In particular, a
+ // failed JSON parse must never be replaced by a freshly completed game.
+ // Preserve the original raw bytes for an intentional private-device export.
+ function snapshot(){
+  let raw;
+  try{raw=localStorage.getItem(KEY);}catch{
+   return{items:[],raw:null,error:'unavailable'};
+  }
+  if(raw===null)return{items:[],raw:null,error:null};
+  let entries;
+  try{entries=JSON.parse(raw);}catch{
+   return{items:[],raw,error:'corrupt'};
+  }
+  if(!Array.isArray(entries)||entries.length>MAX||
+     entries.some(entry=>clean(entry)===null))
+   return{items:[],raw,error:'corrupt'};
+  return{items:entries.map(clean),raw,error:null};
  }
- function persist(entries){
-  try{localStorage.setItem(KEY,JSON.stringify(entries.slice(0,MAX)));return true;}
-  catch{return false;}
+ function read(){return snapshot().items;}
+ // localStorage is not transactional. Re-read immediately before writing and
+ // verify the bytes afterwards; never claim a save on a stale/invalid base.
+ function persist(entries,expectedRaw){
+  if(!Array.isArray(entries)||entries.some(e=>clean(e)===null))
+   return{ok:false,reason:'invalid'};
+  const payload=JSON.stringify(entries.slice(0,MAX));
+  try{
+   const latest=snapshot();
+   if(latest.error)return{ok:false,reason:latest.error};
+   if(expectedRaw!==latest.raw)return{ok:false,reason:'changed'};
+   localStorage.setItem(KEY,payload);
+   return localStorage.getItem(KEY)===payload?
+    {ok:true}:{ok:false,reason:'unverified'};
+  }catch{return{ok:false,reason:'unavailable'};}
  }
  const outcome=e=>{
   const ours=e.side===1?e.red:e.blue,theirs=e.side===1?e.blue:e.red;
@@ -111,14 +134,28 @@
    note.value=e.note;noteLabel.append(note);
    const save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save private note';
    save.addEventListener('click',()=>{
-    const current=read(),item=current[index];
-    // Another tab may have changed the ordered local log while this editor was open.
-    if(!item||item.at!==e.at||item.mode!==e.mode||item.red!==e.red||item.blue!==e.blue){
-     feedback.textContent='The journal changed. Reload the entry before editing.';render();return;
+    const latest=snapshot();
+    if(latest.error){
+     feedback.textContent='Journal storage cannot be safely read. Your unsaved note is preserved here; recover the raw journal first.';
+     return;
+    }
+    const current=latest.items,item=current[index];
+    // Match identity and both original editor values must still be current.
+    // Otherwise saving a stale open editor could erase another tab's notes.
+    if(!item||item.at!==e.at||item.mode!==e.mode||item.stadium!==e.stadium||
+       item.side!==e.side||item.red!==e.red||item.blue!==e.blue||
+       item.seconds!==e.seconds||item.aiOpponent!==e.aiOpponent||
+       item.focus!==e.focus||item.note!==e.note){
+     feedback.textContent='This match or its coaching note changed in another tab. Your draft is still here. Reload saved journal before editing.';
+     return;
     }
     item.focus=pick.value;item.note=note.value.trim().slice(0,240);
-    if(!persist(current)){feedback.textContent='Browser storage is unavailable. Note not saved.';return;}
-    feedback.textContent='Coaching focus and note saved privately on this device.';
+    const saved=persist(current,latest.raw);
+    if(!saved.ok){
+     feedback.textContent='Note not saved ('+saved.reason+'). Your draft remains here; reload or recover saved data before retrying.';
+     return;
+    }
+    feedback.textContent='Coaching focus and note verified on this device.';
     render();
    });
    form.append(focusLabel,noteLabel,save);coaching.append(summary,form);
@@ -175,9 +212,15 @@
    const e=clean({...observation,at:Date.now(),seconds:Math.round(observation.seconds)});
    observation=null;
    if(!e)return;
-   const entries=read();entries.unshift(e);
-   if(persist(entries))render();
-   else feedback.textContent='Match finished, but local browser storage is unavailable.';
+   const previous=snapshot();
+   if(previous.error){
+    feedback.textContent='Match finished, but saved journal data is unreadable. Original records were preserved. Recover the private raw backup before adding results.';
+    render();return;
+   }
+   const entries=previous.items;entries.unshift(e);
+   const saved=persist(entries,previous.raw);
+   if(saved.ok)render();
+   else feedback.textContent='Match finished, but the journal was not safely saved ('+saved.reason+'). Existing records were not intentionally cleared.';
    return;
   }
   const player=eligible();
