@@ -206,6 +206,24 @@
  p2RecoveryActions.append(p2RecoveryBind,p2RecoveryKeyboard,p2RecoveryPitch);
  p2Recovery.append(p2RecoveryTitle,p2RecoveryMessage,p2RecoveryLabel,p2RecoveryActions);
  document.body.append(p2Recovery);
+ // Fullscreen only paints children of its active host. The main game
+ // portal (PR #554) predates this P2 prompt, so retain the *same* controls
+ // within an eligible fullscreen pitch/match container, then restore them
+ // to document.body on exit. No re-created controls or synthetic input.
+ function syncP2RecoveryFullscreen(){
+  const active=document.fullscreenElement;
+  const pitchHost=document.getElementById('pitch');
+  const matchHost=document.getElementById('matchView');
+  const target=active&&(active===pitchHost||active===matchHost)?
+   active:document.body;
+  if(!target||p2Recovery.parentElement===target)return;
+  const focus=document.activeElement;
+  const wasInside=focus===p2Recovery||p2Recovery.contains?.(focus);
+  target.append(p2Recovery);
+  if(wasInside&&focus?.isConnected&&document.activeElement!==focus)
+   focus.focus?.({preventScroll:true});
+ }
+ document.addEventListener('fullscreenchange',syncP2RecoveryFullscreen);
  let acknowledgedP2Loss=null,p2RecoveryPorts=null;
  let pendingKickoffRules=null,kickoffObserved=false;
  // Only the native kickoff event confirms which rules the new room captured.
@@ -280,6 +298,7 @@
  }
  const reservedPort=()=>seatTwoSession&&activeCouchSession()?seatTwoLock?.index??null:null;
  function updateP2Recovery(){
+  syncP2RecoveryFullscreen();
   if(!activeCouchSession()||['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value)){
    p2Recovery.hidden=true;acknowledgedP2Loss=null;p2RecoveryPorts=null;return;
   }
