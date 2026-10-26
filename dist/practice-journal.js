@@ -27,13 +27,29 @@
  focusFilterLabel.append(focusFilter);
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export local history';
  const clearButton=document.createElement('button');clearButton.type='button';clearButton.textContent='Clear journal';clearButton.className='danger';
- controls.append(filterLabel,focusFilterLabel,exportButton,clearButton);
+ const refreshButton=document.createElement('button');refreshButton.type='button';
+ refreshButton.textContent='↻ Reload saved journal';
+ controls.append(filterLabel,focusFilterLabel,exportButton,clearButton,refreshButton);
+ const recovery=document.createElement('aside');recovery.className='local-journal-recovery';
+ recovery.setAttribute('role','region');recovery.setAttribute('aria-label','Journal data recovery');
+ recovery.hidden=true;
+ const recoveryTitle=document.createElement('strong');
+ recoveryTitle.textContent='YOUR SAVED JOURNAL NEEDS RECOVERY';
+ const recoveryDetails=document.createElement('p');
+ const recoveryActions=document.createElement('div');recoveryActions.className='local-journal-recovery-actions';
+ const rawBackup=document.createElement('button');rawBackup.type='button';
+ rawBackup.textContent='↓ Export original raw journal';
+ const resetDamaged=document.createElement('button');resetDamaged.type='button';
+ resetDamaged.className='danger';resetDamaged.textContent='Reset damaged journal';
+ recoveryActions.append(rawBackup,resetDamaged);
+ recovery.append(recoveryTitle,recoveryDetails,recoveryActions);
+ let requestedRawBackup=null;
  const stats=document.createElement('div');stats.className='local-journal-stats';
  const list=document.createElement('div');list.className='local-journal-list';
  list.setAttribute('aria-label','Completed local practice matches');
  const feedback=document.createElement('p');feedback.className='local-journal-feedback';
  feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
- panel.append(header,controls,stats,list,feedback);games.append(panel);
+ panel.append(header,controls,recovery,stats,list,feedback);games.append(panel);
  function clean(entry){
   if(!entry||typeof entry!=='object'||Array.isArray(entry))return null;
   const {at,mode,stadium,side,red,blue,seconds}=entry;
@@ -89,7 +105,17 @@
  };
  const duration=e=>Math.floor(e.seconds/60)+'m '+String(e.seconds%60).padStart(2,'0')+'s';
  function render(){
-  const items=read(), wins=items.filter(e=>outcome(e)==='win').length,
+  const stored=snapshot(),items=stored.items;
+  recovery.hidden=!stored.error;
+  if(stored.error){
+   recoveryDetails.textContent=stored.error==='unavailable'?
+    'The browser cannot read local storage. Results and notes cannot be safely saved until access is restored.':
+    'Saved journal data is unreadable or has an unsupported shape. Its original bytes are still stored; no new match or note will overwrite them. Export the raw backup before choosing any reset.';
+   rawBackup.hidden=stored.error!=='corrupt';
+   resetDamaged.hidden=stored.error!=='corrupt';
+   resetDamaged.disabled=stored.error!=='corrupt'||requestedRawBackup!==stored.raw;
+  }
+  const wins=items.filter(e=>outcome(e)==='win').length,
    losses=items.filter(e=>outcome(e)==='loss').length,draws=items.length-wins-losses;
   count.textContent=items.length+' / '+MAX+' local matches';
   stats.replaceChildren();
@@ -123,6 +149,9 @@
    const summary=document.createElement('summary');
    summary.textContent='Personal notes · '+focusOptions[e.focus]+(e.note?' · saved':'');
    const form=document.createElement('div');form.className='local-journal-edit';
+   // When another tab updates this journal, preserve any unsaved human text
+   // instead of blindly replacing the open DOM editor during a storage event.
+   form.dataset.dirty='false';
    const focusLabel=document.createElement('label');focusLabel.textContent='Focus this match';
    const pick=document.createElement('select');
    pick.setAttribute('aria-label','Match '+new Date(e.at).toLocaleDateString()+' focus');
@@ -132,6 +161,8 @@
    const note=document.createElement('textarea');note.maxLength=240;note.rows=3;
    note.placeholder='E.g. I pressed too early; aim for the free corner next game.';
    note.value=e.note;noteLabel.append(note);
+   pick.addEventListener('change',()=>{form.dataset.dirty='true';});
+   note.addEventListener('input',()=>{form.dataset.dirty='true';});
    const save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save private note';
    save.addEventListener('click',()=>{
     const latest=snapshot();
@@ -161,10 +192,60 @@
    form.append(focusLabel,noteLabel,save);coaching.append(summary,form);
    body.append(name,meta,coaching);row.append(result,body);list.append(row);
   }
-  exportButton.disabled=clearButton.disabled=!items.length;
+  exportButton.disabled=clearButton.disabled=!!stored.error||!items.length;
  }
  filter.addEventListener('change',render);
  focusFilter.addEventListener('change',render);
+ refreshButton.addEventListener('click',()=>{
+  requestedRawBackup=null;render();
+  feedback.textContent='Reloaded the latest journal stored on this device.';
+ });
+ function downloadPrivateRaw(raw){
+  const url=URL.createObjectURL(new Blob([raw],{type:'text/plain;charset=utf-8'}));
+  const anchor=document.createElement('a');anchor.href=url;
+  anchor.download='fuckball-original-practice-journal-'+new Date().toISOString().slice(0,10)+'.txt';
+  document.body.append(anchor);anchor.click();anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }
+ rawBackup.addEventListener('click',()=>{
+  const latest=snapshot();
+  if(latest.error!=='corrupt'||typeof latest.raw!=='string'){
+   feedback.textContent='The saved journal changed. Reload before exporting its raw backup.';
+   return;
+  }
+  try{
+   downloadPrivateRaw(latest.raw);
+   // A download was requested, not a claim that the browser completed it.
+   requestedRawBackup=latest.raw;
+   feedback.textContent='Original raw journal download requested. Keep this private recovery copy safe before resetting.';
+   render();
+  }catch{
+   feedback.textContent='The browser could not prepare a raw backup. Your original journal remains untouched.';
+  }
+ });
+ resetDamaged.addEventListener('click',()=>{
+  const latest=snapshot();
+  if(latest.error!=='corrupt'||requestedRawBackup!==latest.raw){
+   feedback.textContent='Export the latest raw journal before choosing a reset.';
+   render();return;
+  }
+  if(!window.confirm('You requested a raw recovery copy. Resetting now will delete the unreadable original journal from this device. Continue?'))return;
+  if(!window.confirm('Last confirmation: erase this damaged journal? It cannot be reconstructed unless your downloaded raw backup is usable.'))return;
+  try{
+   // Refuse to delete if a different tab repaired or replaced the data.
+   if(localStorage.getItem(KEY)!==latest.raw){
+    feedback.textContent='The journal changed in another tab. Nothing was deleted.';
+    render();return;
+   }
+   localStorage.removeItem(KEY);
+   if(localStorage.getItem(KEY)!==null)throw Error('unverified');
+   requestedRawBackup=null;
+   render();
+   feedback.textContent='Damaged journal reset after an explicit raw backup request. A new private journal can now be created.';
+  }catch{
+   feedback.textContent='Reset not verified. Your existing journal was not intentionally overwritten.';
+  }
+ });
  exportButton.addEventListener('click',()=>{
   const items=read();if(!items.length)return;
   const data={format:'fuckball-local-practice-journal',version:1,source:'browser-private-unverified-solo-matches',exportedAt:new Date().toISOString(),matches:items};
@@ -175,13 +256,30 @@
   feedback.textContent='Local journal exported. No account or server upload.';
  });
  clearButton.addEventListener('click',()=>{
-  const items=read();if(!items.length)return;
+  const before=snapshot();
+  if(before.error||!before.items.length)return;
+  const items=before.items;
   if(!window.confirm('Delete all '+items.length+' local practice results from this browser? Online results and HBR2 replays are not affected.'))return;
   if(!window.confirm('This cannot be undone unless you exported a backup. Delete the local journal?'))return;
-  try{localStorage.removeItem(KEY);}catch{feedback.textContent='Storage is unavailable; journal could not be deleted.';return;}
-  feedback.textContent='Local practice journal cleared.';render();
+  try{
+   const latest=snapshot();
+   if(latest.error||latest.raw!==before.raw){
+    feedback.textContent='Journal changed during confirmation. Reload before deleting.';return;
+   }
+   localStorage.removeItem(KEY);
+   if(localStorage.getItem(KEY)!==null)throw Error('unverified');
+  }catch{feedback.textContent='Storage is unavailable or deletion could not be verified.';return;}
+  render();feedback.textContent='Local practice journal cleared.';
  });
- window.addEventListener('storage',event=>{if(event.key===KEY)render();});
+ window.addEventListener('storage',event=>{
+  if(event.key!==KEY)return;
+  requestedRawBackup=null;
+  if(list.querySelector('.local-journal-edit[data-dirty="true"]')){
+   feedback.textContent='Journal changed in another tab. Your unsaved note remains here. Copy it first, then Reload saved journal.';
+   return;
+  }
+  render();
+ });
  render();
  let observation=null;
  function eligible(){
