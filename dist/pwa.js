@@ -117,48 +117,66 @@
  // Never inspect or cache online rooms, accounts, invites, or API responses.
  const essential=['./','app.js','room-core.js','vendor/haxball.js','ai/policy.js','replay-library.js'];
  async function inspectCache(){
-  if(!('caches' in window)){offlineStatus.textContent='Cache inspection is not supported here.';return;}
+  if(!('caches' in window)){
+   offlineStatus.textContent='Cache inspection is not supported here.';return;
+  }
   try{
    const names=(await caches.keys()).filter(x=>/^fuckball-offline-practice-v[0-9]+$/.test(x))
     .sort((a,b)=>Number(b.split('-v').pop())-Number(a.split('-v').pop()));
-   if(!names.length){offlineStatus.textContent='No offline practice pack stored on this device.';return;}
-   const cache=await caches.open(names[0]);
-   const scope=new URL('./',registered?.scope||location.href);
-   const shell=await cache.match(scope.href);
-   if(!shell){offlineStatus.textContent='Offline game shell is missing. Reconnect to reinstall local practice.';return;}
-   // DOMParser constructs an inert document; no scripts execute and no
-   // additional network fetch is made while reading cached markup.
+   if(!names.length){
+    offlineStatus.textContent='No offline practice pack stored on this device.';return;
+   }
    if(typeof DOMParser!=='function'){
-    offlineStatus.textContent='This browser cannot verify the complete offline game pack.';
+    offlineStatus.textContent='This browser cannot verify the complete offline game pack.';return;
+   }
+   const scope=new URL('./',registered?.scope||location.href);
+   const filesForShell=essential.map(path=>new URL(path,scope).href);
+   let newestIssue=null;
+   // A failed *new* install can leave an incomplete versioned cache in
+   // older clients. Never call that pack ready or discard the last complete
+   // one; inspect a bounded number of previously stored versions instead.
+   for(const name of names.slice(0,5)){
+    const cache=await caches.open(name);
+    const shell=await cache.match(scope.href);
+    if(!shell){
+     newestIssue??='Offline shell is missing from '+name+'.';
+     continue;
+    }
+    const markup=new DOMParser().parseFromString(await shell.text(),'text/html');
+    const required=new Set(filesForShell);
+    for(const node of markup.querySelectorAll('script[src],link[rel~="stylesheet"][href]')){
+     const file=node.getAttribute(node.tagName.toLowerCase()==='script'?'src':'href');
+     if(!file)continue;
+     const url=new URL(file,scope);
+     if(url.origin!==scope.origin||!url.pathname.startsWith(scope.pathname)||
+        url.search||url.hash||!(/\\.(?:js|css)$/i.test(url.pathname)))continue;
+     required.add(url.href);
+    }
+    if(required.size>400){
+     newestIssue??='Unexpected offline pack manifest in '+name+'.';
+     continue;
+    }
+    const files=[...required];
+    const found=await Promise.all(files.map(url=>cache.match(url)));
+    const missing=files.filter((_,i)=>!found[i]);
+    if(missing.length){
+     const shown=missing.slice(0,3).map(url=>decodeURIComponent(new URL(url).pathname.split('/').pop()));
+     newestIssue??='Offline pack '+name+' incomplete ('+(files.length-missing.length)+
+      '/'+files.length+'). Missing '+shown.join(', ')+
+      (missing.length>3?' and '+(missing.length-3)+' more':'')+'.';
+     continue;
+    }
+    const upToDate=name===names[0];
+    offlineStatus.textContent=upToDate?
+     'Offline game is ready ('+files.length+'/'+files.length+
+      ' startup files saved). Local games and downloaded replays can work without internet. Online rooms still require the server.':
+     'An older verified offline game pack remains available ('+
+      files.length+'/'+files.length+' startup files). The newest cached update is incomplete. '+
+      'Reconnect, check for updates, and reopen Fuckball. Online rooms still require the server.';
     return;
    }
-   const markup=new DOMParser().parseFromString(await shell.text(),'text/html');
-   const required=new Set(essential.map(path=>new URL(path,scope).href));
-   for(const node of markup.querySelectorAll('script[src],link[rel~="stylesheet"][href]')){
-    const file=node.getAttribute(node.tagName.toLowerCase()==='script'?'src':'href');
-    if(!file)continue;
-    const url=new URL(file,scope);
-    if(url.origin!==scope.origin||!url.pathname.startsWith(scope.pathname)||
-       url.search||url.hash||!(/\.(?:js|css)$/i.test(url.pathname)))continue;
-    required.add(url.href);
-   }
-   // Bound the work for malformed or unexpectedly huge cached HTML.
-   if(required.size>400){
-    offlineStatus.textContent='Unexpected offline game bundle. Reconnect to refresh the installation.';
-    return;
-   }
-   const files=[...required],found=await Promise.all(files.map(url=>cache.match(url)));
-   const missing=files.filter((_,i)=>!found[i]);
-   if(!missing.length){
-    offlineStatus.textContent='Offline game is ready ('+files.length+'/'+files.length+
-     ' startup files saved). Local matches and your own downloaded replays can start without internet; online rooms still need the server.';
-   }else{
-    const names=missing.slice(0,3).map(url=>decodeURIComponent(new URL(url).pathname.split('/').pop()));
-    offlineStatus.textContent='Offline pack incomplete ('+(files.length-missing.length)+'/'+
-     files.length+' startup files). Missing '+names.join(', ')+
-     (missing.length>3?' and '+(missing.length-3)+' more':'')+
-     '. Reconnect, check for updates, and reopen Fuckball before starting offline.';
-   }
+   offlineStatus.textContent=(newestIssue||'No complete offline game pack found.')+
+    ' Reconnect and check for updates before relying on offline practice.';
   }catch{
    offlineStatus.textContent='Browser storage cannot be inspected; offline readiness is unverified.';
   }
