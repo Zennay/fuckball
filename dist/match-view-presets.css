@@ -27,3 +27,14 @@
 }
 .match-view-presets>button[hidden]{display:none!important}
 .match-view-presets-status{overflow-wrap:anywhere;line-height:1.55}
+
+/* Clear disclosure of the opt-in local sound/chat side effects.
+   Other view presets only touch on-device visuals/performance. */
+.match-view-preset-card em{font-size:11px;line-height:1.35;font-style:normal;
+ color:#d0ebd1;opacity:.95;margin-top:3px}
+.match-view-preset-card[aria-pressed="true"] em{color:#e7ffd4}
+.match-view-presets-status[role="status"]{max-width:70ch}
+@media(max-width:560px){
+ .match-view-preset-card{min-height:120px;padding:12px}
+ .match-view-preset-card em{font-size:11px}
+}
