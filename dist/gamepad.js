@@ -107,7 +107,9 @@
  openSetup.textContent='↻ Rebind controller';
  const keepKeyboard=document.createElement('button');
  keepKeyboard.type='button';keepKeyboard.textContent='Use keyboard / touch';
- recoveryActions.append(openSetup,keepKeyboard);
+ const returnPitch=document.createElement('button');
+ returnPitch.type='button';returnPitch.textContent='↗ Return to match';
+ recoveryActions.append(openSetup,keepKeyboard,returnPitch);
  recovery.append(recoveryTitle,recoveryDetail,recoveryActions);
  document.body.append(recovery);
  let acknowledgedLoss=null;
@@ -118,13 +120,22 @@
  }
  function refreshControllerRecovery(){
   const lost=lostPlayerOneSeat();
+  // The match may continue while the player browses Home / My Games. A
+  // controller loss is a live input event, not a property of the visible tab.
+  // Keep the original seat-neutral and explicit rebind choices in view.
   const visible=!!lost&&lost!==acknowledgedLoss&&
-   typeof started!=='undefined'&&started&&
-   !replay&&!document.getElementById('matchView')?.hidden;
+   typeof started!=='undefined'&&started&&!replay;
   recovery.hidden=!visible;
   if(!visible)return;
+  const assignedToP2=lost.reason==='reserved-for-p2';
+  recoveryTitle.textContent=assignedToP2?
+   'CONTROLLER RESERVED FOR P2 · P1 INPUT NEUTRAL':
+   'CONTROLLER LOST · P1 INPUT NEUTRAL';
   recoveryDetail.textContent='Player 1 controller on port '+(lost.index+1)+
-   ' disconnected or changed. Its movement and kick stay neutral until you explicitly rebind. Keyboard and touch still work.';
+   (assignedToP2?' is now reserved for Player 2.':
+    ' disconnected or changed.')+
+   ' Player 1 movement and kick remain neutral until you explicitly rebind. Keyboard and touch still work.';
+  returnPitch.hidden=document.getElementById('matchView')?.hidden===false;
  }
  openSetup.addEventListener('click',()=>{
   if(recovery.hidden||!lostPlayerOneSeat())return;
@@ -135,6 +146,14 @@
  });
  keepKeyboard.addEventListener('click',()=>{
   acknowledgedLoss=lostPlayerOneSeat();refreshControllerRecovery();
+ });
+ returnPitch.addEventListener('click',()=>{
+  if(recovery.hidden||!lostPlayerOneSeat())return;
+  const tab=document.getElementById('tabPlay');
+  if(tab&&typeof tab.click==='function')tab.click();
+  else if(typeof showView==='function')showView('play');
+  refreshControllerRecovery();
+  document.getElementById('gameCanvas')?.focus?.({preventScroll:true});
  });
  const isCouchRivals=()=>['couchRivals','couchRivals3v3','couchRivals4v4']
   .includes($('mode').value);
@@ -150,7 +169,12 @@
   if(!pad?.connected||pad.index!==seat.index||pad.id!==seat.id){
    seat.lost=true;return null;
   }
-  return pad.index!==reservedP2()?pad:null;
+  if(pad.index===reservedP2()){
+   // A P2 rebind can reserve P1's physical port without unplugging it.
+   // Treat this as a seat loss rather than silently removing P1 controls.
+   seat.lost=true;seat.reason='reserved-for-p2';return null;
+  }
+  return pad;
  }
  const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
   !serverLink&&!peerConnected&&!replay&&
@@ -178,7 +202,11 @@
        pinned.index!==localSeatOne.index){
      localSeatOne.lost=true;return null;
     }
-    return pinned.index!==reservedP2()?pinned:null;
+    if(pinned.index===reservedP2()){
+     localSeatOne.lost=true;localSeatOne.reason='reserved-for-p2';
+     return null;
+    }
+    return pinned;
    }
    // No live match may auto-handoff movement/kick authority when a gamepad is
    // unplugged or a new pad occupies the same Gamepad API port. The original
@@ -362,8 +390,12 @@
  window.addEventListener('gamepaddisconnected',event=>{
   const index=event?.gamepad?.index;
   if(!Number.isSafeInteger(index))return;
-  if(liveSeatLocked&&liveSeatOne?.index===index)liveSeatOne.lost=true;
-  if(localSeatLocked&&localSeatOne?.index===index)localSeatOne.lost=true;
+  if(liveSeatLocked&&liveSeatOne?.index===index){
+   liveSeatOne.lost=true;liveSeatOne.reason='disconnected';
+  }
+  if(localSeatLocked&&localSeatOne?.index===index){
+   localSeatOne.lost=true;localSeatOne.reason='disconnected';
+  }
   lastSignature='';wasStart=true;
   refreshControllerRecovery();
   if(typeof refreshInput==='function'&&typeof started!=='undefined'&&started)
