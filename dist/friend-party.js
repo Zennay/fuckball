@@ -87,10 +87,11 @@
  };
  let busy=false,generation=0,hasJoined=false,lastModeKey='',failedModeKey='',lastQuietPoll=0;
  let lastPartyState=null,lastPartyToken=null;
- let globalActionError='',globalActionErrorUntil=0;
+ let globalActionError='',globalActionErrorUntil=0,globalActionErrorToken=null;
  function showGlobalPartyError(message){
   globalActionError=String(message||'The party action could not be completed.').slice(0,200);
   globalActionErrorUntil=Date.now()+12000;
+  globalActionErrorToken=settings.account?.token||null;
   updateGlobalParty();
   // When the last invitation vanishes, the floating card is intentionally
   // hidden; the original user-visible notification still explains failure.
@@ -129,7 +130,8 @@
     invites.length+' PRIVATE FRIEND INVITATIONS';
    const copy=invites.length+' server-issued invitation'+(invites.length===1?'':'s')+
     ' · Review the sender and accept or decline in your original Party panel.';
-   const message=globalActionErrorUntil>Date.now()?copy+' · '+globalActionError:copy;
+   const message=globalActionErrorToken===currentToken&&globalActionErrorUntil>Date.now()?
+    copy+' · '+globalActionError:copy;
    if(globalDetail.textContent!==message)globalDetail.textContent=message;
    globalOpen.textContent='↗ Review invitation';
    globalRetry.hidden=true;return;
@@ -146,7 +148,8 @@
     remaining===0?' · Deadline passed; request a new search.':
     ' · Keep the original server queue or open your party.'):
    party.members.length+' / 4 signed-in teammates · ready up before searching.';
-  const message=globalActionErrorUntil>Date.now()?detail+' · '+globalActionError:detail;
+  const message=globalActionErrorToken===currentToken&&globalActionErrorUntil>Date.now()?
+   detail+' · '+globalActionError:detail;
   if(globalDetail.textContent!==message)globalDetail.textContent=message;
   globalRetry.hidden=!canRetry;
   globalRetry.disabled=!canRetry||busy;
@@ -190,12 +193,12 @@
   const token=settings.account?.token;
   const requestGeneration=++generation;
   busy=true;notice.textContent='Saving party action…';
-  globalActionError='';globalActionErrorUntil=0;updateGlobalParty();
+  globalActionError='';globalActionErrorUntil=0;globalActionErrorToken=null;updateGlobalParty();
   api(payload).then(state=>{
    // Sign-out, account switch or a newer action invalidates the response.
    // Never render another account's party or launch its human-only queue.
    if(settings.account?.token!==token||generation!==requestGeneration)return;
-   globalActionError='';globalActionErrorUntil=0;
+   globalActionError='';globalActionErrorUntil=0;globalActionErrorToken=null;
    render(state);
    entry.textContent='Party'+(state.invitations?.length?' ('+state.invitations.length+')':'');
    notice.textContent='Party updated.';
