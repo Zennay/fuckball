@@ -50,25 +50,72 @@
   display();
  }
  function announce(text){if(text!==message){message=text;status.textContent=text;}}
- function saveArchive(){
-  try{localStorage.setItem(KEY,JSON.stringify({version:1,records:archived.slice(0,MAX)}));return true;}
-  catch{return false;}
+ // Shared v1 storage schema must remain readable by the existing private
+ // exports and other versions of the game. Protect read→merge→write using
+ // Web Locks when available, and serialize this tab's own async actions.
+ let archiveOps=Promise.resolve();
+ const archiveLock='fuckball.couch-rivals.series.archive.v1';
+ function validRecord(r){
+  return !!r&&[3,5,7].includes(r.bestOf)&&
+   Number.isFinite(r.created)&&r.created>0&&r.created<=Date.now()+86400000&&
+   Number.isInteger(r.red)&&r.red>=0&&r.red<=7&&
+   Number.isInteger(r.blue)&&r.blue>=0&&r.blue<=7&&
+   Number.isInteger(r.draws)&&r.draws>=0&&r.draws<=50&&
+   ['red','blue'].includes(r.winner)&&
+   (r.teamSize===undefined||[2,3,4].includes(r.teamSize));
  }
- function readArchive(){
-  try{
-   const raw=localStorage.getItem(KEY);
-   if(!raw||raw.length>90000)return;
-   const data=JSON.parse(raw);
-   if(data?.version!==1||!Array.isArray(data.records))return;
-   archived=data.records.slice(0,MAX).filter(r=>r&&[3,5,7].includes(r.bestOf)&&
-    Number.isFinite(r.created)&&r.created>0&&r.created<=Date.now()+86400000&&
-    Number.isInteger(r.red)&&r.red>=0&&r.red<=7&&
-    Number.isInteger(r.blue)&&r.blue>=0&&r.blue<=7&&
-    Number.isInteger(r.draws)&&r.draws>=0&&r.draws<=50&&
-    ['red','blue'].includes(r.winner)&&
-    (r.teamSize===undefined||[2,3,4].includes(r.teamSize)));
-  }catch{archived=[];}
+ function readStoredArchive(){
+  const raw=localStorage.getItem(KEY);
+  if(!raw)return [];
+  if(raw.length>90000)throw Error('Saved local series history is oversized.');
+  const data=JSON.parse(raw);
+  if(!data||data.version!==1||!Array.isArray(data.records))
+   throw Error('Saved local series history uses an invalid format.');
+  return data.records.filter(validRecord)
+   .sort((a,b)=>b.created-a.created||seriesIdentity(b).localeCompare(seriesIdentity(a)))
+   .slice(0,MAX);
  }
+ function saveArchiveSnapshot(records){
+  // A tab can commit an older finished match *after* a newer one. Sort by
+  // the actual native series completion timestamp rather than lock order.
+  const bounded=records.filter(validRecord)
+   .sort((a,b)=>b.created-a.created||seriesIdentity(b).localeCompare(seriesIdentity(a)))
+   .slice(0,MAX);
+  localStorage.setItem(KEY,JSON.stringify({version:1,records:bounded}));
+  return bounded;
+ }
+ function seriesIdentity(r){
+  // New results use an immutable ID. Older records still remain addressable
+  // by their original complete content, with no destructive data migration.
+  return typeof r?.id==='string'&&/^cr-[a-z0-9-]{12,90}$/.test(r.id)?
+   r.id:JSON.stringify(r);
+ }
+ function inArchiveTransaction(mutation){
+  const work=archiveOps.catch(()=>{}).then(async()=>{
+   const apply=()=>mutation(readStoredArchive());
+   if(typeof navigator!=='undefined'&&navigator.locks?.request)
+    return navigator.locks.request(archiveLock,{mode:'exclusive'},apply);
+   // Browsers without Web Locks retain safe single-tab ordering; there is no
+   // claim of cross-tab atomicity without the real browser primitive.
+   return apply();
+  });
+  archiveOps=work.catch(()=>{});
+  return work;
+ }
+ function refreshArchive(){
+  try{archived=readStoredArchive();displayHistory();return true;}
+  catch{
+   announce('Stored series history could not be read. Existing data was left untouched; export any finished current series.');
+   return false;
+  }
+ }
+ function readArchive(){try{archived=readStoredArchive();}catch{archived=[];}}
+ // Cross-tab changes must refresh the actual private archive display. Never
+ // send network traffic or resolve unfinished native matches from storage.
+ window.addEventListener('storage',event=>{
+  if(event.key!==KEY)return;
+  archiveOps.then(refreshArchive);
+ });
  const compact=s=>String(s||'').replace(/[\x00-\x1f\x7f-\x9f]/g,'').slice(0,24);
  function labels(){
   const players=room?.state?.players||[];
@@ -79,12 +126,32 @@
   const result={created:series.created,bestOf:series.bestOf,teamSize:series.teamSize,red:series.red,
    blue:series.blue,draws:series.draws,winner:series.red>series.blue?'red':'blue',
    names:series.names,rounds:series.rounds.slice(0,50)};
-  archived.unshift(result);archived=archived.slice(0,MAX);
-  if(!saveArchive())announce('Series finished. Local history could not be saved; export your result now.');
+  // An independent immutable ID makes an explicit delete target the exact
+  // saved series even after another tab adds newer results above it.
+  const random=typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'?
+   crypto.randomUUID().toLowerCase():Math.random().toString(36).slice(2);
+  result.id='cr-'+result.created.toString(36)+'-'+random;
+  inArchiveTransaction(current=>{
+   if(current.some(row=>seriesIdentity(row)===seriesIdentity(result)))
+    return current;
+   archived=saveArchiveSnapshot([result,...current]);
+   return archived;
+  }).then(()=>{
+   displayHistory();
+   if(series?.final===result)
+    announce('Series result saved privately on this device. You can export it now.');
+  }).catch(()=>{
+   announce('Series finished, but your local history was not saved. Export the finished result now.');
+   displayHistory();
+  });
   return result;
  }
- function exportArchive(){
-  if(!archived.length)return;
+ async function exportArchive(){
+  try{
+   await archiveOps;
+   archived=readStoredArchive();
+  }catch{announce('Cannot read current private history. Saved data was not overwritten.');return;}
+  if(!archived.length){announce('There are no saved series to export.');displayHistory();return;}
   const payload={format:'fuckball-couch-series-archive-v1',source:'offline-unverified',
    exportedAt:Date.now(),results:archived.slice(0,MAX)};
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)+'\n'],
@@ -93,27 +160,41 @@
   link.download='fuckball-couch-private-archive-'+new Date().toISOString().slice(0,10)+'.json';
   document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  announce('Your local archive was exported. Nothing was uploaded.');
+  announce('Latest saved local archive exported. Nothing was uploaded.');
  }
  function removeResult(index){
   const selected=archived[index];if(!selected)return;
   if(!window.confirm('Permanently delete this device-local series result?'))return;
-  const old=archived;archived=old.filter((_,i)=>i!==index);
-  if(!saveArchive()){
-   archived=old;announce('Local storage refused deletion. No saved result was changed.');return;
-  }
-  announce('The selected private result has been deleted from this device.');
-  displayHistory();
+  const key=seriesIdentity(selected);
+  inArchiveTransaction(current=>{
+   const at=current.findIndex(row=>seriesIdentity(row)===key);
+   if(at<0){archived=current;return false;}
+   const next=current.slice();next.splice(at,1);
+   archived=saveArchiveSnapshot(next);return true;
+  }).then(removed=>{
+   displayHistory();
+   announce(removed?'The selected private result has been deleted from this device.':
+    'That result was already changed in another tab. Refreshed the current history.');
+  }).catch(()=>announce('Could not delete this series result. Saved history was preserved.'));
  }
  function clearArchive(){
   if(!archived.length)return;
   if(!window.confirm('Delete ALL '+archived.length+' local Couch Rivals series results on this device? '+
    'This cannot be undone. Export the archive first if you need a copy.'))return;
-  try{localStorage.removeItem(KEY);}catch{
-   announce('Local storage refused deletion. Archive unchanged.');return;
-  }
-  archived=[];showAllHistory=false;displayHistory();
-  announce('Private Couch Rivals history cleared from this device.');
+  const confirmed=new Set(archived.map(seriesIdentity));
+  inArchiveTransaction(current=>{
+   // A delayed confirmation must never delete a result another tab just
+   // finished. Require a fresh explicit confirmation if the archive grew.
+   if(current.some(result=>!confirmed.has(seriesIdentity(result)))){
+    archived=current;return false;
+   }
+   archived=saveArchiveSnapshot([]);return true;
+  }).then(cleared=>{
+   if(cleared)showAllHistory=false;
+   displayHistory();
+   announce(cleared?'Private Couch Rivals history cleared from this device.':
+    'New series results arrived in another tab. Nothing was deleted; review the refreshed history and confirm again.');
+  }).catch(()=>announce('Local storage refused deletion. Saved results were preserved.'));
  }
  function displayHistory(){
   history.replaceChildren();
