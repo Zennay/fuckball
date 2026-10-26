@@ -34,9 +34,21 @@
  manualFields.append(outLabel,inLabel,manualButton);manual.append(manualTitle,manualDescription,manualFields);
  const notice=mk('p',null,'room-rotation-notice');
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
- section.append(heading,help,settings,context,rows,suggestions,manual,notice);
+ const exportConfirm=mk('div',null,'room-rotation-export-confirm');
+ exportConfirm.hidden=true;exportConfirm.setAttribute('role','group');
+ exportConfirm.setAttribute('aria-label','Confirm private roster CSV export');
+ const exportHelp=mk('p',
+  'Export currently verified player names and active times as a private CSV? '+
+  'Only a separate, explicit confirm click starts the download.');
+ const exportActions=mk('div',null,'room-rotation-export-actions');
+ const exportApprove=mk('button','Confirm CSV export');exportApprove.type='button';
+ const exportCancel=mk('button','Cancel');exportCancel.type='button';
+ exportActions.append(exportApprove,exportCancel);
+ exportConfirm.append(exportHelp,exportActions);
+ section.append(heading,help,settings,context,rows,suggestions,manual,notice,exportConfirm);
  host.append(section);
- let latest=null,signature='',roomToken=null;
+ let latest=null,signature='',roomToken=null,pendingExport=null;
+ function hideExport(){pendingExport=null;exportConfirm.hidden=true;}
  // A reused room code is not a persistent identity: the native socket is.
  // Invalidate selections when a reconnect creates a new admitted session.
  let observedLink=null,sessionGeneration=0,admissionObservedAt=0;
@@ -54,6 +66,7 @@
  const validFrames=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000000;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
  function clear(){
+  hideExport();
   latest=null;signature='';roomToken=null;
   rows.replaceChildren();suggestions.replaceChildren();notice.textContent='';
  }
@@ -233,29 +246,40 @@
    'No recent admitted-room frame. Refresh after the connection resumes; no recommendation or export was made.';
  };
  download.onclick=()=>{
-  const data=snapshot();if(!data||data.sessionGeneration!==latest?.sessionGeneration||
-   data.token!==latest?.token||!data.people.length){
-   notice.textContent='The room has changed; refresh before exporting.';return;
+  const data=snapshot();
+  if(!data||data.sessionGeneration!==latest?.sessionGeneration||
+     data.token!==latest?.token||!data.people.length){
+   render(true);notice.textContent='The room changed or its server frame is stale. Refresh before exporting.';return;
   }
-  if(!window.confirm('Export displayed player names and their currently observed playing time to a private CSV file?'))return;
- // A blocking permission dialog is not permission to export a changed or
- // expired roster. Verify the exact same admitted socket, target team and
- // server-issued player ledger again before producing any private download.
- const confirmed=snapshot();
- if(!confirmed||confirmed.sessionGeneration!==data.sessionGeneration||
-    confirmed.token!==data.token||confirmed.desired!==data.desired||
-    JSON.stringify(confirmed.people)!==JSON.stringify(data.people)){
-  render(true);
-  notice.textContent='Room, player roster or live frame changed while confirming. No private data exported; review the current players and try again.';
-  return;
- }
+  // A blocking window.confirm would pause the event loop, making every live
+  // frame "stale" while the user reads the prompt. The inline confirmation
+  // keeps native game/network updates flowing until the explicit second click.
+  pendingExport={sessionGeneration:data.sessionGeneration,token:data.token,
+   desired:data.desired,people:JSON.stringify(data.people)};
+  exportConfirm.hidden=false;
+  exportApprove.focus({preventScroll:true});
+  notice.textContent='No data exported yet. Review the prompt and explicitly confirm or cancel.';
+ };
+ exportCancel.onclick=()=>{
+  hideExport();notice.textContent='Private CSV export cancelled; no file generated.';
+ };
+ exportApprove.onclick=()=>{
+  const request=pendingExport;hideExport();if(!request)return;
+  const confirmed=snapshot();
+  if(!confirmed||confirmed.sessionGeneration!==request.sessionGeneration||
+     confirmed.token!==request.token||confirmed.desired!==request.desired||
+     JSON.stringify(confirmed.people)!==request.people){
+   render(true);
+   notice.textContent='Session, roster or recent native frame changed. No data exported; review current players first.';
+   return;
+  }
   // Spreadsheet programs may execute user-provided cells beginning with an
   // Excel formula prefix even inside CSV quotes. Force a literal string.
   const quote=value=>{let cell=String(value);
    if(/^[\s\uFEFF]*[=+\-@]/u.test(cell))cell="'"+cell;
    return '"'+cell.replace(/"/g,'""')+'"';};
   const lines=[['Team','Player','Status','Active seconds observed','Available']];
-  for(const p of data.people){
+  for(const p of confirmed.people){
    lines.push([p.team===1?'Red':p.team===2?'Blue':p.bench===1?'Red bench':
     p.bench===2?'Blue bench':'Spectator',p.name,
     p.team===0?'Inactive':'Playing',p.seconds??'Unavailable',p.available?'yes':'reconnecting']);
@@ -267,7 +291,7 @@
   setTimeout(()=>URL.revokeObjectURL(url),3000);
   notice.textContent='Local roster CSV exported. No server data changed.';
  };
- section.addEventListener('toggle',()=>{if(section.open)render(true);});
+ section.addEventListener('toggle',()=>{if(section.open)render(true);else hideExport();});
  // The panel starts hidden before a room exists. Poll for the first genuine
  // server state as well as later changes; never make hidden DOM block discovery.
  window.addEventListener('fuckball:native-session-state',()=>render(true));
