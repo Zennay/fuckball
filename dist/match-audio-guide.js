@@ -7,6 +7,23 @@
  const video=document.querySelector('#menuVideoPane .rm-form');
  if(!match||!red||!blue||!clock||!video)return;
  const KEY='fuckball.match-audio-guide.v1';
+ const menu=document.getElementById('pauseMenu');
+ const videoPane=document.getElementById('menuVideoPane');
+ const networkDialog=document.getElementById('networkDialog');
+ const joinScreen=document.getElementById('joinScreen');
+ function overlayOpen(){
+  // A locally visible pitch behind a modal is not a foreground match.
+  // Never narrate scores through connection or account/join overlays.
+  if(networkDialog?.open===true||joinScreen?.hidden===false)return true;
+  return !!document.querySelector('dialog[open]');
+ }
+ function canPreview(){
+  // Explicit voice previews belong to the currently visible Settings pane,
+  // not to a prior tab, a hidden game or a background browser window.
+  return match.hidden===false&&menu?.hidden===false&&
+   videoPane?.hidden===false&&document.visibilityState==='visible'&&
+   document.hasFocus()&&!overlayOpen();
+ }
  const defaults={captions:false,voice:false,minutes:false};
  function load(){
   try{
@@ -50,9 +67,15 @@
  const preview=document.createElement('button');
  preview.type='button';preview.className='match-audio-guide-preview';
  preview.textContent='▶ Preview voice';
- preview.setAttribute('aria-label','Preview score voice on this device');
+ preview.setAttribute('aria-label','Preview or stop the on-device score voice');
+ preview.setAttribute('aria-pressed','false');
+ function syncPreviewButton(){
+  preview.textContent=previewSpeaking?'■ Stop preview':'▶ Preview voice';
+  preview.setAttribute('aria-pressed',String(previewSpeaking));
+ }
  preview.addEventListener('click',()=>{
-  if(!speechAvailable||!prefs.voice)return;
+  if(previewSpeaking){stopSpeech();return;}
+  if(!speechAvailable||!prefs.voice||!canPreview())return;
   speak('Voice preview. Red one, Blue zero.',true);
  });
  const support=document.createElement('p');support.className='match-audio-guide-help';
@@ -71,7 +94,7 @@
   if(ownSpeech&&speechAvailable){
    try{window.speechSynthesis.cancel();}catch{}
   }
-  ownSpeech=null;previewSpeaking=false;
+  ownSpeech=null;previewSpeaking=false;syncPreviewButton();
  }
  function sync(){
   for(const key of Object.keys(controls))controls[key].checked=prefs[key];
@@ -80,6 +103,7 @@
   preview.disabled=!speechAvailable||!prefs.voice;
   if(!prefs.captions)caption.hidden=true;
   if(!prefs.voice)stopSpeech();
+  syncPreviewButton();
  }
  sync();
  function visibleActive(){
@@ -88,7 +112,7 @@
   // lobby/rematch voting, and through disconnect/replay transitions.
   if(match.hidden||document.visibilityState!=='visible'||!document.hasFocus()||
    !document.getElementById('pauseMenu')?.hidden||
-   typeof replay!=='undefined'&&!!replay)return false;
+   typeof replay!=='undefined'&&!!replay||overlayOpen())return false;
   if(typeof serverLink!=='undefined'&&serverLink){
    const state=serverLink.roomState;
    return !!serverLink.room&&state?.started===true&&state.paused!==true;
@@ -154,14 +178,18 @@
   lastVoice=now;
   try{
    if(ownSpeech)window.speechSynthesis.cancel();
-   previewSpeaking=explicitPreview;
+   previewSpeaking=explicitPreview;syncPreviewButton();
    const utterance=new window.SpeechSynthesisUtterance(text);utterance.lang='en-GB';
    utterance.rate=1;utterance.pitch=1;utterance.volume=.8;
    ownSpeech=utterance;
-   utterance.onend=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
-   utterance.onerror=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
+   utterance.onend=()=>{
+    if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
+   };
+   utterance.onerror=()=>{
+    if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
+   };
    window.speechSynthesis.speak(utterance);
-  }catch{ownSpeech=null;previewSpeaking=false;}
+  }catch{ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
  }
  function show(text){
   if(!prefs.captions)return;
@@ -173,16 +201,20 @@
   if(captionTimer){clearTimeout(captionTimer);captionTimer=0;}
  }
  function poll(){
-  if(visibleActive()&&previewSpeaking){
-   // A settings voice preview must never talk over a resumed real match.
+  const active=visibleActive();
+  if(previewSpeaking&&(active||!canPreview())){
+   // A preview may never outlive Settings, its current window or a dialog
+   // transition. Also stop it before a genuine match becomes audible.
    stopSpeech();
   }
-  if(!visibleActive()){
-   // An explicit Voice Preview is allowed while settings are open. It is
-   // cancelled by navigation, focus/visibility loss and session changes.
+  if(!active){
+   // An explicit, visible voice preview is not a game event. All hidden or
+   // obscured games are silenced and reset before any further score cue.
    if(!previewSpeaking)silenceAndRebaseline();
    observedSource=null;
-   sourceLabel('Paused · only a visible active match can produce score cues.');
+   sourceLabel(previewSpeaking?
+    'On-device voice preview · not a verified score event.':
+    'Paused · only a visible active match can produce score cues.');
    return;
   }
   const identity=currentScoreSource();
@@ -266,12 +298,22 @@
   observedSource=null;silenceAndRebaseline();
   sourceLabel('Room changed · waiting for the current match scoreboard.');
  });
- const menu=document.getElementById('pauseMenu');
  if(typeof MutationObserver==='function'){
   const visibilityObserver=new MutationObserver(()=>{
    if(!visibleActive())silenceAndRebaseline();
   });
   visibilityObserver.observe(match,{attributes:true,attributeFilter:['hidden']});
   if(menu)visibilityObserver.observe(menu,{attributes:true,attributeFilter:['hidden']});
+  if(videoPane)visibilityObserver.observe(videoPane,{attributes:true,attributeFilter:['hidden']});
+  if(networkDialog)visibilityObserver.observe(networkDialog,{attributes:true,attributeFilter:['open']});
+  if(joinScreen)visibilityObserver.observe(joinScreen,{attributes:true,attributeFilter:['hidden']});
+ }
+ // View and dialog changes silence any voice immediately (not only when the
+ // 350ms score polling interval next wakes up).
+ for(const id of ['tabHome','tabPlay','tabGames','menuMatch','menuHelp','menuVideo']){
+  document.getElementById(id)?.addEventListener('click',()=>{
+   if(previewSpeaking&&!canPreview())stopSpeech();
+   if(!visibleActive()&&!previewSpeaking)silenceAndRebaseline();
+  });
  }
 })();
