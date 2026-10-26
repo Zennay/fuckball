@@ -201,9 +201,11 @@
    notice.textContent='Party updated.';
    launchIfReady(state);
   }).catch(e=>{
-   if(settings.account?.token===token&&generation===requestGeneration)
-    notice.textContent=e.message||'Party action unavailable.';
-    showGlobalPartyError(notice.textContent);
+   // The rejected request may belong to an account that has just signed out.
+   // Never display its private-party failure in another account's game.
+   if(settings.account?.token!==token||generation!==requestGeneration)return;
+   notice.textContent=e.message||'Party action unavailable.';
+   showGlobalPartyError(notice.textContent);
   }).finally(()=>{busy=false;updateGlobalParty();});
  }
  // Each party launch is server-issued and expires. Keep automatic launch
@@ -254,11 +256,11 @@
  }
  async function retryPartySearch(){
   if(busy)return;
+  const accountToken=settings.account?.token;
   busy=true;notice.textContent='Checking the current server-issued party launch…';
   try{
    // Do not trust stale polling state after a room switch, account change,
    // revoked invite, expiry or a leader relaunch.
-   const accountToken=settings.account?.token;
    const state=await api(null);
    if(settings.account?.token!==accountToken){
     bannerRetry.hidden=true;
@@ -274,6 +276,9 @@
    }
    launchIfReady(state,true);
   }catch(e){
+   // An old account's denied private-party request may complete after a
+   // sign-out/switch; discard its result and any per-account error details.
+   if(settings.account?.token!==accountToken)return;
    notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';
    showGlobalPartyError(notice.textContent);
   }finally{busy=false;updateGlobalParty();}
