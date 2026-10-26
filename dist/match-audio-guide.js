@@ -310,7 +310,7 @@
  }
  // View and dialog changes silence any voice immediately (not only when the
  // 350ms score polling interval next wakes up).
- for(const id of ['tabHome','tabPlay','tabGames','menuMatch','menuHelp','menuVideo']){
+ for(const id of ['tabHome','tabPlay','menuMatch','menuHelp','menuVideo']){
   document.getElementById(id)?.addEventListener('click',()=>{
    if(previewSpeaking&&!canPreview())stopSpeech();
    if(!visibleActive()&&!previewSpeaking)silenceAndRebaseline();
