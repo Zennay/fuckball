@@ -31,6 +31,10 @@
  if(anchor)anchor.insertAdjacentElement('afterend',section);
  else home.append(section);
  const ROOM=/^[A-HJ-NP-Z2-9]{8}$/;
+ // A pasted clipboard/QR result is provisional until the human explicitly
+ // chooses Join. Late browser permissions or image decoding must never
+ // replace a newer manually typed invitation or revive a departed view.
+ let invitationEpoch=0;
  function parseInvite(value){
   if(typeof value!=='string'||value.length>2048)throw Error('Room invitation is too long.');
   const raw=value.trim();
@@ -53,6 +57,7 @@
  }
  form.onsubmit=event=>{
   event.preventDefault();
+  if(home.hidden||document.hidden)return;
   const conflict=typeof onlineSessionConflict==='function'?onlineSessionConflict():'';
   if(conflict){status.textContent=conflict;return;}
   try{
@@ -60,6 +65,10 @@
    // Hosted pages intentionally do not assume a server endpoint. The native
    // join form lets the user explicitly choose the host's WebSocket server.
    // Do not discard an otherwise valid link or create a connection here.
+   // Commit the human's final selected code before opening the original join
+   // form. Shut down camera capture and discard every pending clipboard/image
+   // response, including permission prompts that resolve after navigation.
+   invitationEpoch++;imageEpoch++;stopScan();
    status.textContent='Opening '+code+' · room admission and account requirements are checked by the server.';
    showJoinScreen(code);
   }catch(error){status.textContent=error?.message||'Could not open the invitation.';}
@@ -69,13 +78,24 @@
    status.textContent='Clipboard reading is unavailable. Paste a link into the field manually.';
    input.focus();return;
   }
+  const request=++invitationEpoch,original=input.value;
   paste.disabled=true;
+  status.textContent='Waiting for clipboard permission · your existing room code is preserved.';
   try{
    const value=await navigator.clipboard.readText();
+   // Clipboard APIs can settle long after the user edited the field, started
+   // a QR scan, switched views or entered a server-owned join dialog.
+   if(request!==invitationEpoch||home.hidden||document.hidden||
+      input.value!==original)return;
    if(!value||value.length>2048)throw Error('Clipboard is empty or the link is too long.');
-   input.value=value;input.focus();status.textContent='Invitation pasted. Review the link and choose Join room.';
-  }catch(error){status.textContent=error?.message||'Clipboard access was denied. Paste manually.';}
-  finally{paste.disabled=false;}
+   imageEpoch++;
+   if(stream||!scanner.hidden)stopScan();
+   input.value=value;input.focus();
+   status.textContent='Invitation pasted. Review the link and choose Join room.';
+  }catch(error){
+   if(request===invitationEpoch&&!home.hidden&&!document.hidden)
+    status.textContent=error?.message||'Clipboard access was denied. Paste manually.';
+  }finally{paste.disabled=false;}
  };
  // Optional QR recognition: local camera or private image, NEVER auto-join.
  // All decoded values pass the identical strict same-origin invite parser.
@@ -132,6 +152,13 @@
  // Every request captures an epoch. A slow permission or decoder promise
  // must never reactivate an abandoned camera after navigating away.
  let scanEpoch=0,imageEpoch=0;
+ input.addEventListener('input',()=>{
+  invitationEpoch++;imageEpoch++;
+  // A person typing a room code takes ownership of the input immediately:
+  // late camera permissions and in-flight image scans cannot overwrite it.
+  if(stream||!scanner.hidden)stopScan();
+  status.textContent='Your edited invitation is ready for review. Choose Join room to continue.';
+ });
  function stopScan(){
   scanEpoch++;
   if(scanTimer!==null){clearInterval(scanTimer);scanTimer=null;}
@@ -144,6 +171,7 @@
  function acceptScanned(raw){
   try{
    const code=parseInvite(raw);
+   invitationEpoch++;imageEpoch++;
    stopScan();input.value=code;input.focus();
    status.textContent='QR read: valid room code '+code+'. Review and choose Join room; live server admission is still required.';
    return true;
@@ -161,6 +189,7 @@
  scan.onclick=async()=>{
   if(stream||scan.disabled||home.hidden||document.hidden)return;
   const attempt=++scanEpoch;
+  invitationEpoch++;imageEpoch++;
   scan.disabled=true;lastInvalid='';
   // Show Stop even while a permission prompt or lazy decoder is outstanding.
   scanner.hidden=false;
@@ -210,6 +239,7 @@
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
   const request=++imageEpoch;
+  invitationEpoch++;
   imageFile.disabled=true;
   try{
    await readyDecoder();
@@ -230,14 +260,14 @@
  };
  function leaveInviteView(){
   if(!home.hidden&&!document.hidden)return;
-  imageEpoch++; // Discard any late file decode from the previous view.
+  invitationEpoch++;imageEpoch++; // Discard all late clipboard/QR work from the previous view.
   if(stream||!scanner.hidden){
    stopScan();
    status.textContent='Camera stopped when you left the invite screen. Open Home to scan again.';
   }
  }
  document.addEventListener('visibilitychange',leaveInviteView);
- window.addEventListener('pagehide',()=>{imageEpoch++;stopScan();});
+ window.addEventListener('pagehide',()=>{invitationEpoch++;imageEpoch++;stopScan();});
  // The game navigates between in-page views without hiding the browser tab.
  // A page-visibility event alone would leave the physical camera capturing.
  for(const id of ['tabPlay','tabReplay'])
