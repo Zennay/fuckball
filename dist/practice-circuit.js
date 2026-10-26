@@ -162,11 +162,14 @@
   if(!Array.isArray(rows))return 0;
   let latest=0;
   for(const x of rows.slice(0,20)){
+   // The same native attempt must be a coherent success; a malformed
+   // completed flag or impossible duration must never advance the circuit.
    if(!x||x.completed!==true||!validAt(x.at))continue;
    if(type==='goals'){
     if(![60,120,180].includes(x.duration)||![1,3,5].includes(x.target)||
       !Number.isSafeInteger(x.goals)||x.goals<x.target||x.goals>999||
-      !Number.isSafeInteger(x.elapsed)||x.elapsed<0||x.elapsed>180)continue;
+      !Number.isSafeInteger(x.elapsed)||x.elapsed<0||
+      x.elapsed>x.duration+1)continue;
    }else if(type==='rockets'){
     if(![60,120,180].includes(x.duration)||![3,5,7].includes(x.threshold)||
      ![1,3,5].includes(x.target)||!Number.isSafeInteger(x.hits)||x.hits<x.target||x.hits>999||
@@ -183,7 +186,8 @@
     if(![120,180,300].includes(x.seconds)||![2,4,6].includes(x.target)||
      !Number.isSafeInteger(x.links)||x.links<x.target||x.links>99||
      !Number.isSafeInteger(x.attempts)||x.attempts<0||x.attempts>9999||
-     !Number.isSafeInteger(x.elapsed)||x.elapsed<0||x.elapsed>300)continue;
+     !Number.isSafeInteger(x.elapsed)||x.elapsed<0||
+     x.elapsed>x.seconds+1)continue;
    }
    latest=Math.max(latest,x.at);
   }
