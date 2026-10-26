@@ -132,7 +132,7 @@
    !data.mayPropose||data.pendingTeam||
    !data.active.some(p=>p.id===outgoing.id&&p.available)||
    !data.waiting.some(p=>p.id===incoming.id&&p.available)){
-   notice.textContent='Room or permissions changed. Refresh the desk; no swap was proposed.';render(true);return;
+   render(true);notice.textContent='Room or permissions changed. Refresh the desk; no swap was proposed.';return;
   }
   const sideField=document.getElementById('subTeam'),
    outgoingField=document.getElementById('subOutPlayer'),
@@ -167,11 +167,11 @@
   const data=snapshot();
   if(!data||!latest||data.sessionGeneration!==latest.sessionGeneration||
    data.token!==latest.token||data.desired!==latest.desired){
-   notice.textContent='Room changed; refresh before preparing a swap.';render(true);return;
+   render(true);notice.textContent='Room changed; refresh before preparing a swap.';return;
   }
   const outgoing=data.active.find(p=>p.id===Number(outChoice.value)&&p.available);
   const incoming=data.waiting.find(p=>p.id===Number(inChoice.value)&&p.available);
-  if(!outgoing||!incoming){notice.textContent='Choose a connected active and assigned bench player.';render(true);return;}
+  if(!outgoing||!incoming){render(true);notice.textContent='Choose a connected active and assigned bench player.';return;}
   nativePrepare(outgoing,incoming);
  };
  function render(force=false){
@@ -239,6 +239,17 @@
    notice.textContent='The room has changed; refresh before exporting.';return;
   }
   if(!window.confirm('Export displayed player names and their currently observed playing time to a private CSV file?'))return;
+ // A blocking permission dialog is not permission to export a changed or
+ // expired roster. Verify the exact same admitted socket, target team and
+ // server-issued player ledger again before producing any private download.
+ const confirmed=snapshot();
+ if(!confirmed||confirmed.sessionGeneration!==data.sessionGeneration||
+    confirmed.token!==data.token||confirmed.desired!==data.desired||
+    JSON.stringify(confirmed.people)!==JSON.stringify(data.people)){
+  render(true);
+  notice.textContent='Room, player roster or live frame changed while confirming. No private data exported; review the current players and try again.';
+  return;
+ }
   // Spreadsheet programs may execute user-provided cells beginning with an
   // Excel formula prefix even inside CSV quotes. Force a literal string.
   const quote=value=>{let cell=String(value);
