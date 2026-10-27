@@ -69,6 +69,9 @@
   return valid;
  }
  let snapshot=null,items=[],healthy=true,selected='',message='',errorText='';
+ // A recovery must start from an explicit untouched-byte download and must
+ // never silently replace another tab's newer series history.
+ let backedUpDamagedSnapshot=null,restoringDamaged=false;
  function read(){
   snapshot=localStorage.getItem(KEY);
   if(snapshot!==null&&snapshot.length>MAX_BYTES)throw Error('Stored series exceeds 128 KiB.');
@@ -136,7 +139,9 @@
  const choose=text('select');choose.setAttribute('aria-label','Select private match series');
  const createToggle=button('＋ New series',()=>{creation.hidden=!creation.hidden;if(!creation.hidden)name.focus();});
  const backup=button('↓ Backup all JSON',downloadAll);
- const restore=button('↑ Restore JSON',()=>{file.value='';file.click();});
+ const restore=button('↑ Restore JSON',()=>{
+  restoringDamaged=false;file.value='';file.click();
+ });
  const csv=button('↓ Games CSV',downloadCSV),calendar=button('↓ Calendar ICS',downloadCalendar);
  const scorecard=button('↓ Share scorecard SVG',downloadScorecard);
  const shareText=button('Copy series summary',copySummary);
@@ -154,16 +159,26 @@
   label('Blue team',blueName),label('Series format',format),create);
  const note=text('p',null,'series-status');note.setAttribute('role','status');note.setAttribute('aria-live','polite');
  const recovery=text('section',null,'series-recovery');recovery.hidden=true;
- const recoveryText=text('p','Saved private series could not be read safely. This panel will not overwrite it. Download the untouched bytes and resolve the storage problem before editing.');
+ const recoveryText=text('p','Saved private series is unreadable. Download the untouched original bytes first. Only then can you explicitly restore a fully validated private series backup; replacing the damaged bytes is never automatic.');
  const rawDownload=button('↓ Download untouched local data',()=>{
   try{
    const raw=localStorage.getItem(KEY);
    if(!raw||raw!==snapshot)throw Error('Stored data changed; reload first.');
    download('fuckball-series-unreadable-backup.json',raw,'application/json',true);
-   inform('Raw local series bytes downloaded; original storage remains unchanged.');
+   backedUpDamagedSnapshot=raw;
+   inform('Untouched data backup download requested. Verify the downloaded file before choosing Restore verified backup; no stored bytes were changed.');
+   render();
   }catch(e){inform('Could not back up stored bytes: '+e.message);}
  });
- recovery.append(recoveryText,rawDownload);
+ const restoreDamaged=button('↑ Restore verified backup · replace damaged data',()=>{
+  if(healthy||backedUpDamagedSnapshot===null||
+     localStorage.getItem(KEY)!==backedUpDamagedSnapshot)
+   return inform('The damaged data changed or has not been backed up. Download the current untouched bytes first.');
+  restoringDamaged=true;file.value='';file.click();
+ });
+ restoreDamaged.className='series-recovery-restore';
+ const restoreHelp=text('p','Recovery requires browser-supported exclusive storage locking. The original damaged bytes are not deleted until a valid backup is selected and you explicitly confirm replacement.');
+ recovery.append(recoveryText,rawDownload,restoreDamaged,restoreHelp);
  const board=text('section',null,'series-board');
  inner.append(heading,info,tools,creation,note,recovery,board);
  details.append(summary,inner);section.append(details);
@@ -188,7 +203,7 @@
   if(localStorage.getItem(KEY)!==snapshot){
    try{read();healthy=true;errorText='';message='Latest series refreshed before export.';}
    catch(error){
-    healthy=false;items=[];selected='';
+    healthy=false;items=[];selected='';backedUpDamagedSnapshot=null;
     errorText=error.message||'Unreadable private series data';
     render();
     throw Error('Another tab saved unreadable data. Untouched bytes were preserved.');
@@ -380,6 +395,8 @@
   backup.disabled=!healthy||!items.length;createToggle.disabled=remove.disabled=!healthy;
   csv.disabled=calendar.disabled=scorecard.disabled=shareText.disabled=!enabled;
   restore.disabled=!healthy;create.disabled=!healthy;
+  restoreDamaged.disabled=healthy||backedUpDamagedSnapshot===null||
+   snapshot!==backedUpDamagedSnapshot;
   note.textContent=message||(healthy?'Everything here is device-private and unverified.':
    'Unreadable original data: '+errorText);
   if(!v)return void(board.append(text('p','Create your first best-of series with two teams.')));
@@ -554,7 +571,36 @@
   try{await persist(items.filter(x=>x.id!==v.id));selected='';message='Series deleted locally.';render();}
   catch(error){inform(error.message);}
  }
+ async function recoverDamagedFromBackup(imported){
+  if(healthy||backedUpDamagedSnapshot===null||
+     snapshot!==backedUpDamagedSnapshot)
+   throw Error('Stored series changed. Download the current damaged data before restoring.');
+  if(typeof navigator==='undefined'||!navigator.locks?.request)
+   throw Error('Safe restore requires Web Locks on this browser. Unreadable data remains unchanged.');
+  if(!window.confirm('Replace the unreadable local series data with '+imported.length+
+     ' validated series from this backup? Confirm only after checking that the untouched original file was downloaded. This cannot be undone in this browser.'))return false;
+  const expected=backedUpDamagedSnapshot;
+  await pendingWrite.catch(()=>{});
+  await navigator.locks.request(writeLock,{mode:'exclusive'},()=>{
+   // Recheck under the same exclusive lock as normal series mutations.
+   // Never overwrite a different writer's newer bytes or readable content.
+   if(healthy||snapshot!==expected||localStorage.getItem(KEY)!==expected)
+    throw Error('Another tab changed your original data. No replacement occurred.');
+   const restored=validateCollection(imported).map(x=>x.series);
+   const next=JSON.stringify(restored);
+   if(next.length>MAX_BYTES)throw Error('Validated backup exceeds local storage limits.');
+   localStorage.setItem(KEY,next);
+   snapshot=next;items=restored;healthy=true;errorText='';
+   selected=restored[0]?.id||'';backedUpDamagedSnapshot=null;
+   window.dispatchEvent(new Event('fuckball:private-competition-change'));
+  });
+  message=imported.length+' validated private series safely restored. Original damaged bytes were backed up before replacement.';
+  render();
+  return true;
+ }
  file.onchange=async()=>{
+  const recoveryMode=restoringDamaged;
+  restoringDamaged=false;
   const chosen=file.files?.[0];file.value='';if(!chosen)return;
   if(chosen.size<1||chosen.size>MAX_FILE)
    return inform('Use a series backup smaller than 128 KiB.');
@@ -564,6 +610,11 @@
      !Array.isArray(pack.series)||!pack.series.length)
     throw Error('Not a private best-of-series backup.');
    const imported=validateCollection(pack.series).map(x=>x.series);
+   if(recoveryMode){
+    await recoverDamagedFromBackup(imported);
+    return;
+   }
+   if(!healthy)throw Error('The stored series is unreadable. Back up its untouched bytes and use the explicit recovery control.');
    if(imported.length+items.length>MAX)throw Error('Not enough space for every imported series.');
    const now=Date.now(),copies=imported.map(x=>({
     ...x,id:uid(),createdAt:now,updatedAt:now,games:x.games.map(g=>({...g}))}));
@@ -574,6 +625,7 @@
  };
  window.addEventListener('storage',event=>{
   if(event.key!==KEY)return;
+  backedUpDamagedSnapshot=null;
   try{
    read();healthy=true;errorText='';message='Series refreshed from another tab.';
   }catch(e){healthy=false;snapshot=event.newValue;items=[];
