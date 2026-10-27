@@ -35,7 +35,18 @@
  globalOpen.type='button';globalOpen.textContent='↗ Open party';
  const globalRetry=document.createElement('button');
  globalRetry.type='button';globalRetry.textContent='↻ Retry search';
- globalActions.append(globalOpen,globalRetry);
+ // A single server-issued invitation and a member's own ready state can be
+ // acted on without reopening the Friends dialog. Never auto-accept or ready.
+ const globalReady=document.createElement('button');
+ globalReady.type='button';globalReady.className='friend-party-global-primary';
+ globalReady.hidden=true;
+ const globalAccept=document.createElement('button');
+ globalAccept.type='button';globalAccept.textContent='✓ Accept invitation';
+ globalAccept.className='friend-party-global-primary';globalAccept.hidden=true;
+ const globalDecline=document.createElement('button');
+ globalDecline.type='button';globalDecline.textContent='Decline invitation';
+ globalDecline.hidden=true;
+ globalActions.append(globalOpen,globalRetry,globalReady,globalAccept,globalDecline);
  globalParty.append(globalCopy,globalActions);
  document.body.append(globalParty);
  (home.querySelector('.quick-queue-panel')||home.querySelector('.mode-cards'))?.insertAdjacentElement('beforebegin',statusBar);
@@ -76,6 +87,16 @@
  };
  let busy=false,generation=0,hasJoined=false,lastModeKey='',failedModeKey='',lastQuietPoll=0;
  let lastPartyState=null,lastPartyToken=null;
+ let globalActionError='',globalActionErrorUntil=0,globalActionErrorToken=null;
+ function showGlobalPartyError(message){
+  globalActionError=String(message||'The party action could not be completed.').slice(0,200);
+  globalActionErrorUntil=Date.now()+12000;
+  globalActionErrorToken=settings.account?.token||null;
+  updateGlobalParty();
+  // When the last invitation vanishes, the floating card is intentionally
+  // hidden; the original user-visible notification still explains failure.
+  if(globalParty.hidden)notify(globalActionError);
+ }
  function updateGlobalParty(){
   const currentToken=settings.account?.token;
   const state=lastPartyToken===currentToken?lastPartyState:null;
@@ -93,12 +114,25 @@
   const readyCheck=document.querySelector('.quick-ready-dock:not([hidden])');
   globalParty.hidden=(!party&&!invites.length)||!home.hidden||activeMatch||!!readyCheck;
   if(globalParty.hidden)return;
+  const username=settings.account?.username?.toLowerCase();
+  const self=party?.members?.find(m=>m.name===username);
+  const readyAction=!!self&&!party.launchMode;
+  const singleInvite=!party&&invites.length===1&&typeof invites[0]?.id==='string';
+  globalReady.hidden=!readyAction;
+  globalReady.textContent=self?.ready?'Cancel my ready':'✓ Ready up';
+  globalReady.disabled=busy;
+  globalAccept.hidden=!singleInvite;
+  globalDecline.hidden=!singleInvite;
+  globalAccept.disabled=busy;globalDecline.disabled=busy;
+  globalRetry.disabled=busy||globalRetry.hidden;
   if(!party){
    globalTitle.textContent=invites.length===1?'PRIVATE FRIEND INVITATION':
     invites.length+' PRIVATE FRIEND INVITATIONS';
    const copy=invites.length+' server-issued invitation'+(invites.length===1?'':'s')+
     ' · Review the sender and accept or decline in your original Party panel.';
-   if(globalDetail.textContent!==copy)globalDetail.textContent=copy;
+   const message=globalActionErrorToken===currentToken&&globalActionErrorUntil>Date.now()?
+    copy+' · '+globalActionError:copy;
+   if(globalDetail.textContent!==message)globalDetail.textContent=message;
    globalOpen.textContent='↗ Review invitation';
    globalRetry.hidden=true;return;
   }
@@ -114,10 +148,35 @@
     remaining===0?' · Deadline passed; request a new search.':
     ' · Keep the original server queue or open your party.'):
    party.members.length+' / 4 signed-in teammates · ready up before searching.';
-  if(globalDetail.textContent!==detail)globalDetail.textContent=detail;
+  const message=globalActionErrorToken===currentToken&&globalActionErrorUntil>Date.now()?
+   detail+' · '+globalActionError:detail;
+  if(globalDetail.textContent!==message)globalDetail.textContent=message;
   globalRetry.hidden=!canRetry;
   globalRetry.disabled=!canRetry||busy;
  }
+ // Every click is deliberate, and the signed-in account plus current server
+ // receipt is checked again at click time. The original party API is the
+ // sole authority for changing invitations or teammate readiness.
+ function currentGlobalState(){
+  return settings.account?.token&&lastPartyToken===settings.account.token?
+   lastPartyState:null;
+ }
+ globalReady.onclick=()=>{
+  if(busy||globalParty.hidden)return;
+  const party=currentGlobalState()?.party;
+  const user=settings.account?.username?.toLowerCase();
+  const member=party?.members?.find(m=>m.name===user);
+  if(!member||party.launchMode)return;
+  act({action:'ready',ready:!member.ready});
+ };
+ function decideSingleInvitation(accept){
+  if(busy||globalParty.hidden)return;
+  const state=currentGlobalState(),invites=state?.invitations||[];
+  if(state?.party||invites.length!==1||typeof invites[0].id!=='string')return;
+  act({action:accept?'accept':'decline',id:invites[0].id});
+ }
+ globalAccept.onclick=()=>decideSingleInvitation(true);
+ globalDecline.onclick=()=>decideSingleInvitation(false);
  const knownInvitations=new Set();
  async function api(data){
   const token=settings.account?.token;
@@ -134,17 +193,22 @@
   const token=settings.account?.token;
   const requestGeneration=++generation;
   busy=true;notice.textContent='Saving party action…';
+  globalActionError='';globalActionErrorUntil=0;globalActionErrorToken=null;updateGlobalParty();
   api(payload).then(state=>{
    // Sign-out, account switch or a newer action invalidates the response.
    // Never render another account's party or launch its human-only queue.
    if(settings.account?.token!==token||generation!==requestGeneration)return;
+   globalActionError='';globalActionErrorUntil=0;globalActionErrorToken=null;
    render(state);
    entry.textContent='Party'+(state.invitations?.length?' ('+state.invitations.length+')':'');
    notice.textContent='Party updated.';
    launchIfReady(state);
   }).catch(e=>{
-   if(settings.account?.token===token&&generation===requestGeneration)
-    notice.textContent=e.message||'Party action unavailable.';
+   // The rejected request may belong to an account that has just signed out.
+   // Never display its private-party failure in another account's game.
+   if(settings.account?.token!==token||generation!==requestGeneration)return;
+   notice.textContent=e.message||'Party action unavailable.';
+   showGlobalPartyError(notice.textContent);
   }).finally(()=>{busy=false;updateGlobalParty();});
  }
  // Each party launch is server-issued and expires. Keep automatic launch
@@ -195,11 +259,11 @@
  }
  async function retryPartySearch(){
   if(busy)return;
+  const accountToken=settings.account?.token;
   busy=true;notice.textContent='Checking the current server-issued party launch…';
   try{
    // Do not trust stale polling state after a room switch, account change,
    // revoked invite, expiry or a leader relaunch.
-   const accountToken=settings.account?.token;
    const state=await api(null);
    if(settings.account?.token!==accountToken){
     bannerRetry.hidden=true;
@@ -214,8 +278,13 @@
     return;
    }
    launchIfReady(state,true);
-  }catch(e){notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';}
-  finally{busy=false;}
+  }catch(e){
+   // An old account's denied private-party request may complete after a
+   // sign-out/switch; discard its result and any per-account error details.
+   if(settings.account?.token!==accountToken)return;
+   notice.textContent=e.message||'Could not refresh the party. Retry from the original party panel.';
+   showGlobalPartyError(notice.textContent);
+  }finally{busy=false;updateGlobalParty();}
  }
  bannerRetry.onclick=retryPartySearch;
  globalRetry.onclick=retryPartySearch;
