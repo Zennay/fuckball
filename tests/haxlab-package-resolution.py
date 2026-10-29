@@ -94,7 +94,7 @@ print("HaxLab trainer package resolution: PASS")
         # collision environment. --help exits before touching training data;
         # the NumPy stub keeps this import-only check independent of training.
         (installed_root / "numpy.py").write_text(
-            '"""Import-only NumPy stub; this smoke test never trains."""\\n',
+            '"""Import-only NumPy stub; this smoke test never trains."""\n',
             encoding="utf-8",
         )
         env = os.environ.copy()
