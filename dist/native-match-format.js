@@ -45,9 +45,20 @@
   const changed=ballotLink!==d.link||ballotRoom!==d.link.room||
    ballotRound!==d.state.round||ballotPlayer!==networkPlayerId||signature!==sign;
   if(changed){
+   // Applying the winning format legitimately starts a new native room round.
+   // Inspect the authoritative new round before clearing the pending receipt;
+   // a new socket, room or player must never confirm a previous host action.
+   const applied=pendingApply&&pendingApply.link===d.link&&
+    pendingApply.room===d.link.room&&pendingApply.player===networkPlayerId&&
+    pendingApply.round!==d.state.round&&
+    d.state.timeLimit===pendingApply.minutes&&
+    d.state.scoreLimit===pendingApply.goals&&
+    d.state.matchFormatVotes.length===0&&d.state.matchFormatWinner==null;
    ballotLink=d.link;ballotRoom=d.link.room;ballotRound=d.state.round;
    ballotPlayer=networkPlayerId;signature=sign;selected=mine??2;
-   pendingVote=null;pendingApply=null;status.textContent='';
+   pendingVote=null;pendingApply=null;
+   status.textContent=applied?
+    'Native server confirmed the winning format and opened a fresh lobby round.':'';
   }
   return changed;
  }
@@ -61,7 +72,8 @@
     pendingVote=null;
    }else status.textContent='Vote sent · waiting for server-confirmed ballot update.';
   }else if(pendingApply){
-   const confirmed=d.state.matchFormatVotes.length===0&&
+   const confirmed=d.state!==pendingApply.originalState&&
+    d.state.matchFormatVotes.length===0&&
     d.state.matchFormatWinner==null&&
     d.state.timeLimit===pendingApply.minutes&&
     d.state.scoreLimit===pendingApply.goals;
@@ -177,7 +189,9 @@
   if(!now||now.link!==d.link||now.state.round!==d.state.round||
      now.state.matchFormatWinner!==winner)return;
   now.link.send({type:'matchFormatApply'});
-  pendingApply={minutes:chosen.minutes,goals:chosen.goals,sentAt:Date.now()};
+  pendingApply={minutes:chosen.minutes,goals:chosen.goals,
+   originalState:d.state,round:d.state.round,link:d.link,room:d.link.room,
+   player:networkPlayerId,sentAt:Date.now()};
   render();
  };
  // A format ballot is a server-owned Custom Room choice. Players who are
