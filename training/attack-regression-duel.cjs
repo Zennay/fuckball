@@ -34,12 +34,16 @@ function argsOf(argv) {
   return out;
 }
 
-function git(args, cwd) {
+function gitRaw(args, cwd) {
   const result = spawnSync('git', args, {cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024});
   if (result.error || result.status !== 0)
     throw new Error('git ' + args.join(' ') + ' failed: ' +
       (result.error ? result.error.message : (result.stderr || '').trim()));
-  return result.stdout.trimEnd();
+  return result.stdout;
+}
+
+function git(args, cwd) {
+  return gitRaw(args, cwd).trimEnd();
 }
 
 function sha256(value) {
@@ -47,10 +51,10 @@ function sha256(value) {
 }
 
 function loadPolicy(repoRoot, commit, label, tempRoot) {
-  const source = git(['show', commit + ':dist/ai/policy.js'], repoRoot);
+  const source = gitRaw(['show', commit + ':dist/ai/policy.js'], repoRoot);
   const blob = git(['rev-parse', commit + ':dist/ai/policy.js'], repoRoot);
   const file = path.join(tempRoot, label + '-policy.js');
-  fs.writeFileSync(file, source + '\n', {flag: 'wx'});
+  fs.writeFileSync(file, source, {flag: 'wx'});
   const ai = require(file);
   for (const key of ['teamPlan', 'tactical', 'profile'])
     if (typeof ai[key] !== 'function') throw new Error(label + ' policy is missing ' + key);
