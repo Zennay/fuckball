@@ -34,30 +34,55 @@
  manualFields.append(outLabel,inLabel,manualButton);manual.append(manualTitle,manualDescription,manualFields);
  const notice=mk('p',null,'room-rotation-notice');
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
- section.append(heading,help,settings,context,rows,suggestions,manual,notice);
+ const exportConfirm=mk('div',null,'room-rotation-export-confirm');
+ exportConfirm.hidden=true;exportConfirm.setAttribute('role','group');
+ exportConfirm.setAttribute('aria-label','Confirm private roster CSV export');
+ const exportHelp=mk('p',
+  'Export currently verified player names and active times as a private CSV? '+
+  'Only a separate, explicit confirm click starts the download.');
+ const exportActions=mk('div',null,'room-rotation-export-actions');
+ const exportApprove=mk('button','Confirm CSV export');exportApprove.type='button';
+ const exportCancel=mk('button','Cancel');exportCancel.type='button';
+ exportActions.append(exportApprove,exportCancel);
+ exportConfirm.append(exportHelp,exportActions);
+ section.append(heading,help,settings,context,rows,suggestions,manual,notice,exportConfirm);
  host.append(section);
- let latest=null,signature='',roomToken=null;
+ let latest=null,signature='',roomToken=null,pendingExport=null;
+ function hideExport(){pendingExport=null;exportConfirm.hidden=true;}
  // A reused room code is not a persistent identity: the native socket is.
  // Invalidate selections when a reconnect creates a new admitted session.
- let observedLink=null,sessionGeneration=0;
+ let observedLink=null,sessionGeneration=0,admissionObservedAt=0;
+ // Reconnects may reuse a room code and even the same player ID. The very
+ // first *new* physics frame after admission proves the displayed roster was
+ // not left over from the previous socket.
+ function currentFrameEvidence(){
+  if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+     net.receivedSequence<1||net.lastSnapshot<=admissionObservedAt||
+     !Number.isFinite(net.lastSnapshot)||net.lastSnapshot<=0)return false;
+  const age=performance.now()-net.lastSnapshot;
+  return Number.isFinite(age)&&age>=0&&age<=1600;
+ }
  const validId=n=>Number.isSafeInteger(n)&&n>0&&n<=2147483647;
  const validFrames=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000000;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
  function clear(){
+  hideExport();
   latest=null;signature='';roomToken=null;
   rows.replaceChildren();suggestions.replaceChildren();notice.textContent='';
  }
  function snapshot(){
   const link=typeof serverLink==='undefined'?null:serverLink;
-  if(link!==observedLink){observedLink=link;sessionGeneration++;}
+  if(link!==observedLink){
+   observedLink=link;sessionGeneration++;
+   admissionObservedAt=performance.now();
+  }
   const state=link?.roomState;
   // The local room engine can still contain an older room's human names and
   // teams between native welcome and the first NEW server physics snapshot.
   // Never recommend or export those players based on a room code alone.
   if(!link?.room||link.quickMatchMode||!state||
    link.ws?.readyState!==1||state.room!==link.room||
-   typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
-   net.receivedSequence<1||
+   !currentFrameEvidence()||
    !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
   const benches=new Map(Array.isArray(state.benches)?state.benches:[]);
@@ -119,7 +144,7 @@
    !data.mayPropose||data.pendingTeam||
    !data.active.some(p=>p.id===outgoing.id&&p.available)||
    !data.waiting.some(p=>p.id===incoming.id&&p.available)){
-   notice.textContent='Room or permissions changed. Refresh the desk; no swap was proposed.';render(true);return;
+   render(true);notice.textContent='Room or permissions changed. Refresh the desk; no swap was proposed.';return;
   }
   const sideField=document.getElementById('subTeam'),
    outgoingField=document.getElementById('subOutPlayer'),
@@ -154,11 +179,11 @@
   const data=snapshot();
   if(!data||!latest||data.sessionGeneration!==latest.sessionGeneration||
    data.token!==latest.token||data.desired!==latest.desired){
-   notice.textContent='Room changed; refresh before preparing a swap.';render(true);return;
+   render(true);notice.textContent='Room changed; refresh before preparing a swap.';return;
   }
   const outgoing=data.active.find(p=>p.id===Number(outChoice.value)&&p.available);
   const incoming=data.waiting.find(p=>p.id===Number(inChoice.value)&&p.available);
-  if(!outgoing||!incoming){notice.textContent='Choose a connected active and assigned bench player.';render(true);return;}
+  if(!outgoing||!incoming){render(true);notice.textContent='Choose a connected active and assigned bench player.';return;}
   nativePrepare(outgoing,incoming);
  };
  function render(force=false){
@@ -168,7 +193,9 @@
    const pending=!!link?.room&&!link.quickMatchMode&&link.ws?.readyState===1;
    section.hidden=!pending;clear();
    manual.hidden=true;manualButton.disabled=true;download.disabled=true;
-   if(pending)context.textContent='Waiting for the original online room’s current server roster and physics snapshot. No stale swap suggestion or CSV is available.';
+   if(pending)context.textContent=
+    'Waiting for a new, recent server physics frame in this room. '+
+    'Playing-time suggestions, old selections and player-name exports are unavailable until the live roster is verified.';
    else context.textContent='';
    return;
   }
@@ -213,20 +240,46 @@
   download.disabled=!data.people.length;
  }
  side.onchange=()=>{signature='';render(true);};
- refresh.onclick=()=>{render(true);notice.textContent='Refreshed from the current native room snapshot.';};
+ refresh.onclick=()=>{
+  const actual=snapshot();render(true);
+  notice.textContent=actual?'Refreshed from a recently received server frame.':
+   'No recent admitted-room frame. Refresh after the connection resumes; no recommendation or export was made.';
+ };
  download.onclick=()=>{
-  const data=snapshot();if(!data||data.sessionGeneration!==latest?.sessionGeneration||
-   data.token!==latest?.token||!data.people.length){
-   notice.textContent='The room has changed; refresh before exporting.';return;
+  const data=snapshot();
+  if(!data||data.sessionGeneration!==latest?.sessionGeneration||
+     data.token!==latest?.token||!data.people.length){
+   render(true);notice.textContent='The room changed or its server frame is stale. Refresh before exporting.';return;
   }
-  if(!window.confirm('Export displayed player names and their currently observed playing time to a private CSV file?'))return;
+  // A blocking window.confirm would pause the event loop, making every live
+  // frame "stale" while the user reads the prompt. The inline confirmation
+  // keeps native game/network updates flowing until the explicit second click.
+  pendingExport={sessionGeneration:data.sessionGeneration,token:data.token,
+   desired:data.desired,people:JSON.stringify(data.people)};
+  exportConfirm.hidden=false;
+  exportApprove.focus({preventScroll:true});
+  notice.textContent='No data exported yet. Review the prompt and explicitly confirm or cancel.';
+ };
+ exportCancel.onclick=()=>{
+  hideExport();notice.textContent='Private CSV export cancelled; no file generated.';
+ };
+ exportApprove.onclick=()=>{
+  const request=pendingExport;hideExport();if(!request)return;
+  const confirmed=snapshot();
+  if(!confirmed||confirmed.sessionGeneration!==request.sessionGeneration||
+     confirmed.token!==request.token||confirmed.desired!==request.desired||
+     JSON.stringify(confirmed.people)!==request.people){
+   render(true);
+   notice.textContent='Session, roster or recent native frame changed. No data exported; review current players first.';
+   return;
+  }
   // Spreadsheet programs may execute user-provided cells beginning with an
   // Excel formula prefix even inside CSV quotes. Force a literal string.
   const quote=value=>{let cell=String(value);
    if(/^[\s\uFEFF]*[=+\-@]/u.test(cell))cell="'"+cell;
    return '"'+cell.replace(/"/g,'""')+'"';};
   const lines=[['Team','Player','Status','Active seconds observed','Available']];
-  for(const p of data.people){
+  for(const p of confirmed.people){
    lines.push([p.team===1?'Red':p.team===2?'Blue':p.bench===1?'Red bench':
     p.bench===2?'Blue bench':'Spectator',p.name,
     p.team===0?'Inactive':'Playing',p.seconds??'Unavailable',p.available?'yes':'reconnecting']);
@@ -238,7 +291,7 @@
   setTimeout(()=>URL.revokeObjectURL(url),3000);
   notice.textContent='Local roster CSV exported. No server data changed.';
  };
- section.addEventListener('toggle',()=>{if(section.open)render(true);});
+ section.addEventListener('toggle',()=>{if(section.open)render(true);else hideExport();});
  // The panel starts hidden before a room exists. Poll for the first genuine
  // server state as well as later changes; never make hidden DOM block discovery.
  window.addEventListener('fuckball:native-session-state',()=>render(true));

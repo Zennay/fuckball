@@ -36,6 +36,10 @@
  if(form)form.insertAdjacentElement('afterend',block);else dialog.append(block);
  const original='Open Online Rooms to check the selected same-origin native server.';
  let last=null,request=0,controller=null;
+ // The Home readiness checklist already uses a 45-second HTTP receipt.
+ // Reuse exactly that validity window so an old, copied "healthy" snapshot
+ // never outlives the server's previously verified response.
+ const RECEIPT_MAX_AGE_MS=45000;
  const MODES=['1v1','2v2','3v3','4v4'];
  // A short-lived, receipt-only signal for the Home readiness checklist.
  // Health checks never certify WebSocket admission, available opponents or
@@ -70,13 +74,38 @@
   Object.values(slots).forEach(node=>node.textContent='—');
   slots.target.textContent=text||'Not configured';
  }
- address.addEventListener('input',()=>{
+ function reportCurrent(){
+  if(!last||!dialog.open||!selected().ok||navigator.onLine===false)return false;
+  const observed=Date.parse(last.checkedAt),age=Date.now()-observed;
+  return Number.isFinite(observed)&&age>=0&&age<=RECEIPT_MAX_AGE_MS;
+ }
+ function invalidateReport(message){
+  cancel();
+  publishHealthReceipt(false);
+  blank('Recheck this server');
+  status.textContent=message;
+ }
+ function refreshReceipt(){
+  if(!last)return;
+  if(navigator.onLine===false){
+   invalidateReport('The browser is offline. The previous healthy response is no longer current. Check again when online.');
+  }else if(!reportCurrent()){
+   invalidateReport('The previous HTTP health response expired after 45 seconds. Check the server again before relying on these numbers.');
+  }
+ }
+ const changedAddress=()=>{
   cancel();publishHealthReceipt(false);
   const s=selected();blank(s.ok?s.display:'Different/invalid server');
   status.textContent=s.ok?original:s.message;
- });
+ };
+ address.addEventListener('input',changedAddress);
+ address.addEventListener('change',changedAddress);
  dialog.addEventListener('close',()=>{
-  cancel();status.textContent='Check cancelled or cleared when the dialog closed.';
+  // A closed diagnostic is no longer an active check for the player's next
+  // session. Revoke the optional Home receipt before another server is chosen.
+  cancel();publishHealthReceipt(false);
+  blank('Not verified');
+  status.textContent='Check cancelled or cleared when the dialog closed.';
  });
  function validHealth(d){
   return d?.ok===true&&d.engine==='node-haxball-2.3.1'&&
@@ -123,7 +152,8 @@
     occupancy=validQueue(await json('/api/quick-match/availability',ctrl.signal));
     if(!occupancy)queueError='Queue payload not verified; no player totals shown.';
    }catch(error){queueError=ctrl.signal.aborted?'Queue check cancelled.':'Human queue endpoint unavailable.';}
-   if(ticket!==request||!dialog.open||!selected().ok||ctrl.signal.aborted)return;
+   if(ticket!==request||!dialog.open||!selected().ok||
+      navigator.onLine===false||ctrl.signal.aborted)return;
    const checked=new Date();
    last={release:health.release,engine:health.engine,physicsHz:health.physicsHz,
     snapshotHz:health.snapshotHz,rooms:health.rooms,netcode:health.netcode,
@@ -157,7 +187,13 @@
   }
  };
  copy.onclick=async()=>{
-  if(!last||!selected().ok||!dialog.open)return;
+  // Revalidate at the actual click: a preflight may expire while the tab is
+  // suspended or while the copy control still appears enabled.
+  if(!reportCurrent()){
+   if(last)refreshReceipt();
+   return;
+  }
+  const report=last,generation=request;
   const lines=[
    'Fuckball private native-server preflight',
    'Checked: '+last.checkedAt,
@@ -170,9 +206,15 @@
    'No credentials, identity, room IDs or opponent information included.'];
   try{
    await navigator.clipboard.writeText(lines.join('\n'));
-   if(!dialog.open||!selected().ok)return;
-   status.textContent='Private diagnostic summary copied. No credentials, user identity or server URL included.';
-  }catch{status.textContent='Clipboard unavailable; select and copy the visible numbers manually.';}
+   // A clipboard permission prompt may complete after a network switch,
+   // expired receipt, renewed check or closed dialog. Do not announce that
+   // an obsolete status is the selected server's current result.
+   if(report!==last||generation!==request||!reportCurrent())return;
+   status.textContent='Private diagnostic summary copied. Verified less than 45 seconds ago; not gameplay ping or admission.';
+  }catch{
+   if(report===last&&generation===request&&reportCurrent())
+    status.textContent='Clipboard unavailable; select and copy the visible numbers manually.';
+  }
  };
  // An explicit user click in Home delegates to the original on-demand
  // diagnostics. It does not initiate any independent or background probe.
@@ -188,6 +230,24 @@
    check.click();
    return true;
   }
+ });
+ // Invalidate a previously healthy diagnostic when the actual network
+ // changes. Restoring connectivity only permits a NEW manual HTTP check.
+ // No automatic probes, new WebSocket or passive traffic are introduced.
+ window.addEventListener('offline',()=>{
+  invalidateReport('Browser went offline. The previous server health result has been cleared; no connectivity is assumed.');
+ });
+ window.addEventListener('online',()=>{
+  invalidateReport('Browser reports online again. Recheck the selected server explicitly; game admission is not verified.');
+ });
+ window.addEventListener('focus',refreshReceipt);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshReceipt();});
+ const receiptClock=setInterval(()=>{
+  if(dialog.open&&!document.hidden)refreshReceipt();
+ },2500);
+ window.addEventListener('pagehide',()=>{
+  // Never retain a pending status request or stale positive receipt.
+  clearInterval(receiptClock);cancel();publishHealthReceipt(false);
  });
  const initial=selected();blank(initial.ok?initial.display:'Unverified server');
  status.textContent=initial.ok?original:initial.message;

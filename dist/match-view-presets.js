@@ -8,16 +8,16 @@
   if(text!==undefined)x.textContent=String(text);
   if(cls)x.className=cls;return x;};
  const presets=[
-  {id:'balanced',title:'BALANCED',description:'Original native rendering, full stadium view and normal HUD.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:true,focus:'standard',chat:false},
-  {id:'performance',title:'PERFORMANCE',description:'Lightweight 70% rendering, 60 FPS cap, full-pitch camera, distraction-reduced HUD.',quality:'performance',fps:'60',camera:'stadium',zoom:'1',sound:true,focus:'focus',chat:false},
-  {id:'quiet',title:'QUIET PITCH',description:'Focused UI, local pitch-chat text hidden and sound effects off. No one is muted on the server.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:false,focus:'focus',chat:true},
-  {id:'contrast',title:'HIGH VISIBILITY',description:'High-contrast local HUD and menus; gameplay stays unchanged.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:true,focus:'contrast',chat:false},
-  {id:'spectator',title:'SPECTATOR VIEW',description:'Wide full-pitch view and clear native-resolution scoreboard; spectator permissions unchanged.',quality:'native',fps:'0',camera:'stadium',zoom:'0.95',sound:true,focus:'contrast',chat:false}
+  {id:'balanced',title:'BALANCED',description:'Original native rendering, full pitch and normal HUD. Keeps your sound and chat preferences.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:null,focus:'standard',chat:null},
+  {id:'performance',title:'PERFORMANCE',description:'70% rendering, 60 FPS cap, wide camera and focused HUD. Keeps your sound and chat.',quality:'performance',fps:'60',camera:'stadium',zoom:'1',sound:null,focus:'focus',chat:null},
+  {id:'quiet',title:'QUIET PITCH',description:'Explicitly mute local effects and hide pitch chat while keeping real room chat available.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:false,focus:'focus',chat:true},
+  {id:'contrast',title:'HIGH VISIBILITY',description:'Higher-contrast local scoreboard and menus. Keeps your sound and pitch chat choices.',quality:'native',fps:'0',camera:'stadium',zoom:'1',sound:null,focus:'contrast',chat:null},
+  {id:'spectator',title:'SPECTATOR VIEW',description:'Wide pitch and readable scoreboard without changing server spectator rights or sound/chat.',quality:'native',fps:'0',camera:'stadium',zoom:'0.95',sound:null,focus:'contrast',chat:null}
  ];
  const section=el('section',null,'match-view-presets');
  section.setAttribute('aria-label','Apply a complete local match view preset');
  section.append(el('h3','MATCH VIEW PRESETS.'));
- section.append(el('p','Switch several existing local visual and audio options in one click. Everything is reversible; physics, netcode, opponent visibility, gamepad controls and server chat rights are unchanged.'));
+ section.append(el('p','Change your local match view in one click. Only Quiet Pitch changes local sound or hides pitch chat; all other views keep your existing audio and chat choices. Undo is available until you change settings elsewhere. Physics, network, player controls and server chat rights stay unchanged.'));
  const cards=el('div',null,'match-view-presets-grid');
  const status=el('p',null,'match-view-presets-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -39,6 +39,12 @@
  let undo=null,undoExpected=null,applying=false;
  const presetButtons=new Map();
  const equal=(a,b)=>!!a&&!!b&&['quality','fps','camera','zoom','sound','focus','chat'].every(k=>String(a[k])===String(b[k]));
+ // Null means "inherit the player's current device preferences", not a
+ // new audio/chat choice. Quiet Pitch explicitly opts out of both.
+ const resolve=(preset,current)=>({...preset,
+  sound:preset.sound===null?current.sound:preset.sound,
+  chat:preset.chat===null?current.chat:preset.chat
+ });
  const valid=choice=>['native','performance'].includes(choice.quality)&&
   ['0','60','120','144','165','240','360','480','1000','-1'].includes(choice.fps)&&
   ['stadium','follow'].includes(choice.camera)&&Number.isFinite(Number(choice.zoom))&&
@@ -61,8 +67,9 @@
   for(const preset of presets){
    const card=presetButtons.get(preset.id);
    if(!card)continue;
-   card.disabled=!controls||!optionsAvailable(preset,controls);
-   card.setAttribute('aria-pressed',String(equal(now,preset)));
+   const choice=controls?resolve(preset,now):null;
+   card.disabled=!controls||!optionsAvailable(choice,controls);
+   card.setAttribute('aria-pressed',String(equal(now,choice)));
   }
  }
  function writeNative(controls,choice){
@@ -78,17 +85,20 @@
    [controls.chat,'checked','chat','change']
   ];
   for(const [node,property,key,event]of changes){
-   node[property]=key==='zoom'?String(choice[key]):choice[key];
+   const next=key==='zoom'?String(choice[key]):choice[key];
+   if(node[property]===next)continue;
+   node[property]=next;
    node.dispatchEvent(new Event(event,{bubbles:true}));
   }
  }
- function apply(choice,withUndo){
+ function apply(preset,withUndo){
   const controls=readControls();
+  const before=controls?capture(controls):null;
+  const choice=before?resolve(preset,before):null;
   if(!controls||!valid(choice)||!optionsAvailable(choice,controls)){
    status.textContent='A required native match option is unavailable. Nothing changed.';
    syncCards();return false;
   }
-  const before=capture(controls);
   applying=true;
   try{
    writeNative(controls,choice);
@@ -112,7 +122,9 @@
  for(const preset of presets){
   const card=el('button',null,'match-view-preset-card');card.type='button';
   card.setAttribute('aria-pressed','false');
-  card.append(el('strong',preset.title),el('small',preset.description));
+  card.append(el('strong',preset.title),el('small',preset.description),
+   el('em',preset.id==='quiet'?'Also changes local sound and pitch-chat visibility.':
+     'Preserves your current sound and chat choices.'));
   presetButtons.set(preset.id,card);
   card.onclick=()=>{
    if(apply(preset,true))status.textContent=preset.title+' view applied. Undo remains available while these settings are unchanged.';
@@ -148,6 +160,16 @@
   }
  }
  syncCards();
+ // A second tab may change native settings while this window is idle.
+ // Never let an older one-click Undo silently undo newer preferences.
+ window.addEventListener('storage',event=>{
+  if(event.key!=='fuckball.settings'&&event.key!==null)return;
+  if(undo){
+   clearUndo();
+   status.textContent='Another tab updated your match settings. Previous preset Undo was cancelled.';
+  }
+  syncCards();
+ });
  document.addEventListener('visibilitychange',()=>{if(document.hidden)clearUndo();});
  window.addEventListener('pagehide',clearUndo);
 })();

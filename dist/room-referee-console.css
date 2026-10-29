@@ -49,3 +49,15 @@
  .room-referee-global-actions{display:grid;grid-template-columns:1fr 1fr}
 }
 @media(max-width:375px){.room-referee-global-actions{grid-template-columns:1fr}}
+
+/* A referee request is an explicit human permission change; keep the current
+   server receipt and disabled state clear on narrow touchscreens. */
+.room-referee-console button{min-height:46px}
+.room-referee-console button:disabled{cursor:not-allowed}
+.room-referee-feedback[role="status"]{min-height:1.5em;overflow-wrap:anywhere}
+.room-referee-host select{min-height:46px;max-width:100%}
+@media(max-width:470px){
+ .room-referee-host{display:grid;grid-template-columns:1fr}
+ .room-referee-host button{width:100%}
+ .room-referee-actions button{flex:1 1 120px}
+}

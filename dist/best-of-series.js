@@ -69,20 +69,66 @@
   return valid;
  }
  let snapshot=null,items=[],healthy=true,selected='',message='',errorText='';
+ // A recovery must start from an explicit untouched-byte download and must
+ // never silently replace another tab's newer series history.
+ let backedUpDamagedSnapshot=null,restoringDamaged=false;
  function read(){
   snapshot=localStorage.getItem(KEY);
   if(snapshot!==null&&snapshot.length>MAX_BYTES)throw Error('Stored series exceeds 128 KiB.');
   items=validateCollection(snapshot?JSON.parse(snapshot):[]).map(x=>x.series);
  }
  try{read();}catch(error){healthy=false;errorText=error.message||'Local series unavailable';items=[];}
+ // Serialize each local mutation and (on supported browsers) synchronize all
+ // tabs before touching device-private history. This is not a server result.
+ let pendingWrite=Promise.resolve();
+ const writeLock=KEY+':exclusive-write';
  function persist(list){
-  if(!healthy)throw Error('Unreadable private series storage. Export the original bytes first.');
-  if(localStorage.getItem(KEY)!==snapshot)
-   throw Error('Series data changed in another tab. Refresh the page before saving.');
-  const normalized=validateCollection(list).map(x=>x.series);
-  const next=JSON.stringify(normalized);
-  localStorage.setItem(KEY,next);snapshot=next;items=normalized;
-  window.dispatchEvent(new Event('fuckball:private-competition-change'));
+  if(!healthy)return Promise.reject(Error('Unreadable private series storage. Download its original bytes first.'));
+  // Capture the operator's original view BEFORE waiting for another tab.
+  const before=items,expectedSnapshot=snapshot,proposed=validateCollection(list).map(x=>x.series);
+  const work=pendingWrite.catch(()=>{}).then(async()=>{
+   const commit=()=>{
+    const raw=localStorage.getItem(KEY);
+    if(raw!==null&&raw.length>MAX_BYTES)
+     throw Error('Stored private series exceeds 128 KiB. No changes were saved.');
+    const latest=validateCollection(raw?JSON.parse(raw):[]).map(x=>x.series);
+    // A no-lock browser cannot make a truly atomic multi-tab write. Fall
+    // back to refusing even unrelated stale changes, never blindly replacing.
+    if(!navigator.locks?.request&&raw!==expectedSnapshot)
+     throw Error('Another tab changed series data. Refresh before saving.');
+    const oldById=new Map(before.map(x=>[x.id,x]));
+    const proposedById=new Map(proposed.map(x=>[x.id,x]));
+    const merged=new Map(latest.map(x=>[x.id,x]));
+    // Merge edits to DIFFERENT series; edits to the same series always
+    // fail closed if the authoritative stored version has changed.
+    for(const previous of before){
+     const next=proposedById.get(previous.id);
+     if(next&&JSON.stringify(next)===JSON.stringify(previous))continue;
+     const current=merged.get(previous.id);
+     if(!current||JSON.stringify(current)!==JSON.stringify(previous))
+      throw Error('This series changed in another tab. Refresh before editing that series.');
+     if(next)merged.set(previous.id,next);
+     else merged.delete(previous.id);
+    }
+    for(const next of proposed){
+     if(oldById.has(next.id))continue;
+     if(merged.has(next.id))
+      throw Error('Another tab already uses this series identity. Try creating it again.');
+     merged.set(next.id,next);
+    }
+    // Keep the unchanged historical records; refuse overflow or corruption.
+    const normalized=validateCollection([...merged.values()]).map(x=>x.series);
+    const next=JSON.stringify(normalized);
+    localStorage.setItem(KEY,next);
+    snapshot=next;items=normalized;
+    window.dispatchEvent(new Event('fuckball:private-competition-change'));
+   };
+   if(typeof navigator!=='undefined'&&navigator.locks?.request)
+    return navigator.locks.request(writeLock,{mode:'exclusive'},commit);
+   return commit();
+  });
+  pendingWrite=work.catch(()=>{});
+  return work;
  }
  const section=text('section',null,'best-of-series');
  const details=text('details');const summary=text('summary','⚔ BEST-OF SERIES · OPEN');
@@ -93,7 +139,9 @@
  const choose=text('select');choose.setAttribute('aria-label','Select private match series');
  const createToggle=button('＋ New series',()=>{creation.hidden=!creation.hidden;if(!creation.hidden)name.focus();});
  const backup=button('↓ Backup all JSON',downloadAll);
- const restore=button('↑ Restore JSON',()=>{file.value='';file.click();});
+ const restore=button('↑ Restore JSON',()=>{
+  restoringDamaged=false;file.value='';file.click();
+ });
  const csv=button('↓ Games CSV',downloadCSV),calendar=button('↓ Calendar ICS',downloadCalendar);
  const scorecard=button('↓ Share scorecard SVG',downloadScorecard);
  const shareText=button('Copy series summary',copySummary);
@@ -111,16 +159,26 @@
   label('Blue team',blueName),label('Series format',format),create);
  const note=text('p',null,'series-status');note.setAttribute('role','status');note.setAttribute('aria-live','polite');
  const recovery=text('section',null,'series-recovery');recovery.hidden=true;
- const recoveryText=text('p','Saved private series could not be read safely. This panel will not overwrite it. Download the untouched bytes and resolve the storage problem before editing.');
+ const recoveryText=text('p','Saved private series is unreadable. Download the untouched original bytes first. Only then can you explicitly restore a fully validated private series backup; replacing the damaged bytes is never automatic.');
  const rawDownload=button('↓ Download untouched local data',()=>{
   try{
    const raw=localStorage.getItem(KEY);
    if(!raw||raw!==snapshot)throw Error('Stored data changed; reload first.');
    download('fuckball-series-unreadable-backup.json',raw,'application/json',true);
-   inform('Raw local series bytes downloaded; original storage remains unchanged.');
+   backedUpDamagedSnapshot=raw;
+   inform('Untouched data backup download requested. Verify the downloaded file before choosing Restore verified backup; no stored bytes were changed.');
+   render();
   }catch(e){inform('Could not back up stored bytes: '+e.message);}
  });
- recovery.append(recoveryText,rawDownload);
+ const restoreDamaged=button('↑ Restore verified backup · replace damaged data',()=>{
+  if(healthy||backedUpDamagedSnapshot===null||
+     localStorage.getItem(KEY)!==backedUpDamagedSnapshot)
+   return inform('The damaged data changed or has not been backed up. Download the current untouched bytes first.');
+  restoringDamaged=true;file.value='';file.click();
+ });
+ restoreDamaged.className='series-recovery-restore';
+ const restoreHelp=text('p','Recovery requires browser-supported exclusive storage locking. The original damaged bytes are not deleted until a valid backup is selected and you explicitly confirm replacement.');
+ recovery.append(recoveryText,rawDownload,restoreDamaged,restoreHelp);
  const board=text('section',null,'series-board');
  inner.append(heading,info,tools,creation,note,recovery,board);
  details.append(summary,inner);section.append(details);
@@ -137,9 +195,26 @@
   setTimeout(()=>URL.revokeObjectURL(url),60000);
  }
  function filename(v){return 'fuckball-'+v.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,40).replace(/^-|-$/g,'')||'series';}
- function downloadAll(){
-  if(!healthy)return inform('Cannot export normalized data while series storage is unreadable.');
+ // A download must never claim to include a game that is still awaiting
+ // a queued browser lock. Refresh the source before every portable export.
+ async function freshSeriesForExport(){
+  await pendingWrite;
+  if(!healthy)throw Error('Local series is unreadable; export its untouched bytes instead.');
+  if(localStorage.getItem(KEY)!==snapshot){
+   try{read();healthy=true;errorText='';message='Latest series refreshed before export.';}
+   catch(error){
+    healthy=false;items=[];selected='';backedUpDamagedSnapshot=null;
+    errorText=error.message||'Unreadable private series data';
+    render();
+    throw Error('Another tab saved unreadable data. Untouched bytes were preserved.');
+   }
+   render();
+  }
+  return current();
+ }
+ async function downloadAll(){
   try{
+   await freshSeriesForExport();
    download('fuckball-private-series.json',
     JSON.stringify({format:'fuckball-private-series',version:1,exportedAt:Date.now(),series:items},null,2),
     'application/json;charset=utf-8');
@@ -151,8 +226,10 @@
   if(/^[=+\-@\t\r]/.test(s))s="'"+s;
   return '"'+s.replace(/"/g,'""')+'"';
  };
- function downloadCSV(){
-  const v=current();if(!v)return;
+ async function downloadCSV(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('CSV export blocked: '+e.message);}
+  if(!v)return;
   const rows=[['Game','Red','Blue','Red goals','Blue goals','Winner','Kickoff UTC','Venue'],
    ...v.games.map((g,i)=>[i+1,v.red,v.blue,
     g.redScore??'',g.blueScore??'',g.redScore===null?'':g.redScore>g.blueScore?v.red:v.blue,
@@ -161,8 +238,10 @@
    inform('Private game results and dates exported as CSV.');}
   catch(e){inform('CSV export failed: '+e.message);}
  }
- function downloadCalendar(){
-  const v=current();if(!v)return;
+ async function downloadCalendar(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Calendar export blocked: '+e.message);}
+  if(!v)return;
   // A decided series must not export unnecessary future fixtures.
   const state=statusFor(v);
   const rows=v.games.filter((x,i)=>x.kickoff!==null&&(!state.winner||i<state.recorded));
@@ -211,15 +290,19 @@
   return lines;
  }
  async function copySummary(){
-  const v=current();if(!v||!healthy)return;
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Copy blocked: '+e.message);}
+  if(!v||!healthy)return;
   try{
    if(!navigator.clipboard?.writeText)throw Error('Clipboard access is unavailable in this browser.');
    await navigator.clipboard.writeText(shareLines(v,statusFor(v)).join('\n'));
    inform('Series summary copied. Paste it wherever you choose; nothing was uploaded.');
   }catch(e){inform('Copy unavailable: '+e.message+' Use the SVG or CSV export instead.');}
  }
- function downloadScorecard(){
-  const v=current();if(!v||!healthy)return;
+ async function downloadScorecard(){
+  let v;
+  try{v=await freshSeriesForExport();}catch(e){return inform('Scorecard export blocked: '+e.message);}
+  if(!v||!healthy)return;
   try{
    const info=statusFor(v);
    const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -268,30 +351,30 @@
   const result=inspect(v),needed=Math.floor(v.bestOf/2)+1;
   return {...result,needed};
  }
- function update(id,change){
+ async function update(id,change){
   const v=items.find(x=>x.id===id);if(!v)throw Error('Series changed in another view.');
   const next=inspect({...v,updatedAt:Math.max(v.createdAt,Date.now()),games:change(v)}).series;
-  persist(items.map(x=>x.id===id?next:x));
+  await persist(items.map(x=>x.id===id?next:x));
   render();
  }
- function scoreGame(v,i,h,a){
+ async function scoreGame(v,i,h,a){
   const prior=statusFor(v);
   if(prior.winner)throw Error('The series is decided. Undo the most recent game to correct a result.');
   if(i!==prior.recorded)throw Error('Record games in order; undo the last score to correct it.');
   if(!Number.isSafeInteger(h)||!Number.isSafeInteger(a)||h<0||a<0||h>99||a>99||h===a)
    throw Error('A best-of game needs a decisive whole-number score from 0 to 99.');
-  update(v.id,x=>x.games.map((g,j)=>j===i?{...g,redScore:h,blueScore:a}:g));
+  await update(v.id,x=>x.games.map((g,j)=>j===i?{...g,redScore:h,blueScore:a}:g));
   inform('Real, manually entered game '+(i+1)+' saved. The series standings updated.');
  }
- function undoGame(v){
+ async function undoGame(v){
   const info=statusFor(v);if(!info.recorded)return inform('No recorded game to undo.');
   if(!window.confirm('Remove the last manually entered game result? Kickoff date is preserved.'))return;
-  try{update(v.id,x=>x.games.map((g,j)=>j===info.recorded-1?
+  try{await update(v.id,x=>x.games.map((g,j)=>j===info.recorded-1?
     {...g,redScore:null,blueScore:null}:g));
    inform('The latest game result was cleared. Series standings recalculated.');}
   catch(e){inform('Undo failed: '+e.message);}
  }
- function scheduleGame(v,i,value,venue){
+ async function scheduleGame(v,i,value,venue){
   const kickoff=value===''?null:new Date(value).getTime();
   if(value!==''&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)||
    !Number.isFinite(kickoff)||localTime(kickoff)!==value))
@@ -299,7 +382,7 @@
   if(!when(kickoff)||typeof venue!=='string'||venue.length>60||
    /[\u0000-\u001f\u007f-\u009f]/.test(venue)||venue.trim()!==venue)
    throw Error('Invalid kickoff or venue.');
-  update(v.id,x=>x.games.map((g,j)=>j===i?{...g,kickoff,venue}:g));
+  await update(v.id,x=>x.games.map((g,j)=>j===i?{...g,kickoff,venue}:g));
   inform('Provisional local kickoff saved; no online fixture was created.');
  }
  function render(){
@@ -312,6 +395,8 @@
   backup.disabled=!healthy||!items.length;createToggle.disabled=remove.disabled=!healthy;
   csv.disabled=calendar.disabled=scorecard.disabled=shareText.disabled=!enabled;
   restore.disabled=!healthy;create.disabled=!healthy;
+  restoreDamaged.disabled=healthy||backedUpDamagedSnapshot===null||
+   snapshot!==backedUpDamagedSnapshot;
   note.textContent=message||(healthy?'Everything here is device-private and unverified.':
    'Unreadable original data: '+errorText);
   if(!v)return void(board.append(text('p','Create your first best-of series with two teams.')));
@@ -396,7 +481,7 @@
      'Later matches may become unnecessary if a team clinches the series early.'));
    }catch(error){output.append(text('p',error.message||'Cannot plan games.'));}
   }
-  inputs.onsubmit=e=>{
+  inputs.onsubmit=async e=>{
    e.preventDefault();
    if(!prepared||prepared.signature!==planSignature()){
     clearPreview();return inform('The series plan changed. Preview it again before saving.');
@@ -404,7 +489,7 @@
    if(!window.confirm('Save '+prepared.diff.length+' provisional kickoff dates for "'+v.name+
      '"? Scores remain unchanged and no invitations are sent.'))return;
    try{
-    persist(items.map(x=>x.id===v.id?prepared.candidate:x));
+    await persist(items.map(x=>x.id===v.id?prepared.candidate:x));
     message=prepared.diff.length+' provisional series kickoffs saved. Export Calendar ICS to share dates.';
     render();
    }catch(error){clearPreview();inform('Schedule not saved: '+(error.message||'Storage error'));}
@@ -433,11 +518,11 @@
    const submit=text('button','Save game result');submit.type='submit';
    const canScore=healthy&&!data.winner&&i===data.recorded;
    h.disabled=a.disabled=submit.disabled=!canScore;
-   form.onsubmit=event=>{
+   form.onsubmit=async event=>{
     event.preventDefault();
     if(!/^(0|[1-9]\d?)$/.test(h.value)||!/^(0|[1-9]\d?)$/.test(a.value))
      return inform('Enter whole-number goals (0–99) for both teams.');
-    try{scoreGame(v,i,Number(h.value),Number(a.value));}
+    try{await scoreGame(v,i,Number(h.value),Number(a.value));}
     catch(error){inform(error.message);}
    };
    form.append(label(v.red+' goals',h),label(v.blue+' goals',a),submit);
@@ -447,12 +532,12 @@
    const venue=text('input');venue.maxLength=60;venue.placeholder='Venue · optional';venue.value=g.venue;
    venue.setAttribute('aria-label','Game '+(i+1)+' venue');
    const save=text('button','Save kickoff');save.type='submit';save.disabled=!healthy;
-   const clear=button('Remove kickoff',()=>{
-    try{scheduleGame(v,i,'','');}catch(e){inform(e.message);}
+   const clear=button('Remove kickoff',async()=>{
+    try{await scheduleGame(v,i,'','');}catch(e){inform(e.message);}
    });clear.disabled=!healthy||g.kickoff===null;
-   schedule.onsubmit=event=>{
+   schedule.onsubmit=async event=>{
     event.preventDefault();
-    try{scheduleGame(v,i,date.value,venue.value.trim());}catch(e){inform(e.message);}
+    try{await scheduleGame(v,i,date.value,venue.value.trim());}catch(e){inform(e.message);}
    };
    schedule.append(label('Provisional local date',date),label('Venue',venue),save,clear);
    card.append(line,form,schedule);
@@ -466,7 +551,7 @@
   }
   board.append(grid);
  }
- creation.onsubmit=e=>{
+ creation.onsubmit=async e=>{
   e.preventDefault();
   const n=name.value.trim(),r=redName.value.trim(),b=blueName.value.trim(),size=Number(format.value);
   if(!validName(n,60)||!validName(r,35)||!validName(b,35)||
@@ -476,17 +561,46 @@
   const now=Date.now(),v={version:1,id:uid(),name:n,red:r,blue:b,bestOf:size,
    createdAt:now,updatedAt:now,games:Array.from({length:size},(_,i)=>({
     id:'g'+(i+1),redScore:null,blueScore:null,kickoff:null,venue:''}))};
-  try{persist([...items,v]);selected=v.id;creation.hidden=true;message='Private series created.';render();}
+  try{await persist([...items,v]);selected=v.id;creation.hidden=true;message='Private series created.';render();}
   catch(error){inform(error.message);}
  };
  choose.onchange=()=>{selected=choose.value;message='';render();};
- function deleteSeries(){
+ async function deleteSeries(){
   const v=current();if(!v)return;
   if(!window.confirm('Delete "'+v.name+'" and all its local scores/dates? Export a backup first.'))return;
-  try{persist(items.filter(x=>x.id!==v.id));selected='';message='Series deleted locally.';render();}
+  try{await persist(items.filter(x=>x.id!==v.id));selected='';message='Series deleted locally.';render();}
   catch(error){inform(error.message);}
  }
+ async function recoverDamagedFromBackup(imported){
+  if(healthy||backedUpDamagedSnapshot===null||
+     snapshot!==backedUpDamagedSnapshot)
+   throw Error('Stored series changed. Download the current damaged data before restoring.');
+  if(typeof navigator==='undefined'||!navigator.locks?.request)
+   throw Error('Safe restore requires Web Locks on this browser. Unreadable data remains unchanged.');
+  if(!window.confirm('Replace the unreadable local series data with '+imported.length+
+     ' validated series from this backup? Confirm only after checking that the untouched original file was downloaded. This cannot be undone in this browser.'))return false;
+  const expected=backedUpDamagedSnapshot;
+  await pendingWrite.catch(()=>{});
+  await navigator.locks.request(writeLock,{mode:'exclusive'},()=>{
+   // Recheck under the same exclusive lock as normal series mutations.
+   // Never overwrite a different writer's newer bytes or readable content.
+   if(healthy||snapshot!==expected||localStorage.getItem(KEY)!==expected)
+    throw Error('Another tab changed your original data. No replacement occurred.');
+   const restored=validateCollection(imported).map(x=>x.series);
+   const next=JSON.stringify(restored);
+   if(next.length>MAX_BYTES)throw Error('Validated backup exceeds local storage limits.');
+   localStorage.setItem(KEY,next);
+   snapshot=next;items=restored;healthy=true;errorText='';
+   selected=restored[0]?.id||'';backedUpDamagedSnapshot=null;
+   window.dispatchEvent(new Event('fuckball:private-competition-change'));
+  });
+  message=imported.length+' validated private series safely restored. Original damaged bytes were backed up before replacement.';
+  render();
+  return true;
+ }
  file.onchange=async()=>{
+  const recoveryMode=restoringDamaged;
+  restoringDamaged=false;
   const chosen=file.files?.[0];file.value='';if(!chosen)return;
   if(chosen.size<1||chosen.size>MAX_FILE)
    return inform('Use a series backup smaller than 128 KiB.');
@@ -496,16 +610,22 @@
      !Array.isArray(pack.series)||!pack.series.length)
     throw Error('Not a private best-of-series backup.');
    const imported=validateCollection(pack.series).map(x=>x.series);
+   if(recoveryMode){
+    await recoverDamagedFromBackup(imported);
+    return;
+   }
+   if(!healthy)throw Error('The stored series is unreadable. Back up its untouched bytes and use the explicit recovery control.');
    if(imported.length+items.length>MAX)throw Error('Not enough space for every imported series.');
    const now=Date.now(),copies=imported.map(x=>({
     ...x,id:uid(),createdAt:now,updatedAt:now,games:x.games.map(g=>({...g}))}));
    if(!window.confirm('Import '+copies.length+' private series as new copies? Existing series remain unchanged.'))return;
-   persist([...items,...copies]);selected=copies[0].id;
+   await persist([...items,...copies]);selected=copies[0].id;
    message=copies.length+' private series imported as separate copies.';render();
   }catch(error){inform('Import refused: '+(error.message||'Invalid file'));}
  };
  window.addEventListener('storage',event=>{
   if(event.key!==KEY)return;
+  backedUpDamagedSnapshot=null;
   try{
    read();healthy=true;errorText='';message='Series refreshed from another tab.';
   }catch(e){healthy=false;snapshot=event.newValue;items=[];
@@ -513,7 +633,7 @@
    message='Another tab changed stored series into unreadable data. Original bytes protected.';}
   render();
  });
- window.addEventListener('fuckball:create-private-series',event=>{
+ window.addEventListener('fuckball:create-private-series',async event=>{
   const request=event.detail;
   const respond=(ok,detail)=>window.dispatchEvent(new CustomEvent('fuckball:private-series-created',{
    detail:ok?{ok:true,id:detail}:{ok:false,reason:detail}
@@ -534,7 +654,7 @@
     games:Array.from({length:request.bestOf},(_,i)=>({
      id:'g'+(i+1),redScore:null,blueScore:null,kickoff:null,venue:''
     }))}).series;
-   persist([...items,created]);selected=created.id;
+   await persist([...items,created]);selected=created.id;
    message='New best-of-'+created.bestOf+' series created for '+created.red+' vs '+created.blue+
     '. All games are unplayed and unofficial.';
    details.open=true;render();

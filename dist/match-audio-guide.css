@@ -13,7 +13,7 @@
 
 /* An explicitly requested local speech preview, not a fake game event. */
 .match-audio-guide-preview{display:inline-flex;align-items:center;
- justify-content:center;min-height:44px;margin:8px 0;padding:9px 15px;
+ justify-content:center;min-height:48px;margin:8px 0;padding:9px 15px;
  border:1px solid #bbdb99;border-radius:9px;background:#254c45;
  color:#f1ffe4;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
 .match-audio-guide-preview:disabled{opacity:.55;cursor:not-allowed}
@@ -25,3 +25,16 @@
  color:#e4f7e9;font-size:12px;line-height:1.5;
  overflow-wrap:anywhere}
 @media(max-width:580px){.match-audio-guide-provenance{padding:10px;font-size:12px}}
+
+/* Only an explicit Settings-pane preview speaks; its pressed state is visible
+   and the Stop action remains a large keyboard/touch target on mobile. */
+.match-audio-guide-preview[aria-pressed="true"]{
+ border-color:#ffca8c;background:#543d30;color:#fff4e4;
+ box-shadow:0 0 0 1px #ffca8c55 inset;
+}
+.match-audio-guide-preview[aria-pressed="true"]:focus-visible{
+ outline:3px solid #ffdfac;outline-offset:3px;
+}
+@media(max-width:580px){
+ .match-audio-guide-preview{width:100%;min-height:48px}
+}

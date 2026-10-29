@@ -14,6 +14,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact clean source before build and tests
         env:
@@ -26,4 +27,10 @@ jobs:
           node-version: '22'
       - run: npm run build:solo
       - run: npm test
+      - name: Guard HaxLab trainer package resolution
+        run: python3 tests/haxlab-package-resolution.py
+      - name: Smoke-test pinned native attack-regression evidence runner
+        run: |
+          node training/attack-regression-duel.cjs --smoke --output /tmp/fuckball-attack-regression-smoke.json
+          node -e "const r=require('/tmp/fuckball-attack-regression-smoke.json'); if(r.games.length!==4 || r.design.games!==4 || r.design.liveStateChanged!==false || r.livePromotionPerformed!==false || r.gate.passed!==false) process.exit(1)"
       - run: node --check server.js
