@@ -79,13 +79,20 @@
   if(!host)return null;
   host.replaceChildren();
   if(!Array.isArray(receipts)||!Array.isArray(scope)||typeof authorized!=='function'||!authorized())return null;
-  const clusters=group(receipts);
+  // Group in the original chronological server receipt stream so session
+  // boundaries remain stable; then project every group onto the explicit
+  // period/mode scope. Group totals, comparison and private exports must all
+  // use exactly these visible rows, never excluded receipt history.
+  const scopeIds=new Set(scope.filter(valid).map(x=>x.id));
+  const clusters=group(receipts).map(x=>({
+   key:x.key,rows:x.rows.filter(receipt=>scopeIds.has(receipt.id))
+  })).filter(x=>x.rows.length>0);
   const active=clusters.find(x=>x.key===selected)||null;
   const ids=active?new Set(active.rows.map(x=>x.id)):null;
   const section=document.createElement('section');section.className='native-play-sessions';
   section.setAttribute('aria-label','Recent online match session explorer');
   const title=text('h3','RECENT PLAY SESSIONS');
-  const desc=text('p','Your server stores separate, unranked match receipts—not session IDs. These are device-calculated groups based on time between recorded match completions, limited to the latest 50 server receipts.','native-session-intro');
+  const desc=text('p','Your server stores separate, unranked match receipts—not session IDs. Device-calculated session boundaries use the latest 50 receipts; every displayed count, comparison and export respects your selected period, mode, outcome and calendar day. Not a ranked rating.','native-session-intro');
   const top=document.createElement('div');top.className='native-session-top';
   const label=text('label','Maximum gap between results');
   const gap=document.createElement('select');gap.setAttribute('aria-label','Gap for grouping recent online results');
@@ -95,27 +102,29 @@
    const next=Number(gap.value);if(!GAPS.includes(next)||!authorized())return;
    gapMinutes=next;limit=6;compareKey=null;onSelect(null);
   };
+  const scopedCount=clusters.reduce((sum,x)=>sum+x.rows.length,0);
   const hint=text('p',clusters.length+' estimated play group'+(clusters.length===1?'':'s')+
-   ' within your '+receipts.length+' most recent native server receipts. Not lifetime data.','native-session-count');
+   ' · '+scopedCount+' selected result'+(scopedCount===1?'':'s')+
+   ' of '+receipts.length+' recent server receipts. Not lifetime data.','native-session-count');
   top.append(label,hint);
   const message=text('p',active?'Showing one estimated play group below. Your existing filters still apply.':
    'Select a group to narrow the actual online result cards below.','native-session-message');
   const clear=text('button','Show all recent results','native-session-clear');clear.type='button';
   clear.hidden=!active;clear.onclick=()=>{if(authorized())onSelect(null);};
   const grid=document.createElement('div');grid.className='native-session-grid';
-  const scopeIds=new Set(scope.map(x=>x.id));
   clusters.slice(0,limit).forEach((cluster,index)=>{
-   const rows=cluster.rows,stats=totals(rows),visible=rows.filter(x=>scopeIds.has(x.id));
+   const rows=cluster.rows,stats=totals(rows);
    const box=document.createElement('article');box.className='native-session-card';
    if(active?.key===cluster.key)box.classList.add('selected');
    const heading=text('strong','GROUP '+(index+1)+' · '+rows.length+' result'+(rows.length===1?'':'s'));
    const range=text('small',fmt(rows[rows.length-1].at)+' → '+fmt(rows[0].at));
    const detail=text('p',stats.wins+' W · '+stats.draws+' D · '+stats.losses+' L · goals '+stats.goalsFor+
     '–'+stats.goalsAgainst+' · '+Math.floor(stats.frames/60)+'s active play');
-   const scoped=text('small',visible.length+' result'+(visible.length===1?'':'s')+' match your chosen period/mode');
+   const scoped=text('small','All '+rows.length+' result'+(rows.length===1?'':'s')+
+    ' match your active period, mode, outcome and calendar filters');
    const actions=document.createElement('div');actions.className='native-session-actions';
    const show=text('button',active?.key===cluster.key?'Selected ✓':'Show these results');
-   show.type='button';show.disabled=active?.key===cluster.key||!visible.length;
+   show.type='button';show.disabled=active?.key===cluster.key||!rows.length;
    show.onclick=()=>{if(authorized())onSelect(cluster.key);};
    const csv=text('button','↓ CSV');csv.type='button';csv.title='Local download without account or receipt IDs';
    const html=text('button','↓ Print sheet');html.type='button';html.title='Offline printable summary without account or receipt IDs';
@@ -131,7 +140,10 @@
    };
    const safeAction=action=>()=>{
     if(!authorized()){message.textContent='Session changed. Reload your own results before exporting.';return;}
-    try{action(rows);message.textContent='Private session report generated locally, not uploaded.';}
+    // Only the filtered session rows captured by this render can be exported.
+    // Authorization is rechecked at click-time, including account changes.
+    if(!rows.length||rows.some(row=>!scopeIds.has(row.id)))return;
+    try{action(rows);message.textContent='Private filtered session report generated locally, not uploaded.';}
     catch{message.textContent='Could not export the chosen play grouping.';}
    };
    csv.onclick=safeAction(exportCsv);html.onclick=safeAction(exportHtml);
@@ -139,6 +151,8 @@
   });
   // Explicit two-group comparison is local and descriptive, never a claim
   // of causal improvement, global skill, official session or ranked rating.
+  // Comparison receives exactly the same filtered rows as the cards and
+  // downloadable reports; a hidden historic match cannot affect the result.
   const other=clusters.find(c=>c.key===compareKey&&c.key!==active?.key);
   const comparison=document.createElement('section');comparison.className='native-session-comparison';
   comparison.hidden=!active||!other;

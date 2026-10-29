@@ -290,3 +290,33 @@ body.lobby .scoreboard{opacity:.35}
 }
 @media(max-width:385px){.native-sub-consent-actions{grid-template-columns:1fr}
  .native-sub-consent-actions button:last-child{grid-column:auto}}
+
+/* Offline solo match only: clear human-controlled pause after tab/window blur.
+   Never covers or changes authoritative server matches or Couch Rivals pads. */
+.solo-focus-banner[hidden]{display:none!important}
+.solo-focus-banner{position:fixed;z-index:108;left:50%;
+ transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ box-sizing:border-box;width:min(880px,calc(100vw - 24px));
+ display:flex;align-items:center;justify-content:space-between;gap:18px;
+ border:2px solid #d7efa2;border-radius:14px;padding:15px 18px;
+ background:#1d3430;color:#e9faec;box-shadow:0 15px 48px #07181be0}
+.solo-focus-banner strong{display:block;color:#ddffa6;
+ letter-spacing:.065em;font-size:.83rem}
+.solo-focus-banner p{font-size:.87rem;line-height:1.5;color:#d2e2dc;
+ margin:6px 0 0;max-width:55ch}
+.solo-focus-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.solo-focus-actions button{min-height:48px;border-radius:9px;
+ border:1px solid #a4c2b0;background:#2a4740;color:#edfff1;
+ font:inherit;font-size:.85rem;font-weight:800;padding:10px 15px;cursor:pointer}
+.solo-focus-actions button.primary{background:#d9ff9a;color:#1b3326;
+ border-color:#d9ff9a}
+.solo-focus-actions button[hidden]{display:none!important}
+.solo-focus-actions button:disabled{opacity:.5;cursor:not-allowed}
+.solo-focus-actions button:focus-visible{outline:3px solid #f0ffa7;outline-offset:3px}
+@media(max-width:730px){
+ .solo-focus-banner{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+ .solo-focus-actions{display:grid;grid-template-columns:1fr 1fr}
+ .solo-focus-actions button[hidden]+button{grid-column:1/-1}
+}
+@media(max-width:380px){.solo-focus-actions{grid-template-columns:1fr}
+ .solo-focus-actions button[hidden]+button{grid-column:auto}}

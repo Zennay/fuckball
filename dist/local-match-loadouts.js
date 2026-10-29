@@ -36,7 +36,14 @@
   });
  };
  let snapshot=null,rows=[],healthy=true;
+ // A corrupt saved collection must not be silently replaced by a valid import.
+ // Record which *exact* damaged value the human requested a local backup of.
+ let corruptBackupRequestedFor=null;
+ // An array index is not an identity: another tab may reorder, rename or
+ // delete a loadout while the first tab is editing it.
+ let selectedName=null,selectionNeedsReview=false;
  function refreshStored(){
+  corruptBackupRequestedFor=null;
   try{
    const raw=localStorage.getItem(KEY);snapshot=raw;
    rows=raw===null?[]:validate(JSON.parse(raw));
@@ -44,17 +51,21 @@
   }catch{healthy=false;rows=[];}
  }
  refreshStored();
- function write(next){
+ function write(next,selection=selectedName){
   if(!healthy)throw Error('Stored presets could not be read. They were not overwritten.');
   const payload={version:1,presets:next};
   const raw=JSON.stringify(payload);
   if(raw.length>MAX_BYTES)throw Error('Preset collection is too large.');
   if(localStorage.getItem(KEY)!==snapshot){
+   // Never keep a numeric selection across an external replacement: index 2
+   // might now be a completely different teammate's practice preset.
+   selectedName=null;selectionNeedsReview=true;
    refreshStored();render();
-   throw Error('Another tab changed your saved presets. Latest list loaded. Repeat the action.');
+   throw Error('Another tab changed your saved presets. No preset was overwritten. Choose the latest saved loadout again.');
   }
   localStorage.setItem(KEY,raw);
-  snapshot=raw;rows=next;render();
+  snapshot=raw;rows=next;selectedName=selection;
+  selectionNeedsReview=false;render();
  }
  const root=newNode('section',null,'local-match-loadouts');
  root.setAttribute('aria-label','Private local match loadouts');
@@ -89,19 +100,32 @@
  const remove=btn('Delete selected',removeSelected);
  const exportBtn=btn('↓ Backup my loadouts',backup);
  const importBtn=btn('↑ Restore loadouts',()=>upload.click());
+ const recoverCopy=btn('↓ Download unreadable saved data',downloadCorruptData);
+ recoverCopy.hidden=true;
  const upload=newNode('input');upload.type='file';upload.accept='.json,application/json';
  upload.hidden=true;upload.setAttribute('aria-label','Restore private local match loadout backup');
- actions.append(play,save,update,remove,exportBtn,importBtn,upload);
+ actions.append(play,save,update,remove,exportBtn,importBtn,recoverCopy,upload);
  const note=newNode('p','All saved loadouts are private device settings, not live room presets. Starting a loadout uses the original local game and asks before replacing a current local match or replay. Imported stadium files are not included.');
  const status=newNode('p',null,'local-loadouts-status');status.setAttribute('role','status');
  status.setAttribute('aria-live','polite');
  root.append(header,fields,actions,note,status);
  const after=home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
  if(after)after.insertAdjacentElement('afterend',root);else home.append(root);
- function selectedIndex(){
+ function chosenIndex(){
   if(picker.value==='')return null;
   const index=Number(picker.value);
   return Number.isSafeInteger(index)&&index>=0&&index<rows.length?index:null;
+ }
+ function selectedIndex(){
+  const index=chosenIndex();
+  if(index===null||selectionNeedsReview||!selectedName||
+     rows[index].name.toLocaleLowerCase()!==selectedName)return null;
+  return index;
+ }
+ function requireSelection(){
+  const i=selectedIndex();
+  if(i===null)throw Error('Choose a saved loadout from the latest list before changing or deleting it.');
+  return i;
  }
  function readForm(){
   const draft={name:name.value.trim(),mode:mode.value,difficulty:difficulty.value,
@@ -114,45 +138,61 @@
   score.value=String(p.scoreLimit);time.value=String(p.timeLimit);map.value=String(p.stadium);
  }
  function render(){
-  const previous=picker.value;
+  // Bind selection by normalized NAME rather than stale list position.
+  // Cross-tab changes intentionally disarm the selection until the human
+  // explicitly chooses a current entry in the refreshed list.
+  const current=!selectionNeedsReview&&selectedName?
+   rows.findIndex(row=>row.name.toLocaleLowerCase()===selectedName):-1;
   picker.replaceChildren(new Option('Choose a saved loadout',''));
   rows.forEach((row,i)=>picker.add(new Option(row.name,String(i))));
-  picker.value=previous&&Number(previous)<rows.length?previous:'';
+  picker.value=current>=0?String(current):'';
+  if(current<0)selectedName=null;
   meta.textContent=rows.length+' / '+LIMIT+' SAVED';
   picker.disabled=remove.disabled=update.disabled=!healthy||!rows.length;
   save.disabled=!healthy||rows.length>=LIMIT;
   exportBtn.disabled=!healthy||!rows.length;
+  recoverCopy.hidden=healthy;
+  recoverCopy.disabled=healthy||snapshot===null;
   if(!healthy){
-   status.textContent='Existing local match presets are unreadable. Storage was not overwritten. Restore the damaged data manually before saving.';
+   status.textContent='Saved loadouts are unreadable; nothing was overwritten. '+
+    'First download a copy of the damaged data, verify the download, then restore a valid private backup. '+
+    'Your current offline game and practice results are not affected.';
   }
  }
- picker.onchange=()=>{const index=selectedIndex();if(index!==null){fill(rows[index]);
-   status.textContent='Loaded '+rows[index].name+' for review. No game started.';}};
+ picker.onchange=()=>{
+  const index=chosenIndex();
+  selectedName=index===null?null:rows[index].name.toLocaleLowerCase();
+  selectionNeedsReview=false;
+  if(index!==null){
+   fill(rows[index]);
+   status.textContent='Selected '+rows[index].name+' from the current saved list. No game started.';
+  }else status.textContent='Choose a saved loadout before editing or deleting it.';
+ };
  function saveNew(){
   try{
    const item=readForm();
    if(rows.length>=LIMIT)throw Error('Eight local loadouts is the maximum.');
    if(rows.some(x=>x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
     throw Error('A loadout with this name already exists; select it to update.');
-   write([...rows,item]);picker.value=String(rows.length-1);
+   write([...rows,item],item.name.toLocaleLowerCase());
    status.textContent='New local loadout saved. It will only start when you click Play.';
   }catch(e){status.textContent=e.message||'Could not save loadout.';}
  }
  function saveExisting(){
   try{
-   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout to update.');
+   const i=requireSelection();
    const item=readForm();
    if(rows.some((x,n)=>n!==i&&x.name.toLocaleLowerCase()===item.name.toLocaleLowerCase()))
     throw Error('Another saved loadout already uses that name.');
-   write(rows.map((x,n)=>n===i?item:x));picker.value=String(i);
+   write(rows.map((x,n)=>n===i?item:x),item.name.toLocaleLowerCase());
    status.textContent='Saved changes to the selected local loadout.';
   }catch(e){status.textContent=e.message||'Loadout not updated.';}
  }
  function removeSelected(){
   try{
-   const i=selectedIndex();if(i===null)throw Error('Choose a saved loadout.');
+   const i=requireSelection();
    if(!confirm('Remove saved local loadout "'+rows[i].name+'"? Your native practice results and matches will remain unchanged.'))return;
-   write(rows.filter((_,n)=>n!==i));status.textContent='Only the chosen loadout was deleted.';
+   write(rows.filter((_,n)=>n!==i),'');status.textContent='Only the selected loadout was deleted. Choose another before editing.';
   }catch(e){status.textContent=e.message||'Loadout not deleted.';}
  }
  function launch(){
@@ -244,11 +284,31 @@
   }
   status.textContent='Native '+draft.mode+' practice started with "'+draft.name+'". No online server joined.';
  }
- function download(payload,filename){
-  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));
+ function downloadText(content,filename,mime){
+  const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const link=newNode('a');link.href=url;link.download=filename;
   document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ function download(payload,filename){
+  downloadText(JSON.stringify(payload,null,2),filename,'application/json;charset=utf-8');
+ }
+ function downloadCorruptData(){
+  if(healthy||snapshot===null)return;
+  try{
+   const before=localStorage.getItem(KEY);
+   if(before!==snapshot){
+    refreshStored();render();
+    throw Error('Saved data changed in another tab. Inspect its latest state before downloading.');
+   }
+   // This user-initiated download preserves the literal bytes, even when JSON
+   // is invalid. Do not claim the browser actually saved the download.
+   downloadText(snapshot,'fuckball-unreadable-local-loadouts-'+
+    new Date().toISOString().slice(0,10)+'.txt','text/plain;charset=utf-8');
+   corruptBackupRequestedFor=snapshot;
+   status.textContent='Damaged data copy requested. Verify it is in Downloads. You may now '+
+    'restore a valid private loadout JSON backup; replacement still needs explicit confirmation.';
+  }catch(e){status.textContent='Could not prepare recovery copy: '+(e.message||'Download unavailable');}
  }
  function backup(){
   if(!healthy||!rows.length)return;
@@ -265,14 +325,43 @@
    if(parsed?.format!=='fuckball-local-match-loadouts'||parsed.version!==1||
     parsed.source!=='private-device-only')throw Error('Unsupported local match loadout backup.');
    const incoming=validate({version:1,presets:parsed.presets});
+   if(!healthy){
+    if(snapshot===null||corruptBackupRequestedFor!==snapshot)
+     throw Error('Download the unreadable saved data first, then verify its download before restoring.');
+    const raw=JSON.stringify({version:1,presets:incoming});
+    if(raw.length>MAX_BYTES)throw Error('Imported collection is too large.');
+    // Even an explicit recovery must not erase a concurrent tab's new data.
+    if(localStorage.getItem(KEY)!==snapshot){
+     refreshStored();render();
+     throw Error('Saved data changed in another tab. No data was overwritten. Review the current collection.');
+    }
+    if(!confirm('Replace the unreadable local loadouts with '+incoming.length+
+      ' validated entries? First verify your downloaded recovery copy. '+
+      'The unreadable original will be overwritten; existing match results will remain unchanged.'))return;
+    if(localStorage.getItem(KEY)!==snapshot){
+     refreshStored();render();
+     throw Error('Saved data changed during confirmation. The original was not overwritten.');
+    }
+    // If setItem throws (quota/private storage), leave the unreadable original
+    // untouched and keep recovery available; never declare a successful save.
+    localStorage.setItem(KEY,raw);
+    snapshot=raw;rows=incoming;healthy=true;
+    selectedName=null;selectionNeedsReview=false;corruptBackupRequestedFor=null;
+    render();
+    status.textContent='Private loadouts recovered from '+incoming.length+
+      ' validated entries. Existing matches and results were not modified.';
+    return;
+   }
    if(!confirm('Replace '+rows.length+' saved local match loadouts with '+
     incoming.length+' from this device backup? No real matches or practice history will change.'))return;
-   write(incoming);status.textContent='Restored '+incoming.length+' private match loadout settings.';
+   write(incoming,'');status.textContent='Restored '+incoming.length+' private match loadouts. Choose an entry to edit it.';
   }catch(e){status.textContent='Restore refused: '+(e.message||'Unsupported data');}
  };
  window.addEventListener('storage',e=>{
   if(e.key!==KEY&&e.key!==null)return;
-  refreshStored();render();status.textContent='Saved loadouts changed in another tab. Re-select your current setup.';
+  selectedName=null;selectionNeedsReview=true;
+  refreshStored();render();
+  status.textContent='Another tab changed your saved loadouts. The previous selection is cleared so editing cannot overwrite a different preset. Choose the latest entry again.';
  });
  fill({name:'My solo match',mode:'bot',difficulty:'hard',scoreLimit:3,timeLimit:7,stadium:nativeMaps[0].id});
  render();

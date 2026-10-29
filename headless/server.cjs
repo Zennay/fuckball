@@ -427,7 +427,15 @@ function createServer(options={}){
  function takeover(r,to,state){const ws=r.sockets.get(to);if(!ws){r.migration=null;r.authority='server';r.epoch++;announce(r,'server');return;}send(ws,{type:'takeover',state:RoomCore.encodeState(state),frame:roomTime(r),epoch:r.epoch});
   r.authority=to;r.standby=state;r.standbyAt=Date.now();r.migration=null;r.lastMigration=Date.now();if(r.pendingJoins.length)migrate(r,'server','join');}
  /* Continue on this server from a host's export. Inputs that only reached this server are merged in. */
- function resume(r,state,{failover=false}={}){const mine=new Map([...r.clients].map(([id,c])=>[id,c.timeline?.export()]));r.authority='server';r.restore(state);if(failover)r.seq+=1000;
+ function resume(r,state,{failover=false}={}){
+  const mine=new Map([...r.clients].map(([id,c])=>[id,c.timeline?.export()]));
+  // Real accepted WebSockets and reconnect-reserved seats are stronger human
+  // identity evidence than the returning browser host's cached bot roster.
+  // Do not let a stale export convert a genuine high-ID player into a bot.
+  const verifiedHumans=new Set([...r.sockets.keys(),...r.parked.keys()]);
+  r.authority='server';
+  r.restore(state,verifiedHumans);
+  if(failover)r.seq+=1000;
   for(const [id,c]of r.clients){const own=mine.get(id);if(own&&c.timeline)c.timeline.receive(own.changes.filter(x=>x[0]>c.timeline.lastSeq),r.frame,r.frame);}
   for(const id of [...r.clients.keys()])if(!r.sockets.has(id)&&!r.parked.has(id))r.leave(id);
   for(const id of r.parked.keys())if(r.clients.has(id))r.disconnected.add(id);

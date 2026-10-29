@@ -164,15 +164,33 @@
   gamesMessage('Restored '+inserted.length+' replay'+(inserted.length===1?'':'s')+
    (skipped?' · '+skipped+' already here':'')+'. Stored locally; not ranked or server-verified.');
  }
- function busy(value){exportButton.disabled=importButton.disabled=value;}
+ let archiveBusy=false;
+ function busy(value){
+  archiveBusy=value;
+  exportButton.disabled=importButton.disabled=value;
+ }
+ // Coordinate only import-in-progress state with the local HBR2 desk. No
+ // player data, replay bytes, server results or session info are shared.
+ window.FuckballReplayArchive={isBusy:()=>archiveBusy};
+ function hasActiveTransfer(){
+  if(archiveBusy||window.FuckballReplayImportDesk?.isBusy?.()){
+   gamesMessage('Another local replay import or ZIP transfer is in progress. Finish it before starting another.');
+   return true;
+  }
+  return false;
+ }
  exportButton.addEventListener('click',async()=>{
+  if(hasActiveTransfer())return;
   busy(true);
   try{await exportArchive();}catch(error){gamesMessage('Backup failed: '+error.message);}
   finally{busy(false);}
  });
- importButton.addEventListener('click',()=>archiveFile.click());
+ importButton.addEventListener('click',()=>{
+  if(hasActiveTransfer())return;
+  archiveFile.click();
+ });
  archiveFile.addEventListener('change',async()=>{
-  const file=archiveFile.files?.[0];archiveFile.value='';if(!file)return;
+  const file=archiveFile.files?.[0];archiveFile.value='';if(!file||hasActiveTransfer())return;
   busy(true);
   try{await importArchive(file);}catch(error){gamesMessage('Restore failed: '+error.message);}
   finally{busy(false);}
@@ -182,10 +200,23 @@
   if(event.dataTransfer?.types?.includes('Files'))event.preventDefault();
  });
  view.addEventListener('drop',async event=>{
-  if(!event.dataTransfer?.files?.length)return;
+  // A staged HBR2 drop was already handled by the import desk. ZIP archives
+  // are a separate destructive-to-storage operation and must never consume
+  // a bubbled HBR2 drop, or silently ignore other files in a mixed batch.
+  if(event.defaultPrevented||!event.dataTransfer?.files?.length)return;
   event.preventDefault();
-  const file=event.dataTransfer.files[0];
-  if(!/\.zip$/i.test(file.name)){gamesMessage('Drop a My Games ZIP backup here to restore it.');return;}
+  const files=Array.from(event.dataTransfer.files);
+  if(files.length!==1||!/\.zip$/i.test(files[0].name)){
+   gamesMessage('Drop exactly one My Games ZIP backup. Drop individual .hbr2 files in the import desk.');
+   return;
+  }
+  if(hasActiveTransfer())return;
+  const file=files[0];
+  if(typeof window.confirm!=='function'||!window.confirm(
+   'Restore the '+file.name+' ZIP backup into My Games? This may add recordings to device storage. Existing recordings are never overwritten.')){
+   gamesMessage('ZIP restore cancelled. Your local recordings were left unchanged.');
+   return;
+  }
   busy(true);
   try{await importArchive(file);}catch(error){gamesMessage('Restore failed: '+error.message);}
   finally{busy(false);}

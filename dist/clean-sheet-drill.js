@@ -35,6 +35,18 @@
  const records=el('div',null,'clean-sheet-records');
  history.append(historyHead,records);
  panel.append(heading,intro,settings,status,history);
+ // The original native defensive match should survive harmless Home/My Games
+ // navigation. Return never changes team, opponent, timer or authority.
+ const returnPanel=el('aside',null,'clean-sheet-return');
+ returnPanel.hidden=true;
+ returnPanel.setAttribute('role','region');
+ returnPanel.setAttribute('aria-label','Paused defensive training session');
+ const returnText=el('p');
+ returnText.setAttribute('role','status');
+ const returnButton=el('button','↗ Return to Clean Sheet');
+ returnButton.type='button';
+ returnPanel.append(returnText,returnButton);
+ document.body.append(returnPanel);
  const anchor=home.querySelector('.teamwork-panel')||home.querySelector('.goal-rush-setup')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',panel);else home.append(panel);
  const hud=el('aside',null,'clean-sheet-hud');hud.hidden=true;
@@ -48,7 +60,22 @@
  for(const b of [stop,again,close])b.type='button';
  again.hidden=true;close.hidden=true;actions.append(stop,again,close);
  hud.append(badge,clock,score,gauge,actions);match.append(hud);
- let active=null;
+ let active=null,parked=false;
+ function updateReturn(){
+  returnPanel.hidden=!active||!parked||!match.hidden||document.hidden;
+  if(returnPanel.hidden)return;
+  const s=active;
+  returnText.textContent='Clean Sheet paused · '+s.conceded+' conceded / '+
+   s.allowance+' allowed · '+Math.max(0,s.duration-Math.ceil(s.frames/60))+
+   's of active defending left. Same local match, no clock skipped.';
+ }
+ returnButton.addEventListener('click',()=>{
+  if(!active||!parked||!match.hidden||document.hidden)return;
+  document.getElementById('tabPlay')?.click();
+  // Existing user pause/resume control is the only way to restart the
+  // simulation. Returning here must never unpause or create a new match.
+  updateReturn();
+ });
  const now=()=>Date.now();
  function read(){
   try{
@@ -116,11 +143,12 @@
  function progress(s){
   const left=Math.max(0,Math.ceil((s.duration*60-s.frames)/60));
   clock.textContent=left+'s left · '+s.conceded+' conceded / '+s.allowance+' allowed';
-  score.textContent=s.scored+' for · '+s.conceded+' against · actual native 1v1 score';
+  score.textContent=(parked||paused?'Paused · explicitly resume the same offline match. ':'')+
+   s.scored+' for · '+s.conceded+' against · actual native 1v1 score';
   gauge.value=Math.min(100,Math.floor(s.frames/(s.duration*60)*100));
  }
  function finish(label,complete=false){
-  const s=active;if(!s)return;active=null;
+  const s=active;if(!s)return;active=null;parked=false;updateReturn();
   if(complete)save(s);
   badge.textContent=label;
   clock.textContent=complete?
@@ -133,17 +161,41 @@
   stop.hidden=true;again.hidden=false;close.hidden=false;
  }
  function quit(){
-  active=null;hud.hidden=true;badge.textContent='CLEAN SHEET · LOCAL AI';
+  active=null;parked=false;updateReturn();
+  hud.hidden=true;badge.textContent='CLEAN SHEET · LOCAL AI';
   stop.hidden=false;again.hidden=true;close.hidden=true;
+ }
+ function park(){
+  const s=active;if(!s)return;
+  // A hidden drill still belongs to one immutable native match. If the
+  // player launched a different local game or online room, do not show a
+  // misleading Resume prompt or preserve old defensive counters.
+  if(room!==s.room||serverLink||peerConnected||replay||!started||
+     team()!==s.side||room.currentFrameNo<s.frame){
+   finish('CLEAN SHEET · GAME CHANGED');return;
+  }
+  // Pause the original offline simulation before hiding it; do not invent
+  // match time or defensive outcomes while the player cannot see the pitch.
+  if(!serverLink&&!peerConnected&&!replay&&room===s.room&&started&&!paused)
+   togglePause();
+  if(room===s.room&&Number.isSafeInteger(room.currentFrameNo))
+   s.frame=room.currentFrameNo;
+  parked=true;progress(s);updateReturn();
  }
  function tick(){
   const s=active;if(!s)return;
-  if(document.hidden){finish('CLEAN SHEET · TAB HIDDEN');return;}
+  if(document.hidden||match.hidden){park();return;}
   if(!matchReady()||room!==s.room||team()!==s.side||room.currentFrameNo<s.frame){
    finish('CLEAN SHEET · GAME CHANGED');return;
   }
   const frame=room.currentFrameNo;
-  if(!paused)s.frames+=Math.max(0,frame-s.frame);
+  if(parked||paused){
+   s.frame=frame;
+   if(!paused)parked=false;
+   progress(s);updateReturn();
+   return;
+  }
+  s.frames+=Math.max(0,frame-s.frame);
   s.frame=frame;
   const current=room.gameState;
   const mine=s.side===1?current.redScore:current.blueScore;
@@ -169,6 +221,7 @@
    active={room,side,duration:seconds,allowance:allowed,
     initialFor:side===1?g.redScore:g.blueScore,initialAgainst:side===1?g.blueScore:g.redScore,
     frame:room.currentFrameNo,frames:0,conceded:0,scored:0};
+   parked=false;updateReturn();
    badge.textContent='CLEAN SHEET · LOCAL AI';stop.hidden=false;again.hidden=true;close.hidden=true;
    hud.hidden=false;status.textContent='Defense challenge running in a real native local AI match.';
    progress(active);
@@ -180,5 +233,14 @@
  window.setInterval(tick,150);
  // Preserve the user's existing native view routing and network permissions.
  const previousShowView=showView;
- showView=function(next){if(next!=='play'&&active)finish('CLEAN SHEET · LEFT PITCH');previousShowView(next);};
+ showView=function(next){
+  if(next!=='play'&&active)park();
+  previousShowView(next);
+  updateReturn();
+ };
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&active)park();
+  else updateReturn();
+ });
+ window.addEventListener('focus',updateReturn);
 })();

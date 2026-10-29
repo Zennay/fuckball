@@ -546,7 +546,22 @@ function renderReplayMoments(bytes){
  });
 }
 const replayLoadWithMoments=loadReplay;
+// My Games may be opened from a still-running (now background-paused) solo,
+// 2v2 or 4v4 local match. Every recorded-moment, coaching, collection and
+// Watch launcher eventually uses this one entry point. The original engine
+// reset is irreversible, so require *human* consent before calling it.
+function confirmLocalMatchToReplay(){
+ if($('gamesView').hidden||!started||replay||serverLink||peerConnected)return;
+ const warning='Opening a replay will end your current local match, reset its score and players, and may save an active recording. Continue?';
+ if(typeof window.confirm!=='function'||!window.confirm(warning)){
+  gamesMessage('Your local match was kept. Return to match to continue playing.');
+  throw Error('Replay opening cancelled; the current local match was not replaced.');
+ }
+}
 loadReplay=function(bytes,name){
+ // Do not call the old loader, destroy a replay, change view or release game
+ // inputs on cancellation. Online connections are still guarded by app.js.
+ confirmLocalMatchToReplay();
  replayLoadWithMoments(bytes,name);
  renderReplayMoments(bytes);
 };
