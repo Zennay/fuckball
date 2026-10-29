@@ -272,7 +272,10 @@
    chosen=key;attendancePanel.open=true;renderAttendance();
    attendancePanel.scrollIntoView({block:'start',behavior:'auto'});
    fixtureChoice.focus({preventScroll:true});
-  }
+  },
+  // User-requested refresh is read-only: re-read attendance AND the three
+  // competition collections. It never changes private fixture writers.
+  onRefresh:()=>{loadRSVP();render();}
  });
  content.append(header,totals);
  if(ops)content.append(ops.element);

@@ -32,3 +32,10 @@
 @media(max-width:550px){.practice-focus-next-actions button,.practice-focus-actions button{flex:1 1 100%}
  .practice-focus-card{padding:13px}.practice-focus-next{padding:12px}}
 @media print{.practice-focus-actions,.practice-focus-next-actions{display:none!important}}
+
+/* Surface inconsistent or unreadable local evidence without disguising it as
+   an empty history. Source records are never changed by this read-only coach. */
+.practice-focus-integrity:empty{display:none}
+.practice-focus-integrity{font-size:12px;line-height:1.55;margin:0;
+ padding:11px 13px;border:1px solid #bca472;border-radius:9px;
+ background:#342d23;color:#f5e5b3;overflow-wrap:anywhere}

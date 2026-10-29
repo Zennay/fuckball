@@ -36,12 +36,12 @@
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  const actions=make('div',null,'replay-import-actions');
  const importButton=button('↓ Import selected replays',importFiles);
- const clearButton=button('Clear selection',()=>{selected=[];render();});
+ const clearButton=button('Clear selection',()=>{selected=[];retryPending=false;render();});
  importButton.disabled=clearButton.disabled=true;
  actions.append(importButton,clearButton);
  section.append(header,zone,choose,previews,status,actions);
  view.insertBefore(section,library);
- let selected=[],busy=false,usedCount=null,usedBytes=null;
+ let selected=[],busy=false,usedCount=null,usedBytes=null,usageRevision=0,retryPending=false;
  const fileInfo=file=>file&&typeof file.name==='string'&&
   /\.hbr2$/i.test(file.name)&&file.name.length<=255&&
   Number.isSafeInteger(file.size)&&file.size>0&&file.size<=MAX_FILE;
@@ -53,12 +53,19 @@
   if(totals(files)>MAX_TOTAL)throw Error('Batch exceeds the entire 160 MB local replay limit.');
  }
  async function updateUsage(){
+  // Delayed focus/drop/list responses must not overwrite the latest usable
+  // storage limit or make an exhausted library look writable.
+  const revision=++usageRevision;
   try{
    const all=await ReplayLibrary.list();
+   if(revision!==usageRevision)return false;
    usedCount=all.length;usedBytes=all.reduce((total,item)=>total+item.size,0);
    usage.textContent=all.length+' / 30 saved · '+bytes(usedBytes)+' / 160 MB';
+   return true;
   }catch{
+   if(revision!==usageRevision)return false;
    usedCount=usedBytes=null;usage.textContent='Storage availability is unknown';
+   return false;
   }
  }
  function render(){
@@ -89,6 +96,9 @@
    selected.length+' selected · '+bytes(totals(selected))+
     ' · Not imported until you confirm.':'No recordings selected.';
   importButton.disabled=busy||!selected.length||!!error||!!storageWarning;
+  importButton.textContent=retryPending&&selected.length?
+   '↻ Import remaining '+selected.length+' recording'+(selected.length===1?'':'s'):
+   '↓ Import selected replays';
   clearButton.disabled=busy||!selected.length;
   choose.disabled=busy;zone.classList.toggle('is-busy',busy);
   zone.setAttribute('aria-disabled',String(busy));
@@ -99,10 +109,10 @@
   // combining with a previously selected batch.
   const incoming=Array.from(files||[]).slice(0,MAX_BATCH+1);
   if(incoming.length>MAX_BATCH){
-   selected=[];render();status.textContent='Maximum 10 recordings per batch. Nothing was imported.';
+   selected=[];retryPending=false;render();status.textContent='Maximum 10 recordings per batch. Nothing was imported.';
    return;
   }
-  selected=incoming;render();
+  retryPending=false;selected=incoming;render();
  }
  function browse(){
   if(busy)return;
@@ -132,46 +142,98 @@
   if(!dragDepth)zone.classList.remove('dragging');
  });
  zone.addEventListener('drop',event=>{
-  if(busy||!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
-  event.preventDefault();dragDepth=0;zone.classList.remove('dragging');
-  stage(event.dataTransfer.files);
+  if(!Array.from(event.dataTransfer?.types||[]).includes('Files'))return;
+  const files=Array.from(event.dataTransfer?.files||[]);
+  dragDepth=0;zone.classList.remove('dragging');
+  // ZIP backups belong to the view's archive restore flow, not the HBR2
+  // preview selection. Let the ancestor handle only an unambiguous ZIP.
+  if(files.length===1&&/\.zip$/i.test(files[0].name))return;
+  event.preventDefault();
+  event.stopPropagation();
+  if(busy||window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='An import or backup restore is already running. Retry when it finishes.';
+   return;
+  }
+  stage(files);
+  updateUsage().then(render);
  });
+ // A recording dropped on empty My Games space should stage in the same
+ // explicit-review flow as a drop onto the HBR2 panel. This listener is
+ // registered before the ZIP archive's view handler, and consumes non-ZIPs
+ // so the archive never replaces the HBR2 preview with a misleading warning.
+ view.addEventListener('drop',event=>{
+  if(event.defaultPrevented||!event.dataTransfer?.files?.length)return;
+  const files=Array.from(event.dataTransfer.files);
+  if(files.length===1&&/\.zip$/i.test(files[0].name))return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if(busy||window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='Finish the current import or ZIP restore before adding files.';
+   return;
+  }
+  stage(files);
+  section.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  zone.focus?.({preventScroll:true});
+  updateUsage().then(render);
+ });
+ // Local private UI signal only; never exposes recording bytes to other tabs.
+ window.FuckballReplayImportDesk={isBusy:()=>busy};
  async function importFiles(){
   if(busy||!selected.length)return;
+  if(window.FuckballReplayArchive?.isBusy?.()){
+   status.textContent='ZIP backup restore is in progress. Finish restoring before importing individual replays.';
+   return;
+  }
   const files=[...selected];
   try{preflight(files);}catch(error){
    status.textContent=error.message;return;
   }
-  busy=true;render();let completed=0,failed=null;
+  busy=true;render();
+  let completed=0,failed=null,refreshFailed=null,started=false;
   try{
+   // Canonical library still owns every HBR2 parse and storage transaction.
    const existing=await ReplayLibrary.list();
    const remaining=MAX_TOTAL-existing.reduce((n,item)=>n+item.size,0);
    if(existing.length+files.length>MAX_ITEMS||totals(files)>remaining)
     throw Error('Not enough space. Remove old recordings in Storage Manager before importing.');
+   started=true;
    for(const [index,file] of files.entries()){
     status.textContent='Importing recording '+(index+1)+' of '+files.length+'…';
     try{
      if(!fileInfo(file))throw Error('Invalid file size or .hbr2 extension');
-     // Parser, transaction, source limits and sanitization belong to the
-     // one canonical device-local recording library.
      await ReplayLibrary.save(new Uint8Array(await file.arrayBuffer()),file.name);
      completed++;
     }catch(e){failed=e.message||'Invalid HBR2 recording';break;}
    }
-   if(completed){
-    selected=files.slice(completed);
-    await renderMyGames();
-    window.dispatchEvent(new Event('fuckball:local-replay-library-change'));
-   }
-   status.textContent=failed?
-    completed+' saved, import stopped: '+failed+
-     '. Files not yet imported remain selected. Already saved recordings are kept.':
-    completed+' genuine local recordings saved to My Games. They are not official server results.';
   }catch(error){
-   status.textContent='Import could not start: '+(error.message||'Replay storage unavailable')+'. No files were added.';
+   failed=error.message||'Replay storage unavailable';
   }finally{
-   busy=false;await updateUsage();
-   const finalText=status.textContent;render();status.textContent=finalText;
+   if(completed){
+    // A failed cosmetic refresh must never re-offer persisted bytes as
+    // unsaved files. Only the unapplied tail is eligible for explicit retry.
+    selected=files.slice(completed);
+    retryPending=selected.length>0;
+    try{window.dispatchEvent(new Event('fuckball:local-replay-library-change'));}catch{}
+    try{await renderMyGames();}
+    catch(e){refreshFailed=e?.message||'Could not refresh the My Games view';}
+   }else if(!started)retryPending=false;
+   busy=false;
+   const capacityVerified=await updateUsage();
+   render();
+   const saved=completed+' genuine recording'+(completed===1?'':'s')+' saved locally';
+   const remainingCount=files.length-completed;
+   if(completed){
+    status.textContent=saved+
+     (failed?' · import stopped: '+failed+'.':' · import complete.')+
+     (remainingCount?' '+remainingCount+' unsaved file'+(remainingCount===1?' remains':'s remain')+
+       ' selected for an explicit retry.':'')+
+     (refreshFailed?' Saved recordings are intact, but the library view could not refresh: '+refreshFailed+
+       '. Reopen My Games to see them.':'')+
+     (!capacityVerified?' Storage usage could not be refreshed; verify space before retrying.':'')+
+     ' Imported recordings are not official server results.';
+   }else status.textContent=failed?
+    'No files were saved: '+failed+'. Your selection is unchanged.':
+    'No recordings were saved. Your selection is unchanged.';
   }
  }
  const tab=document.getElementById('tabReplay');

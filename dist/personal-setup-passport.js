@@ -94,11 +94,11 @@
    return stored===null?fallback():JSON.parse(stored);
   }catch{throw Error('Could not read saved '+key+'.');}
  }
- function current(){
+ function current(selected=entries.map(item=>item[0])){
   const parts={};
-  parts.keyboard=bindings(settings.keys);
+  if(selected.includes('keyboard'))parts.keyboard=bindings(settings.keys);
   for(const [kind,, ,storageKey] of entries){
-   if(kind==='keyboard')continue;
+   if(kind==='keyboard'||!selected.includes(kind))continue;
    parts[kind]=validators[kind](safeRead(storageKey,defaults[kind]));
   }
   return parts;
@@ -133,7 +133,8 @@
  const intro=document.createElement('p');
  intro.textContent='Only gameplay control layouts and accessibility preferences. No account token, room link, messages, replays or stats leave this device.';
  const section=document.createElement('section');section.className='setup-passport-choices';
- const summary=document.createElement('strong');summary.textContent='CHOOSE WHICH SETTINGS TO RESTORE';
+ const summary=document.createElement('strong');
+ summary.textContent='CHOOSE WHICH SETTINGS TO BACK UP OR RESTORE';
  const selections=new Map();
  for(const [kind,label,help] of entries){
   const row=document.createElement('label');row.className='setup-passport-choice';
@@ -144,6 +145,12 @@
  }
  const status=document.createElement('p');status.className='setup-passport-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+ const preview=document.createElement('section');preview.className='setup-passport-preview';
+ preview.hidden=true;preview.setAttribute('aria-label','Validated device settings replacement preview');
+ const previewTitle=document.createElement('strong');
+ previewTitle.textContent='PREVIEW · THESE CATEGORIES MAY CHANGE';
+ const previewList=document.createElement('ul');
+ preview.append(previewTitle,previewList);
  const buttonsRow=document.createElement('div');buttonsRow.className='setup-passport-actions';
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.textContent='↓ Export safe .json';
  const choose=document.createElement('button');choose.type='button';choose.textContent='↑ Select .json';
@@ -152,62 +159,145 @@
  const close=document.createElement('button');close.type='button';close.textContent='Done';
  buttonsRow.append(exportButton,choose,apply,close);
  const file=document.createElement('input');file.type='file';file.accept='.json,application/json';file.hidden=true;
- dialog.append(heading,intro,summary,section,status,buttonsRow,file);document.body.append(dialog);
- let pending=null,opener=null;
- function safeImportNow(){
-  return matchViewHidden()&&!(typeof serverLink!=='undefined'&&serverLink?.room)&&
-   !(typeof peerConnected!=='undefined'&&peerConnected)&&
-   !(typeof replay!=='undefined'&&replay)&&
-   !document.querySelector('.quick-queue-actions button:not([hidden])')&&
-   !document.querySelector('.quick-ready:not([hidden])');
+ dialog.append(heading,intro,summary,section,preview,status,buttonsRow,file);
+ document.body.append(dialog);
+ let pending=null,opener=null,selectionStamp=0,baseline=null;
+ function snapshot(kind){
+  if(kind==='keyboard')return JSON.stringify(settings.keys);
+  const row=entries.find(x=>x[0]===kind);
+  return localStorage.getItem(row[3]);
  }
- function matchViewHidden(){return document.getElementById('matchView')?.hidden!==false;}
+ function previewParts(parsed){
+  previewList.replaceChildren();
+  baseline=new Map();
+  for(const [kind,label] of entries){
+   if(!Object.hasOwn(parsed,kind))continue;
+   // The source file is schema-validated already; inspect only the actual
+   // selected category, never the complete (account-bearing) app settings.
+   const line=document.createElement('li');
+   let result='Saved controls unavailable on this device';
+   try{
+    baseline.set(kind,snapshot(kind));
+    const existing=current([kind])[kind];
+    result=JSON.stringify(existing)===JSON.stringify(parsed[kind])?
+     'Already matches the saved setup':'Will replace this category on this device';
+   }catch{baseline.set(kind,null);}
+   line.textContent=label+' · '+result;
+   previewList.append(line);
+  }
+  preview.hidden=false;
+ }
+ // A user setting restore reloads this page and destroys every in-flight
+ // WebSocket, WebRTC, native room-recovery timer and local game engine.
+ // Hidden UI never constitutes consent to discard a human or solo session.
+ function importBlocker(){
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return 'Leave or cancel the active online room, join or human search first.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Choose Stop reconnecting in your original room before restoring.';
+  if(typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&peer)
+   return 'Disconnect the current direct-peer match or handshake first.';
+  if(typeof replay!=='undefined'&&replay)
+   return 'Close your replay before changing device controls.';
+  if(typeof started!=='undefined'&&started)
+   return 'Finish and stop your current local match before restoring controls.';
+  if(document.getElementById('matchView')?.hidden===false)
+   return 'Return to Home and leave active play before restoring controls.';
+  if(document.getElementById('joinScreen')?.hidden===false)
+   return 'Finish or close the current room invitation before restoring.';
+  if(document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])'))
+   return 'Cancel the human matchmaking queue or ready check first.';
+  return '';
+ }
  for(const btn of buttons)btn.addEventListener('click',event=>{
-  opener=event.currentTarget;pending=null;apply.disabled=true;section.hidden=true;
-  status.textContent='Export creates a local private file. Import previews all recognized categories before replacing anything.';
+  opener=event.currentTarget;selectionStamp++;pending=null;baseline=null;
+  apply.disabled=true;preview.hidden=true;previewList.replaceChildren();
+  section.hidden=false;
+  for(const [,box] of selections){box.checked=true;box.parentElement.hidden=false;}
+  status.textContent='Select a private backup category, or open a setup file to preview it before restoring.';
   dialog.showModal();
  });
  function exit(){if(dialog.open)dialog.close();}
- dialog.addEventListener('close',()=>{opener?.focus();opener=null;});
+ dialog.addEventListener('close',()=>{
+  selectionStamp++;pending=null;baseline=null;apply.disabled=true;
+  opener?.focus();opener=null;
+ });
  close.onclick=exit;
  exportButton.onclick=()=>{
+  const kinds=entries.filter(([kind])=>selections.get(kind).checked&&
+   !selections.get(kind).parentElement.hidden).map(([kind])=>kind);
+  if(!kinds.length){status.textContent='Choose at least one control category to back up.';return;}
   let payload;
   try{payload=JSON.stringify({format:FORMAT,version:VERSION,
-   exportedAt:new Date().toISOString(),parts:current()},null,2);}
+   exportedAt:new Date().toISOString(),parts:current(kinds)},null,2);}
   catch(error){status.textContent='Cannot export device settings: '+error.message;return;}
   if(new Blob([payload]).size>MAX_BYTES){status.textContent='Setup exceeds 24 KiB export limit.';return;}
   const url=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download='fuckball-player-setup.json';
   document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),30000);
-  status.textContent='Private setup exported. No account credentials or network upload.';
+  status.textContent='Exported '+kinds.length+
+   ' selected control categories privately. No account credentials or network upload.';
  };
- choose.onclick=()=>{file.value='';file.click();};
+ choose.onclick=()=>{
+  selectionStamp++;pending=null;baseline=null;preview.hidden=true;
+  apply.disabled=true;file.value='';file.click();
+ };
  file.addEventListener('change',async()=>{
-  pending=null;apply.disabled=true;section.hidden=true;
-  const selection=file.files?.[0];if(!selection)return;
-  if(selection.size>MAX_BYTES){status.textContent='Setup file exceeds 24 KiB.';return;}
+  const stamp=++selectionStamp;
+  pending=null;baseline=null;apply.disabled=true;preview.hidden=true;section.hidden=true;
+  const selectedFile=file.files?.[0];if(!selectedFile)return;
+  if(selectedFile.size>MAX_BYTES){status.textContent='Setup file exceeds 24 KiB.';return;}
   try{
-   const content=await selection.text(),parsed=parse(JSON.parse(content));
+   const text=await selectedFile.text();
+   if(stamp!==selectionStamp||!dialog.open)return;
+   const parsed=parse(JSON.parse(text));
+   previewParts(parsed);
    pending=parsed;
    for(const [kind,box] of selections){
-    box.parentElement.hidden=!Object.hasOwn(parsed,kind);box.checked=Object.hasOwn(parsed,kind);
+    box.parentElement.hidden=!Object.hasOwn(parsed,kind);
+    box.checked=Object.hasOwn(parsed,kind);
    }
    section.hidden=false;
-   status.textContent='Validated '+Object.keys(parsed).length+' settings categories. Select what to replace; nothing has been changed yet.';
+   status.textContent='Validated '+Object.keys(parsed).length+
+    ' categories. Review the preview and choose what to replace; no settings changed.';
    apply.disabled=false;
-  }catch(error){status.textContent='Import rejected: '+(error.message||'Invalid setup file');}
+  }catch(error){
+   if(stamp===selectionStamp&&dialog.open)
+    status.textContent='Import rejected: '+(error.message||'Invalid setup file');
+  }
  });
  apply.onclick=()=>{
   if(!pending)return;
-  if(!safeImportNow()){
-   status.textContent='Finish or leave any match, replay, room and Quick Match queue before restoring device settings.';
+  const blocked=importBlocker();
+  if(blocked){
+   status.textContent='Device setup not changed: '+blocked;
    return;
   }
   const chosen=entries.filter(([kind])=>pending[kind]&&selections.get(kind).checked);
   if(!chosen.length){status.textContent='Select at least one category to restore.';return;}
+  // Import data was previewed earlier. If another tab or menu changed an
+  // affected control in the meantime, never clobber that new live preference.
+  function previewUnchanged(){
+   if(!baseline)return false;
+   try{return chosen.every(([kind])=>baseline.has(kind)&&
+     baseline.get(kind)===snapshot(kind));}
+   catch{return false;}
+  }
+  if(!previewUnchanged()){
+   status.textContent='A selected control layout changed since preview. Re-select the file to review the latest device settings.';
+   return;
+  }
   const types=chosen.map(([,label])=>label).join(', ');
   if(!window.confirm('Replace '+types+' on this device, then reload Fuckball? Your existing account stays signed in.'))return;
+  // The native confirmation can remain open while another browser tab writes.
+  if(!previewUnchanged()){
+   status.textContent='Your existing controls changed during confirmation. Re-select the setup file before replacing them.';
+   return;
+  }
+  const afterConfirm=importBlocker();
+  if(afterConfirm){status.textContent='Setup kept unchanged: '+afterConfirm;return;}
   const backups=new Map(),olderKeys=JSON.parse(JSON.stringify(settings.keys));
   try{
    for(const [kind,,,key] of chosen){
@@ -221,8 +311,10 @@
    }
    for(const [kind,,,key] of chosen)if(key&&localStorage.getItem(key)!==JSON.stringify(pending[kind]))
     throw Error('Storage did not preserve '+kind+'.');
-   status.textContent='Selected settings restored. Reloading to safely activate every control panel.';
-   window.setTimeout(()=>location.reload(),100);
+   status.textContent='Selected settings restored; reloading to activate the original controls.';
+   // Reload immediately after a committed transaction, avoiding a window in
+   // which a player might launch with half of the old/new input mappings.
+   location.reload();
   }catch(error){
    settings.keys=olderKeys;savePrefs();
    for(const [key,value] of backups){

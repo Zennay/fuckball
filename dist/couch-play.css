@@ -48,3 +48,34 @@
  font-size:.85rem;color:#e2f8dc;overflow-wrap:anywhere}
 @media(max-width:620px){.couch-rivals-recovery{padding:14px}
  .couch-rivals-recovery-seats{grid-template-columns:1fr}}
+
+/* Two-human P2 recovery is a genuine manual input rebind, not a new game
+   or a change to the active match's controller/gameplay permissions. */
+.couch-p2-recovery[hidden]{display:none!important}
+.couch-p2-recovery{position:fixed;z-index:113;left:50%;transform:translateX(-50%);
+ bottom:max(16px,env(safe-area-inset-bottom));width:min(700px,calc(100vw - 20px));
+ box-sizing:border-box;display:grid;gap:10px;border:2px solid #e1c58e;
+ background:#2d2b23;color:#fff6df;border-radius:14px;
+ padding:16px 18px;box-shadow:0 16px 45px #071318dd}
+.couch-p2-recovery strong{font-size:.86rem;letter-spacing:.055em;color:#ffdfa2}
+.couch-p2-recovery p{font-size:.86rem;line-height:1.45;color:#f7e8d1;margin:0}
+.couch-p2-recovery label{display:grid;gap:7px;font-size:.8rem;font-weight:800}
+.couch-p2-recovery select{box-sizing:border-box;width:100%;min-height:46px;
+ background:#1b2829;color:#f8fff0;border:1px solid #abbaa5;border-radius:9px;
+ padding:9px;font:inherit}
+.couch-p2-recovery-actions{display:flex;gap:8px;flex-wrap:wrap}
+.couch-p2-recovery-actions button{font:inherit;font-size:.82rem;font-weight:800;
+ min-height:48px;min-width:0;border-radius:9px;cursor:pointer;
+ padding:9px 13px;color:#fff7e3;background:#534b37;border:1px solid #bfb092}
+.couch-p2-recovery-actions button.primary{background:#ffe09e;color:#2a291f;
+ border-color:#ffe09e}
+.couch-p2-recovery-actions button:disabled{opacity:.53;cursor:not-allowed}
+.couch-p2-recovery :is(button,select):focus-visible{outline:3px solid #f4ffae;outline-offset:3px}
+.couch-p2-recovery-actions button[hidden]{display:none!important}
+@media(max-width:650px){
+ .couch-p2-recovery{padding:14px;gap:9px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .couch-p2-recovery-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .couch-p2-recovery-actions button.primary{grid-column:1/-1}
+}
+@media(max-width:370px){.couch-p2-recovery-actions{grid-template-columns:1fr}
+ .couch-p2-recovery-actions button.primary{grid-column:auto}}

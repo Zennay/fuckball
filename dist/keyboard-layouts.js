@@ -31,17 +31,32 @@
    if(!result[key].some(Boolean))throw Error('Movement and kick actions each need a key.');
   return result;
  }
- let saved=[null,null,null];
- try{
-  const parsed=JSON.parse(localStorage.getItem(storeKey)||'null');
-  if(parsed?.version===1&&Array.isArray(parsed.slots)&&parsed.slots.length===3)
-   saved=parsed.slots.map(item=>{try{return item?validate(item):null;}catch{return null;}});
- }catch{}
+ // Each tab starts with a snapshot but must never overwrite slots changed by
+ // another tab. Reading latest storage immediately before each mutation also
+ // catches missed/delayed storage events. Invalid storage is not erased.
+ const emptySlots=()=>[null,null,null];
+ function decodeSlots(raw){
+  if(raw===null)return emptySlots();
+  try{
+   const parsed=JSON.parse(raw);
+   if(parsed?.version!==1||!Array.isArray(parsed.slots)||parsed.slots.length!==3)
+    return null;
+   return parsed.slots.map(item=>item===null?null:validate(item));
+  }catch{return null;}
+ }
+ function readLatestSlots(){
+  try{return decodeSlots(localStorage.getItem(storeKey));}
+  catch{return undefined;} // unavailable storage: retain session-only edits
+ }
+ const initialSlots=readLatestSlots();
+ let saved=Array.isArray(initialSlots)?initialSlots:emptySlots();
+ let storageUnavailable=initialSlots===undefined;
+ const slotsNeedingReview=new Set(); // foreign updates must be acknowledged first
  const panel=document.createElement('section');panel.className='keyboard-layouts';
  panel.setAttribute('aria-label','Keyboard layout presets');
  const title=document.createElement('h3');title.textContent='KEYBOARD PROFILES.';
  const desc=document.createElement('p');
- desc.textContent='Try a ready-made layout, keep up to three personal layouts or move one to another device. Switches take effect immediately; online rules and physics do not change.';
+ desc.textContent='Try a ready-made layout, keep up to three personal layouts or move one to another device. Saved slots are shared between browser tabs: conflicting edits are never silently overwritten. Online rules and physics do not change.';
  const presets=document.createElement('div');presets.className='keyboard-layout-presets';
  for(const [id,label] of [['standard','Default'],['arrows','Arrow keys'],['wasd','WASD'],['ijkl','IJKL'],['esdf','ESDF · left hand'],['numpad','Numpad · right hand']]){
   const btn=document.createElement('button');btn.type='button';btn.textContent=label;
@@ -104,41 +119,149 @@
   updateHomeKeys();
  }
  function persist(){
-  try{localStorage.setItem(storeKey,JSON.stringify({version:1,slots:saved}));return true;}
-  catch{return false;}
+  // A tab that could not read the saved snapshot cannot safely write a
+  // replacement snapshot even if the browser later allows setItem again.
+  if(storageUnavailable)return false;
+  try{
+   localStorage.setItem(storeKey,JSON.stringify({version:1,slots:saved}));
+   storageUnavailable=false;
+   return true;
+  }catch{
+   storageUnavailable=true;
+   return false;
+  }
+ }
+ const slotIdentity=value=>JSON.stringify(value);
+ function syncSavedProfiles(announce=false){
+  const latest=storageUnavailable?undefined:readLatestSlots();
+  if(latest===undefined)return true;
+  if(latest===null){
+   if(announce)message('Saved profiles have an invalid format. They were not replaced; resolve the stored data before editing slots.',true);
+   return false;
+  }
+  if(slotIdentity(latest)===slotIdentity(saved))return true;
+  for(let i=0;i<3;i++)if(slotIdentity(latest[i])!==slotIdentity(saved[i]))
+   slotsNeedingReview.add(i);
+  saved=latest;
+  refreshSlots();
+  if(announce)message('Saved keyboard profiles changed in another tab. Slots refreshed; your active game keys were not changed.');
+  return true;
+ }
+ function slotIsCurrent(index){
+  if(slotsNeedingReview.has(index)){
+   slotsNeedingReview.delete(index);
+   message('Slot '+(index+1)+' was edited in another tab. Review the updated slot, then click again to make your own change.',true);
+   return false;
+  }
+  const latest=storageUnavailable?undefined:readLatestSlots();
+  if(latest===undefined){
+   if(!storageUnavailable){
+    message('Saved profiles cannot be read right now. No stored slots were overwritten.',true);
+    return false;
+   }
+   return true; // explicit session-only mode
+  }
+  if(latest===null){
+   message('Saved profile storage has invalid data. No slots were overwritten.',true);
+   return false;
+  }
+  if(slotIdentity(latest[index])!==slotIdentity(saved[index])){
+   saved=latest;refreshSlots();
+   message('Slot '+(index+1)+' changed in another tab. Review the refreshed slot and click again.',true);
+   return false;
+  }
+  // Merge edits to *other* slots from the latest on-disk snapshot, rather
+  // than persisting the stale whole-array snapshot from this tab.
+  saved=latest;
+  return true;
+ }
+ // Reading, checking and writing a shared three-slot snapshot in separate
+ // tabs is not atomic. Serialize the WHOLE transaction when Web Locks exists:
+ // two simultaneous writes to different slots cannot each replace the other's
+ // just-saved slot. Older browsers keep the existing cautious re-read fallback.
+ async function commitSlot(index,value,action){
+  const commit=()=>{
+   if(Number(slot.value)!==index){
+    message('Slot selection changed while waiting to save. Choose the slot and try again.',true);
+    return false;
+   }
+   if(!slotIsCurrent(index))return false;
+   saved[index]=value;
+   slotsNeedingReview.delete(index);
+   const persisted=persist();
+   refreshSlots();
+   message(persisted?'Slot '+(index+1)+' '+action+'.':
+    'Slot '+(index+1)+' updated for this visit only; browser storage is unavailable.',!persisted);
+   return persisted;
+  };
+  if(typeof navigator!=='undefined'&&typeof navigator.locks?.request==='function'){
+   try{return await navigator.locks.request(storeKey,{mode:'exclusive'},commit);}
+   catch{message('Browser profile save lock was unavailable. No profile was changed; try again.',true);return false;}
+  }
+  return commit();
+ }
+ // A profile switch changes live human controls. Keep a single local undo
+ // snapshot, never a background or cross-tab binding restore.
+ let previousActiveKeys=null,homeUndo=null;
+ const undoControl=button('↶ Undo key change',undoLastLayout);
+ undoControl.className='keyboard-profile-undo';undoControl.disabled=true;
+ function updateUndo(){
+  undoControl.disabled=!previousActiveKeys;
+  if(homeUndo)homeUndo.disabled=!previousActiveKeys;
+ }
+ function copyKeys(){
+  return Object.fromEntries(actions.map(a=>[a,[...(settings.keys[a]||[])]]));
+ }
+ function undoLastLayout(){
+  if(!previousActiveKeys)return;
+  const restore=previousActiveKeys;
+  previousActiveKeys=null;
+  if(typeof cancelBinding==='function')cancelBinding();
+  if(typeof releaseInputs==='function')releaseInputs();
+  settings.keys=restore;
+  savePrefs();
+  renderBindings();
+  updateUndo();
+  message('Your previous keyboard controls are restored. Any current held keys were released.');
  }
  function apply(source,name){
   let mapping;
   try{mapping=validate(source);}catch(e){message(e.message,true);return;}
+  const previous=copyKeys();
+  if(JSON.stringify(previous)===JSON.stringify(mapping)){
+   message(name+' is already active. No controls were changed.');return;
+  }
   if(typeof cancelBinding==='function')cancelBinding();
   if(typeof releaseInputs==='function')releaseInputs();
   settings.keys=mapping;
   savePrefs();
   renderBindings();
-  message(name+' is active. Key changes below still work normally.');
+  previousActiveKeys=previous;
+  updateUndo();
+  message(name+' is active. Undo restores the previous controls if needed.');
  }
  function saveCurrent(){
   let current;
   try{current=validate(settings.keys);}catch(e){message(e.message,true);return;}
   const index=Number(slot.value);
+  if(!slotIsCurrent(index))return;
   if(saved[index]&&!window.confirm('Replace your previously saved layout in Slot '+(index+1)+'?'))return;
-  saved[index]=current;
-  message(persist()?'Slot '+(index+1)+' saved on this device.':'Saved for this visit; browser storage is unavailable.',false);
-  refreshSlots();
+  commitSlot(index,current,'saved on this device');
  }
  button('Save current',saveCurrent);
  button('Load slot',()=>{
   const index=Number(slot.value);
+  if(!syncSavedProfiles(true))return;
   if(!saved[index]){message('Nothing saved in this slot yet.',true);return;}
+  slotsNeedingReview.delete(index);
   apply(saved[index],'Slot '+(index+1));
  });
  button('Delete slot',()=>{
   const index=Number(slot.value);
+  if(!slotIsCurrent(index))return;
   if(!saved[index]){message('Slot already empty.');return;}
   if(!window.confirm('Permanently delete the local keyboard layout in Slot '+(index+1)+'?'))return;
-  saved[index]=null;
-  message(persist()?'Slot deleted.':'Slot cleared for this visit; browser storage is unavailable.');
-  refreshSlots();
+  commitSlot(index,null,'deleted');
  });
  const shareRow=document.createElement('div');shareRow.className='keyboard-layout-share';
  button('Export current .json',()=>{
@@ -167,7 +290,10 @@
  });
  const status=document.createElement('p');status.className='keyboard-layout-status';
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- status.textContent='Current keys are stored by Fuckball settings; saved slots stay in this browser only.';
+ status.textContent=initialSlots===null?
+  'Stored keyboard profiles could not be read. Existing data will not be overwritten.':
+  'Current keys are stored by Fuckball settings; saved slots stay in this browser only.';
+ if(initialSlots===null)status.classList.add('error');
  panel.append(title,desc,presets,slotLabel,actionsRow,file,status);
  // Real, editable keyboard profiles now start on the Play home screen too.
  // No match startup, game input, network traffic or account write is necessary.
@@ -198,12 +324,17 @@
   const load=document.createElement('button');load.type='button';load.textContent='Load personal slot';
   load.onclick=()=>{
    const index=Number(homeSlot.value);
+   if(!syncSavedProfiles(true))return;
    if(!saved[index]){message('Selected personal slot is empty.',true);return;}
+   slotsNeedingReview.delete(index);
    apply(saved[index],'Personal slot '+(index+1));
   };
   const save=document.createElement('button');save.type='button';save.textContent='Save current to slot';
   save.onclick=()=>{slot.value=homeSlot.value;saveCurrent();};
-  slotRow.append(slotName,load,save);
+  homeUndo=document.createElement('button');homeUndo.type='button';
+  homeUndo.textContent='↶ Undo key change';homeUndo.className='keyboard-profile-undo';homeUndo.disabled=true;
+  homeUndo.addEventListener('click',undoLastLayout);
+  slotRow.append(slotName,load,save,homeUndo);
   const currentTitle=document.createElement('h3');currentTitle.textContent='YOUR CURRENT KEYS';
   quickPreview=document.createElement('div');quickPreview.className='keyboard-quick-map';
   couchKeysInfo=document.createElement('p');couchKeysInfo.className='keyboard-couch-keys';
@@ -233,11 +364,23 @@
   // paused. Reflect it in the separate Home profiles immediately, without
   // replacing someone's saved slot or sending any input to the match.
   window.addEventListener('fuckball:keyboard-bindings-changed',()=>{
+   // A native Controls rebind is now the user's newer choice. Do not let
+   // an old profile-undo button silently restore stale P1 action mappings.
+   previousActiveKeys=null;updateUndo();
    updateHomeKeys();
    if(quickStatus)quickStatus.textContent='Native keyboard controls updated. Current keys above are now authoritative.';
   });
-  window.addEventListener('focus',()=>{if(!home.hidden)updateHomeKeys();});
+  window.addEventListener('focus',()=>{
+   if(!home.hidden){syncSavedProfiles(true);updateHomeKeys();}
+  });
  }
+ // A second tab may rename, delete or save a personal slot while this one
+ // remains open. Refresh only the saved presets; never override the active
+ // keyboard bindings or a running human's input on a storage event.
+ window.addEventListener('storage',event=>{
+  if(event.key!==storeKey&&event.key!==null)return;
+  syncSavedProfiles(true);
+ });
  const subtitle=document.createElement('p');subtitle.className='keyboard-layout-disclaimer';
  subtitle.textContent='Import files contain keyboard codes only. Avoid loading layout files from sources you do not trust.';
  panel.append(subtitle);

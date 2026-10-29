@@ -99,6 +99,10 @@
    !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
    g.redScore<0||g.blueScore<0||g.redScore>500||g.blueScore>500||
    g.timeElapsed<0||g.timeElapsed>12*3600)return null;
+  // An unstarted local Watch Bots room displays an initial 0:0 placeholder.
+  // That is not an observed score and must not become a saved broadcast PNG.
+  if(!serverLink&&typeof started!=='undefined'&&!started&&g.timeElapsed===0)
+   return null;
   return {red:g.redScore,blue:g.blueScore,time:Math.floor(g.timeElapsed)};
  };
  const clockText=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
@@ -127,7 +131,10 @@
   const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
   const inProgress=online?serverLink.roomState?.started===true&&serverLink.roomState?.paused!==true:
    typeof started!=='undefined'&&started===true&&typeof paused!=='undefined'&&paused!==true;
+  const pausedLocal=!online&&typeof started!=='undefined'&&started===true&&
+   typeof paused!=='undefined'&&paused===true;
   stamp.textContent=inProgress?'LIVE LOCAL VIEW · UNVERIFIED':
+   pausedLocal?'LOCAL WATCH PAUSED · LAST OBSERVED SCORE · UNVERIFIED':
    online&&serverLink.roomState?.started===true?'MATCH PAUSED · LAST LOCAL SCORE':
    'BETWEEN ROUNDS · LAST LOCAL SCORE · UNVERIFIED';
   foot.textContent=inProgress?'Current native match snapshot · no verified match result':

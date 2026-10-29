@@ -25,3 +25,24 @@
 .teamwork-hud-actions{display:flex;flex-wrap:wrap;gap:8px}
 .teamwork-hud-actions button{min-height:42px;flex:1}
 @media(max-width:720px){.teamwork-panel{padding:15px}.teamwork-hud{bottom:120px;padding:12px 14px}.teamwork-score{font-size:17px}}
+
+/* In-progress native 4v4 Teamwork is parked, never simulated off-pitch. */
+.teamwork-parked-dock[hidden]{display:none!important}
+.teamwork-parked-dock{position:fixed;z-index:100;left:50%;
+ transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(730px,calc(100vw - 24px));box-sizing:border-box;display:flex;
+ align-items:center;justify-content:space-between;gap:16px;padding:15px 18px;
+ border:2px solid #d6f2a4;border-radius:14px;
+ background:#19332e;color:#eef9ed;box-shadow:0 14px 40px #06191aea}
+.teamwork-parked-dock p{margin:0;font-size:.86rem;line-height:1.5;
+ overflow-wrap:anywhere;color:#e1f2dc}
+.teamwork-parked-dock>div{display:flex;gap:8px;flex-shrink:0}
+.teamwork-parked-dock button{min-height:48px;padding:10px 14px;
+ font:inherit;font-weight:800;font-size:.84rem;cursor:pointer;
+ border-radius:9px;border:1px solid #9bbcaa;background:transparent;color:#f0ffed}
+.teamwork-parked-dock button.primary{background:#d7ff9b;
+ color:#163523;border-color:#d7ff9b}
+.teamwork-parked-dock button:focus-visible{outline:3px solid #fff8ac;outline-offset:3px}
+@media(max-width:700px){.teamwork-parked-dock{flex-direction:column;align-items:stretch;padding:14px}
+ .teamwork-parked-dock>div{display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:365px){.teamwork-parked-dock>div{grid-template-columns:1fr}}

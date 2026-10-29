@@ -30,34 +30,77 @@
  const safeRoom=room=>typeof room==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(room);
  function snapshot(){
   const active=typeof serverLink==='undefined'?null:serverLink;
-  if(!active?.room||active.quickMatchMode||!safeRoom(active.room))return null;
+  // A room code retained on the client is not a live room invitation.
+  // The original server-admitted WebSocket must still be open and usable.
+  if(!active?.room||active.quickMatchMode||!safeRoom(active.room)||
+     active.failed||active.recoveryAttempt||active.ws?.readyState!==1)return null;
   // Derive the invitation from the same current browser site used for native room links.
   // Ignore any externally supplied inviteLink input or saved stale room code.
   if(location.protocol!=='https:'&&location.protocol!=='http:')return null;
   const url=new URL(location.pathname,location.origin);
   url.searchParams.set('room',active.room);
-  return {room:active.room,url:url.href,control:active.roomControl||{}};
+  const current={room:active.room,url:url.href,control:active.roomControl||null,
+   session:active,socket:active.ws};
+  // Freeze the admission text at the moment a share/export starts. The server
+  // can replace or mutate roomControl while a clipboard/share/PNG promise
+  // awaits permission; checking only the room code would miss that change.
+  return{...current,accessLabel:eligibility(current),accessNotice:warning(current)};
  }
  function eligibility(data){
   const settings=data.control;
+  if(!settings)return 'ROOM VERIFIED · ACCESS RULES PENDING';
   if(settings.locked)return 'LOCKED · no new admissions currently';
-  if(settings.clubOnly)return 'CLUB-ONLY · membership required';
-  if(settings.accountsOnly)return 'ACCOUNT REQUIRED';
+  const requirements=[];
+  if(settings.clubOnly)requirements.push('CLUB MEMBERSHIP REQUIRED');
+  if(settings.accountsOnly)requirements.push('SIGN-IN REQUIRED');
+  if(settings.accessKeyRequired===true)requirements.push('ACCESS KEY REQUIRED');
+  if(requirements.length)return requirements.join(' · ');
   if(settings.listed)return 'PUBLICLY LISTED · server admission required';
   return 'UNLISTED · invite link only';
  }
  function warning(data){
   const s=data.control;
+  if(!s)return 'The game server has confirmed this room code but has not reported all admission rules yet. Sharing never grants access.';
   if(s.locked)return 'The room is locked. This link will not unlock it or admit new players.';
-  if(s.clubOnly)return 'Only eligible Club members can enter. Sending this link does not grant Club membership.';
-  if(s.accountsOnly)return 'Recipients must sign in. This link does not create an account or grant admission.';
+  const requirements=[];
+  if(s.clubOnly)requirements.push('Recipients must belong to the approved Club.');
+  if(s.accountsOnly)requirements.push('Recipients must sign in.');
+  if(s.accessKeyRequired===true)
+   requirements.push('An access key is also required; share it separately, never inside this invite URL.');
+  if(requirements.length)
+   return requirements.join(' ')+' Only the server can admit visitors.';
   return s.listed?
    'This room is currently public. It can become unlisted, full or closed after sharing.':
    'Unlisted codes may still work until the room closes. Share only with intended recipients.';
  }
+ // An original room ID may be reused after a real disconnect/reconnect.
+ // Socket/link identity prevents reusing old QR and asynchronous UI receipts.
+ const sameSession=(a,b)=>!!a&&!!b&&a.session===b.session&&
+  a.socket===b.socket&&a.url===b.url;
+ const sameSharePolicy=(a,b)=>sameSession(a,b)&&
+  a.accessLabel===b.accessLabel&&a.accessNotice===b.accessNotice;
+ function shareReceipt(previous,success){
+  const current=snapshot();
+  if(!sameSession(previous,current))
+   return 'Room disconnected or changed while sharing. An older invitation may have been copied or sent; review the current room.';
+  if(!sameSharePolicy(previous,current))
+   return 'Room access rules changed while sharing. The link may have been copied or sent; review current admission requirements before inviting.';
+  return success;
+ }
+ let menuShareEpoch=0;
+ function showShareResult(epoch,message){
+  if(epoch===menuShareEpoch)status.textContent=message;
+ }
  function refresh(){
   const next=snapshot();section.hidden=!next;
-  if(!next){hideQr();current=null;link.value='';code.textContent='';return;}
+  if(!next){
+   hideQr();current=null;link.value='';code.textContent='';
+   state.textContent='';caution.textContent='';status.textContent='';
+   return;
+  }
+  if(current&&!sameSession(current,next)){
+   hideQr();status.textContent='';
+  }
   if(renderedQrUrl&&renderedQrUrl!==next.url)hideQr();
   // Keep copy/share actions bound to the *currently* active room.
   current=next;code.textContent='ROOM '+next.room;link.value=next.url;
@@ -69,21 +112,24 @@
   if(!now)throw Error('No shareable native Custom Room is currently active.');
   refresh();return now;
  };
- async function copy(value,message){
+ async function copy(room,value,message,epoch){
   if(typeof navigator.clipboard?.writeText!=='function')
    throw Error('Clipboard access is unavailable. Select and copy the displayed link instead.');
   await navigator.clipboard.writeText(value);
-  status.textContent=message;
+  showShareResult(epoch,shareReceipt(room,message));
  }
  button('Copy invite link',async()=>{
-  try{const room=currentRoom();await copy(room.url,'Room invite link copied. Only the server can admit recipients.');}
-  catch(e){status.textContent=e.message||'Could not copy invitation.';}
+  const epoch=++menuShareEpoch;
+  try{const room=currentRoom();await copy(room,room.url,'Room invite link copied. Only the server can admit recipients.',epoch);}
+  catch(e){showShareResult(epoch,e.message||'Could not copy invitation.');}
  });
  button('Copy room code',async()=>{
-  try{const room=currentRoom();await copy(room.room,'Eight-character room code copied. No join attempt was made.');}
-  catch(e){status.textContent=e.message||'Could not copy code.';}
+  const epoch=++menuShareEpoch;
+  try{const room=currentRoom();await copy(room,room.room,'Eight-character room code copied. No join attempt was made.',epoch);}
+  catch(e){showShareResult(epoch,e.message||'Could not copy code.');}
  });
  button('Share via device',async()=>{
+  const epoch=++menuShareEpoch;
   try{
    const room=currentRoom();
    if(typeof navigator.share!=='function')throw Error('Device sharing is unavailable. Use Copy invite link instead.');
@@ -91,10 +137,11 @@
    await navigator.share({title:'Fuckball Custom Room '+room.room,
     text:'Join my Fuckball Custom Room · '+details+'. Entry requires approval from the live game server.',
     url:room.url});
-   status.textContent='Room invitation handed to your device share sheet; admission remains server-controlled.';
+   showShareResult(epoch,shareReceipt(room,
+    'Room invitation handed to your device share sheet; admission remains server-controlled.'));
   }catch(e){
-   if(e?.name==='AbortError')status.textContent='Sharing cancelled.';
-   else status.textContent=e.message||'Device sharing failed.';
+   showShareResult(epoch,e?.name==='AbortError'?'Sharing cancelled.':
+    e.message||'Device sharing failed.');
   }
  });
  // QR is encoded entirely in-browser from the currently valid, native room URL.
@@ -184,8 +231,13 @@
    ctx.fillText('Open via Fuckball. Joining requires a separate deliberate action.',70,851,1070);
    const blob=await new Promise((resolve,reject)=>
     canvas.toBlob(value=>value?resolve(value):reject(Error('Cannot export this QR image.')),'image/png'));
-   if(snapshot()?.url!==currentRoomData.url)
-    throw Error('Room changed during QR export. Open the new room and try again.');
+   const latest=snapshot();
+   if(!sameSession(currentRoomData,latest))
+    throw Error('Room disconnected or changed during QR export. Open its live room QR and try again.');
+   if(!sameSharePolicy(currentRoomData,latest))
+    throw Error('Room admission settings changed during QR export. Refresh the access notice and generate a current card.');
+   if(renderedQrUrl!==currentRoomData.url||qrPanel.hidden)
+    throw Error('The current QR was closed or replaced during export; show it again.');
    const url=URL.createObjectURL(blob);
    const link=document.createElement('a');link.href=url;
    link.download='fuckball-room-'+currentRoomData.room+'-qr.png';
@@ -233,6 +285,127 @@
  reload.className='room-invite-center-refresh';
  section.append(heading,description,code,linkLabel,actions,qrPanel,caution,status);
  pane.append(section);section.hidden=true;
+ // One-click invite sharing from both high-traffic views. These are read-only
+ // affordances for the *same* server-confirmed native Custom Room, not another
+ // room directory, public listing, client-owned join or permission override.
+ const shareViews=[];
+ function makeShareView(host,place){
+  if(!host)return;
+  const card=document.createElement('aside');card.className='room-invite-view-card';
+  card.hidden=true;card.setAttribute('aria-label','Share current online Custom Room');
+  const heading=document.createElement('div');heading.className='room-invite-view-heading';
+  const summary=document.createElement('div');summary.className='room-invite-view-summary';
+  const eyebrow=document.createElement('strong');eyebrow.textContent='PLAY WITH FRIENDS';
+  const caption=document.createElement('p');caption.textContent='Share your current, server-confirmed room.';
+  summary.append(eyebrow,caption);
+  const roomTag=document.createElement('code');roomTag.className='room-invite-view-code';
+  heading.append(summary,roomTag);
+  const admission=document.createElement('p');admission.className='room-invite-view-access';
+  const field=document.createElement('input');field.type='text';field.readOnly=true;
+  field.spellcheck=false;field.setAttribute('aria-label','Current online Custom Room invite link');
+  const actionsView=document.createElement('div');actionsView.className='room-invite-view-actions';
+  const message=document.createElement('p');message.className='room-invite-view-message';
+  message.setAttribute('role','status');message.setAttribute('aria-live','polite');
+  function control(label,run){
+   const b=document.createElement('button');b.type='button';b.textContent=label;
+   b.addEventListener('click',run);actionsView.append(b);return b;
+  }
+  let viewShareEpoch=0;
+  const reportChanged=origin=>{
+   const now=snapshot();
+   if(!sameSession(origin,now))
+    message.textContent='The live room session changed. An older invitation may have been shared; review the new room.';
+   else if(!sameSharePolicy(origin,now))
+    message.textContent='Room access rules changed during sharing. Check the current requirements before sending invitations.';
+  };
+  async function copyChoice(kind){
+   const epoch=++viewShareEpoch;
+   const room=snapshot();
+   if(!room){message.textContent='No active online Custom Room to invite anyone to.';return;}
+   const value=kind==='code'?room.room:room.url;
+   if(typeof navigator.clipboard?.writeText!=='function'){
+    field.value=room.url;field.select?.();
+    message.textContent=kind==='code'?
+     'Clipboard unavailable. Use the visible eight-character room code.':
+     'Clipboard unavailable. The current link is selected for manual copying.';
+    return;
+   }
+   try{
+    await navigator.clipboard.writeText(value);
+    if(epoch!==viewShareEpoch)return;
+    message.textContent=kind==='code'?'Current room code copied.':'Current room invite copied.';
+    reportChanged(room);
+   }catch{
+    if(epoch!==viewShareEpoch)return;
+    const latest=snapshot();
+    field.value=latest?.url||'';field.select?.();
+    message.textContent='Clipboard blocked. Select and copy the current displayed link instead.';
+   }
+  }
+  control('Copy invite',()=>copyChoice('link'));
+  control('Copy code',()=>copyChoice('code'));
+  control('Share',async()=>{
+   const epoch=++viewShareEpoch;
+   const room=snapshot();
+   if(!room){message.textContent='No current room to share.';return;}
+   if(typeof navigator.share!=='function'){
+    message.textContent='Device sharing is unavailable. Use Copy invite.';return;
+   }
+   try{
+    await navigator.share({title:'Fuckball Custom Room '+room.room,
+     text:'Join our Fuckball room. '+eligibility(room)+'. The server decides admission.',
+     url:room.url});
+    if(epoch!==viewShareEpoch)return;
+    message.textContent='Invite passed to your device share sheet.';
+    reportChanged(room);
+   }catch(e){
+    if(epoch===viewShareEpoch)message.textContent=e?.name==='AbortError'?'Sharing cancelled.':
+     'Device sharing failed. You can still copy the invite.';
+   }
+  });
+  control('Show QR',()=>{
+   const room=snapshot();
+   if(!room){message.textContent='This Custom Room is no longer connected.';return;}
+   document.getElementById('tabPlay')?.click();
+   if(typeof openMatchMenu!=='function'){
+    message.textContent='Open Match menu to view the current room QR.';return;
+   }
+   openMatchMenu('menuMatchPane','menuMatch');
+   refresh();
+   if(!sameSession(room,snapshot())){
+    message.textContent='Room session changed. Open the current room invite instead.';return;
+   }
+   if(renderedQrUrl!==room.url)qrButton.click();
+   if(!qrPanel.hidden)qrPanel.scrollIntoView?.({behavior:'auto',block:'nearest'});
+  });
+  card.append(heading,admission,field,actionsView,message);
+  host.prepend(card);shareViews.push({place,host,card,roomTag,admission,field,message,
+   last:'',lastSession:null,lastSocket:null});
+ }
+ makeShareView(document.getElementById('homeView'),'home');
+ makeShareView(document.getElementById('gamesView'),'games');
+ function syncShareViews(){
+  const active=snapshot();
+  for(const view of shareViews){
+   const {host,card,roomTag,admission,field,message}=view;
+   const visible=!!active&&!host.hidden;
+   card.hidden=!visible;
+   if(!visible){view.lastSession=null;view.lastSocket=null;continue;}
+   const identity=active.room+'|'+active.url;
+   if(view.last!==identity||view.lastSession!==active.session||
+      view.lastSocket!==active.socket){
+    view.last=identity;view.lastSession=active.session;
+    view.lastSocket=active.socket;message.textContent='';
+   }
+   roomTag.textContent=active.room;
+   field.value=active.url;
+   admission.textContent=eligibility(active)+' · '+warning(active);
+  }
+ }
+ setInterval(syncShareViews,1000);
+ document.getElementById('tabHome')?.addEventListener('click',()=>queueMicrotask(syncShareViews));
+ window.addEventListener('fuckball:native-session-state',syncShareViews);
+ syncShareViews();
  // The menu is controlled by the existing game UI. Refresh only while opened,
  // never fetch a room directory, persist a code or mutate server settings.
  let latestRoom='';
@@ -240,8 +413,8 @@
   const visible=typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
   if(!visible){section.hidden=true;if(renderedQrUrl)hideQr();return;}
   const next=snapshot();
-  if(!next){section.hidden=true;current=null;latestRoom='';hideQr();return;}
-  if(next.room!==latestRoom||next.url!==link.value||
+  if(!next){latestRoom='';refresh();return;}
+  if(!sameSession(current,next)||next.room!==latestRoom||next.url!==link.value||
     eligibility(next)!==state.textContent||warning(next)!==caution.textContent){
    latestRoom=next.room;status.textContent='';refresh();
   }else section.hidden=false;

@@ -100,6 +100,7 @@
       createdAt:now,updatedAt:now});
   };
   let cups=[],active='',message='',showAll=true,storageSnapshot=null;
+  let storageUnsafe=false,recoveryDownloaded=false;
   try{
     storageSnapshot=localStorage.getItem(KEY);
     if(storageSnapshot!==null){
@@ -110,9 +111,11 @@
       if(new Set(cups.map(c=>c.id)).size!==cups.length)throw Error();
     }
   }catch{
-    cups=[];message='Saved cups could not be verified. Restore a valid private backup.';
+    cups=[];storageUnsafe=true;
+    message='Saved cup data could not be verified. Editing is locked to protect your original results.';
   }
   function save(updated){
+    if(storageUnsafe)throw Error('Saved cups are unreadable. Download the original recovery copy before explicitly resetting or editing.');
     if(!Array.isArray(updated)||updated.length>MAX)throw Error('Cup limit reached.');
     const text=JSON.stringify(updated);
     if(text.length>LIMIT)throw Error('Local cup storage is full. Export and remove old cups.');
@@ -123,7 +126,7 @@
     storageSnapshot=text;cups=updated;
     window.dispatchEvent(new Event('fuckball:private-competition-change'));
   }
-  const current=()=>cups.find(c=>c.id===active)||null;
+  const current=()=>storageUnsafe?null:cups.find(c=>c.id===active)||null;
   const main=el('section',null,'knockout-desk');
   main.setAttribute('aria-label','Private knockout cup builder');
   const section=el('details',null,'knockout-disclosure');
@@ -153,6 +156,19 @@
   const importButton=btn('↑ Restore JSON',()=>importFile.click());
   const deleteButton=btn('Delete cup',deleteCup,'knockout-delete');
   toolbar.append(picker,add,exportButton,csvButton,calendarButton,printButton,importButton,deleteButton,importFile);
+  // Corrupt / unsupported local progress must never become an apparently empty
+  // cup list that a new Create / Restore / Remove operation can overwrite.
+  const recoveryPanel=el('section',null,'knockout-storage-recovery');
+  recoveryPanel.hidden=true;recoveryPanel.setAttribute('role','region');
+  recoveryPanel.setAttribute('aria-label','Recover existing private knockout cups');
+  const recoveryHeading=el('strong','YOUR PRIVATE CUP RESULTS NEED RECOVERY');
+  const recoveryText=el('p');
+  recoveryText.setAttribute('role','status');
+  const recoveryActions=el('div',null,'knockout-storage-recovery-actions');
+  const recoveryExport=btn('↓ Download original recovery copy',downloadOriginalCupStorage);
+  const recoveryReset=btn('Delete unreadable data & start fresh',resetUnreadableCupStorage,'knockout-delete');
+  recoveryActions.append(recoveryExport,recoveryReset);
+  recoveryPanel.append(recoveryHeading,recoveryText,recoveryActions);
   const summary=el('div',null,'knockout-progress');
   const seriesHandoff=el('section',null,'knockout-series-handoff');
   const seriesLead=el('div',null,'knockout-series-handoff-copy');
@@ -183,7 +199,7 @@
   seriesHandoff.append(seriesLead,seriesActions);seriesHandoff.hidden=true;
   const bracket=el('div',null,'knockout-bracket');bracket.setAttribute('aria-label','Knockout bracket');
   const notification=el('p',null,'knockout-message');notification.setAttribute('role','status');notification.setAttribute('aria-live','polite');
-  body.append(description,toolbar,setup,summary,seriesHandoff,bracket,notification);
+  body.append(description,recoveryPanel,toolbar,setup,summary,seriesHandoff,bracket,notification);
   section.append(title,body);main.append(section);
   const anchor=home.querySelector('.tournament-desk')||home.querySelector('.formation-studio')||
     home.querySelector('.mode-cards');
@@ -203,12 +219,24 @@
     return 'ROUND OF '+entrants;
   }
   function render(){
-    if(!current()&&cups.length)active=cups[0].id;
+    recoveryPanel.hidden=!storageUnsafe;
+    if(storageUnsafe){
+      const readable=storageSnapshot!==null;
+      recoveryText.textContent=readable?
+        'Saved cup data exists but cannot be safely interpreted. No cup scores, imports, deletions or new cups can overwrite it. Download the exact original bytes first.':
+        'Browser storage could not be read. All cup edits are locked. Check browser permissions or reload; nothing has been cleared.';
+      recoveryExport.disabled=!readable;
+      recoveryReset.disabled=!readable||!recoveryDownloaded;
+      setup.hidden=true;
+    }
+    for(const button of [add,importButton])button.disabled=storageUnsafe;
+    picker.disabled=storageUnsafe;
+    if(!current()&&cups.length&&!storageUnsafe)active=cups[0].id;
     const c=current();
     picker.replaceChildren(new Option('Choose a cup…',''));
     for(const t of cups)picker.add(new Option(t.name,t.id));
     picker.value=c?.id||'';
-    for(const button of [exportButton,csvButton,calendarButton,printButton,deleteButton])button.disabled=!c;
+    for(const button of [exportButton,csvButton,calendarButton,printButton,deleteButton])button.disabled=!c||storageUnsafe;
     summary.replaceChildren();bracket.replaceChildren();
     notification.textContent=message||'Everything stays private to this browser. Results are manual and unverified.';
     if(!c)return;
@@ -383,6 +411,37 @@
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }
   const slug=c=>'fuckball-cup-'+(c.name.toLocaleLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,40)||'private');
+  function downloadOriginalCupStorage(){
+    if(!storageUnsafe||storageSnapshot===null)return info('No readable original storage to export. Nothing was changed.');
+    try{
+      const original=localStorage.getItem(KEY);
+      if(original!==storageSnapshot)throw Error('Cup data changed in another tab. Reload before downloading the original.');
+      // Deliberately preserve original bytes, even if JSON cannot be parsed.
+      // A .txt copy is NOT represented as a validated importable backup.
+      download('fuckball-knockout-original-recovery.txt',original,'text/plain;charset=utf-8');
+      recoveryDownloaded=true;
+      message='Original cup storage downloaded as text. Keep this copy safe before considering a reset.';
+      render();
+    }catch(error){info(error.message||'Could not download original private cup data. No data was changed.');}
+  }
+  function resetUnreadableCupStorage(){
+    if(!storageUnsafe||!recoveryDownloaded||storageSnapshot===null)
+      return info('First download the original readable recovery copy. Nothing was deleted.');
+    try{
+      if(localStorage.getItem(KEY)!==storageSnapshot)
+        throw Error('Cup data changed in another tab. Reload before deleting anything.');
+      if(!window.confirm('DELETE unreadable private cup data from this browser? Only do this AFTER saving your original recovery copy. This cannot be undone.'))return;
+      // The consent applies only to the raw bytes the user backed up.
+      if(localStorage.getItem(KEY)!==storageSnapshot)
+        throw Error('Cup data changed while confirming. Reload; no data was deleted.');
+      localStorage.removeItem(KEY);
+      if(localStorage.getItem(KEY)!==null)throw Error('Browser did not confirm removal. Reload to inspect your saved cups.');
+      storageSnapshot=null;storageUnsafe=false;recoveryDownloaded=false;
+      cups=[];active='';message='Original recovery copy retained in your downloads. Empty private cups are now unlocked.';
+      render();
+      window.dispatchEvent(new Event('fuckball:private-competition-change'));
+    }catch(error){info(error.message||'Reset was refused. Existing cup data was not deliberately overwritten.');}
+  }
   function exportCup(){
     const c=current();if(!c)return;
     download(slug(c)+'.json',JSON.stringify({...c,note:'Manual, unverified friendly results'},null,2),'application/json');
@@ -520,8 +579,17 @@
       if(!Array.isArray(p)||p.length>MAX||event.newValue?.length>LIMIT)throw Error();
       const incoming=p.map(normalize);
       if(new Set(incoming.map(x=>x.id)).size!==incoming.length)throw Error();
-      cups=incoming;storageSnapshot=event.newValue;message='Private cup list refreshed from another tab.';render();
-    }catch{info('A second tab changed cup data. Reload to inspect it before editing.');}
+      cups=incoming;storageSnapshot=event.newValue;
+      storageUnsafe=false;recoveryDownloaded=false;
+      message='Private cup list refreshed from another tab.';render();
+    }catch{
+      // An invalid update from another tab must not leave earlier cups looking
+      // editable when the actual stored collection is no longer trustworthy.
+      cups=[];active='';storageSnapshot=event.newValue;
+      storageUnsafe=true;recoveryDownloaded=false;
+      message='Another tab saved unreadable cup data. Writes are locked; preserve the original before resetting.';
+      render();
+    }
   });
   render();
 })();

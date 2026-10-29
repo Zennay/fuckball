@@ -27,3 +27,19 @@
 .room-rotation-manual-fields select{min-width:0;width:100%;padding:9px;background:#122b2d;color:#eef9df;border:1px solid #769b8c;border-radius:7px}
 .room-rotation-manual-fields button{min-height:38px;padding:8px 12px;border:1px solid #a1be9b;border-radius:8px;background:#cee99a;color:#1a352b;font-weight:800;cursor:pointer}
 .room-rotation-manual-fields button:disabled{opacity:.55;cursor:not-allowed}
+
+/* Private roster export is a second, explicit action, never a blocking
+   browser confirm that suspends receipt of the required live server frames. */
+.room-rotation-export-confirm[hidden]{display:none!important}
+.room-rotation-export-confirm{margin-top:12px;padding:12px 14px;
+ border:1px solid #d4ef9a;border-radius:10px;background:#153b36}
+.room-rotation-export-confirm p{font-size:13px;line-height:1.55;
+ color:#effbdc;margin:0 0 10px}
+.room-rotation-export-actions{display:flex;gap:9px;flex-wrap:wrap}
+.room-rotation-export-actions button{min-height:46px;font:inherit;font-size:13px;
+ font-weight:800;border-radius:8px;padding:10px 13px;cursor:pointer;
+ background:#234940;color:#ecffe6;border:1px solid #96b9a6}
+.room-rotation-export-actions button:first-child{background:#d9ff9c;
+ border-color:#d9ff9c;color:#153128}
+.room-rotation-export-actions button:focus-visible{outline:3px solid #f0ffbe;outline-offset:3px}
+@media(max-width:520px){.room-rotation-export-actions{display:grid;grid-template-columns:1fr}}

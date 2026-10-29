@@ -22,3 +22,38 @@
 @media(max-width:680px){.sudden-death-hud{top:80px;right:8px}.sudden-death-fields>*{flex:1 1 140px}}
 
 .sudden-death-history-row button{justify-self:start;margin-top:5px}
+
+/* Never leave a phone player with a full-width drill menu across the pitch.
+   The native ball/players remain visible and touch targets stay accessible. */
+.sudden-death-actions button{min-height:48px;padding:10px 13px}
+.sudden-death-hud[data-phase="between"]{border-color:#e5ffac}
+.sudden-death-hud[data-phase="complete"]{border-color:#b6ebbd}
+.sudden-death-hud[data-phase="stopped"]{border-color:#e4b9a9}
+.sudden-death-hud[data-phase="complete"] .sudden-death-progress{
+ color:#ecffce;font-weight:700}
+@media(max-width:680px){
+ .sudden-death-hud{box-sizing:border-box;max-height:calc(100dvh - 96px);overflow-y:auto;
+  bottom:auto;top:max(78px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right))}
+ .sudden-death-hud[data-phase="running"],
+ .sudden-death-hud[data-phase="starting"]{
+  width:min(230px,calc(100vw - 20px));padding:10px 12px;
+  background:rgba(13,37,39,.91)}
+ .sudden-death-hud[data-phase="running"] .sudden-death-rounds,
+ .sudden-death-hud[data-phase="starting"] .sudden-death-rounds{display:none}
+ .sudden-death-hud[data-phase="running"] .sudden-death-clock{
+  font-size:15px;margin-top:3px}
+ .sudden-death-hud[data-phase="running"] .sudden-death-progress{
+  margin:6px 0;line-height:1.4}
+ .sudden-death-hud[data-phase="between"],
+ .sudden-death-hud[data-phase="complete"],
+ .sudden-death-hud[data-phase="stopped"]{
+  width:min(340px,calc(100vw - 16px))}
+}
+
+/* Native best-of continuity: an explicit return, never an offscreen kickoff. */
+.sudden-death-return[hidden]{display:none!important}
+.sudden-death-return{min-height:48px!important;border:1px solid #b3e7a8;
+ border-radius:9px;background:#284738;color:#ecffe8;font-weight:800;
+ padding:10px 15px;cursor:pointer;max-width:100%;white-space:normal}
+.sudden-death-return:focus-visible{outline:3px solid #e0ff97;outline-offset:3px}
+@media(max-width:600px){.sudden-death-return{flex:1 1 100%;width:100%}}

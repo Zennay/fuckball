@@ -31,8 +31,8 @@
  .native-match-sheet-actions button{flex-basis:100%}}
 @media print{.native-match-sheet{display:none!important}}
 
-/* Do not imply a roster is verified while the new room's snapshots have not
-   arrived. All share actions stay disabled until a current session exists. */
+
+/* Keep room rosters hidden until a current authoritative snapshot exists. */
 .native-match-sheet[data-snapshot-state="waiting"]{
  border-color:#b1c2a9;background:#1b3034;
 }
