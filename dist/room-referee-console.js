@@ -52,14 +52,22 @@
  dockPause.type=dockView.type='button';
  dockActions.append(dockPause,dockView);dock.append(dockCopy,dockActions);
  document.body.append(dock);
- let lastRoom=null,lastLink=null,lastKey='',pausePending=null;
+ let lastRoom=null,lastLink=null,lastKey='',pausePending=null,appointmentPending=null;
  const validId=v=>Number.isSafeInteger(v)&&v>0;
  const nativeTeam=p=>typeof p?.team==='number'?p.team:p?.team?.id;
  function snapshot(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!link?.room||link.quickMatchMode||!link.roomState||
-   !Array.isArray(room?.state?.players)||room.state.players.length>128)return null;
-  const state=link.roomState;
+  const state=link?.roomState;
+  // Room codes/previous cached rosters are not evidence of the *current*
+  // admitted socket. The welcome resets net.receivedSequence to zero; native
+  // room referee rights become usable only after fresh room status and its
+  // first physics snapshot from that same session.
+  if(!link?.room||link.quickMatchMode||!state||
+   state.room!==link.room||link.ws?.readyState!==1||
+   typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+   net.receivedSequence<1||!Number.isFinite(net.lastSnapshot)||
+   net.lastSnapshot<=0||!Array.isArray(room?.state?.players)||
+   room.state.players.length>128)return null;
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
   const bots=typeof botIds!=='undefined'&&botIds instanceof Set?botIds:new Set();
   const people=[];
@@ -93,14 +101,40 @@
  }
  function render(){
   const d=snapshot();
-  if(!d){panel.hidden=true;pitchPrompt.hidden=true;dock.hidden=true;
-   lastKey='';lastRoom=null;lastLink=null;pausePending=null;return;}
+  if(!d){
+   pitchPrompt.hidden=true;dock.hidden=true;
+   lastKey='';lastRoom=null;lastLink=null;pausePending=null;
+   appointmentPending=null;
+   const link=typeof serverLink!=='undefined'?serverLink:null;
+   // Keep a helpful read-only progress state, never previous-room referee
+   // names, controls, or an action enabled during native admission.
+   panel.hidden=!link?.room||!!link.quickMatchMode;
+   hostControls.hidden=true;actions.hidden=true;promptNote.hidden=true;
+   if(!panel.hidden){
+    state.textContent=link.ws?.readyState===1?
+     'Waiting for this room’s current server roster snapshot. Referee actions are locked.':
+     'Room disconnected. Reconnect before using referee controls.';
+   }
+   return;
+  }
   panel.hidden=false;
   if(lastRoom!==d.link.room||lastLink!==d.link){
    lastKey='';lastRoom=d.link.room;lastLink=d.link;
-   notice.textContent='';pausePending=null;
+   notice.textContent='';pausePending=null;appointmentPending=null;
   }
   if(!d.running||d.paused||!d.online)pausePending=null;
+  if(appointmentPending){
+   const pending=appointmentPending;
+   if(pending.link!==d.link||pending.room!==d.link.room)
+    appointmentPending=null;
+   else if(d.referee===pending.id){
+    appointmentPending=null;
+    notice.textContent='Referee assignment confirmed by the current room server.';
+   }else if(Date.now()-pending.at>=3000){
+    appointmentPending=null;
+    notice.textContent='No server referee receipt yet. Review the current roster and explicitly retry if needed.';
+   }
+  }
   if(pausePending&&Date.now()-pausePending.at>3000){
    pausePending=null;
    notice.textContent='No server pause confirmation yet. You may explicitly retry.';
@@ -120,7 +154,7 @@
     (pausePending?' · Awaiting native confirmation.':'');
    dockPause.disabled=!!pausePending;
   }
-  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused,d.online,!!pausePending]);
+  const key=JSON.stringify([d.link.room,d.referee,d.people,d.isHost,d.isReferee,d.request,d.running,d.paused,d.online,!!pausePending,appointmentPending?.id??null]);
   // Menu-open state changes independently of room packets; keep the optional
   // pitch prompt correct even when the authoritative room data is unchanged.
   pitchPrompt.hidden=!(liveRequest&&
@@ -137,7 +171,9 @@
    for(const p of d.people)choose.add(new Option(p.name+(p.side===0?' · spectator':' · playing'),String(p.id)));
    const allowed=[...choose.options].map(x=>x.value);
    choose.value=allowed.includes(previous)?previous:String(allowed.includes(String(d.referee))?d.referee:0);
-   appoint.disabled=!allowed.includes(choose.value)||Number(choose.value)===d.referee;
+   appoint.disabled=!!appointmentPending||!allowed.includes(choose.value)||
+    Number(choose.value)===d.referee;
+   appoint.textContent=appointmentPending?'… Waiting for room receipt':'Apply referee assignment';
   }
   actions.hidden=!d.isReferee;
   pause.hidden=!d.running||d.paused;
@@ -155,17 +191,26 @@
  }
  choose.onchange=()=>{
   const d=snapshot();
-  if(d?.isHost)appoint.disabled=Number(choose.value)===d.referee;
+  if(d?.isHost)appoint.disabled=!!appointmentPending||
+   !d.people.some(p=>String(p.id)===choose.value)&&choose.value!=='0'||
+   Number(choose.value)===d.referee;
  };
  appoint.onclick=()=>{
   const d=snapshot(),id=Number(choose.value);
-  if(!d?.isHost||!Number.isSafeInteger(id)||id<0||
+  if(!d?.isHost||appointmentPending||!Number.isSafeInteger(id)||id<0||
    (id!==0&&!d.people.some(p=>p.id===id)))return;
   if(!window.confirm(id?
    'Appoint this connected human as room referee with pause/resume permissions only?':
    'Revoke referee pause/resume rights?'))return;
-  d.link.send({type:'appointReferee',id});
-  notice.textContent='Assignment requested. Awaiting the authoritative native room update.';
+  // The confirmation dialog can outlive an admission or host role. Recheck
+  // the exact socket and server roster before submitting one narrow request.
+  const fresh=snapshot();
+  if(!fresh?.isHost||fresh.link!==d.link||fresh.link.room!==d.link.room||
+   (id!==0&&!fresh.people.some(p=>p.id===id)))return;
+  appointmentPending={link:fresh.link,room:fresh.link.room,id,at:Date.now()};
+  fresh.link.send({type:'appointReferee',id});
+  notice.textContent='Assignment requested once. Waiting for the original room server to confirm.';
+  lastKey='';render();
  };
  function changePause(value){
   const d=snapshot();

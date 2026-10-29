@@ -7,6 +7,23 @@
  const video=document.querySelector('#menuVideoPane .rm-form');
  if(!match||!red||!blue||!clock||!video)return;
  const KEY='fuckball.match-audio-guide.v1';
+ const menu=document.getElementById('pauseMenu');
+ const videoPane=document.getElementById('menuVideoPane');
+ const networkDialog=document.getElementById('networkDialog');
+ const joinScreen=document.getElementById('joinScreen');
+ function overlayOpen(){
+  // A locally visible pitch behind a modal is not a foreground match.
+  // Never narrate scores through connection or account/join overlays.
+  if(networkDialog?.open===true||joinScreen?.hidden===false)return true;
+  return !!document.querySelector('dialog[open]');
+ }
+ function canPreview(){
+  // Explicit voice previews belong to the currently visible Settings pane,
+  // not to a prior tab, a hidden game or a background browser window.
+  return match.hidden===false&&menu?.hidden===false&&
+   videoPane?.hidden===false&&document.visibilityState==='visible'&&
+   document.hasFocus()&&!overlayOpen();
+ }
  const defaults={captions:false,voice:false,minutes:false};
  function load(){
   try{
@@ -16,7 +33,7 @@
   }catch{return{...defaults};}
  }
  let prefs=load(),previous=null,captionTimer=0,lastVoice=0,ownSpeech=null,
-  previewSpeaking=false,observedSource=null;
+  previewSpeaking=false,observedSource=null,lastSampleSequence=null;
  function sourceLabel(text){
   if(provenance.textContent!==text)provenance.textContent=text;
  }
@@ -24,7 +41,7 @@
  const section=document.createElement('fieldset');section.className='match-audio-guide-options';
  const legend=document.createElement('legend');legend.textContent='LIVE SCORE GUIDE';
  const note=document.createElement('p');
- note.textContent='Optional local goal captions, spoken score and minute reminders from the real displayed scoreboard. OFF by default. Never claims who scored, never reads chat and never changes gameplay.';
+ note.textContent='Optional goal captions, spoken score and minute reminders from the live scoreboard. OFF by default. Online cues stop when fresh game frames stop arriving. Never claims who scored, reads chat or changes gameplay.';
  const controls={};
  for(const [key,title,hint] of [
   ['captions','Goal captions','Readable short-lived pitch caption when the displayed native score increases.'],
@@ -50,9 +67,15 @@
  const preview=document.createElement('button');
  preview.type='button';preview.className='match-audio-guide-preview';
  preview.textContent='▶ Preview voice';
- preview.setAttribute('aria-label','Preview score voice on this device');
+ preview.setAttribute('aria-label','Preview or stop the on-device score voice');
+ preview.setAttribute('aria-pressed','false');
+ function syncPreviewButton(){
+  preview.textContent=previewSpeaking?'■ Stop preview':'▶ Preview voice';
+  preview.setAttribute('aria-pressed',String(previewSpeaking));
+ }
  preview.addEventListener('click',()=>{
-  if(!speechAvailable||!prefs.voice)return;
+  if(previewSpeaking){stopSpeech();return;}
+  if(!speechAvailable||!prefs.voice||!canPreview())return;
   speak('Voice preview. Red one, Blue zero.',true);
  });
  const support=document.createElement('p');support.className='match-audio-guide-help';
@@ -71,7 +94,7 @@
   if(ownSpeech&&speechAvailable){
    try{window.speechSynthesis.cancel();}catch{}
   }
-  ownSpeech=null;previewSpeaking=false;
+  ownSpeech=null;previewSpeaking=false;syncPreviewButton();
  }
  function sync(){
   for(const key of Object.keys(controls))controls[key].checked=prefs[key];
@@ -80,6 +103,7 @@
   preview.disabled=!speechAvailable||!prefs.voice;
   if(!prefs.captions)caption.hidden=true;
   if(!prefs.voice)stopSpeech();
+  syncPreviewButton();
  }
  sync();
  function visibleActive(){
@@ -88,7 +112,7 @@
   // lobby/rematch voting, and through disconnect/replay transitions.
   if(match.hidden||document.visibilityState!=='visible'||!document.hasFocus()||
    !document.getElementById('pauseMenu')?.hidden||
-   typeof replay!=='undefined'&&!!replay)return false;
+   typeof replay!=='undefined'&&!!replay||overlayOpen())return false;
   if(typeof serverLink!=='undefined'&&serverLink){
    const state=serverLink.roomState;
    return !!serverLink.room&&state?.started===true&&state.paused!==true;
@@ -101,26 +125,40 @@
  // game, and key each observation to its transport and server-issued round.
  // Numeric player IDs, room codes and a reused clock are not enough to
  // distinguish different human matches.
+// A snapshot received once is not proof a multiplayer score is still live.
+ // Only a recently applied actual frame may ground further speech/captions.
+ function freshReceivedFrame(){
+  if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
+     net.receivedSequence<1||!Number.isFinite(net.lastSnapshot)||
+     net.lastSnapshot<=0)return false;
+  const elapsed=performance.now()-net.lastSnapshot;
+  return elapsed>=0&&elapsed<=1600;
+ }
  function currentScoreSource(){
   if(typeof serverLink!=='undefined'&&serverLink){
    const link=serverLink;
    if(!link.room||link.ws?.readyState!==1||link.roomState?.started!==true)
     return null;
-   if(typeof net==='undefined'||!Number.isSafeInteger(net.receivedSequence)||
-      net.receivedSequence<1)return null;
+   if(!freshReceivedFrame())return null;
    if(link.roomState.room&&link.roomState.room!==link.room)return null;
    const round=Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0?
     link.roomState.round:null;
-   return{kind:'native',transport:link,room:link.room,round};
+   return{kind:'native',transport:link,room:link.room,round,
+    sequence:net.receivedSequence};
   }
   if(typeof peerConnected!=='undefined'&&peerConnected){
    const transport=typeof channel!=='undefined'&&channel?channel:
     typeof peer!=='undefined'?peer:null;
    if(!transport)return null;
-   return{kind:'peer',transport,room:null,round:null};
+   // Hosts have locally authoritative physics; direct-peer guests need
+   // fresh actual input snapshots rather than a stored scoreboard.
+   const guest=typeof peerRole!=='undefined'&&peerRole==='guest';
+   if(guest&&!freshReceivedFrame())return null;
+   return{kind:'peer',transport,room:null,round:null,
+    sequence:guest?net.receivedSequence:null};
   }
   if(typeof room==='undefined'||!room)return null;
-  return{kind:'local',transport:room,room:null,round:null};
+  return{kind:'local',transport:room,room:null,round:null,sequence:null};
  }
  function sameScoreSource(a,b){
   return !!a&&!!b&&a.kind===b.kind&&a.transport===b.transport&&
@@ -140,14 +178,18 @@
   lastVoice=now;
   try{
    if(ownSpeech)window.speechSynthesis.cancel();
-   previewSpeaking=explicitPreview;
+   previewSpeaking=explicitPreview;syncPreviewButton();
    const utterance=new window.SpeechSynthesisUtterance(text);utterance.lang='en-GB';
    utterance.rate=1;utterance.pitch=1;utterance.volume=.8;
    ownSpeech=utterance;
-   utterance.onend=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
-   utterance.onerror=()=>{if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;}};
+   utterance.onend=()=>{
+    if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
+   };
+   utterance.onerror=()=>{
+    if(ownSpeech===utterance){ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
+   };
    window.speechSynthesis.speak(utterance);
-  }catch{ownSpeech=null;previewSpeaking=false;}
+  }catch{ownSpeech=null;previewSpeaking=false;syncPreviewButton();}
  }
  function show(text){
   if(!prefs.captions)return;
@@ -155,23 +197,31 @@
   captionTimer=setTimeout(()=>{caption.hidden=true;},4200);
  }
  function silenceAndRebaseline(){
-  previous=null;stopSpeech();caption.hidden=true;
+  previous=null;lastSampleSequence=null;stopSpeech();caption.hidden=true;
   if(captionTimer){clearTimeout(captionTimer);captionTimer=0;}
  }
  function poll(){
-  if(!visibleActive()){
-   // An explicit Voice Preview is allowed while settings are open. It is
-   // cancelled by navigation, focus/visibility loss and session changes.
+  const active=visibleActive();
+  if(previewSpeaking&&(active||!canPreview())){
+   // A preview may never outlive Settings, its current window or a dialog
+   // transition. Also stop it before a genuine match becomes audible.
+   stopSpeech();
+  }
+  if(!active){
+   // An explicit, visible voice preview is not a game event. All hidden or
+   // obscured games are silenced and reset before any further score cue.
    if(!previewSpeaking)silenceAndRebaseline();
    observedSource=null;
-   sourceLabel('Paused · only a visible active match can produce score cues.');
+   sourceLabel(previewSpeaking?
+    'On-device voice preview · not a verified score event.':
+    'Paused · only a visible active match can produce score cues.');
    return;
   }
   const identity=currentScoreSource();
   if(!identity){
    observedSource=null;
    silenceAndRebaseline();
-   sourceLabel('Waiting for this live room’s verified server snapshot.');
+   sourceLabel('Waiting for fresh verified match frames · no score cues while the connection is stale.');
    return;
   }
   const current=sample();
@@ -187,6 +237,7 @@
    silenceAndRebaseline();
    observedSource=identity;
    previous=current;
+   lastSampleSequence=identity.sequence;
    sourceLabel(identity.kind==='native'?
     'Current admitted online room · '+(identity.round===null?
      'server round not supplied':'server round '+identity.round)+
@@ -194,6 +245,16 @@
     identity.kind==='peer'?'Current direct-peer match · live scoreboard.':
      'Current local match · live scoreboard.');
    return;
+  }
+  if(identity.sequence!==null){
+   // Re-reading the same scoreboard without a new native/guest packet
+   // cannot justify another spoken human goal.
+   if(identity.sequence===lastSampleSequence)return;
+   if(lastSampleSequence!==null&&identity.sequence<lastSampleSequence){
+    silenceAndRebaseline();previous=current;
+    lastSampleSequence=identity.sequence;return;
+   }
+   lastSampleSequence=identity.sequence;
   }
   const last=previous;previous=current;
   if(!last)return;
@@ -237,12 +298,22 @@
   observedSource=null;silenceAndRebaseline();
   sourceLabel('Room changed · waiting for the current match scoreboard.');
  });
- const menu=document.getElementById('pauseMenu');
  if(typeof MutationObserver==='function'){
   const visibilityObserver=new MutationObserver(()=>{
    if(!visibleActive())silenceAndRebaseline();
   });
   visibilityObserver.observe(match,{attributes:true,attributeFilter:['hidden']});
   if(menu)visibilityObserver.observe(menu,{attributes:true,attributeFilter:['hidden']});
+  if(videoPane)visibilityObserver.observe(videoPane,{attributes:true,attributeFilter:['hidden']});
+  if(networkDialog)visibilityObserver.observe(networkDialog,{attributes:true,attributeFilter:['open']});
+  if(joinScreen)visibilityObserver.observe(joinScreen,{attributes:true,attributeFilter:['hidden']});
+ }
+ // View and dialog changes silence any voice immediately (not only when the
+ // 350ms score polling interval next wakes up).
+ for(const id of ['tabHome','tabPlay','menuMatch','menuHelp','menuVideo']){
+  document.getElementById(id)?.addEventListener('click',()=>{
+   if(previewSpeaking&&!canPreview())stopSpeech();
+   if(!visibleActive()&&!previewSpeaking)silenceAndRebaseline();
+  });
  }
 })();

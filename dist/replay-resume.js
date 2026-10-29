@@ -76,6 +76,13 @@
  let activeReplay=null,activeId=null,lastSaved=0,lastObserved=0,forgottenReplay=null;
  let sessionStartedAt=0,sessionStartedAtMs=0,explicitRewind=false;
  let viewToken=0,busy=false,painted='';
+ // The original offline engine fires a kickoff for every newly started
+ // local round. Capture that generation across an IndexedDB await so a
+ // newer human match is never replaced by a previously approved replay.
+ let localKickoffGeneration=0;
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  localKickoffGeneration++;
+ });
  const current=()=>{
   const id=typeof activeLocalReplayId==='string'?activeLocalReplayId:'';
   if(!idValid(id)||typeof replay==='undefined'||!replay||controls.hidden||pitch.hidden)return null;
@@ -165,21 +172,56 @@
    !window.confirm('Open the saved replay? Your current local match or replay will be replaced.')){
    feedback.textContent='Existing playback preserved.';return;
   }
+  // Remember exactly which session and checkpoint the player chose. A
+  // different match, replay, tab view or edited position during the async
+  // read needs a fresh explicit user choice; old consent is not transferable.
+  const originalReplay=typeof replay==='undefined'?null:replay;
+  const originalStarted=typeof started!=='undefined'&&started;
+  const originalPaused=typeof paused!=='undefined'&&paused;
+  const originalRoom=typeof room==='undefined'?null:room;
+  const originalKickoff=localKickoffGeneration;
+  const fromGamesHidden=games.hidden,fromPitchHidden=pitch.hidden;
   busy=true;feedback.textContent='Opening saved HBR2 playback…';
   try{
    const file=await ReplayLibrary.get(id);
-   if(!file?.item||file.item.id!==id||file.bytes.length>32*1024*1024)
+   if(!file?.item||file.item.id!==id||!file.bytes||
+      !Number.isSafeInteger(file.bytes.length)||file.bytes.length<1||
+      file.bytes.length>32*1024*1024)
     throw Error('This local replay is no longer available.');
-   // Re-evaluate admission after the asynchronous browser database read.
+   // No false "success" from a stale, removed or cross-tab-edited private
+   // checkpoint: a changed saved position requires its own new click.
+   const latest=lookup(id);
+   if(!latest||latest.at!==saved.at||latest.ms!==saved.ms||
+      latest.duration!==saved.duration)
+    throw Error('This saved position changed while loading. Refresh it and choose Continue again.');
    if(typeof pendingSessionBlock==='function'&&pendingSessionBlock())
     throw Error('Your online session changed; replay has not been opened.');
+   const nowReplay=typeof replay==='undefined'?null:replay;
+   const nowStarted=typeof started!=='undefined'&&started;
+   const nowPaused=typeof paused!=='undefined'&&paused;
+   if(originalKickoff!==localKickoffGeneration||
+      originalReplay!==nowReplay||
+      !originalStarted&&nowStarted||
+      originalStarted&&(!nowStarted||nowPaused!==originalPaused||
+       (typeof room!=='undefined'&&room!==originalRoom))||
+      games.hidden!==fromGamesHidden||pitch.hidden!==fromPitchHidden)
+    throw Error('A different game or view became active while loading. Your current game was preserved.');
    loadReplay(file.bytes,file.item.name);
    activeLocalReplayId=id;
    if(!replay||!Number.isFinite(replay.length()))throw Error('Replay player unavailable.');
    replay.setTime(Math.min(replay.length()-500,saved.ms));
-   if(typeof refreshReplayBookmarks==='function')await refreshReplayBookmarks();
-   if(typeof refreshReplayNotes==='function')await refreshReplayNotes();
-   feedback.textContent='Resumed '+file.item.name+' at '+format(saved.ms)+' (private local playback).';
+   // Optional browser-private annotations are not the replay. Failure to
+   // refresh them must not claim that an already playing HBR2 failed.
+   const warning=[];
+   if(typeof refreshReplayBookmarks==='function'){
+    try{await refreshReplayBookmarks();}catch{warning.push('bookmarks');}
+   }
+   if(typeof refreshReplayNotes==='function'){
+    try{await refreshReplayNotes();}catch{warning.push('notes');}
+   }
+   feedback.textContent='Resumed '+file.item.name+' at '+format(saved.ms)+
+    (warning.length?' · playback succeeded, saved '+warning.join(' and ')+' unavailable.':
+     ' (private local playback).');
    refreshControls();
    return true;
   }catch(error){feedback.textContent=error?.message||'Could not resume replay.';return false;}

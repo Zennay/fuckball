@@ -175,25 +175,70 @@
   saved=latest;
   return true;
  }
- function commitSlot(index,value,action){
-  if(!slotIsCurrent(index))return false;
-  saved[index]=value;
-  slotsNeedingReview.delete(index);
-  const persisted=persist();
-  refreshSlots();
-  message(persisted?'Slot '+(index+1)+' '+action+'.':
-   'Slot '+(index+1)+' updated for this visit only; browser storage is unavailable.',!persisted);
-  return true;
+ // Reading, checking and writing a shared three-slot snapshot in separate
+ // tabs is not atomic. Serialize the WHOLE transaction when Web Locks exists:
+ // two simultaneous writes to different slots cannot each replace the other's
+ // just-saved slot. Older browsers keep the existing cautious re-read fallback.
+ async function commitSlot(index,value,action){
+  const commit=()=>{
+   if(Number(slot.value)!==index){
+    message('Slot selection changed while waiting to save. Choose the slot and try again.',true);
+    return false;
+   }
+   if(!slotIsCurrent(index))return false;
+   saved[index]=value;
+   slotsNeedingReview.delete(index);
+   const persisted=persist();
+   refreshSlots();
+   message(persisted?'Slot '+(index+1)+' '+action+'.':
+    'Slot '+(index+1)+' updated for this visit only; browser storage is unavailable.',!persisted);
+   return persisted;
+  };
+  if(typeof navigator!=='undefined'&&typeof navigator.locks?.request==='function'){
+   try{return await navigator.locks.request(storeKey,{mode:'exclusive'},commit);}
+   catch{message('Browser profile save lock was unavailable. No profile was changed; try again.',true);return false;}
+  }
+  return commit();
+ }
+ // A profile switch changes live human controls. Keep a single local undo
+ // snapshot, never a background or cross-tab binding restore.
+ let previousActiveKeys=null,homeUndo=null;
+ const undoControl=button('↶ Undo key change',undoLastLayout);
+ undoControl.className='keyboard-profile-undo';undoControl.disabled=true;
+ function updateUndo(){
+  undoControl.disabled=!previousActiveKeys;
+  if(homeUndo)homeUndo.disabled=!previousActiveKeys;
+ }
+ function copyKeys(){
+  return Object.fromEntries(actions.map(a=>[a,[...(settings.keys[a]||[])]]));
+ }
+ function undoLastLayout(){
+  if(!previousActiveKeys)return;
+  const restore=previousActiveKeys;
+  previousActiveKeys=null;
+  if(typeof cancelBinding==='function')cancelBinding();
+  if(typeof releaseInputs==='function')releaseInputs();
+  settings.keys=restore;
+  savePrefs();
+  renderBindings();
+  updateUndo();
+  message('Your previous keyboard controls are restored. Any current held keys were released.');
  }
  function apply(source,name){
   let mapping;
   try{mapping=validate(source);}catch(e){message(e.message,true);return;}
+  const previous=copyKeys();
+  if(JSON.stringify(previous)===JSON.stringify(mapping)){
+   message(name+' is already active. No controls were changed.');return;
+  }
   if(typeof cancelBinding==='function')cancelBinding();
   if(typeof releaseInputs==='function')releaseInputs();
   settings.keys=mapping;
   savePrefs();
   renderBindings();
-  message(name+' is active. Key changes below still work normally.');
+  previousActiveKeys=previous;
+  updateUndo();
+  message(name+' is active. Undo restores the previous controls if needed.');
  }
  function saveCurrent(){
   let current;
@@ -286,7 +331,10 @@
   };
   const save=document.createElement('button');save.type='button';save.textContent='Save current to slot';
   save.onclick=()=>{slot.value=homeSlot.value;saveCurrent();};
-  slotRow.append(slotName,load,save);
+  homeUndo=document.createElement('button');homeUndo.type='button';
+  homeUndo.textContent='↶ Undo key change';homeUndo.className='keyboard-profile-undo';homeUndo.disabled=true;
+  homeUndo.addEventListener('click',undoLastLayout);
+  slotRow.append(slotName,load,save,homeUndo);
   const currentTitle=document.createElement('h3');currentTitle.textContent='YOUR CURRENT KEYS';
   quickPreview=document.createElement('div');quickPreview.className='keyboard-quick-map';
   couchKeysInfo=document.createElement('p');couchKeysInfo.className='keyboard-couch-keys';
@@ -316,6 +364,9 @@
   // paused. Reflect it in the separate Home profiles immediately, without
   // replacing someone's saved slot or sending any input to the match.
   window.addEventListener('fuckball:keyboard-bindings-changed',()=>{
+   // A native Controls rebind is now the user's newer choice. Do not let
+   // an old profile-undo button silently restore stale P1 action mappings.
+   previousActiveKeys=null;updateUndo();
    updateHomeKeys();
    if(quickStatus)quickStatus.textContent='Native keyboard controls updated. Current keys above are now authoritative.';
   });

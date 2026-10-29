@@ -37,17 +37,28 @@
   return Array.isArray(order)&&order.length===3&&new Set(order).size===3&&
    order.every(key=>Object.hasOwn(TYPES,key));
  }
+ // A malformed/stale existing snapshot must not masquerade as no data:
+ // writing a new circuit over it would permanently delete player progress.
+ function validCircuit(s){
+  return !!s&&s.version===1&&validOrder(s.order)&&validAt(s.startedAt)&&
+   s.startedAt>=Date.now()-DAY&&Number.isSafeInteger(s.done)&&
+   s.done>=0&&s.done<=2&&(s.armedStep===null||s.armedStep===s.done)&&
+   Number.isSafeInteger(s.armedAt)&&s.armedAt>=0&&
+   Number.isSafeInteger(s.baseline)&&s.baseline>=0;
+ }
+ function storageProblem(key,isValid){
+  let raw;
+  try{raw=localStorage.getItem(key);}catch{return true;}
+  if(raw===null)return false;
+  try{return !isValid(JSON.parse(raw));}catch{return true;}
+ }
+ function circuitUnreadable(){return storageProblem(STATE,validCircuit);}
  function readState(){
   const s=data(STATE);
-  if(!s||s.version!==1||!validOrder(s.order)||!validAt(s.startedAt)||
-   !Number.isSafeInteger(s.done)||s.done<0||s.done>2||
-   !(s.armedStep===null||s.armedStep===s.done)||
-   !Number.isSafeInteger(s.armedAt)||s.armedAt<0||
-   !Number.isSafeInteger(s.baseline)||s.baseline<0)return null;
-  if(s.startedAt<Date.now()-DAY)return null;
-  return s;
+  return validCircuit(s)?s:null;
  }
  function saveState(s){
+  if(circuitUnreadable()||!validCircuit(s))return false;
   try{localStorage.setItem(STATE,JSON.stringify(s));return true;}catch{return false;}
  }
  // The circuit is shared by every tab on this device. Do not let a stale
@@ -69,15 +80,27 @@
   render('Your circuit changed in another tab. Current saved progress is shown.');
   return false;
  }
+ function validHistoryRow(x){
+  return x?.version===1&&validOrder(x.order)&&validAt(x.startedAt)&&
+   validAt(x.finishedAt)&&x.finishedAt>=x.startedAt&&
+   x.finishedAt-x.startedAt<=DAY;
+ }
+ function validHistory(rows){
+  return Array.isArray(rows)&&rows.length<=12&&rows.every(validHistoryRow);
+ }
+ function historyUnreadable(){return storageProblem(HISTORY,validHistory);}
  function readHistory(){
-  const rows=data(HISTORY);if(!Array.isArray(rows))return[];
-  return rows.slice(0,12).filter(x=>x?.version===1&&validOrder(x.order)&&
-   validAt(x.startedAt)&&validAt(x.finishedAt)&&x.finishedAt>=x.startedAt&&
-   x.finishedAt-x.startedAt<=DAY);
+  const rows=data(HISTORY);
+  return validHistory(rows)?rows:[];
  }
  function saveHistory(rows){
-  try{localStorage.setItem(HISTORY,JSON.stringify(rows.slice(0,12)));return true;}
-  catch{return false;}
+  // Never overwrite an unreadable collection with an apparently empty one.
+  if(historyUnreadable()||!validHistory(rows.slice(0,12)))return false;
+  try{
+   const saved=JSON.stringify(rows.slice(0,12));
+   localStorage.setItem(HISTORY,saved);
+   return localStorage.getItem(HISTORY)===saved;
+  }catch{return false;}
  }
  function latestSuccess(type){
   if(type==='comeback'){
@@ -139,11 +162,14 @@
   if(!Array.isArray(rows))return 0;
   let latest=0;
   for(const x of rows.slice(0,20)){
+   // The same native attempt must be a coherent success; a malformed
+   // completed flag or impossible duration must never advance the circuit.
    if(!x||x.completed!==true||!validAt(x.at))continue;
    if(type==='goals'){
     if(![60,120,180].includes(x.duration)||![1,3,5].includes(x.target)||
       !Number.isSafeInteger(x.goals)||x.goals<x.target||x.goals>999||
-      !Number.isSafeInteger(x.elapsed)||x.elapsed<0||x.elapsed>180)continue;
+      !Number.isSafeInteger(x.elapsed)||x.elapsed<0||
+      x.elapsed>x.duration+1)continue;
    }else if(type==='rockets'){
     if(![60,120,180].includes(x.duration)||![3,5,7].includes(x.threshold)||
      ![1,3,5].includes(x.target)||!Number.isSafeInteger(x.hits)||x.hits<x.target||x.hits>999||
@@ -160,7 +186,8 @@
     if(![120,180,300].includes(x.seconds)||![2,4,6].includes(x.target)||
      !Number.isSafeInteger(x.links)||x.links<x.target||x.links>99||
      !Number.isSafeInteger(x.attempts)||x.attempts<0||x.attempts>9999||
-     !Number.isSafeInteger(x.elapsed)||x.elapsed<0||x.elapsed>300)continue;
+     !Number.isSafeInteger(x.elapsed)||x.elapsed<0||
+     x.elapsed>x.seconds+1)continue;
    }
    latest=Math.max(latest,x.at);
   }
@@ -200,7 +227,20 @@
  busyReturn.type='button';
  busyReturn.onclick=()=>document.getElementById('tabPlay')?.click();
  busyCard.append(busyCopy,busyReturn);
- section.append(header,busyCard,live,archive,status);
+ // Browser storage can contain a damaged or older format. Offer an explicit
+ // local-only backup and opt-in reset, not an implicit overwrite on Start,
+ // Complete, Clear or Export.
+ const storageCard=make('aside','practice-circuit-storage-recovery');
+ storageCard.hidden=true;
+ storageCard.setAttribute('role','alert');
+ const storageMessage=make('p','','Stored practice progress cannot be safely read. Changes are blocked to protect the original records.');
+ const storageActions=make('div','practice-circuit-actions');
+ const backupStorage=make('button','','↓ Download raw backup');
+ const resetStorage=make('button','','Reset unreadable data');
+ backupStorage.type=resetStorage.type='button';
+ storageActions.append(backupStorage,resetStorage);
+ storageCard.append(storageMessage,storageActions);
+ section.append(header,busyCard,storageCard,live,archive,status);
  const anchor=home.querySelector('.practice-weekly-plan')||home.querySelector('.practice-lab')||home.querySelector('.mode-cards');
  if(anchor)anchor.insertAdjacentElement('afterend',section);else home.append(section);
  const hud=make('aside','practice-circuit-hud'),hudText=make('span','','');
@@ -212,14 +252,17 @@
  const elapsed=(from,to)=>Math.max(0,Math.round((to-from)/60000))+' min';
  function renderHistory(){
   const past=readHistory();historyList.replaceChildren();
-  if(!past.length)historyList.append(make('li','','No completed circuits saved on this device.'));
+  if(historyUnreadable())
+   historyList.append(make('li','','Existing private circuit history cannot be read. A raw backup and explicit recovery are available above.'));
+  else if(!past.length)
+   historyList.append(make('li','','No completed circuits saved on this device.'));
   for(const row of past){
    const item=make('li','practice-circuit-record');
    item.append(make('strong','',new Date(row.finishedAt).toLocaleDateString()+' · '+elapsed(row.startedAt,row.finishedAt)),
      make('span','',row.order.map(label).join(' → ')));
    historyList.append(item);
   }
-  download.disabled=clear.disabled=!past.length;
+  download.disabled=clear.disabled=!past.length||historyUnreadable();
  }
  function online(){
   // Pending native joins, timed room reconnects and direct-peer handshakes
@@ -230,16 +273,31 @@
    (typeof peer!=='undefined'&&!!peer)||
    !!document.querySelector('.quick-queue-actions button:not([hidden]),.quick-ready:not([hidden])');
  }
+ function renderStorageSafety(){
+  const badCircuit=circuitUnreadable(),badHistory=historyUnreadable();
+  storageCard.hidden=!badCircuit&&!badHistory;
+  if(!storageCard.hidden){
+   storageMessage.textContent='Unreadable or expired private '+
+    (badCircuit&&badHistory?'circuit and history':badCircuit?'circuit':'circuit history')+
+    ' data found. Download a raw device-only backup before choosing an explicit reset. New progress will not overwrite these records.';
+  }
+  return badCircuit||badHistory;
+ }
  function renderOnlineSafety(){
-  const busy=online();
+  const busy=online(),unreadable=renderStorageSafety();
   busyCard.hidden=!busy;
-  selector.disabled=start.disabled=!!session||busy;
+  selector.disabled=start.disabled=!!session||busy||unreadable;
   hud.hidden=!session||match.hidden||busy;
  }
  function render(message){
   live.hidden=!session;
   renderOnlineSafety();
-  if(!session){hudText.textContent='';renderHistory();if(message)status.textContent=message;return;}
+  if(!session){
+   hudText.textContent='';renderHistory();
+   if(message)status.textContent=message;
+   else if(!storageCard.hidden)status.textContent='Recovery needed. Your existing device-only data has not been changed.';
+   return;
+  }
   progress.textContent='STAGE '+(session.done+1)+' / 3 · '+session.order.map((key,i)=>i<session.done?'✓':i===session.done?'◉':'○').join('   ');
   rows.replaceChildren();
   session.order.forEach((key,i)=>{
@@ -256,6 +314,31 @@
   hudText.textContent='CIRCUIT '+(session.done+1)+'/3 · '+label(session.order[session.done])+(armed?' · tracking':' · open drill');
   renderHistory();
  }
+ // A backup is only ever created by the player's click, saved locally on
+ // their own device. Never upload raw private practice progress to a server.
+ backupStorage.onclick=()=>{
+  let snapshot;
+  try{snapshot={circuit:localStorage.getItem(STATE),history:localStorage.getItem(HISTORY)};}
+  catch{status.textContent='Browser storage cannot be read. No backup was created.';return;}
+  const blob=new Blob([JSON.stringify({
+   format:'fuckball-practice-recovery',version:1,exportedAt:new Date().toISOString(),
+   source:'private-device-only-raw-backup',...snapshot
+  },null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='fuckball-practice-recovery-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  status.textContent='Raw private practice backup downloaded. Existing records remain unchanged.';
+ };
+ resetStorage.onclick=()=>{
+  const keys=[circuitUnreadable()?STATE:null,historyUnreadable()?HISTORY:null].filter(Boolean);
+  if(!keys.length){render();return;}
+  if(!confirm('Permanently discard the selected unreadable practice records on this device? Download the raw backup first if you might want to recover them. Other drill results remain unchanged.'))return;
+  try{for(const key of keys)localStorage.removeItem(key);}
+  catch{status.textContent='Browser refused the reset. Existing records may remain; check the recovery status.';renderStorageSafety();return;}
+  session=readState();
+  render('Explicit reset finished. Valid individual drill records were not deleted.');
+ };
  function completed(){
   if(!refreshFromStorage()||!session||session.armedStep!==session.done||!session.armedAt)return false;
   const at=latestSuccess(session.order[session.done]);
@@ -263,15 +346,35 @@
   const previous=session;
   const next={...previous,done:previous.done+1,armedStep:null,armedAt:0,baseline:0};
   if(next.done===3){
-   // Delete only the exact finished circuit. The other tab may have
-   // abandoned or replaced it since this tab displayed the result.
+   // Persist the genuine three-stage result BEFORE deleting the active
+   // circuit. A full/quota-blocked or unreadable history must leave the
+   // completed step retriable, instead of silently discarding all progress.
    if(!sameState(readState(),previous)){refreshFromStorage();return false;}
+   if(historyUnreadable()){
+    status.textContent='History cannot be read. Download a raw backup and recover storage before finalizing your circuit.';
+    renderStorageSafety();return false;
+   }
+   const past=readHistory();
+   const existing=past.find(row=>row.startedAt===previous.startedAt&&
+    row.order.every((key,i)=>key===previous.order[i]));
+   const finishedAt=Date.now(),row=existing||{
+    version:1,startedAt:previous.startedAt,finishedAt,order:previous.order
+   };
+   if(!existing&&!saveHistory([row,...past])){
+    status.textContent='Circuit completion not yet saved. Storage is unavailable; active progress was preserved.';
+    return false;
+   }
+   // A previous removal failure can be retried without duplicate rows.
+   if(!sameState(readState(),previous)){
+    refreshFromStorage();return false;
+   }
    try{localStorage.removeItem(STATE);}
-   catch{status.textContent='Could not save circuit completion. Your drill history remains.';return false;}
+   catch{
+    status.textContent='The result was saved, but the active circuit could not be cleared. You can retry safely without another history row.';
+    return false;
+   }
    session=null;
-   const finishedAt=Date.now(),row={version:1,startedAt:previous.startedAt,finishedAt,order:previous.order};
-   const archived=saveHistory([row,...readHistory()]);
-   render(archived?'Circuit completed! Three new real local drill completions saved.':'Circuit completed; history could not be saved in this browser.');
+   render('Circuit completed! Three genuine local drill results are recorded in your private history.');
    return true;
   }
   if(!commitIfUnchanged(next,previous)){
@@ -284,6 +387,10 @@
   return true;
  }
  start.onclick=()=>{
+  if(renderStorageSafety()){
+   status.textContent='Unreadable previous practice data is protected. Download a raw backup and choose an explicit reset before starting a new circuit.';
+   return;
+  }
   if(!refreshFromStorage()||session)return;
   if(online()){status.textContent='Leave the online room or Quick Match queue before starting offline training.';return;}
   const order=PRESETS[Number(selector.value)]?.order;
@@ -328,7 +435,11 @@
   render('Tracking '+label(step)+'. Press START inside the actual drill, then complete its in-game goal.');
  }
  open.onclick=openDrill;
- refresh.onclick=()=>{if(!completed())render('No new successful saved result for this stage yet.');};
+ refresh.onclick=()=>{
+  if(!completed())render(historyUnreadable()?
+   'The final result cannot be archived while saved history is unreadable. Your active circuit remains intact.':
+   'No new successful saved result for this stage yet.');
+ };
  abandon.onclick=()=>{
   if(!refreshFromStorage()||!session)return;
   if(!confirm('End your unfinished circuit? Local drill results and previous completed circuits stay saved.'))return;

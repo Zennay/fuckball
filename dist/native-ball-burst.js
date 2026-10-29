@@ -11,7 +11,7 @@
  const panel=mk('section',null,'native-ball-burst');
  panel.setAttribute('aria-label','Local native ball-speed burst training');
  panel.append(mk('h2','ROCKET KICK CHALLENGE.'));
- panel.append(mk('p','Train forceful kicks against the native local AI. Only actual human kick events and measured ball velocity from the original physics engine count. Values are RAW GAME SPEED UNITS, not km/h or proven shot quality.'));
+ panel.append(mk('p','Train forceful kicks against a genuine opposing native AI player. Only real human kick events and ball velocity from the existing physics engine count; changing the lineup discards the attempt. Values are RAW GAME SPEED UNITS, not km/h or proven shot quality.'));
  const controls=mk('div',null,'native-ball-burst-controls');
  function option(label,values,format,selected){
   const wrap=mk('label',label),select=mk('select');
@@ -103,9 +103,17 @@
  const ready=()=>{
   if(serverLink||peerConnected||replay||!room||!started||match.hidden||!room.gameState)return false;
   const own=room.state?.players?.find?.(p=>p.id===1);
-  return document.getElementById('mode')?.value==='bot'&&
-   own?.disc&&[1,2].includes(own.team?.id)&&!botIds.has(1)&&
-   room.state.players.some(p=>p.id!==1&&botIds.has(p.id));
+  if(document.getElementById('mode')?.value!=='bot'||!own?.disc||
+     ![1,2].includes(own.team?.id)||botIds.has(1))return false;
+  // A bot ID alone is insufficient: a friendly bot, absent opponent or
+  // disabled native AI must not yield an apparently verified kick result.
+  const players=room.state?.players;
+  if(!Array.isArray(players))return false;
+  const field=players.filter(p=>[1,2].includes(p?.team?.id));
+  if(field.length!==2)return false;
+  const opponent=field.find(p=>p.id!==1);
+  return !!opponent?.disc&&opponent.team.id===(own.team.id===1?2:1)&&
+   botIds.has(opponent.id)&&opponent.aiControlled===true;
  };
  const denied=()=>{
   if(serverLink||peerConnected)return 'Leave your online room or direct-peer connection before starting local practice.';
@@ -129,6 +137,12 @@
  }
  function finish(label,saveAttempt=false){
   const s=active;if(!s)return;
+  // The last measured kick and its saved history must belong to a genuine
+  // uninterrupted one-human-versus-one-opposing-AI native match.
+  if(saveAttempt&&(!ready()||room!==s.room||ownTeam()!==s.side)){
+   label='ROCKET KICK · OPPONENT CHANGED';
+   saveAttempt=false;
+  }
   // Do not count an unfinished/overridden native kick measurement.
   active=null;
   if(saveAttempt)persist(s);
@@ -167,7 +181,7 @@
   if(document.hidden){finish('ROCKET KICK · TAB HIDDEN');return;}
   if(!ready()||room!==s.room||ownTeam()!==s.side||
    !Number.isSafeInteger(room.currentFrameNo)||room.currentFrameNo<s.frame){
-   finish('ROCKET KICK · MATCH CHANGED');return;
+   finish('ROCKET KICK · MATCH / OPPONENT CHANGED');return;
   }
   const frame=room.currentFrameNo;
   if(!paused){

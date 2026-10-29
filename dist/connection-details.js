@@ -140,9 +140,8 @@
   else if(playingSince===null)playingSince=now;
   const last=Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
    net.lastSnapshot:null;
-  // Only a frame timestamp observed after this active-play interval began
-  // is evidence of a current game update. The former one-second lookback
-  // could label an old round's cached snapshot as newly received.
+  // Only a frame from THIS active-play interval is evidence of playback.
+  // Do not credit cached prior-round frames or timestamps in the future.
   const snapshotReceived=playing&&last!==null&&last>=playingSince&&last<=now;
   const sinceUpdate=playing?Math.max(0,now-(snapshotReceived?last:playingSince)):null;
   const ageMs=snapshotReceived?sinceUpdate:null;
