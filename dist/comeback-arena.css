@@ -28,3 +28,29 @@
 @media(max-width:540px){.comeback-arena{padding:12px}.comeback-hud{top:62px}.comeback-actions button{min-width:95px}}
 @media(prefers-reduced-motion:reduce){.comeback-arena *,.comeback-hud *{animation:none!important;transition:none!important}}
 
+
+/* The same native match is parked, never recreated or credited while hidden. */
+.comeback-return[hidden]{display:none!important}
+.comeback-return{box-sizing:border-box;position:fixed;z-index:113;left:50%;
+ transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(860px,calc(100vw - 24px));display:flex;gap:16px;
+ justify-content:space-between;align-items:center;padding:15px 18px;
+ border-radius:14px;border:2px solid #d4f3a3;background:#193630;
+ color:#f0ffeb;box-shadow:0 14px 38px #041417dd}
+.comeback-return-copy{min-width:0}
+.comeback-return-copy strong{display:block;color:#e2fda7;font-size:.88rem;letter-spacing:.055em}
+.comeback-return-copy p{font-size:.85rem;line-height:1.45;color:#cfe6d8;margin:6px 0 0}
+.comeback-return-actions{display:flex;flex-shrink:0;flex-wrap:wrap;gap:9px}
+.comeback-return-actions button,.comeback-hud .comeback-actions button{
+ min-height:48px;padding:11px 14px;border-radius:9px;font:inherit;
+ font-size:.86rem;font-weight:800;cursor:pointer;border:1px solid #a7bdad;
+ background:#29483d;color:#f0ffeb}
+.comeback-return-actions button.primary,.comeback-hud .comeback-actions button.primary{
+ background:#d9ffa1;color:#153225;border-color:#d9ffa1}
+.comeback-return :is(button):focus-visible{outline:3px solid #f7ffaa;outline-offset:3px}
+@media(max-width:730px){
+ .comeback-return{flex-direction:column;align-items:stretch;gap:11px;
+  bottom:max(8px,env(safe-area-inset-bottom))}
+ .comeback-return-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:390px){.comeback-return-actions{grid-template-columns:1fr}}

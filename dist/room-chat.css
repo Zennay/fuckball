@@ -132,16 +132,16 @@
  .native-room-chat-inbox-actions button:first-child{grid-column:auto}
 }
 
-/* Human-room draft recovery: no storage or background chat delivery. */
-.native-chat-draft-notice[hidden],.native-chat-draft-discard[hidden]{display:none!important}
-.native-chat-draft-notice{margin:7px 0 0;padding:9px 12px;
- border:1px solid #b7d39b;border-radius:8px;background:#233c32;
- color:#e2f7d6;font-size:.81rem;line-height:1.45;
- max-width:65ch;overflow-wrap:anywhere}
-.native-chat-draft-discard{min-height:44px;min-width:140px;
- margin-top:7px;padding:9px 12px;border-radius:8px;
- font:inherit;font-size:.82rem;font-weight:780;
- border:1px solid #c1a79f;background:#3d3032;color:#ffede8;
- cursor:pointer}
-.native-chat-draft-discard:focus-visible{outline:3px solid #d7ff9d;outline-offset:3px}
-@media(max-width:480px){.native-chat-draft-discard{min-height:48px;width:100%}}
+/* Local-only unsent draft: clear ownership is a deliberate human action. */
+.native-chat-draft-actions[hidden]{display:none!important}
+.native-chat-draft-actions{display:flex;align-items:center;justify-content:space-between;
+ gap:11px;flex-wrap:wrap;margin:8px 0 0;padding:10px 12px;
+ border:1px solid #9fc7b6;border-radius:10px;background:#18362d}
+.native-chat-draft-info{flex:1 1 200px;margin:0;min-width:0;line-height:1.4;
+ font-size:.82rem;color:#d9f3e4;overflow-wrap:anywhere}
+.native-chat-draft-actions button{font:inherit;font-size:.82rem;font-weight:750;
+ min-height:44px;padding:9px 12px;border-radius:8px;cursor:pointer;
+ border:1px solid #e5ae9e;color:#ffe3da;background:#402e2b}
+.native-chat-draft-actions button:focus-visible{outline:3px solid #d9ff99;outline-offset:3px}
+@media(max-width:500px){.native-chat-draft-actions{flex-direction:column;align-items:stretch}
+ .native-chat-draft-actions button{min-height:48px}}

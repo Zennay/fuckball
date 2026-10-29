@@ -39,130 +39,120 @@
  sendFeedback.setAttribute('aria-live','polite');
  sendFeedback.hidden=true;
  chatForm?.append(sendFeedback);
- let onlineDraftRoom=null,privateDraft=false;
- function preserveDraftAudience(){
+ // One unsent draft remains scoped to its original room and audience.
+ // Data stays on this device in memory; only the native handler sends.
+ let onlineDraftRoom=null,onlineDraftLink=null,onlineDraftPlayer=null,privateDraft=false,localDraft=false;
+ let submittingNativeChat=false,closingNativeChat=false;
+ const draftControls=document.createElement('div');
+ draftControls.className='native-chat-draft-actions';draftControls.hidden=true;
+ const draftInfo=document.createElement('p');
+ draftInfo.className='native-chat-draft-info';
+ draftInfo.setAttribute('role','status');
+ const discardDraft=document.createElement('button');
+ discardDraft.type='button';discardDraft.textContent='Discard unsent draft';
+ discardDraft.setAttribute('aria-label','Discard unsent chat draft on this device');
+ draftControls.append(draftInfo,discardDraft);
+ chatForm?.append(draftControls);
+ function clearDraftScope(){onlineDraftRoom=null;onlineDraftLink=null;onlineDraftPlayer=null;privateDraft=false;localDraft=false;}
+ function updateDraftControls(){
+  const hasText=!!chatInput?.value.trim();
+  draftControls.hidden=!hasText;
+  if(!hasText){clearDraftScope();return;}
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!onlineDraftRoom&&link?.room)onlineDraftRoom=link.room;
+  const differentRoom=!!onlineDraftRoom&&link?.room!==onlineDraftRoom;
+  const differentSession=!!onlineDraftRoom&&(link!==onlineDraftLink||
+   networkPlayerId!==onlineDraftPlayer);
+  const differentAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const wrongOrigin=localDraft&&!!link?.room;
+  const scope=privateDraft?'private TEAM draft':
+   localDraft?'local-game draft':'online room draft';
+  draftInfo.textContent=differentRoom||differentSession||differentAudience||wrongOrigin?
+   'Unsent '+scope+' preserved. It cannot be sent to another room or audience. Discard it to start fresh.':
+   'Unsent '+scope+' · preserved if you close chat. Not sent.';
+ }
+ function preserveDraftAudience(){
+  if(!chatInput?.value.trim())return;
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!onlineDraftRoom&&!localDraft){
+   if(link?.room){onlineDraftRoom=link.room;onlineDraftLink=link;
+    onlineDraftPlayer=networkPlayerId;}
+   else localDraft=true;
+  }
   // Never let a previously team-only draft silently turn public if the
   // native channel picker resets while a player reconnects or changes teams.
   if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
    privateDraft=true;
  }
  chatInput?.addEventListener('focus',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  preserveDraftAudience();sendFeedback.hidden=true;updateDraftControls();
  });
  chatInput?.addEventListener('input',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  if(!chatInput.value.trim())clearDraftScope();
+  else preserveDraftAudience();
+  sendFeedback.hidden=true;updateDraftControls();
  });
  chatForm?.addEventListener('change',()=>{
   if(chatInput?.value.trim())preserveDraftAudience();
+  updateDraftControls();
  });
- chatForm?.addEventListener('focusout',event=>{
-  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget)){
-   onlineDraftRoom=null;privateDraft=false;
+ discardDraft.addEventListener('click',()=>{
+  if(chatInput)chatInput.value='';
+  clearDraftScope();sendFeedback.hidden=true;
+  updateDraftControls();chatInput?.focus({preventScroll:true});
+ });
+ const nativeCloseChat=typeof closeChat==='function'?closeChat:null;
+ if(nativeCloseChat)closeChat=function(...args){
+  const text=chatInput?.value||'';
+  const preserve=!submittingNativeChat&&!!text.trim();
+  if(preserve)preserveDraftAudience();
+  closingNativeChat=true;
+  let result;
+  try{result=nativeCloseChat.apply(this,args);}
+  finally{closingNativeChat=false;}
+  if(preserve&&chatInput)chatInput.value=text;
+  else if(!preserve)clearDraftScope();
+  updateDraftControls();
+  return result;
+ };
+ const nativeSubmit=chatForm?.onsubmit;
+ if(typeof nativeSubmit==='function')chatForm.onsubmit=function(event){
+  submittingNativeChat=true;
+  try{return nativeSubmit.call(this,event);}
+  finally{
+   submittingNativeChat=false;
+   if(!chatInput?.value.trim())clearDraftScope();
+   updateDraftControls();
   }
+ };
+ window.addEventListener('fuckball:native-session-state',updateDraftControls);
+ chatForm?.addEventListener('focusout',event=>{
+  // Focus loss during Close is not permission to make a team draft public.
+  if(!closingNativeChat&&chatForm.hidden&&!chatForm.contains(event.relatedTarget)
+     &&!chatInput?.value.trim())clearDraftScope();
  });
  chatForm?.addEventListener('submit',event=>{
   const link=typeof serverLink!=='undefined'?serverLink:null;
   // Any pending native connection or stale online chat draft is not a local
   // chat session. The sender must consciously reconnect or leave the form.
   const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
+  const wrongSession=!!onlineDraftRoom&&
+   (link!==onlineDraftLink||networkPlayerId!==onlineDraftPlayer);
   const blocked=link&&(!link.room||link.ws?.readyState!==1)||
     !!onlineDraftRoom&&!link?.room;
+  const wrongOrigin=localDraft&&!!link?.room;
   const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!blocked&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!wrongSession&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
   event.preventDefault();event.stopImmediatePropagation();
-  sendFeedback.textContent=wrongRoom?
-   'This draft was written for another room. Close chat and start a new message before sending to these players.':
+  sendFeedback.textContent=wrongRoom||wrongSession?
+   'This draft belongs to an earlier room connection or player. Discard it explicitly before sending to these players.':
+   wrongOrigin?'This local-game draft cannot be sent to an online room. Discard it to start fresh.':
    blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
    wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
    'The room host muted your chat. Your unsent draft is still here.';
   sendFeedback.hidden=false;
   chatInput?.focus({preventScroll:true});
  },true);
- // Keep an unsent human-room draft when the player closes chat to move,
- // check the roster or browse My Games. A composer from a different room,
- // account/player slot or socket must NEVER be restored to a new audience.
- // This is session-memory only: no storage, network traffic or autosend.
- let unsentSessionDraft=null,chatWasSubmitted=false;
- const nativeCloseChat=typeof closeChat==='function'?closeChat:null;
- const nativeOpenChat=typeof openChat==='function'?openChat:null;
- const draftNote=document.createElement('p');
- draftNote.className='native-chat-draft-notice';
- draftNote.setAttribute('role','status');draftNote.setAttribute('aria-live','polite');
- draftNote.hidden=true;
- const discardDraft=document.createElement('button');
- discardDraft.type='button';
- discardDraft.className='native-chat-draft-discard';
- discardDraft.textContent='Discard unsent draft';
- discardDraft.hidden=true;
- chatForm?.append(draftNote,discardDraft);
- const activeDraftSession=()=>{
-  const link=typeof serverLink!=='undefined'?serverLink:null;
-  const player=typeof networkPlayerId!=='undefined'?networkPlayerId:null;
-  return link?.room&&Number.isSafeInteger(player)&&player>0?
-   {link,room:link.room,player}:null;
- };
- const isCurrentDraft=entry=>{
-  const current=activeDraftSession();
-  return !!entry&&!!current&&entry.link===current.link&&
-   entry.room===current.room&&entry.player===current.player;
- };
- const clearUnsentDraft=()=>{
-  unsentSessionDraft=null;draftNote.hidden=true;discardDraft.hidden=true;
- };
- discardDraft.addEventListener('click',()=>{
-  if(chatInput)chatInput.value='';
-  onlineDraftRoom=null;privateDraft=false;
-  clearUnsentDraft();
-  chatInput?.focus({preventScroll:true});
- });
- // This capture hook runs after the existing moderation/audience fail-closed
- // guard: a blocked submit never counts as a sent message.
- chatForm?.addEventListener('submit',()=>{
-  chatWasSubmitted=true;clearUnsentDraft();
-  // A rejected native command can return before closeChat; later Escape
-  // should still save the draft instead of treating it as submitted.
-  queueMicrotask(()=>{chatWasSubmitted=false;});
- },true);
- if(nativeCloseChat&&nativeOpenChat){
-  closeChat=function(...args){
-   const existing=activeDraftSession();
-   const contents=chatForm?.hidden?'':chatInput?.value||'';
-   if(!chatWasSubmitted&&existing&&contents.trim()){
-    const channel=chatForm?.querySelector('.team-chat-channel select')?.value;
-    unsentSessionDraft={...existing,text:contents.slice(0,140),
-     teamOnly:channel==='team'||privateDraft===true};
-   }else clearUnsentDraft(); // Clearing the field is an explicit discard, too.
-   chatWasSubmitted=false;
-   return nativeCloseChat(...args);
-  };
-  openChat=function(...args){
-   if(unsentSessionDraft&&!isCurrentDraft(unsentSessionDraft))
-    clearUnsentDraft();
-   const out=nativeOpenChat(...args);
-   if(isCurrentDraft(unsentSessionDraft)&&chatInput){
-    chatInput.value=unsentSessionDraft.text;
-    onlineDraftRoom=unsentSessionDraft.room;
-    privateDraft=unsentSessionDraft.teamOnly;
-    if(unsentSessionDraft.teamOnly){
-     const selector=chatForm?.querySelector('.team-chat-channel select');
-     if(selector){selector.value='team';window.FuckballTeamChat?.sync();}
-    }
-    draftNote.textContent=unsentSessionDraft.teamOnly?
-     'Unsent TEAM draft restored on this device. Only the original team channel is allowed; check recipients before sending.':
-     'Unsent room draft restored on this device. Check recipients before sending.';
-    draftNote.hidden=false;discardDraft.hidden=false;
-    chatInput.focus({preventScroll:true});
-    chatInput.setSelectionRange?.(chatInput.value.length,chatInput.value.length);
-   }
-   return out;
-  };
- }
- window.addEventListener('fuckball:native-session-state',()=>{
-  if(unsentSessionDraft&&!isCurrentDraft(unsentSessionDraft))clearUnsentDraft();
- });
  // A connected human room stays active while Home/My Games is on screen.
  // The HUD chat log lives on the hidden pitch; keep a bounded ephemeral
  // catch-up inbox on this device, without sending or saving chat messages.
@@ -244,11 +234,11 @@
    '● '+unread+(unread===99?'+':'')+' unread room message'+(unread===1?'':'s')+
    ' · '+(expanded?'Hide':'Read'):
    '◌ Room chat · '+(expanded?'Hide':'Read recent');
-  // A saved draft is discoverable off the pitch, without exposing its
-  // private text or sending it through the room catch-up inbox.
-  const savedDraftHere=isCurrentDraft(unsentSessionDraft);
-  if(savedDraftHere)chatDockSummary.textContent+=' · unsent draft';
-  chatDockReply.textContent=savedDraftHere?'↩ Resume unsent draft':'↩ Reply in match';
+  const currentDraft=!!onlineDraftRoom&&!!chatInput?.value.trim()&&
+   onlineDraftLink===serverLink&&onlineDraftRoom===serverLink?.room&&
+   onlineDraftPlayer===networkPlayerId;
+  if(currentDraft)chatDockSummary.textContent+=' · unsent draft';
+  chatDockReply.textContent=currentDraft?'↩ Resume unsent draft':'↩ Reply in match';
   chatDockSummary.setAttribute('aria-expanded',String(!chatDockPanel.hidden));
  }
  chatDockSummary.addEventListener('click',()=>{
@@ -285,9 +275,7 @@
    openChat();
    // Navigating through native views may close an existing composer; never
    // overwrite or lose the player's unsent local draft.
-   // A freshly restored same-room draft must not be overwritten by the
-   // now-empty composer when navigating here from the off-pitch inbox.
-   if(savedDraft?.trim()&&input.value!==savedDraft)input.value=savedDraft;
+   if(savedDraft!==null&&input.value!==savedDraft)input.value=savedDraft;
    input.focus?.({preventScroll:true});
   }else{
    const original=document.getElementById('chatLog');

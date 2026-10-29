@@ -65,3 +65,25 @@ html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms
  outline:3px solid #ddffae;outline-offset:3px}
 @media(max-width:540px){.setup-passport-dialog{padding:14px}
  .setup-passport-actions button{flex:1 1 100%}}
+
+/* Show exactly which controls follow the device and which are overrides. */
+.fb-access-origin{display:inline-flex;align-items:center;align-self:start;
+ font-size:12px;line-height:1.2;font-style:normal;font-weight:700;
+ padding:4px 8px;border:1px solid #8499a4;border-radius:999px;
+ color:#d9e9e9;background:#172b33}
+.fb-access-origin[data-source="custom"]{border-color:#d6f39f;
+ background:#29452d;color:#e7ffbc}
+.fb-access-dialog .fb-access-message{min-height:1.6em}
+@media(prefers-reduced-motion:reduce){.fb-access-dialog{scroll-behavior:auto}}
+
+/* Read-only, on-demand scoreboard for screen-reader users. No gameplay overlay. */
+.fb-access-score-review{display:grid;gap:7px;padding:12px 14px;
+ border:1px solid #83aa98;border-radius:10px;background:#233e42}
+.fb-access-score-review button{justify-self:start;min-height:48px;
+ font:inherit;font-size:14px;font-weight:800;padding:10px 15px;
+ border:1px solid #c9efa3;border-radius:8px;background:#d9f6ae;color:#193329;
+ cursor:pointer}
+.fb-access-score-review button:focus-visible{outline:3px solid #fff9b0;outline-offset:3px}
+.fb-access-dialog .fb-access-score-review p{margin:0;font-size:13px;
+ line-height:1.5;color:#e3f3e4;overflow-wrap:anywhere}
+@media(max-width:480px){.fb-access-score-review button{width:100%}}

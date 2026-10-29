@@ -575,6 +575,108 @@
   postMatchOpen.textContent=requesting?'View pending server request →':
    vote?'Review rematch consent →':'Review result & rematch →';
  }
+ // Local full-time has no server proposal: use the original offline
+ // engine's result receipt and original native Start button for a rematch.
+ // Keep this separate from the server-authoritative rematch ribbon above.
+ let offlineFulltime=null,offlineFulltimeSerial=0,offlineFulltimeDismissed=null;
+ const localCards=[];
+ function offlineFulltimeResult(){
+  if(!offlineFulltime||offlineFulltimeDismissed===offlineFulltime.id)return null;
+  if(typeof room==='undefined'||room!==offlineFulltime.room||
+     typeof serverLink!=='undefined'&&!!serverLink||
+     typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&!!peer||
+     typeof replay!=='undefined'&&!!replay){
+   offlineFulltime=null;return null;
+  }
+  return offlineFulltime;
+ }
+ function canRepeatLocalMatch(item){
+  return !!item&&typeof started!=='undefined'&&!started&&
+   !room.gameState&&!document.getElementById('startButton')?.disabled;
+ }
+ function localRestart(){
+  const entry=offlineFulltimeResult();
+  if(!entry||!canRepeatLocalMatch(entry))
+   return announce('Full time is still finishing, or that local match has ended. Review the game controls first.');
+  const blocker=typeof pendingSessionBlock==='function'?pendingSessionBlock():'';
+  if(blocker)return announce(blocker);
+  const native=document.getElementById('startButton');
+  native.click(); // Original offline reset reuses native teams / stadium.
+  if(!started)return announce('The native match did not restart. Check the match controls.');
+  offlineFulltime=null;
+  offlineFulltimeDismissed=null;
+  refreshOfflineFulltime();
+  announce('New local round started with the same teams and stadium.');
+ }
+ function reviewLocalTeams(){
+  const entry=offlineFulltimeResult();
+  if(!entry)return announce('That local result is no longer active.');
+  document.getElementById('tabPlay')?.click();
+  if(typeof openMatchMenu==='function')openMatchMenu('menuMatchPane','menuMatch');
+  document.getElementById('startButton')?.focus?.({preventScroll:true});
+ }
+ function makeLocalFulltimeCard(inMenu){
+  const card=node('section',null,'play-local-fulltime'+(inMenu?' play-local-fulltime-menu':''));
+  card.hidden=true;
+  card.setAttribute('aria-label','Finished local game');
+  const copy=node('div',null,'play-local-fulltime-content');
+  copy.append(node('span','FULL TIME · LOCAL GAME','play-local-fulltime-label'));
+  const score=node('strong','','play-local-fulltime-score');
+  const detail=node('p','','play-local-fulltime-detail');
+  detail.setAttribute('role','status');detail.setAttribute('aria-live','polite');
+  copy.append(score,detail);
+  const actions=node('div',null,'play-local-fulltime-actions');
+  const play=action('↻ Play again',localRestart,'primary');
+  const review=action('Review teams',reviewLocalTeams,'');
+  const dismiss=action('Dismiss',()=>{
+   if(offlineFulltime)offlineFulltimeDismissed=offlineFulltime.id;
+   refreshOfflineFulltime();
+  },'');
+  actions.append(play,review,dismiss);
+  card.append(copy,actions);
+  localCards.push({card,score,detail,play,review});
+  return card;
+ }
+ const homeLocalFulltime=makeLocalFulltimeCard(false);
+ intro.insertAdjacentElement('afterend',homeLocalFulltime);
+ const originalLocalMatchMenu=document.getElementById('nextMatchPanel');
+ if(originalLocalMatchMenu)
+  originalLocalMatchMenu.insertAdjacentElement('afterend',makeLocalFulltimeCard(true));
+ function refreshOfflineFulltime(){
+  const receipt=offlineFulltimeResult(),ready=canRepeatLocalMatch(receipt);
+  for(const {card,score,detail,play,review} of localCards){
+   card.hidden=!receipt;
+   if(!receipt)continue;
+   const label=receipt.winner===1?'RED WINS':
+    receipt.winner===2?'BLUE WINS':'DRAW';
+   const nativeScore=Number.isSafeInteger(receipt.red)&&
+    Number.isSafeInteger(receipt.blue)?' · '+receipt.red+' : '+receipt.blue:'';
+   const head=label+nativeScore;
+   if(score.textContent!==head)score.textContent=head;
+   const info=ready?'Local-only result · restart with the same teams and stadium.':
+    'Final whistle · the engine is finishing this round before another kickoff.';
+   if(detail.textContent!==info)detail.textContent=info;
+   play.disabled=!ready;
+   review.disabled=false;
+  }
+ }
+ window.addEventListener('fuckball:local-fulltime',event=>{
+  const data=event.detail;
+  if(!data||data.room!==room||![0,1,2].includes(data.winner))return;
+  offlineFulltime={room:data.room,winner:data.winner,mode:data.mode,
+   red:data.red,blue:data.blue,id:++offlineFulltimeSerial};
+  offlineFulltimeDismissed=null;
+  refreshOfflineFulltime();
+ });
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  offlineFulltime=null;offlineFulltimeDismissed=null;refreshOfflineFulltime();
+ });
+ const localFulltimeRefresh=setInterval(()=>{
+  if(offlineFulltime)refreshOfflineFulltime();
+ },600);
+ localFulltimeRefresh?.unref?.();
+
  const observer=new MutationObserver(()=>refresh());
  const match=document.getElementById('matchView');
  if(match){

@@ -19,3 +19,14 @@
  .human-queue-watch-controls>*{flex:1 1 100%}
  .human-queue-watch button.primary{width:100%}}
 @media(prefers-reduced-motion:reduce){.human-queue-watch *{transition:none!important;animation:none!important}}
+
+/* Human queue watch remains a read-only observation until a deliberate join. */
+.human-queue-watch[data-watch-state="ready"]{border-color:#c5ef9e}
+.human-queue-watch[data-watch-state="ready"] .human-queue-watch-status{border-left-color:#d1ff91}
+.human-queue-watch[data-watch-state="paused"] .human-queue-watch-status,
+.human-queue-watch[data-watch-state="stale"] .human-queue-watch-status{
+ border-left-color:#ffbf87;color:#fbe4cd}
+.human-queue-watch[data-watch-state="paused"] .human-queue-watch-controls button,
+.human-queue-watch[data-watch-state="stale"] .human-queue-watch-controls button{
+ min-height:44px}
+.human-queue-watch .human-queue-watch-controls button[hidden]{display:none!important}

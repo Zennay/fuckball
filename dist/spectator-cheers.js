@@ -26,9 +26,21 @@
  hide.onclick=()=>{show=!show;try{localStorage.setItem('fuckball.spectator-cheers.visible',show?'yes':'no');}catch{}
   updateHide();};
  updateHide();
- let currentRoom=null,lastSent=0,lastReceived=0;
+ let currentRoom=null,currentLink=null,lastSent=0,lastReceived=0;
+ let pending=null,pendingTimer=null;
+ const cheerButtons=[];
+ function clearPending(){
+  if(pendingTimer!==null){clearTimeout(pendingTimer);pendingTimer=null;}
+  pending=null;
+ }
+ function awaitingReceipt(link){
+  return !!pending&&pending.link===link&&pending.room===link?.room;
+ }
  function nativeSpectator(l){
-  if(!l?.room||l?.quickMatchMode||l?.roomControl?.spectatorCheerSupported!==true)return false;
+  // The native send helper intentionally ignores closed sockets. Do not tell
+  // a human they cheered, or consume the local cooldown, when no packet left.
+  if(!l?.room||l?.ws?.readyState!==1||l?.quickMatchMode||
+     l?.roomControl?.spectatorCheerSupported!==true)return false;
   if(typeof networkPlayerId!=='number'||networkPlayerId<1)return false;
   const players=typeof room!=='undefined'?room?.state?.players:null;
   const player=players?.find?.(p=>p?.id===networkPlayerId);
@@ -39,13 +51,23 @@
  function sync(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const next=link?.room||null;
-  if(next!==currentRoom){currentRoom=next;eventBox.replaceChildren();eventBox.hidden=true;
-   lastSent=0;lastReceived=0;flash.textContent='';}
+  if(next!==currentRoom||link!==currentLink){
+   const abandoned=!!pending;
+   clearPending();currentRoom=next;currentLink=link;
+   eventBox.replaceChildren();eventBox.hidden=true;
+   lastSent=0;lastReceived=0;
+   flash.textContent=abandoned&&next?
+    'Previous cheer was not confirmed. A new room connection is active.':'';
+  }
+  if(pending&&link?.ws?.readyState!==1){
+   clearPending();
+   flash.textContent='Connection interrupted before server confirmation. Reconnect to cheer.';
+  }
   const supported=!!next&&!link.quickMatchMode&&link.roomControl?.spectatorCheerSupported===true;
   tray.hidden=!nativeSpectator(link)||match.hidden||document.hidden||
    typeof replay!=='undefined'&&!!replay;
   hide.hidden=!supported;
-  if(supported&&tray.hidden)flash.textContent='';
+  for(const button of cheerButtons)button.disabled=tray.hidden||awaitingReceipt(link);
  }
  for(const [kind,emoji] of Object.entries(KINDS)){
   const button=document.createElement('button');button.type='button';
@@ -53,30 +75,59 @@
   button.setAttribute('aria-label','Send '+kind+' reaction to Custom Room');
   button.addEventListener('click',()=>{
    const link=typeof serverLink!=='undefined'?serverLink:null;
-   if(!nativeSpectator(link)){flash.textContent='Only connected spectators can cheer.';sync();return;}
+   if(!nativeSpectator(link)||match.hidden||document.hidden||
+      typeof replay!=='undefined'&&!!replay){
+    flash.textContent='Join as a connected spectator and return to the live match to cheer.';
+    sync();return;
+   }
+   if(awaitingReceipt(link)){
+    flash.textContent='Waiting for the room server to confirm your previous cheer.';
+    return;
+   }
    if((link.chatMutedUntil||link.roomControl?.chatMuteUntil||0)>Date.now()){
     flash.textContent='Cheering is muted by the host.';return;
    }
    const now=performance.now();
    if(now-lastSent<3100){flash.textContent='Cheer available every three seconds.';return;}
    // Only one bounded, allowlisted reaction. Never send names/room state.
-   link.send({type:'spectatorCheer',kind});
+   // A send is NOT a receipt: muted, rate-limited or unadmitted actions may
+   // never be echoed. Wait for this exact socket's server broadcast.
+   try{link.send({type:'spectatorCheer',kind});}
+   catch{flash.textContent='Could not send cheer. Check connection and retry.';return;}
    lastSent=now;
-   flash.textContent='Sent to room server · subject to moderation.';
+   const attempt={link,room:link.room,kind};
+   pending=attempt;
+   flash.textContent='Cheer sent · waiting for public server confirmation…';
+   pendingTimer=setTimeout(()=>{
+    if(pending!==attempt)return;
+    clearPending();
+    flash.textContent='No server receipt for this cheer. You can retry explicitly.';
+    sync();
+   },4700);
+   sync();
   });
+  cheerButtons.push(button);
   tray.append(button);
  }
  tray.append(flash);
  spectatorToolbar.append(tray,hide);
  function receive(d){
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!show||document.hidden||match.hidden||!link?.room||
+  if(!link?.room||
     d?.room!==link.room||link.quickMatchMode||
     !Number.isSafeInteger(d.from)||d.from<1||
     typeof d.name!=='string'||d.name.length<1||d.name.length>25||
     typeof d.kind!=='string'||!Object.hasOwn(KINDS,d.kind)||
     !Number.isSafeInteger(d.at)||d.at<=0)return;
   if(Date.now()-d.at>20000||d.at>Date.now()+10000)return;
+  // The server broadcasts accepted cheers back to their sender. Treat
+  // only that same original link/room/player/kind as an authoritative receipt.
+  if(awaitingReceipt(link)&&d.from===networkPlayerId&&d.kind===pending.kind){
+   clearPending();lastReceived=performance.now();
+   flash.textContent='✓ Cheer accepted and broadcast by the room server.';
+   sync();
+  }
+  if(!show||document.hidden||match.hidden)return;
   const row=document.createElement('div');row.className='spectator-cheer-line';
   const badge=document.createElement('span');badge.textContent=KINDS[d.kind];
   const author=document.createElement('span');author.textContent=d.name+' is cheering';

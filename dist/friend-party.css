@@ -44,3 +44,56 @@
 .friend-party-club p{margin:0;color:#c9e4d0;font-size:12px;line-height:1.55}
 .friend-party-club button{min-height:44px;width:100%;font-weight:800}
 .friend-party-club button:disabled{opacity:.55;cursor:not-allowed}
+
+/* A failed but still authorized party launch is a human action, not a
+   polling retry. Keep the original retry affordance visible and accessible. */
+.friend-party-banner .friend-party-retry[hidden]{display:none!important}
+.friend-party-banner .friend-party-retry{min-height:46px;min-width:168px;
+ border-color:#e0ff9c!important;background:#dfff95!important;
+ color:#183126!important;font-weight:900!important}
+.friend-party-banner .friend-party-retry:focus-visible{outline:3px solid #ffffff;
+ outline-offset:3px}
+@media(max-width:470px){
+ .friend-party-banner .friend-party-retry{width:100%;flex:1 1 100%}
+}
+
+/* An authorized 30-second party launch remains actionable when Home is hidden.
+   The live game and native ready-check always take display priority. */
+.friend-party-global[hidden],.friend-party-global-actions button[hidden]{display:none!important}
+.friend-party-global{position:fixed;z-index:108;left:50%;
+ transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));
+ width:min(850px,calc(100vw - 22px));max-height:calc(100dvh - 22px);
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:18px;padding:15px 18px;border:2px solid #b9eaa4;
+ border-radius:14px;background:#1c3733;color:#efffec;
+ box-shadow:0 14px 40px #020d13cc}
+.friend-party-global-copy{min-width:0}
+.friend-party-global-copy strong{display:block;color:#dbffaf;
+ font-size:.82rem;font-weight:900;letter-spacing:.06em}
+.friend-party-global-copy p{font-size:.85rem;line-height:1.48;color:#d1e6dc;
+ margin:5px 0 0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.friend-party-global-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.friend-party-global-actions button{font:inherit;font-size:.85rem;font-weight:800;
+ min-height:48px;padding:9px 14px;border:1px solid #b6dcb0;
+ border-radius:9px;background:#2d4d41;color:#f0ffe8;cursor:pointer}
+.friend-party-global-actions button.friend-party-global-primary{background:#d9ffa0;color:#193425;border-color:#d9ffa0}
+.friend-party-global-actions button[hidden]{display:none!important}
+.friend-party-global-actions button:disabled{opacity:.5;cursor:not-allowed}
+.friend-party-global-actions button:focus-visible{outline:3px solid #fffba1;outline-offset:3px}
+@media(max-width:690px){
+ .friend-party-global{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+ .friend-party-global-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:370px){.friend-party-global-actions{grid-template-columns:1fr}}
+
+/* Cross-view private-party actions: clear consent vs review/decline. */
+.friend-party-global-actions button{min-width:116px}
+.friend-party-global-actions button.friend-party-global-primary{min-width:146px}
+.friend-party-global-actions button:disabled{cursor:not-allowed}
+@media(max-width:690px){
+ .friend-party-global-actions button{width:100%;min-width:0}
+ .friend-party-global-actions button.friend-party-global-primary{min-width:0}
+}
+@media(max-width:390px){
+ .friend-party-global{max-height:calc(100dvh - 18px);overflow-y:auto}
+}

@@ -88,6 +88,73 @@
  // Otherwise a disconnected pad could be replaced by a different person's
  // controller on the same port, unintentionally moving/kicking online.
  let liveSeatOne=null,liveSeatLocked=false;
+ // The live-seat lock correctly rejects an unplugged/replaced controller,
+ // but its warning used to exist only deep inside Video Settings. Give the
+ // player a safe, visible recovery path without automatically authorizing a
+ // newly connected controller (or stealing Player 2's physical port).
+ const recovery=document.createElement('aside');
+ recovery.className='gamepad-seat-recovery';
+ recovery.hidden=true;recovery.setAttribute('role','region');
+ recovery.setAttribute('aria-label','Gamepad disconnected during live match');
+ const recoveryTitle=document.createElement('strong');
+ recoveryTitle.textContent='CONTROLLER LOST · P1 INPUT NEUTRAL';
+ const recoveryDetail=document.createElement('p');
+ recoveryDetail.textContent='This controller stopped controlling Player 1. Keyboard and touch remain available. Rebind explicitly to use a controller again.';
+ const recoveryActions=document.createElement('div');
+ recoveryActions.className='gamepad-seat-recovery-actions';
+ const openSetup=document.createElement('button');
+ openSetup.type='button';openSetup.className='primary';
+ openSetup.textContent='↻ Rebind controller';
+ const keepKeyboard=document.createElement('button');
+ keepKeyboard.type='button';keepKeyboard.textContent='Use keyboard / touch';
+ const returnPitch=document.createElement('button');
+ returnPitch.type='button';returnPitch.textContent='↗ Return to match';
+ recoveryActions.append(openSetup,keepKeyboard,returnPitch);
+ recovery.append(recoveryTitle,recoveryDetail,recoveryActions);
+ document.body.append(recovery);
+ let acknowledgedLoss=null;
+ function lostPlayerOneSeat(){
+  const seat=localSeatLocked&&localTwoHumanMode()?localSeatOne:
+   liveSeatLocked&&liveP1Session()?liveSeatOne:null;
+  return seat?.lost===true?seat:null;
+ }
+ function refreshControllerRecovery(){
+  const lost=lostPlayerOneSeat();
+  // The match may continue while the player browses Home / My Games. A
+  // controller loss is a live input event, not a property of the visible tab.
+  // Keep the original seat-neutral and explicit rebind choices in view.
+  const visible=!!lost&&lost!==acknowledgedLoss&&
+   typeof started!=='undefined'&&started&&!replay;
+  recovery.hidden=!visible;
+  if(!visible)return;
+  const assignedToP2=lost.reason==='reserved-for-p2';
+  recoveryTitle.textContent=assignedToP2?
+   'CONTROLLER RESERVED FOR P2 · P1 INPUT NEUTRAL':
+   'CONTROLLER LOST · P1 INPUT NEUTRAL';
+  recoveryDetail.textContent='Player 1 controller on port '+(lost.index+1)+
+   (assignedToP2?' is now reserved for Player 2.':
+    ' disconnected or changed.')+
+   ' Player 1 movement and kick remain neutral until you explicitly rebind. Keyboard and touch still work.';
+  returnPitch.hidden=document.getElementById('matchView')?.hidden===false;
+ }
+ openSetup.addEventListener('click',()=>{
+  if(recovery.hidden||!lostPlayerOneSeat())return;
+  const open=window.fuckballControllerSetup?.open;
+  if(typeof open==='function'){
+   if(open()===false)recoveryDetail.textContent='This browser cannot open Controller Setup. Keyboard and touch remain available.';
+  }else recoveryDetail.textContent='Controller Setup is unavailable here. Open Configure controller on Home to explicitly bind Player 1.';
+ });
+ keepKeyboard.addEventListener('click',()=>{
+  acknowledgedLoss=lostPlayerOneSeat();refreshControllerRecovery();
+ });
+ returnPitch.addEventListener('click',()=>{
+  if(recovery.hidden||!lostPlayerOneSeat())return;
+  const tab=document.getElementById('tabPlay');
+  if(tab&&typeof tab.click==='function')tab.click();
+  else if(typeof showView==='function')showView('play');
+  refreshControllerRecovery();
+  document.getElementById('gameCanvas')?.focus?.({preventScroll:true});
+ });
  const isCouchRivals=()=>['couchRivals','couchRivals3v3','couchRivals4v4']
   .includes($('mode').value);
  const liveP1Session=()=>typeof started!=='undefined'&&started&&
@@ -102,7 +169,12 @@
   if(!pad?.connected||pad.index!==seat.index||pad.id!==seat.id){
    seat.lost=true;return null;
   }
-  return pad.index!==reservedP2()?pad:null;
+  if(pad.index===reservedP2()){
+   // A P2 rebind can reserve P1's physical port without unplugging it.
+   // Treat this as a seat loss rather than silently removing P1 controls.
+   seat.lost=true;seat.reason='reserved-for-p2';return null;
+  }
+  return pad;
  }
  const localTwoHumanMode=()=>typeof started!=='undefined'&&started&&
   !serverLink&&!peerConnected&&!replay&&
@@ -130,7 +202,11 @@
        pinned.index!==localSeatOne.index){
      localSeatOne.lost=true;return null;
     }
-    return pinned.index!==reservedP2()?pinned:null;
+    if(pinned.index===reservedP2()){
+     localSeatOne.lost=true;localSeatOne.reason='reserved-for-p2';
+     return null;
+    }
+    return pinned;
    }
    // No live match may auto-handoff movement/kick authority when a gamepad is
    // unplugged or a new pad occupies the same Gamepad API port. The original
@@ -218,6 +294,7 @@
  }
  function frame(){
   const pad=controller();
+  refreshControllerRecovery();
   describe(pad);
   const start=pad?isHeld(pad,9):false;
   if(start&&!wasStart&&!['couchRivals','couchRivals3v3','couchRivals4v4'].includes($('mode').value)&&
@@ -313,9 +390,14 @@
  window.addEventListener('gamepaddisconnected',event=>{
   const index=event?.gamepad?.index;
   if(!Number.isSafeInteger(index))return;
-  if(liveSeatLocked&&liveSeatOne?.index===index)liveSeatOne.lost=true;
-  if(localSeatLocked&&localSeatOne?.index===index)localSeatOne.lost=true;
+  if(liveSeatLocked&&liveSeatOne?.index===index){
+   liveSeatOne.lost=true;liveSeatOne.reason='disconnected';
+  }
+  if(localSeatLocked&&localSeatOne?.index===index){
+   localSeatOne.lost=true;localSeatOne.reason='disconnected';
+  }
   lastSignature='';wasStart=true;
+  refreshControllerRecovery();
   if(typeof refreshInput==='function'&&typeof started!=='undefined'&&started)
    refreshInput();
  });

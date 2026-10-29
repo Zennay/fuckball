@@ -279,11 +279,21 @@
    // the last validation on click; do not carry a stale disabled state from
    // the previous proposal while the new ready-check is rendering.
    dockAccept.disabled=readyAccepted||readyConfirming||seconds===0;
-   dockDecline.disabled=seconds===0;
+   // Once this exact proposal has a real server receipt, Decline cannot
+   // reverse the accepted vote. The server would reject a second response.
+   dockDecline.hidden=readyAccepted;
+   dockDecline.disabled=readyAccepted||seconds===0;
   }
   if(ready){
    const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
-   readyText.textContent='All '+ready.players+' human players must confirm. Casual '+playlistLabel(ready.mode)+', no ranked rating.';
+   readyTitle.textContent=readyAccepted?'SERVER CONFIRMED · WAITING FOR PLAYERS':
+    readyConfirming?'SENDING READY · WAIT FOR SERVER':
+    remain===0?'READY CHECK EXPIRED':'MATCH FOUND.';
+   readyBox.classList.toggle('is-confirmed',readyAccepted);
+   readyDock.classList.toggle('is-confirmed',readyAccepted);
+   readyText.textContent=readyAccepted?
+    'The server received your vote. Waiting for the remaining real people.':
+    'All '+ready.players+' human players must confirm. Casual '+playlistLabel(ready.mode)+', no ranked rating.';
    readyProgress.textContent=ready.ready+' / '+ready.players+' confirmed · '+remain+
     's left'+(readyAccepted?' · Server received your acceptance; waiting for others.':
      readyConfirming?' · Sending your confirmation to the server…':
@@ -291,7 +301,8 @@
    acceptReady.textContent=readyAccepted?'✓ Server confirmed':
     readyConfirming?'… Waiting for server':'✓ I’m ready';
    acceptReady.disabled=readyAccepted||readyConfirming||remain===0;
-   declineReady.disabled=remain===0;
+   declineReady.hidden=readyAccepted;
+   declineReady.disabled=readyAccepted||remain===0;
    notice.textContent=readyAccepted?'Your acceptance was confirmed by the server. Waiting for other humans.':
     readyConfirming?'Waiting for the server to acknowledge your ready confirmation…':
     readyNoReceipt?'The server has not acknowledged your confirmation. Try again before time runs out.':
@@ -501,8 +512,19 @@
  });
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){clearReadyAlert();loadAvailability();}
-  else clearPulse();
+  if(document.visibilityState==='visible'){
+   clearReadyAlert();loadAvailability();
+  }else{
+   clearPulse();
+   // A player may background the browser AFTER the server sent the 15s
+   // proposal. The original alert only ran at proposal-arrival time, so this
+   // path would silently hide the only confirmation controls. Existing
+   // opted-in browser notifications apply to the still-active proposal.
+   // This never auto-accepts, requeues, renews or extends the server timer.
+   if(ready&&!readyAccepted&&Number.isSafeInteger(ready.expiresAt)&&
+      Date.now()<ready.expiresAt)
+    alertReady(ready.mode,ready.expiresAt);
+  }
  });
  window.addEventListener('online',loadAvailability);
  window.addEventListener('offline',loadAvailability);
@@ -530,7 +552,7 @@
   }
  };
  declineReady.onclick=()=>{
-  if(!ready)return;
+  if(!ready||readyAccepted||Date.now()>=ready.expiresAt)return;
   clearReadyReceipt();
   try{serverLink?.send({type:'queueReadyResponse',id:ready.id,accept:false});}catch{}
   disconnect();done('You declined the match. Search again when ready.');
