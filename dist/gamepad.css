@@ -40,3 +40,11 @@
  width:calc(100vw - 20px);padding:13px;max-height:calc(100dvh - 82px)}
 }
 @media(max-width:390px){.gamepad-seat-recovery-actions{display:grid;grid-template-columns:1fr}}
+
+/* Recovery stays visible on Home, My Games and pitch while the original
+   live P1 controller seat remains locked and neutral. No automatic rebind. */
+.gamepad-seat-recovery-actions button[hidden]{display:none!important}
+.gamepad-seat-recovery-actions button:last-child:not([hidden]){
+ flex:1 1 100%;border-color:#a5c9c4;color:#e9fbf5;background:#23403e}
+.gamepad-seat-recovery-actions button:last-child:focus-visible{
+ outline:3px solid #f1ffb3;outline-offset:3px}

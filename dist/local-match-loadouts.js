@@ -36,10 +36,14 @@
   });
  };
  let snapshot=null,rows=[],healthy=true;
+ // A corrupt saved collection must not be silently replaced by a valid import.
+ // Record which *exact* damaged value the human requested a local backup of.
+ let corruptBackupRequestedFor=null;
  // An array index is not an identity: another tab may reorder, rename or
  // delete a loadout while the first tab is editing it.
  let selectedName=null,selectionNeedsReview=false;
  function refreshStored(){
+  corruptBackupRequestedFor=null;
   try{
    const raw=localStorage.getItem(KEY);snapshot=raw;
    rows=raw===null?[]:validate(JSON.parse(raw));
@@ -96,9 +100,11 @@
  const remove=btn('Delete selected',removeSelected);
  const exportBtn=btn('↓ Backup my loadouts',backup);
  const importBtn=btn('↑ Restore loadouts',()=>upload.click());
+ const recoverCopy=btn('↓ Download unreadable saved data',downloadCorruptData);
+ recoverCopy.hidden=true;
  const upload=newNode('input');upload.type='file';upload.accept='.json,application/json';
  upload.hidden=true;upload.setAttribute('aria-label','Restore private local match loadout backup');
- actions.append(play,save,update,remove,exportBtn,importBtn,upload);
+ actions.append(play,save,update,remove,exportBtn,importBtn,recoverCopy,upload);
  const note=newNode('p','All saved loadouts are private device settings, not live room presets. Starting a loadout uses the original local game and asks before replacing a current local match or replay. Imported stadium files are not included.');
  const status=newNode('p',null,'local-loadouts-status');status.setAttribute('role','status');
  status.setAttribute('aria-live','polite');
@@ -145,8 +151,12 @@
   picker.disabled=remove.disabled=update.disabled=!healthy||!rows.length;
   save.disabled=!healthy||rows.length>=LIMIT;
   exportBtn.disabled=!healthy||!rows.length;
+  recoverCopy.hidden=healthy;
+  recoverCopy.disabled=healthy||snapshot===null;
   if(!healthy){
-   status.textContent='Existing local match presets are unreadable. Storage was not overwritten. Restore the damaged data manually before saving.';
+   status.textContent='Saved loadouts are unreadable; nothing was overwritten. '+
+    'First download a copy of the damaged data, verify the download, then restore a valid private backup. '+
+    'Your current offline game and practice results are not affected.';
   }
  }
  picker.onchange=()=>{
@@ -274,11 +284,31 @@
   }
   status.textContent='Native '+draft.mode+' practice started with "'+draft.name+'". No online server joined.';
  }
- function download(payload,filename){
-  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'}));
+ function downloadText(content,filename,mime){
+  const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const link=newNode('a');link.href=url;link.download=filename;
   document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }
+ function download(payload,filename){
+  downloadText(JSON.stringify(payload,null,2),filename,'application/json;charset=utf-8');
+ }
+ function downloadCorruptData(){
+  if(healthy||snapshot===null)return;
+  try{
+   const before=localStorage.getItem(KEY);
+   if(before!==snapshot){
+    refreshStored();render();
+    throw Error('Saved data changed in another tab. Inspect its latest state before downloading.');
+   }
+   // This user-initiated download preserves the literal bytes, even when JSON
+   // is invalid. Do not claim the browser actually saved the download.
+   downloadText(snapshot,'fuckball-unreadable-local-loadouts-'+
+    new Date().toISOString().slice(0,10)+'.txt','text/plain;charset=utf-8');
+   corruptBackupRequestedFor=snapshot;
+   status.textContent='Damaged data copy requested. Verify it is in Downloads. You may now '+
+    'restore a valid private loadout JSON backup; replacement still needs explicit confirmation.';
+  }catch(e){status.textContent='Could not prepare recovery copy: '+(e.message||'Download unavailable');}
  }
  function backup(){
   if(!healthy||!rows.length)return;
@@ -295,6 +325,33 @@
    if(parsed?.format!=='fuckball-local-match-loadouts'||parsed.version!==1||
     parsed.source!=='private-device-only')throw Error('Unsupported local match loadout backup.');
    const incoming=validate({version:1,presets:parsed.presets});
+   if(!healthy){
+    if(snapshot===null||corruptBackupRequestedFor!==snapshot)
+     throw Error('Download the unreadable saved data first, then verify its download before restoring.');
+    const raw=JSON.stringify({version:1,presets:incoming});
+    if(raw.length>MAX_BYTES)throw Error('Imported collection is too large.');
+    // Even an explicit recovery must not erase a concurrent tab's new data.
+    if(localStorage.getItem(KEY)!==snapshot){
+     refreshStored();render();
+     throw Error('Saved data changed in another tab. No data was overwritten. Review the current collection.');
+    }
+    if(!confirm('Replace the unreadable local loadouts with '+incoming.length+
+      ' validated entries? First verify your downloaded recovery copy. '+
+      'The unreadable original will be overwritten; existing match results will remain unchanged.'))return;
+    if(localStorage.getItem(KEY)!==snapshot){
+     refreshStored();render();
+     throw Error('Saved data changed during confirmation. The original was not overwritten.');
+    }
+    // If setItem throws (quota/private storage), leave the unreadable original
+    // untouched and keep recovery available; never declare a successful save.
+    localStorage.setItem(KEY,raw);
+    snapshot=raw;rows=incoming;healthy=true;
+    selectedName=null;selectionNeedsReview=false;corruptBackupRequestedFor=null;
+    render();
+    status.textContent='Private loadouts recovered from '+incoming.length+
+      ' validated entries. Existing matches and results were not modified.';
+    return;
+   }
    if(!confirm('Replace '+rows.length+' saved local match loadouts with '+
     incoming.length+' from this device backup? No real matches or practice history will change.'))return;
    write(incoming,'');status.textContent='Restored '+incoming.length+' private match loadouts. Choose an entry to edit it.';

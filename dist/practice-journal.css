@@ -35,3 +35,24 @@
 .local-journal-row .local-journal-match{flex:1}
 @media(max-width:820px){.local-journal-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.local-journal-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.local-journal-edit button{width:100%}}
+
+/* Private journal recovery protects the original bytes and unsaved coaching. */
+.local-journal-recovery[hidden]{display:none!important}
+.local-journal-recovery{box-sizing:border-box;margin:16px 0;padding:17px 19px;
+ border-radius:12px;border:2px solid #e8c48f;background:#372d28;color:#fff0de}
+.local-journal-recovery strong{display:block;font-size:.9rem;letter-spacing:.045em;color:#fff2c9}
+.local-journal-recovery p{font-size:.85rem;line-height:1.55;max-width:76ch;
+ margin:9px 0;color:#f5dbbd;overflow-wrap:anywhere}
+.local-journal-recovery-actions{display:flex;gap:10px;flex-wrap:wrap}
+.local-journal-recovery-actions button{box-sizing:border-box;min-height:48px;
+ padding:10px 14px;border:1px solid #d7c3a4;border-radius:8px;background:#413c32;
+ color:#fff5e3;font:inherit;font-weight:700;cursor:pointer}
+.local-journal-recovery-actions button.danger{border-color:#f2aea0;color:#ffe3dc}
+.local-journal-recovery-actions button:disabled{opacity:.52;cursor:not-allowed}
+.local-journal-recovery-actions button:focus-visible,
+.local-journal-controls button:focus-visible{outline:3px solid #e8ffad;outline-offset:3px}
+@media(max-width:620px){
+ .local-journal-recovery{padding:14px}
+ .local-journal-recovery-actions{display:grid;grid-template-columns:1fr}
+ .local-journal-recovery-actions button{width:100%}
+}

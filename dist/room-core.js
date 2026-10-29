@@ -508,11 +508,21 @@ function createRoomCore(opts){
  function exportState({final=true}={}){const recording=hb._room.isRecording();if(final&&recording)hb.stopRecording();
   return{v:1,recording:!final&&recording,round:r.round,lastResult:r.lastResult,rematchSeq:r.rematchSeq,ai:AI.memoryOf?.(hb._room.state)??null,id:r.id,frame:r.frame,seq:r.seq,tick:r.tick,owner:r.owner,nextId:r.nextId,botIds:[...r.botIds],mode:r.mode,difficulty:r.difficulty,botLevels:r.botLevels,teamProfile:r.teamProfile,started:r.started,paused:r.paused,refereeId:r.refereeId,lobbyReady:[...r.lobbyReady],stadiumBallot:[...r.stadiumBallot],stadiumBallotNames:ballotNames,formatVotes:[...r.formatVotes],formatVersion:1,kickoff:r.kickoff?{...r.kickoff,humans:r.kickoff.humans.map(x=>[...x])}:null,benches:[...r.benches],benchReadyIds:[...r.benchReady],captains:[...r.captains],activeFrames:[...r.activeFrames],sideFrames:[...r.sideFrames],subEvents:r.subEvents.map(e=>({...e})),subSeq:r.subSeq,
    clients:[...r.clients].map(([id,c])=>[id,{name:c.name,lastInputSeq:c.lastInputSeq,timeline:c.timeline?c.timeline.export():null}]),room:roomBytes()};}
- function restore(s){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
+ function restore(s,verifiedServerHumans=null){hb._room.useSnapshot(API.Replay.readAll(s.room instanceof Uint8Array?s.room:Uint8Array.from(s.room)).roomData);
   for(const k of ['frame','seq','tick','owner','nextId','mode','difficulty','botLevels','teamProfile','started','paused'])r[k]=s[k];r.round=Number.isSafeInteger(s.round)&&s.round>=0?s.round:0;r.lastResult=s.lastResult&&s.lastResult.round===r.round?s.lastResult:null;r.rematchSeq=Number.isSafeInteger(s.rematchSeq)&&s.rematchSeq>=0?s.rematchSeq:0;r.rematch=null;r.pauseRequest=null;r.pauseCooldowns.clear();r.refereeId=0;r.lastRefereePauseAt=0;r.clients.clear();r.disconnected.clear();r.benches.clear();r.benchReady.clear();r.lobbyReady.clear();r.readyClickAt.clear();r.stadiumBallot.clear();r.stadiumVoteAt.clear();r.formatVotes.clear();r.formatVoteAt.clear();r.captains.clear();r.activeFrames.clear();r.sideFrames.clear();r.subEvents.length=0;r.pendingSubs.clear();r.kickoff=null;r.subSeq=Number.isSafeInteger(s.subSeq)&&s.subSeq>=0?s.subSeq:0;const humanIds=new Set((s.clients||[]).map(([id])=>id));
-  // Legacy states can omit botIds; their connected client roster still proves
-  // which high numeric IDs are people. New exports carry explicit bot IDs.
-  r.botIds=new Set(Array.isArray(s.botIds)?s.botIds:hb._room.state.players.filter(p=>p.id>=100&&!humanIds.has(p.id)).map(p=>p.id));
+  // Native room authority also knows the live and reconnect-reserved socket
+  // identities. A delayed browser-host export can omit or mislabel a genuine
+  // human; a numeric bot ID in that export never overrides server admission.
+  if(verifiedServerHumans)for(const id of verifiedServerHumans)
+   if(Number.isSafeInteger(id)&&id>0)humanIds.add(id);
+  const actualPlayerIds=new Set(hb._room.state.players.map(p=>p.id));
+  // Preserve the explicit exported AI roster, but only for actual room discs
+  // which do not belong to a server-known or exported human. For old exports
+  // missing botIds retain the legacy high-ID fallback with the same guard.
+  const botCandidates=Array.isArray(s.botIds)?s.botIds:
+   hb._room.state.players.filter(p=>p.id>=100).map(p=>p.id);
+  r.botIds=new Set(botCandidates.filter(id=>Number.isSafeInteger(id)&&id>0&&
+   actualPlayerIds.has(id)&&!humanIds.has(id)));
   // Numeric player IDs are NOT AI identities: a persistent room can admit
   // real humans with IDs >= 100. Restore only the authoritative bot membership
   // from the exported room, never infer it from an id threshold.

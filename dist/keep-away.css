@@ -36,3 +36,19 @@
 .keep-away-return button:focus-visible{outline:3px solid #f3ffcd;outline-offset:3px}
 @media(max-width:600px){.keep-away-return{flex-direction:column;align-items:stretch}
  .keep-away-return button{width:100%}}
+
+/* Device-only recovery of unreadable saved native Keep Away results.
+   Reset is never available before the user requests the original raw bytes. */
+.keep-away-recovery[hidden]{display:none!important}
+.keep-away-recovery{margin:12px 0 2px;padding:16px 18px;
+ border:2px solid #e1ad8d;border-radius:12px;
+ background:#372d29;color:#fff3e6;display:flex;flex-direction:column;gap:8px}
+.keep-away-recovery strong{letter-spacing:.06em;font-size:.87rem;color:#ffe1b5}
+.keep-away-recovery p{margin:0;line-height:1.52;font-size:.88rem;color:#f5dacb}
+.keep-away-recovery button{align-self:flex-start;min-height:48px;
+ border:1px solid #f3c5a3;border-radius:9px;background:#49372e;color:#fff6e9;
+ padding:11px 15px;font:inherit;font-weight:800;cursor:pointer}
+.keep-away-history-head button:disabled{opacity:.5;cursor:not-allowed}
+.keep-away-recovery button:focus-visible{outline:3px solid #fff0b9;outline-offset:3px}
+@media(max-width:620px){.keep-away-recovery{padding:14px}
+ .keep-away-recovery button{width:100%;align-self:stretch;min-height:48px}}

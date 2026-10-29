@@ -86,6 +86,43 @@
  dock.append(dockContent,dockActions,dockHost);
  document.body.append(dock);
  let lastSignature='';
+ // Native room status updates are the only acknowledgement of readiness.
+ // Block repeated click-to-toggle requests until that status is seen, or
+ // until the player explicitly retries after a bounded no-receipt window.
+ let pendingReadiness=null,missingReceipt=null;
+ function receiptStatus(link,state){
+  const id=typeof networkPlayerId!=='undefined'?networkPlayerId:null;
+  const expected=pendingReadiness||missingReceipt;
+  if(expected&&(expected.link!==link||expected.room!==link?.room||
+    expected.id!==id||state?.started||state?.lastResult)){
+   pendingReadiness=null;missingReceipt=null;
+  }
+  const actual=Array.isArray(state?.lobbyReadyIds)&&
+   state.lobbyReadyIds.includes(id);
+  if(pendingReadiness&&actual===pendingReadiness.desired){
+   pendingReadiness=null;missingReceipt=null;
+  }
+  if(missingReceipt&&actual===missingReceipt.desired)missingReceipt=null;
+  if(pendingReadiness&&Date.now()-pendingReadiness.sentAt>=3000){
+   missingReceipt=pendingReadiness;pendingReadiness=null;
+  }
+  return{pending:!!pendingReadiness,missing:!!missingReceipt};
+ }
+ function receiptLabel(status){
+  return status.pending?' · Request sent; waiting for the room server…':
+   status.missing?' · No server update yet; explicitly retry if you still want to change readiness.':'';
+ }
+ // On a newly admitted or reconnected room, room.state.players can still
+ // contain the previous local game's players until the first binary snapshot.
+ // A native welcome + textual room event is NOT a roster receipt. This gate
+ // is scoped to the current socket because disconnect() resets net counters.
+ function hasCurrentNativeRoster(link){
+  const state=link?.roomState;
+  if(!link?.room||!state||link.ws?.readyState!==1)return false;
+  if(typeof state.room==='string'&&state.room!==link.room)return false;
+  return typeof net!=='undefined'&&Number.isSafeInteger(net.receivedSequence)&&
+   net.receivedSequence>0&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0;
+ }
  function lobbySummary(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const state=link?.roomState;
@@ -93,7 +130,8 @@
   const supported=Array.isArray(state.lobbyReadyIds)&&state.lobbyReadyIds.length<=128;
   const ready=supported?new Set(state.lobbyReadyIds.filter(Number.isSafeInteger)):new Set();
   const disconnected=new Set(Array.isArray(state.disconnectedIds)?state.disconnectedIds:[]);
-  const roster=typeof room!=='undefined'?room?.state?.players:[];
+  const rosterVerified=hasCurrentNativeRoster(link);
+  const roster=rosterVerified&&typeof room!=='undefined'?room?.state?.players:[];
   const active=(Array.isArray(roster)?roster:[]).filter(p=>
    Number.isSafeInteger(p?.id)&&!botIds.has(p.id)&&
    !disconnected.has(p.id)&&[1,2].includes(p?.team?.id));
@@ -106,8 +144,10 @@
    active.every(p=>ready.has(p.id));
   const canHost=link.isOwner===true&&Object.hasOwn(state,'kickoff')&&
    !state.lastResult&&supported;
-  return{link,supported,active,own,ready,remaining,
-   canSchedule:canHost&&allReady&&!countdown,
+  return{link,state,supported,rosterVerified,active,own,ready,remaining,
+   canSchedule:rosterVerified&&canHost&&allReady&&!countdown,
+   // Host cancellation of a server-issued countdown is always safe, even
+   // before first visual roster snapshot; starting a new one never is.
    canCancel:canHost&&!!countdown,canHost,allReady};
  }
  function renderGlobalLobby(){
@@ -117,6 +157,7 @@
    typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
   dock.hidden=!state||nativeVisible;
   if(dock.hidden)return;
+  const receipt=receiptStatus(state.link,state.state);
   const confirmed=state.active.filter(p=>state.ready.has(p.id)).length;
   const ownReady=!!state.own&&state.ready.has(state.own.id);
   dockTitle.textContent=state.remaining!==null?
@@ -124,14 +165,19 @@
    'CUSTOM ROOM · KICKOFF READINESS';
   const text=!state.supported?
    'This server has not reported lobby readiness. View the room for the native Start control.':
+   !state.rosterVerified?
+   'Waiting for the first current-room server frame before showing players or sending readiness.':
    state.active.length===0?'No active human players on Red or Blue yet.':
    confirmed+' / '+state.active.length+' connected humans confirmed'+
     (state.own?(ownReady?' · you are server-confirmed ready.':
-     ' · your readiness is needed.'):' · join a team to ready up.');
+     ' · your readiness is needed.'):' · join a team to ready up.')+
+    (state.own?receiptLabel(receipt):'');
   if(dockProgress.textContent!==text)dockProgress.textContent=text;
-  dockToggle.hidden=!state.supported||!state.own;
-  dockToggle.disabled=state.remaining!==null;
-  dockToggle.textContent=ownReady?'✓ READY · CHANGE TO NOT READY':'✓ I AM READY';
+  dockToggle.hidden=!state.supported||!state.rosterVerified||!state.own;
+  dockToggle.disabled=state.remaining!==null||receipt.pending||
+   state.link.ws?.readyState!==1;
+  dockToggle.textContent=receipt.pending?'… WAITING FOR SERVER':
+   ownReady?'✓ READY · CHANGE TO NOT READY':'✓ I AM READY';
   dockHost.hidden=!state.canHost;
   dockLengthLabel.hidden=!!state.canCancel;
   dockStart.hidden=!!state.canCancel;
@@ -277,6 +323,18 @@
   // not the pre-kickoff readiness screen.
   panel.hidden=!!state.started||!!state.lastResult;
   if(panel.hidden)return;
+  // A room event can arrive before its first authenticated native snapshot.
+  // Do not display a roster from an older match or offer local ready/kickoff
+  // controls until this exact socket has delivered current game-state frames.
+  if(!hasCurrentNativeRoster(link)){
+   lastSignature='';
+   toggle.disabled=true;refresh.disabled=false;
+   kickoffControls.hidden=true;
+   list.replaceChildren(el('li','Waiting for current-room player snapshot…'));
+   progress.textContent='Checking this room’s live players with the game server…';
+   note.textContent='Your previous local roster is not used for new room readiness. The server will provide the current players.';
+   return;
+  }
   const available=Array.isArray(state.lobbyReadyIds)&&state.lobbyReadyIds.length<=128;
   if(!available){
    kickoffControls.hidden=true;kickoffStatus.textContent='';
@@ -294,6 +352,7 @@
    [1,2].includes(p?.team?.id));
   const own=active.find(p=>p.id===networkPlayerId);
   const chosen=!!own&&confirmed.has(own.id);
+  const receipt=receiptStatus(link,state);
   const ready=active.filter(p=>confirmed.has(p.id)).length;
   const signature=JSON.stringify([state.round,state.started,networkPlayerId,active.map(p=>[p.id,p.name,p.team?.id]),[...confirmed].sort((a,b)=>a-b)]);
   if(signature!==lastSignature){
@@ -308,11 +367,17 @@
    }
    if(!active.length)list.append(el('li','Waiting for the real native player roster…'));
   }
-  progress.textContent=active.length?
-   ready+' / '+active.length+' connected active humans ready'+(ready===active.length?' · Team is ready for host kickoff':' · Awaiting players'):
-   'No active connected humans to ready up yet.';
-  toggle.disabled=!own;
-  toggle.textContent=chosen?'CHANGE TO NOT READY':'I AM READY';
+  progress.textContent=(active.length?
+   ready+' / '+active.length+' connected active humans ready'+
+    (ready===active.length?' · Team is ready for host kickoff':' · Awaiting players'):
+   'No active connected humans to ready up yet.')+
+   (own?receiptLabel(receipt):'');
+  // The menu and the Home/My Games dock must enforce the same server
+  // countdown and acknowledgement gate. A rapid double tap must never
+  // invert a queued I AM READY into a second NOT READY command.
+  toggle.disabled=!own||!!state.kickoff||receipt.pending||link.ws?.readyState!==1;
+  toggle.textContent=receipt.pending?'… WAITING FOR SERVER':
+   chosen?'CHANGE TO NOT READY':'I AM READY';
   toggle.setAttribute('aria-pressed',String(chosen));
   refresh.disabled=false;
   const supports=Object.hasOwn(state,'kickoff'),running=!!state.kickoff;
@@ -334,19 +399,27 @@
  }
  toggle.onclick=()=>{
   const link=serverLink,state=link?.roomState;
-  if(!link?.room||link.quickMatchMode||!Array.isArray(state?.lobbyReadyIds)||state.started)return;
+  if(!link?.room||link.quickMatchMode||!Array.isArray(state?.lobbyReadyIds)||
+     state.started||!!state.kickoff||link.ws?.readyState!==1||
+     !hasCurrentNativeRoster(link)||receiptStatus(link,state).pending)return;
   const myId=networkPlayerId;
   const own=room?.state?.players?.find?.(p=>p.id===myId);
   if(![1,2].includes(own?.team?.id)||botIds.has(myId)||
    state.disconnectedIds?.includes(myId))return;
   const current=state.lobbyReadyIds.includes(myId);
+  // This is an idempotent desired state, not a local ready claim. Only a
+  // subsequent authoritative room event may confirm the intended change.
+  pendingReadiness={link,room:link.room,id:myId,desired:!current,sentAt:Date.now()};
+  missingReceipt=null;
   link.send({type:'lobbyReady',ready:!current});
-  progress.textContent='Sending your own readiness to the room server…';
+  progress.textContent='Ready change sent; waiting for the room server…';
+  renderGlobalLobby();
  };
  count.onclick=()=>{
   const link=serverLink,state=link?.roomState,n=Number(length.value);
   if(!link?.room||!link.isOwner||link.quickMatchMode||state?.started||state?.lastResult||
-   !Object.hasOwn(state||{},'kickoff')||state.kickoff||![3,5,10].includes(n))return;
+   !hasCurrentNativeRoster(link)||!Object.hasOwn(state||{},'kickoff')||
+   state.kickoff||![3,5,10].includes(n))return;
   link.send({type:'kickoffCountdown',seconds:n});
   kickoffStatus.textContent='Requesting a native server-controlled kickoff…';
  };

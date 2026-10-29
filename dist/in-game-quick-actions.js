@@ -15,6 +15,9 @@
  toolbar.append(trigger);
  const sheet=document.createElement('section');sheet.id='fbQuickActions';
  sheet.className='in-game-quick-sheet';sheet.hidden=true;
+ // A non-modal action group: keyboard navigation stays within these explicit
+ // controls while human game input is neutral. Outside focus closes it.
+ sheet.setAttribute('role','group');
  sheet.setAttribute('aria-label','In-game quick actions');
  const heading=document.createElement('div');heading.className='in-game-quick-heading';
  const title=document.createElement('strong');title.textContent='MATCH QUICK ACTIONS';
@@ -22,7 +25,7 @@
  dismiss.textContent='✕';dismiss.setAttribute('aria-label','Close match quick actions');
  heading.append(title,dismiss);
  const intro=document.createElement('p');intro.textContent=
-  'Your player stands still while you choose. The match clock keeps running. Nothing is shared, saved or paused unless you choose that tool.';
+  'Your player stands still while you choose. The match clock keeps running. Use Tab to move between actions, Escape to return to the pitch. Nothing is shared, saved or paused unless you choose that tool.';
  const grid=document.createElement('div');grid.className='in-game-quick-grid';
  const feedback=document.createElement('p');feedback.className='in-game-quick-feedback';
  feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
@@ -43,7 +46,10 @@
  }
  function close(focus=false){
   if(!opened)return;
-  opened=false;sheet.hidden=true;window.fuckballQuickActionsOpen=false;
+  opened=false;sheet.hidden=true;
+  // A human may have switched directly into Quick Calls. Preserve its
+  // ownership of the same native keyboard/touch/controller input gate.
+  window.fuckballQuickActionsOpen=window.fuckballQuickCallsOpen===true;
   trigger.setAttribute('aria-expanded','false');
   // Never carry a pressed kick/stick/key across a panel boundary.
   neutralizeHumanSeats();
@@ -90,6 +96,12 @@
   action('⚙ Match menu','Use the original gameplay and team controls',
    ()=>!!document.getElementById('matchMenuButton'),'#matchMenuButton')
  ];
+ function usableControls(){
+  // Deliberately use only known native controls, not every button behind the
+  // panel or selectors that could select off-screen controls from another view.
+  return[dismiss,...actions.map(action=>action.button)]
+   .filter(button=>!button.hidden&&!button.disabled);
+ }
  function render(){
   let count=0;
   for(const item of actions){
@@ -101,6 +113,9 @@
  }
  function open(){
   if(busy()||opened)return;
+  // Panels never stack. This only closes the prior view; it does not send a
+  // chat message or change the authoritative online room.
+  window.fuckballCloseQuickCalls?.(false);
   render();
   // Input must be stopped BEFORE focus is transferred: if someone held a
   // direction/kick while tapping Quick, no movement survives behind the UI.
@@ -119,10 +134,29 @@
  },{passive:true});
  window.addEventListener('blur',()=>close());
  window.addEventListener('keydown',event=>{
-  if(opened&&event.key==='Escape'){
-   event.preventDefault();event.stopImmediatePropagation();close(true);
+  if(!opened)return;
+  if(event.key==='Escape'){
+   event.preventDefault();event.stopImmediatePropagation();close(true);return;
+  }
+  if(event.key!=='Tab')return;
+  const controls=usableControls();
+  if(!controls.length)return;
+  const current=document.activeElement,first=controls[0],last=controls[controls.length-1];
+  // Keep a controller/keyboard player's focus inside the action sheet. An
+  // uncontrolled Tab previously escaped to game HUD buttons while its input
+  // surface was still blocked behind the visible sheet.
+  if(!sheet.contains(current)||event.shiftKey&&current===first||
+     !event.shiftKey&&current===last){
+   event.preventDefault();event.stopPropagation();
+   (event.shiftKey?last:first).focus({preventScroll:true});
   }
  },true);
+ document.addEventListener('focusin',event=>{
+  // Browser/system keyboard shortcuts may programmatically move focus.
+  // Release the input lock instead of leaving a stranded invisible menu.
+  if(opened&&!sheet.contains(event.target)&&event.target!==trigger)close();
+ });
+ window.addEventListener('pagehide',()=>close());
  const watch=new MutationObserver(()=>{
   if(opened&&busy())close();
   trigger.hidden=match.hidden;

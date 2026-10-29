@@ -53,7 +53,18 @@
  returnActions.append(back,dismiss);
  returnCard.append(returnCopy,returnActions);
  document.body.append(returnCard);
- let pausedByFocus=false,dismissedReturn=false;
+ let pausedByFocus=false,dismissedReturn=false,pausedForBlockedControls=false;
+ const chatForm=document.getElementById('chatForm');
+ // A local solo/couch game has no remote referee who may pause on our behalf.
+ // While a real settings dialog or the in-pitch composer owns input, the
+ // original local engine must stop instead of letting bots score unattended.
+ // The normal translucent match menu is deliberately NOT a blocking dialog.
+ function blockedControls(){
+  const dialog=document.querySelector?.('dialog[open]');
+  if(dialog)return 'dialog';
+  if(chatForm&&!chatForm.hidden&&!match.hidden)return 'chat';
+  return '';
+ }
  function localSession(){
   return typeof started!=='undefined'&&started&&
    typeof serverLink!=='undefined'&&!serverLink&&
@@ -66,26 +77,42 @@
   // An internal screen transition can happen programmatically, not only
   // through Home / My Games button clicks. Ensure the local game stops before
   // the user loses control, using the original native pause path.
-  if(local&&match.hidden&&!paused)pauseWhenAway();
+  const blocked=local?blockedControls():'';
+  if(local&&(match.hidden||blocked)&&!paused)pauseWhenAway(blocked);
   // views.js already pauses local sessions when navigating. Adopt that
   // existing pause for the return UI; never resume automatically.
   if(local&&match.hidden&&paused)pausedByFocus=true;
-  if(pausedByFocus&&(!local||!paused))pausedByFocus=false;
+  if(pausedByFocus&&(!local||!paused)){
+   pausedByFocus=false;pausedForBlockedControls=false;
+  }
+  // A manually paused room stays manually paused; neither form nor dialog
+  // reopening acquires ownership or automatically resumes a local match.
+  if(pausedByFocus&&blocked)pausedForBlockedControls=true;
+  if(pausedByFocus&&pausedForBlockedControls){
+   reason.textContent=blocked==='dialog'?
+    'A settings dialog is open. Your local score, players and recording are preserved. Close it before choosing Resume.':
+    blocked==='chat'?
+    'Chat input owns the controls. Your local match is paused until you finish composing and choose Resume.':
+    'Your local match was paused while an overlay owned the controls. Resume when everybody is ready.';
+  }else{
+   reason.textContent='You switched away from the game. The score, players and recording are preserved. Resume only when everyone is ready.';
+  }
   if(!local||!match.hidden)dismissedReturn=false;
-  sheet.hidden=!pausedByFocus||match.hidden||document.hidden;
-  returnCard.hidden=!local||!paused||!match.hidden||document.hidden||dismissedReturn;
+  sheet.hidden=!pausedByFocus||match.hidden||document.hidden||!!blocked;
+  returnCard.hidden=!local||!paused||!match.hidden||document.hidden||!!blocked||dismissedReturn;
  }
- function pauseWhenAway(){
+ function pauseWhenAway(cause=''){
   if(!localSession()||paused)return;
   // Reuse the original local pause implementation and input release.
   // Do not reset or stop the match, discard a recording, or send a network
   // pause to a guest/host/room. The user must explicitly resume later.
   togglePause();
   pausedByFocus=paused===true;
+  pausedForBlockedControls=pausedByFocus&&(cause==='dialog'||cause==='chat');
   paint();
  }
  resume.addEventListener('click',()=>{
-  if(!pausedByFocus||!localSession()||!paused||document.hidden||match.hidden)return;
+  if(!pausedByFocus||!localSession()||!paused||document.hidden||match.hidden||blockedControls())return;
   togglePause();
   paint();
  });
@@ -104,9 +131,14 @@
  });
  dismiss.addEventListener('click',()=>{dismissedReturn=true;paint();});
  if(typeof MutationObserver!=='undefined'){
-  // Handle showView('home'/'games') triggered by scripts as well as tabs.
+  // Handle both scripted view changes and modal/chat focus ownership
+  // immediately. The existing bounded timer is a fallback, not the trigger
+  // for a potentially unopposed 700ms of local simulation.
   const observer=new MutationObserver(paint);
   observer.observe(match,{attributes:true,attributeFilter:['hidden']});
+  for(const dialog of document.querySelectorAll?.('dialog')||[])
+   observer.observe(dialog,{attributes:true,attributeFilter:['open']});
+  if(chatForm)observer.observe(chatForm,{attributes:true,attributeFilter:['hidden']});
  }
  window.addEventListener('blur',pauseWhenAway);
  document.addEventListener('visibilitychange',()=>{
@@ -114,6 +146,9 @@
   paint();
  });
  window.addEventListener('focus',paint);
+ // Keyboard focus can move into an existing chat field without navigation.
+ // Only local games are ever paused; native WebSocket/peer sessions are exempt.
+ document.addEventListener?.('focusin',paint);
  for(const id of ['pauseButton','startButton','resetButton','tabPlay','tabHome','tabReplay']){
   document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(paint));
  }
