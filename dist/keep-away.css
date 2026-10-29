@@ -20,3 +20,35 @@
 .keep-away-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
 .keep-away-setup button:focus-visible,.keep-away-hud button:focus-visible,.keep-away-setup select:focus-visible{outline:3px solid #dcf49a;outline-offset:3px}
 @media(max-width:680px){.keep-away-hud{right:8px;top:78px}.keep-away-fields>*{flex:1 1 140px}}
+
+
+/* Parked native practice: one explicit Return action on Home or My Games. */
+.keep-away-return[hidden]{display:none!important}
+.keep-away-return{position:fixed;z-index:108;bottom:max(12px,env(safe-area-inset-bottom));
+ left:50%;transform:translateX(-50%);width:min(770px,calc(100vw - 24px));
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:13px;padding:14px 16px;border:2px solid #c4e6a6;border-radius:13px;
+ color:#f5fff2;background:#203b36;box-shadow:0 16px 44px #07151bd9}
+.keep-away-return p{font-size:.85rem;line-height:1.5;margin:0;color:#e3f0e6}
+.keep-away-return button{flex-shrink:0;min-height:48px;min-width:165px;
+ border:1px solid #ddffad;background:#ddffad;color:#153125;border-radius:9px;
+ padding:10px 14px;font:inherit;font-weight:800;cursor:pointer}
+.keep-away-return button:focus-visible{outline:3px solid #f3ffcd;outline-offset:3px}
+@media(max-width:600px){.keep-away-return{flex-direction:column;align-items:stretch}
+ .keep-away-return button{width:100%}}
+
+/* Device-only recovery of unreadable saved native Keep Away results.
+   Reset is never available before the user requests the original raw bytes. */
+.keep-away-recovery[hidden]{display:none!important}
+.keep-away-recovery{margin:12px 0 2px;padding:16px 18px;
+ border:2px solid #e1ad8d;border-radius:12px;
+ background:#372d29;color:#fff3e6;display:flex;flex-direction:column;gap:8px}
+.keep-away-recovery strong{letter-spacing:.06em;font-size:.87rem;color:#ffe1b5}
+.keep-away-recovery p{margin:0;line-height:1.52;font-size:.88rem;color:#f5dacb}
+.keep-away-recovery button{align-self:flex-start;min-height:48px;
+ border:1px solid #f3c5a3;border-radius:9px;background:#49372e;color:#fff6e9;
+ padding:11px 15px;font:inherit;font-weight:800;cursor:pointer}
+.keep-away-history-head button:disabled{opacity:.5;cursor:not-allowed}
+.keep-away-recovery button:focus-visible{outline:3px solid #fff0b9;outline-offset:3px}
+@media(max-width:620px){.keep-away-recovery{padding:14px}
+ .keep-away-recovery button{width:100%;align-self:stretch;min-height:48px}}

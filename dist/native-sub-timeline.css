@@ -11,3 +11,18 @@
 .native-sub-timeline-row{display:grid;gap:5px;border:1px solid #5d8174;background:#1e393a;padding:10px;border-radius:8px}
 .native-sub-timeline-row strong{font-size:12px;color:#e7f8bd;overflow-wrap:anywhere}
 .native-sub-timeline-row small{font-size:11px;color:#c3dccb}
+
+/* A native substitution is a server-reported swap, not a reconstructed or
+   signed match result. Keep the consent/status and export controls legible. */
+.native-sub-timeline-controls select,.native-sub-timeline-controls button{min-height:46px;
+ font-size:.85rem}
+.native-sub-timeline-status{padding:10px 12px;border-left:3px solid #bad997;
+ border-radius:3px;background:#213f42;overflow-wrap:anywhere}
+.native-sub-timeline-row small{line-height:1.5}
+.native-sub-timeline-row strong{line-height:1.45}
+@media(max-width:440px){
+ .native-sub-timeline{padding:12px}
+ .native-sub-timeline-controls{display:grid;grid-template-columns:1fr}
+ .native-sub-timeline-controls select,.native-sub-timeline-controls button{width:100%;
+  min-height:48px}
+}

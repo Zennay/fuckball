@@ -93,8 +93,13 @@
   // browser zoom, split-screen or software chrome is active. Account for
   // BOTH thumbs, safe outer edges, and the actual flex padding/gap.
   const viewport=window.visualViewport;
-  const width=Math.max(180,Math.min(window.innerWidth||320,
-   Number.isFinite(viewport?.width)&&viewport.width>0?viewport.width:Infinity));
+  const visualWidth=Math.min(window.innerWidth||320,
+   Number.isFinite(viewport?.width)&&viewport.width>0?viewport.width:Infinity);
+  // Landscape tablets can show the pitch beside a room/sidebar; the real
+  // flex row may be narrower than the whole visual viewport. Fit BOTH
+  // interactive targets to the container, not only the outer window.
+  const rowWidth=controls.getBoundingClientRect?.().width||controls.clientWidth||visualWidth;
+  const width=Math.max(180,Math.min(visualWidth,rowWidth));
   const height=Math.max(120,Math.min(window.innerHeight||480,
    Number.isFinite(viewport?.height)&&viewport.height>0?viewport.height:Infinity));
   const reserved=40; // maximum 2×16px padding + 8px flex gap
@@ -104,6 +109,8 @@
   // Landscape phones have less room above the bottom browser/safe-area bar.
   // Keep BOTH thumbs below the score HUD without changing the native
   // joystick radius, kick strength, or the player's saved preference.
+  // This same effective lift positions the *actual* joystick and kick
+  // hit targets in CSS; it isn't a no-op offset on a static flex row.
   const bottomReserved=64,topReserved=54;
   const heightScale=(height-bottomReserved-topReserved)/88;
   const actualScale=Math.min(config.scale,Math.max(.75,Math.min(
@@ -142,8 +149,9 @@
   field.style.setProperty('--preview-opacity',String(config.opacity/100));
   status.textContent=(config.hand==='left'?'Kick left':'Kick right')+' · '+Math.round(placed.scale*100)+
    '% controls'+(placed.scale<config.scale?' (size fitted to screen)':'')+
-   (placed.lift<config.lift?' · lift fitted to '+placed.lift+'px':'')+
-   ' · '+config.deadzone+' px deadzone · device only';
+   ' · '+placed.edge+'px edge'+(placed.edge<config.edge?' (fitted)':'')+
+   ' · '+placed.lift+'px lift'+(placed.lift<config.lift?' (fitted)':'')+
+   ' · '+config.deadzone+'px deadzone · device only';
   // A layout applied twice by window.resize AND visualViewport.resize must
   // release a held touch at most once. Opacity-only edits are purely visual.
   const geometry=[config.hand,placed.scale,placed.edge,placed.lift,

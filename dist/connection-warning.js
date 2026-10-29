@@ -9,6 +9,8 @@
  panel.setAttribute('aria-label','Match connection quality');
  panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');
  const heading=document.createElement('strong');
+ const provenance=document.createElement('small');
+ provenance.className='connection-warning-context';
  const description=document.createElement('p');
  const metric=document.createElement('span');metric.className='connection-warning-metric';
  metric.setAttribute('aria-hidden','true');
@@ -19,11 +21,20 @@
  const dismiss=document.createElement('button');dismiss.type='button';
  dismiss.textContent='Hide';dismiss.setAttribute('aria-label','Hide this connection warning');
  actions.append(details,dismiss);
- panel.append(heading,description,metric,actions);
+ panel.append(heading,provenance,description,metric,actions);
  const hud=document.getElementById('hudCorner');
  (hud?.parentElement||match).append(panel);
  let current='clear',dismissed=null,session=null,roster=null,rosterFreshAt=0;
- let playStartedAt=null;
+ let playStartedAt=null,observedRound=null,observedRunning=null;
+ function resetEvidence(key,round,running){
+  session=key;observedRound=round;observedRunning=running;
+  clear();
+  // A previously issued latency Map must never be given a *new* timestamp
+  // merely because a rematch started on the same WebSocket.
+  roster=serverLink?.room&&serverLink.serverPings instanceof Map?
+   serverLink.serverPings:null;
+  rosterFreshAt=0;playStartedAt=null;
+ }
  function clear(){
   panel.hidden=true;current='clear';dismissed=null;
  }
@@ -47,7 +58,7 @@
   const sampleMap=native&&serverLink.serverPings instanceof Map?
    serverLink.serverPings:null;
   if(sampleMap!==roster){roster=sampleMap;rosterFreshAt=roster?now:0;}
-  const fresh=!!roster&&now-rosterFreshAt<=6000;
+  const fresh=!!roster&&rosterFreshAt>0&&now-rosterFreshAt<=6000;
   const nativeSample=fresh?roster.get(networkPlayerId):null;
   const fromServer=native&&healthy(nativeSample);
   // Server challenge RTT and peer-host transport RTT are different sensors.
@@ -72,22 +83,39 @@
   // the old warning had no timestamp and stayed permanently silent.
   // Start timing from observed active play, not from stale previous rounds;
   // paused lobbies and hidden/background tabs restart this grace window.
-  const last=running&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
-   Math.max(net.lastSnapshot,playStartedAt):playStartedAt;
+  const freshFrame=running&&Number.isFinite(net.lastSnapshot)&&
+   net.lastSnapshot>0&&playStartedAt!==null&&
+   net.lastSnapshot>=playStartedAt&&net.lastSnapshot<=now;
+  const last=running?(freshFrame?net.lastSnapshot:playStartedAt):null;
   const recent=running&&last!==null?Math.max(0,now-last):null;
-  const neverReceived=running&&!(Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0);
+  // A snapshot from the *previous* server round does not prove that even one
+  // frame of the new round arrived. Label missing updates truthfully.
+  const neverReceived=running&&!freshFrame;
   return {ms,source,jitter,recent,neverReceived};
  };
  function refresh(){
   const native=!!serverLink?.room;
   if(document.hidden||match.hidden||replay||(!native&&!peerConnected)){
-   clear();session=null;roster=null;rosterFreshAt=0;playStartedAt=null;return;
+   clear();session=null;observedRound=null;observedRunning=null;
+   roster=null;rosterFreshAt=0;playStartedAt=null;return;
   }
   // A room code can be reused by a new socket/player. Warnings dismissed in
   // the previous session must not hide a real new-session warning.
   const key=native?serverLink:
    (typeof peer!=='undefined'&&peer?peer:channel);
-  if(key!==session){session=key;clear();roster=null;rosterFreshAt=0;playStartedAt=null;}
+  const round=native&&Number.isSafeInteger(serverLink.roomState?.round)&&
+   serverLink.roomState.round>=0?serverLink.roomState.round:null;
+  const running=native?serverLink.roomState?.started===true&&
+   serverLink.roomState?.paused!==true:started&&!paused;
+  // A new server round can start on exactly the same socket between two
+  // 1.1-second polls, with identical team/score labels. Reset warnings and
+  // dismissed severities by authoritative round and active-play transition.
+  if(key!==session||round!==observedRound||running!==observedRunning)
+   resetEvidence(key,round,running);
+  provenance.textContent=native?(round===null?
+   'CURRENT NATIVE ROOM · ROUND NOT YET VERIFIED':
+   'CURRENT NATIVE ROOM · SERVER ROUND '+round):
+   'CURRENT DIRECT-PEER SESSION';
   const {ms,source,jitter,recent,neverReceived}=readings();
   panel.dataset.transport=native?'native':'peer';
   let severity='clear';
@@ -132,6 +160,11 @@
  // requests, timing changes, server writes, or input mutations.
  const interval=setInterval(refresh,1100);
  document.addEventListener('visibilitychange',refresh);
+ // The local native engine issues an actual kickoff event, not a timer guess.
+ // Never let warnings or a previous frame timestamp survive a new local game.
+ window.addEventListener('fuckball:local-match-kickoff',()=>{
+  clear();playStartedAt=null;observedRunning=null;rosterFreshAt=0;
+ });
  window.addEventListener('online',refresh);
  window.addEventListener('offline',refresh);
  refresh();

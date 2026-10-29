@@ -47,3 +47,21 @@
  .frame-meter-evidence-actions{grid-template-columns:1fr}
  .frame-meter-evidence-actions button:first-child{grid-column:auto}
 }
+
+/* Evidence scope is deliberately not a room/account identifier. */
+.frame-meter-source{margin:6px 0 0;color:#cce6d0;font-size:.84rem;
+ line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:560px){.frame-meter-source{font-size:.78rem}}
+
+/* Player-visible distinction between reliable, preliminary and frozen FPS.
+   Readings are local browser render data, never a synthetic device benchmark. */
+.frame-meter-confidence{display:inline-flex;align-items:center;
+ max-width:100%;margin-top:7px;padding:6px 9px;box-sizing:border-box;
+ border-radius:7px;border:1px solid #98b5a0;color:#e4ffdc;
+ font-size:.72rem;font-weight:800;line-height:1.4;letter-spacing:.025em;
+ overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.frame-meter-confidence[data-state="preliminary"]{border-color:#c5b27d;color:#ffe8b8}
+.frame-meter-confidence[data-state="stale"]{border-color:#f0afa3;
+ background:#542e2c;color:#ffe4de}
+.frame-meter-confidence[data-state="measured"]{border-color:#b5e6a6;color:#dcffc8}
+@media(max-width:560px){.frame-meter-confidence{font-size:.68rem;white-space:normal}}

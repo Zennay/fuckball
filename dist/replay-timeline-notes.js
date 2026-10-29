@@ -11,7 +11,11 @@
  const status=node('p','','replay-notes-status'),list=node('ol','','replay-notes-list');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
  panel.append(help,toolbar,status,list);root.append(title,panel);controls.append(root);
- let id='',notes=[],selectedReplay=null,busy=false,generation=0;
+ let id='',notes=[],selectedReplay=null,busy=false,generation=0,editor=null;
+ function closeSourceEditor(){
+  const currentEditor=editor;editor=null;
+  if(currentEditor?.open)currentEditor.close();
+ }
  const frame=()=>Math.max(0,Math.round(replay.getTime()*60/1000));
  const format=n=>Math.floor(n/3600)+':'+String(Math.floor(n%3600/60)).padStart(2,'0');
  const playing=()=>!controls.hidden&&!document.getElementById('matchView').hidden&&typeof replay!=='undefined'&&!!replay&&
@@ -66,7 +70,9 @@
  }
  function openEditor(existing){
   if(!current()||busy)return;
+  closeSourceEditor();
   const replayId=id,at=existing?.frameNo??frame(),dialog=node('dialog','','replay-notes-dialog'),form=node('form','','replay-notes-form');
+  editor=dialog;
   const heading=node('h2',existing?'Edit your note':'New coaching note'),message=node('p','Recorded moment '+format(at)+' · kept only in My Games.');
   const label=node('label','Moment title'),name=node('input');name.type='text';name.maxLength=60;name.required=true;name.value=existing?.label||'Moment at '+format(at);label.append(name);
   const typeLabel=node('label','Training focus'),type=node('select');
@@ -76,10 +82,15 @@
   const actions=node('div','','replay-notes-actions'),cancel=node('button','Cancel'),submit=node('button','Save note');
   cancel.type='button';cancel.onclick=()=>dialog.close();submit.type='submit';submit.className='primary';actions.append(cancel,submit);
   form.append(heading,message,label,typeLabel,bodyLabel,actions);dialog.append(form);document.body.append(dialog);
-  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  dialog.addEventListener('close',()=>{
+   if(editor===dialog)editor=null;
+   dialog.remove();
+  },{once:true});
   form.onsubmit=async event=>{
    event.preventDefault();
-   if(!current()||id!==replayId){message.textContent='Replay changed; reopen it to save a note.';return;}
+   if(!current()||id!==replayId||editor!==dialog){
+    message.textContent='Replay changed; reopen it to save a note.';return;
+   }
    const candidate=[...notes.filter(n=>n.frameNo!==at),{frameNo:at,label:name.value,category:type.value,text:body.value}];
    try{ReplayLibrary.normalizeNotes(candidate);submit.disabled=true;
     if(await save(candidate))dialog.close();else {message.textContent='Save failed; your changes are still in this form.';submit.disabled=false;}
@@ -90,6 +101,9 @@
  add.onclick=()=>{if(!current()||busy)return;const found=notes.find(n=>n.frameNo===frame());if(found)openEditor(found);else if(notes.length<12)openEditor(null);};
  async function refresh(){
   const serial=++generation,replayId=activeLocalReplayId;
+  // Loading an unrelated saved recording or a raw HBR2 invalidates the
+  // previous note editor. Never leave a stale document-wide modal open.
+  if(editor&&(id!==replayId||selectedReplay!==replay))closeSourceEditor();
   id='';notes=[];selectedReplay=null;root.hidden=true;
   if(!playing())return;
   const playback=replay;
@@ -100,6 +114,8 @@
   }catch(error){if(serial===generation){root.hidden=false;status.textContent='Cannot read coaching notes: '+(error.message||'Browser storage unavailable');}}
  }
  window.refreshReplayNotes=refresh;
- const close=closeReplay;closeReplay=function(){generation++;root.hidden=true;id='';notes=[];close();};
+ const close=closeReplay;closeReplay=function(){
+  closeSourceEditor();generation++;root.hidden=true;id='';notes=[];close();
+ };
  root.hidden=true;
 })();
