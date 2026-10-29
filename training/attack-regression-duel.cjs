@@ -119,8 +119,15 @@ function game(makeRoom, candidate, incumbent, mapName, candidateSide, seed, fram
       if (!player || ![1, 2].includes(player.team.id)) return;
       const team = player.team.id;
       const m = stats[team];
-      if (pendingPass) finishPass('unresolved');
-      if (keeperRelease) finishKeeper(null);
+      if (pendingPass) {
+        const confirmedContact = tick - pendingPass.tick >= 2 && player.id !== pendingPass.kicker;
+        finishPass(confirmedContact ?
+          (player.team.id === pendingPass.team ? 'received' : 'intercepted') : 'unresolved', player);
+      }
+      if (keeperRelease) {
+        const confirmedContact = tick - keeperRelease.tick >= 2 && player.id !== keeperRelease.kicker;
+        finishKeeper(confirmedContact ? player : null);
+      }
       activeShot = null;
       m.kicks++;
       const intent = plans[team] && plans[team][player.id];
