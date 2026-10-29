@@ -82,13 +82,27 @@
   return online||watch;
  };
  const roomKey=()=>serverLink?.room||'local-watch';
+ // An old native state is not proof that the match is still broadcasting.
+ // Paused/completed rooms retain their explicitly labelled last score, but
+ // actively playing rooms must have a recent authoritative server frame.
+ const waitingForLiveFrame=()=>{
+  if(!serverLink?.room||serverLink.roomState?.started!==true||
+     serverLink.roomState?.paused===true)return false;
+  const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  const age=performance.now()-at;
+  return !Number.isFinite(at)||at<=0||age<0||age>3500;
+ };
  const liveSnapshot=()=>{
-  if(!viewAvailable())return null;
+  if(!viewAvailable()||waitingForLiveFrame())return null;
   const g=room?.gameState;
   if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
    !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
    g.redScore<0||g.blueScore<0||g.redScore>500||g.blueScore>500||
    g.timeElapsed<0||g.timeElapsed>12*3600)return null;
+  // An unstarted local Watch Bots room displays an initial 0:0 placeholder.
+  // That is not an observed score and must not become a saved broadcast PNG.
+  if(!serverLink&&typeof started!=='undefined'&&!started&&g.timeElapsed===0)
+   return null;
   return {red:g.redScore,blue:g.blueScore,time:Math.floor(g.timeElapsed)};
  };
  const clockText=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
@@ -103,19 +117,28 @@
   const ref=room,key=roomKey();
   if(ref!==lastRef||key!==lastRoom){lastRef=ref;lastRoom=key;last=null;}
   const snapshot=liveSnapshot();
-  if(!snapshot){last=null;overlay.hidden=true;save.disabled=true;return;}
+  if(!snapshot){
+   last=null;overlay.hidden=true;save.disabled=true;
+   toggle.textContent=waitingForLiveFrame()?'◌ WAITING FOR LIVE FRAMES':'◉ HUD ON';
+   return;
+  }
+  toggle.textContent='◉ HUD ON';
   last=snapshot;
   red.textContent=String(snapshot.red);blue.textContent=String(snapshot.blue);
   clock.textContent=clockText(snapshot.time);
   // A finished round still has a genuine local score, but labeling the
   // waiting room LIVE is misleading. Never infer the official final result.
   const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
-  const inProgress=online?serverLink.roomState?.started===true:
-   typeof started!=='undefined'&&started===true;
+  const inProgress=online?serverLink.roomState?.started===true&&serverLink.roomState?.paused!==true:
+   typeof started!=='undefined'&&started===true&&typeof paused!=='undefined'&&paused!==true;
+  const pausedLocal=!online&&typeof started!=='undefined'&&started===true&&
+   typeof paused!=='undefined'&&paused===true;
   stamp.textContent=inProgress?'LIVE LOCAL VIEW · UNVERIFIED':
+   pausedLocal?'LOCAL WATCH PAUSED · LAST OBSERVED SCORE · UNVERIFIED':
+   online&&serverLink.roomState?.started===true?'MATCH PAUSED · LAST LOCAL SCORE':
    'BETWEEN ROUNDS · LAST LOCAL SCORE · UNVERIFIED';
   foot.textContent=inProgress?'Current native match snapshot · no verified match result':
-   'No current kickoff · displayed score is the last locally observed snapshot';
+   'No current live action · displayed score is the last locally observed snapshot';
   overlay.classList.toggle('between-rounds',!inProgress);
   overlay.classList.toggle('compact',settings.mode==='compact');
   overlay.hidden=false;save.disabled=false;

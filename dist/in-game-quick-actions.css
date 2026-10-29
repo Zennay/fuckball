@@ -30,3 +30,23 @@
 }
 @media(prefers-reduced-transparency:reduce){.in-game-quick-sheet{background:#142b35;backdrop-filter:none}}
 @media print{.in-game-quick-sheet,.in-game-quick-trigger{display:none!important}}
+
+/* An open shortcut panel temporarily owns human controls, not the match clock.
+   Keep its state unmistakable for keyboard/controller and touch users. */
+.in-game-quick-trigger[aria-expanded="true"]{
+ background:#e0ffa7;color:#18352c;border-color:#e0ffa7;
+ box-shadow:0 0 0 2px #152d28,0 0 0 4px #d0f49a;
+}
+.in-game-quick-sheet .in-game-quick-feedback{
+ border-top:1px solid #72968a;padding-top:10px;font-weight:750;
+}
+
+/* The Quick Actions surface owns keyboard/controller input while open.
+   Make that focus state distinct on every viewport without shifting pitch. */
+.in-game-quick-sheet:focus-within{border-color:#d8ffad;box-shadow:0 14px 45px #000b,0 0 0 2px #9ecd8c}
+.in-game-quick-sheet{overscroll-behavior:contain}
+.in-game-quick-grid button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:620px){
+ .in-game-quick-heading button{min-height:44px;min-width:44px}
+ .in-game-quick-action{min-height:48px}
+}

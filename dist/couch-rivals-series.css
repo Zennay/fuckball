@@ -3,7 +3,7 @@
 .couch-series>p{max-width:760px;font-size:14px;color:#c3dacf;line-height:1.5}
 .couch-series-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:14px 0}
 .couch-series-controls label{display:grid;gap:5px;font-size:12px;font-weight:700}
-.couch-series-controls select,.couch-series-controls button{min-height:42px;box-sizing:border-box}
+.couch-series-controls select,.couch-series-controls button{min-height:48px;box-sizing:border-box}
 .couch-series-controls select{padding:8px;border-radius:8px;background:#12272d;color:#e8f6ec;border:1px solid #80a890}
 .couch-series-controls button{border-radius:8px}
 .couch-series-status{min-height:24px;margin:10px 0;font-size:13px}
@@ -17,7 +17,7 @@
 @media(max-width:640px){.couch-series{padding:14px}.couch-series-controls>*{flex:1 1 100%}.couch-series-hud{right:8px;bottom:88px;max-width:46vw}}
 
 .couch-series-hud strong{display:block}
-.couch-series-hud .couch-series-hud-action{display:block;margin:9px 0 0 auto;padding:9px 13px;min-height:40px;pointer-events:auto;cursor:pointer;background:#d4f0aa;color:#1c3231;border:0;border-radius:7px;font-weight:800}
+.couch-series-hud .couch-series-hud-action{display:block;margin:9px 0 0 auto;padding:10px 13px;min-height:48px;pointer-events:auto;cursor:pointer;background:#d4f0aa;color:#1c3231;border:0;border-radius:7px;font-weight:800}
 .couch-series-hud .couch-series-hud-action:focus-visible{outline:3px solid #fff;outline-offset:2px}
 
 .couch-series-history-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #436059;padding:4px 0}

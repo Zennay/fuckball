@@ -14,3 +14,35 @@
 .native-stadium-ballot-status{color:#d4f3ad!important;font-weight:700;min-height:20px}
 .native-stadium-ballot small{display:block;color:#acc4ba;line-height:1.6}
 .native-stadium-ballot button:focus-visible,.native-stadium-ballot input:focus-visible{outline:3px solid #d2f59a;outline-offset:3px}
+
+/* A real pre-kickoff human stadium vote stays actionable while a teammate
+   reads Home / My Games; gameplay inputs and native host rights are untouched. */
+.native-stadium-dock[hidden]{display:none!important}
+.native-stadium-dock{position:fixed;z-index:113;left:50%;transform:translateX(-50%);
+ bottom:max(12px,env(safe-area-inset-bottom));width:min(920px,calc(100vw - 24px));
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:18px;padding:16px 19px;border:2px solid #cde3ac;border-radius:15px;
+ color:#edf8ec;background:#17302f;box-shadow:0 15px 40px #04121ac9}
+.native-stadium-dock-copy{min-width:0}
+.native-stadium-dock-copy strong{display:block;color:#e3f8ad;font-size:.81rem;letter-spacing:.075em}
+.native-stadium-dock-status{color:#d3e3da;font-size:.84rem;line-height:1.45;
+ margin:7px 0 0;overflow-wrap:anywhere}
+.native-stadium-dock-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0}
+.native-stadium-dock-actions select,.native-stadium-dock-actions button{
+ min-height:48px;box-sizing:border-box;padding:10px 13px;font:inherit;
+ font-size:.82rem;font-weight:800;color:#eff9eb;border:1px solid #94bba7;
+ border-radius:9px;background:#24493d}
+.native-stadium-dock-actions select{max-width:220px}
+.native-stadium-dock-actions option{color:#102a25;background:#f0ffec}
+.native-stadium-dock-actions button{cursor:pointer}
+.native-stadium-dock-actions button.primary{background:#ddffa0;color:#143021;border-color:#ddffa0}
+.native-stadium-dock-actions button[hidden]{display:none}
+.native-stadium-dock-actions button:disabled{opacity:.55;cursor:not-allowed}
+.native-stadium-dock-actions button:focus-visible,.native-stadium-dock-actions select:focus-visible{
+ outline:3px solid #f3ffb4;outline-offset:3px}
+@media(max-width:800px){
+ .native-stadium-dock{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+ .native-stadium-dock-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .native-stadium-dock-actions select{max-width:none;grid-column:1/-1}
+}
+@media(max-width:380px){.native-stadium-dock-actions{grid-template-columns:1fr}}

@@ -10,3 +10,31 @@
 .match-audio-guide-caption{position:absolute;z-index:26;left:50%;top:82px;transform:translateX(-50%);background:#163132ed;border:2px solid #c4eb9f;color:#f7ffe9;border-radius:12px;padding:11px 16px;max-width:min(90vw,420px);text-align:center;line-height:1.4;font-size:16px;font-weight:850;pointer-events:none}
 .match-audio-guide-caption[hidden]{display:none}
 @media(max-width:580px){.match-audio-guide-caption{top:115px;width:max-content;max-width:85vw;font-size:14px}}
+
+/* An explicitly requested local speech preview, not a fake game event. */
+.match-audio-guide-preview{display:inline-flex;align-items:center;
+ justify-content:center;min-height:48px;margin:8px 0;padding:9px 15px;
+ border:1px solid #bbdb99;border-radius:9px;background:#254c45;
+ color:#f1ffe4;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.match-audio-guide-preview:disabled{opacity:.55;cursor:not-allowed}
+.match-audio-guide-preview:focus-visible{outline:3px solid #d6faa7;outline-offset:3px}
+
+/* The player sees which actual match may produce spoken/visual score cues. */
+.match-audio-guide-provenance{margin:9px 0 0;padding:9px 11px;
+ border:1px solid #8ab3a2;border-radius:8px;background:#153037;
+ color:#e4f7e9;font-size:12px;line-height:1.5;
+ overflow-wrap:anywhere}
+@media(max-width:580px){.match-audio-guide-provenance{padding:10px;font-size:12px}}
+
+/* Only an explicit Settings-pane preview speaks; its pressed state is visible
+   and the Stop action remains a large keyboard/touch target on mobile. */
+.match-audio-guide-preview[aria-pressed="true"]{
+ border-color:#ffca8c;background:#543d30;color:#fff4e4;
+ box-shadow:0 0 0 1px #ffca8c55 inset;
+}
+.match-audio-guide-preview[aria-pressed="true"]:focus-visible{
+ outline:3px solid #ffdfac;outline-offset:3px;
+}
+@media(max-width:580px){
+ .match-audio-guide-preview{width:100%;min-height:48px}
+}

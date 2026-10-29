@@ -19,3 +19,14 @@
 .native-activity-calendar :is(select,button):focus-visible{outline:3px solid #e0ffa1;outline-offset:2px}
 @media(max-width:620px){.native-activity-calendar{padding:11px}.native-calendar-grid{gap:3px}.native-calendar-day{min-height:58px;padding:4px 2px}.native-calendar-day-count{font-size:8px}.native-calendar-empty{min-height:50px}.native-calendar-toolbar button{flex:1}}
 @media(prefers-reduced-motion:reduce){.native-activity-calendar *{animation:none!important;transition:none!important}}
+/* Calendar and private downloads use the same account-scoped result filters. */
+.native-calendar-export-count{margin:0;padding:9px 11px;border-radius:9px;
+ background:#29473e;border:1px solid #6b9980;color:#e6f4e3;
+ font-size:12px;line-height:1.5}
+.native-calendar-toolbar button.native-calendar-export:disabled{opacity:.55;
+ cursor:not-allowed;border-color:#586a64;color:#b8c8bc}
+.native-calendar-day.has-match:disabled{background:#263d3b;
+ border-color:#506b67;color:#aebfb3;opacity:.72;cursor:not-allowed}
+.native-calendar-day.has-match:disabled .native-calendar-day-count{font-weight:600}
+@media(max-width:620px){.native-calendar-export-count{padding:10px}
+ .native-calendar-day-count{font-variant-numeric:tabular-nums}}

@@ -33,3 +33,27 @@
   max-width:min(230px,calc(100vw - 18px));min-height:48px;font-size:12px}
  .self-bench-actions button{min-height:46px}
 }
+
+/* Native pause requests remain actionable when the host browses Home/My Games.
+   This panel routes explicit actions to original, server-authorized controls. */
+.self-bench-pause-prompt[hidden]{display:none!important}
+.self-bench-pause-prompt{box-sizing:border-box;width:min(370px,calc(100vw - 20px));
+ padding:14px;max-width:none;display:flex;flex-direction:column;align-items:stretch;
+ gap:11px;cursor:default}
+.self-bench-pause-prompt p{margin:0;color:#213d2d;font-weight:800;font-size:13px;
+ line-height:1.45;overflow-wrap:anywhere}
+.self-bench-pause-prompt-actions{display:flex;gap:8px;flex-wrap:wrap}
+.self-bench-pause-prompt-actions button{font:inherit;min-height:48px;font-weight:800;
+ font-size:12px;border:1px solid #547b5f;background:#f7ffe5;color:#1b382a;
+ border-radius:9px;padding:10px 13px;cursor:pointer;flex:1 1 132px}
+.self-bench-pause-prompt-actions .primary{background:#286044;color:#f4ffe5;
+ border-color:#286044}
+.self-bench-pause-prompt-actions button:disabled{opacity:.52;cursor:not-allowed}
+.self-bench-pause-prompt-actions button:focus-visible{outline:3px solid #f3ff86;outline-offset:3px}
+@media(max-width:540px){.self-bench-pause-prompt{
+ width:min(370px,calc(100vw - 18px));right:9px;bottom:max(96px,calc(env(safe-area-inset-bottom) + 88px));
+ max-width:none;padding:13px}
+ .self-bench-pause-prompt-actions{display:grid;grid-template-columns:1fr 1fr}
+ .self-bench-pause-prompt-actions button{min-width:0;font-size:12px}
+}
+@media(max-width:360px){.self-bench-pause-prompt-actions{grid-template-columns:1fr}}

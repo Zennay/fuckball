@@ -19,9 +19,15 @@
  const landscapeLabel=el('label',undefined,'mobile-match-session-landscape');
  const landscape=el('input');landscape.type='checkbox';
  landscapeLabel.append(landscape,document.createTextNode('Try landscape orientation in fullscreen (where allowed)'));
+ // Show a truthful capability choice before a player opts in. Unsupported
+ // browsers retain normal device rotation without a fake lock promise.
+ if(typeof screen==='undefined'||typeof screen.orientation?.lock!=='function'){
+  landscape.disabled=true;
+  landscapeLabel.title='This browser does not support fullscreen landscape orientation lock.';
+ }
  const status=el('p','Off · normal device sleep rules apply','mobile-match-session-status');
  status.setAttribute('role','status');status.setAttribute('aria-live','polite');
- const hint=el('p','Wake protection automatically releases if you leave the pitch or hide the tab. It never keeps an idle server game awake.','mobile-match-session-hint');
+ const hint=el('p','Wake protection releases whenever you leave active play, spectate, or hide the tab. Leaving the pitch also exits its fullscreen display and releases any landscape lock.','mobile-match-session-hint');
  section.append(actions,landscapeLabel,status,hint);
  pane.append(section);
  const quick=el('button','☀ AWAKE OFF','hud-button mobile-match-session-quick');quick.type='button';
@@ -48,25 +54,24 @@
    return{active:false,reason:'close the open dialog'};
   if(document.getElementById('mode')?.value==='watch')
    return{active:false,reason:'switch from watching to playing'};
-  // Never keep an online spectator device awake just because the server
-  // match continues. Native server admission and team state stay authoritative.
+  // A server's "started" signal is not a user's playing permission.
+  // Enforce the actual playing seat for native online guests, direct-peer
+  // hosts/guests and offline/local players alike. Spectators must not hold
+  // a mobile device awake simply because somebody else keeps playing.
   const online=typeof serverLink!=='undefined'&&!!serverLink?.room;
-  // The local started bit can lag a native room transition. Require the
-  // authoritative server round to be running and unpaused as well.
+  const direct=typeof peerConnected!=='undefined'&&peerConnected===true;
   if(online&&!serverLink.roomState?.started)
    return{active:false,reason:'wait for the online room to start'};
   if(online&&serverLink.roomState?.paused)
    return{active:false,reason:'resume the paused online round'};
-  const guest=typeof peerConnected!=='undefined'&&peerConnected&&
-   typeof peerRole!=='undefined'&&peerRole==='guest';
-  if(online||guest){
-   const mine=typeof networkPlayerId!=='undefined'?networkPlayerId:1;
-   const players=typeof room!=='undefined'?room?.state?.players:null;
-   if(!Array.isArray(players))return{active:false,reason:'wait for the active player roster'};
-   const player=players.find(p=>p.id===mine);
-   if(!player||![1,2].includes(player.team?.id))
-    return{active:false,reason:'enter an active playing team'};
-  }
+  const remotePlayer=online||(direct&&typeof peerRole!=='undefined'&&peerRole==='guest');
+  const mine=remotePlayer?
+   (typeof networkPlayerId!=='undefined'?networkPlayerId:1):1;
+  const players=typeof room!=='undefined'?room?.state?.players:null;
+  if(!Array.isArray(players))return{active:false,reason:'wait for the active player roster'};
+  const player=players.find(p=>p.id===mine);
+  if(!player||![1,2].includes(player.team?.id))
+   return{active:false,reason:'enter an active playing team'};
   return{active:true,reason:'playing on the visible pitch'};
  }
  const active=()=>powerEligibility().active;
@@ -130,52 +135,123 @@
   if(active())await acquire();
  }
  wake.onclick=toggleWake;quick.onclick=toggleWake;
- async function unlockOrientation(){
-  if(!orientationLocked)return;
+ // Orientation requests are asynchronous, and a phone can leave fullscreen
+ // before a browser finally resolves lock('landscape'). Serialize requests and
+ // invalidate stale completions so they cannot trap an already-exited match.
+ let orientationVersion=0,orientationWork=Promise.resolve();
+ const wantsLandscape=()=>landscape.checked&&!match.hidden&&!document.hidden&&
+  (typeof document.hasFocus!=='function'||document.hasFocus())&&
+  document.fullscreenElement===match;
+ function unlockOrientation(){
+  ++orientationVersion;
   orientationLocked=false;
+  // Always attempt this, even while lock() is still pending. The stale
+  // completion will also unlock before any newer request runs.
   try{screen.orientation?.unlock?.();}catch{}
  }
  async function applyLandscape(){
-  if(!landscape.checked||!document.fullscreenElement)return;
+  if(!wantsLandscape()){
+   if(landscape.checked)
+    render('Enter fullscreen on the visible pitch to request landscape. Device orientation remains unchanged.');
+   return;
+  }
+  const version=++orientationVersion;
+  orientationWork=orientationWork.catch(()=>{}).then(async()=>{
+   if(version!==orientationVersion||!wantsLandscape())return;
+   try{
+    if(typeof screen.orientation?.lock!=='function')throw Error('unsupported');
+    await screen.orientation.lock('landscape');
+    if(version!==orientationVersion||!wantsLandscape()){
+     try{screen.orientation?.unlock?.();}catch{}
+     orientationLocked=false;
+     return;
+    }
+    orientationLocked=true;
+    render('Fullscreen landscape active. Leaving the pitch returns orientation to device control.');
+   }catch{
+    if(version!==orientationVersion)return;
+    orientationLocked=false;
+    render('Fullscreen is active, but this browser did not allow landscape lock.');
+   }
+  });
+  await orientationWork;
+ }
+ // A fullscreen match element can be hidden by Home/My Games navigation,
+ // room loss, or a native session reset without a fullscreenchange event.
+ // Never trap a player in an invisible fullscreen surface on a phone.
+ let hiddenFullscreenExitAttempted=false;
+ function restoreDisplayOnLeavingPitch(){
+  const hiddenFullscreen=match.hidden&&document.fullscreenElement===match;
+  if(!hiddenFullscreen){
+   hiddenFullscreenExitAttempted=false;
+   return;
+  }
+  if(hiddenFullscreenExitAttempted)return;
+  hiddenFullscreenExitAttempted=true;
+  // A hidden pitch is no longer entitled to keep orientation locked even
+  // while exitFullscreen() is pending or rejected by the browser.
+  unlockOrientation();
   try{
-   if(typeof screen.orientation?.lock!=='function')throw Error('unsupported');
-   await screen.orientation.lock('landscape');
-   orientationLocked=true;render('Fullscreen landscape requested on this device.');
+   if(typeof document.exitFullscreen!=='function')throw Error('unsupported');
+   Promise.resolve(document.exitFullscreen())
+    .catch(()=>render('Leaving the match could not exit fullscreen. Press Esc or your device back button.'));
   }catch{
-   orientationLocked=false;render('Fullscreen is active, but this browser did not allow landscape lock.');
+   render('Leaving the match could not exit fullscreen. Press Esc or your device back button.');
   }
  }
  fullscreen.onclick=async()=>{
   try{
    if(document.fullscreenElement){
+    unlockOrientation();
     await document.exitFullscreen();
-    await unlockOrientation();
     render();return;
    }
+   if(match.hidden)throw Error('Pitch is hidden');
    if(typeof match.requestFullscreen!=='function')throw Error('unsupported');
    await match.requestFullscreen();
-   await applyLandscape();render();
+   if(wantsLandscape())await applyLandscape();
+   render();
   }catch{
    render('Fullscreen was declined by this browser or device.');
   }
  };
  landscape.addEventListener('change',async()=>{
-  if(!landscape.checked){await unlockOrientation();render('Orientation returned to device control.');}
+  if(!landscape.checked){unlockOrientation();render('Orientation returned to device control.');}
   else await applyLandscape();
  });
  document.addEventListener('fullscreenchange',()=>{
-  if(!document.fullscreenElement)unlockOrientation();
+  // Fullscreen can move to a different DOM element without becoming null.
+  // Only the original visible pitch owns this opt-in landscape lock.
+  if(document.fullscreenElement!==match)unlockOrientation();
+  restoreDisplayOnLeavingPitch();
   render();
  });
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){release();return;}
+  if(document.hidden){
+   unlockOrientation();
+   release();
+   return;
+  }
+  if(wantsLandscape()&&!orientationLocked)applyLandscape();
   if(wanted&&active())acquire();else render();
  });
- window.addEventListener('pagehide',()=>{wanted=false;release();unlockOrientation();});
+ // On desktop/PWA windows, losing focus does not always hide the document.
+ // Relinquish the display-only orientation lock even in that case; reapply
+ // only when the exact same pitch regains focus and the user remains opted in.
+ window.addEventListener('blur',unlockOrientation);
+ window.addEventListener('focus',()=>{
+  if(wantsLandscape()&&!orientationLocked)applyLandscape();
+ });
+ window.addEventListener('pagehide',()=>{
+  wanted=false;
+  unlockOrientation();
+  release();
+ });
  // Keep power behaviour aligned with the actual foreground match, not a menu
  // setting or an unverified claim that a match is still in progress.
  let lastActive=false,lastReason='';
  function syncMatchPower(){
+  restoreDisplayOnLeavingPitch();
   const state=powerEligibility(),now=state.active;
   if(!now&&(sentinel||pending))release();
   else if(now&&wanted&&!sentinel&&!pending)acquire();

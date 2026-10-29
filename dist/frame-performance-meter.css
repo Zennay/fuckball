@@ -20,3 +20,48 @@
 .frame-meter-panel button:disabled{opacity:.48;cursor:not-allowed}
 .frame-meter-notice{min-height:15px}
 @media(max-width:560px){.frame-meter-panel{right:5px;top:65px;width:calc(100vw - 10px);padding:12px}.frame-meter-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.frame-meter-tile strong{font-size:19px}}
+
+/* Private real-FPS evidence: review it from My Games without keeping a game
+   rendering in the background or pretending unobserved time was measured. */
+.frame-meter-gaps{margin:7px 0 2px;font-size:11px;line-height:1.5;color:#d6dcb0}
+.frame-meter-evidence[hidden]{display:none!important}
+.frame-meter-evidence{box-sizing:border-box;margin:0 0 17px;padding:15px 18px;
+ display:flex;align-items:center;justify-content:space-between;gap:15px;
+ border:1px solid #8bb4a5;border-radius:13px;background:#193632;
+ color:#edfff0}
+.frame-meter-evidence-copy{min-width:0}
+.frame-meter-evidence-copy strong{font-size:.78rem;letter-spacing:.075em;color:#d8f6ac}
+.frame-meter-evidence-copy p{margin:6px 0 0;font-size:.81rem;
+ color:#d4e4da;line-height:1.48;max-width:70ch;overflow-wrap:anywhere}
+.frame-meter-evidence-actions{display:flex;flex-shrink:0;flex-wrap:wrap;gap:8px}
+.frame-meter-evidence-actions button{min-height:46px;padding:10px 12px;
+ border:1px solid #a4c0b0;background:#264d43;color:#f1ffed;
+ border-radius:9px;font-size:.82rem;font-weight:800;cursor:pointer}
+.frame-meter-evidence-actions button:focus-visible{outline:3px solid #e6ffae;outline-offset:2px}
+@media(max-width:780px){
+ .frame-meter-evidence{flex-direction:column;align-items:stretch;padding:13px}
+ .frame-meter-evidence-actions{display:grid;grid-template-columns:1fr 1fr}
+ .frame-meter-evidence-actions button:first-child{grid-column:1/-1}
+}
+@media(max-width:370px){
+ .frame-meter-evidence-actions{grid-template-columns:1fr}
+ .frame-meter-evidence-actions button:first-child{grid-column:auto}
+}
+
+/* Evidence scope is deliberately not a room/account identifier. */
+.frame-meter-source{margin:6px 0 0;color:#cce6d0;font-size:.84rem;
+ line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:560px){.frame-meter-source{font-size:.78rem}}
+
+/* Player-visible distinction between reliable, preliminary and frozen FPS.
+   Readings are local browser render data, never a synthetic device benchmark. */
+.frame-meter-confidence{display:inline-flex;align-items:center;
+ max-width:100%;margin-top:7px;padding:6px 9px;box-sizing:border-box;
+ border-radius:7px;border:1px solid #98b5a0;color:#e4ffdc;
+ font-size:.72rem;font-weight:800;line-height:1.4;letter-spacing:.025em;
+ overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.frame-meter-confidence[data-state="preliminary"]{border-color:#c5b27d;color:#ffe8b8}
+.frame-meter-confidence[data-state="stale"]{border-color:#f0afa3;
+ background:#542e2c;color:#ffe4de}
+.frame-meter-confidence[data-state="measured"]{border-color:#b5e6a6;color:#dcffc8}
+@media(max-width:560px){.frame-meter-confidence{font-size:.68rem;white-space:normal}}

@@ -39,28 +39,93 @@
  sendFeedback.setAttribute('aria-live','polite');
  sendFeedback.hidden=true;
  chatForm?.append(sendFeedback);
- let onlineDraftRoom=null,privateDraft=false;
- function preserveDraftAudience(){
+ // One unsent draft remains scoped to its original room and audience.
+ // Data stays on this device in memory; only the native handler sends.
+ let onlineDraftRoom=null,privateDraft=false,localDraft=false;
+ let submittingNativeChat=false,closingNativeChat=false;
+ const draftControls=document.createElement('div');
+ draftControls.className='native-chat-draft-actions';draftControls.hidden=true;
+ const draftInfo=document.createElement('p');
+ draftInfo.className='native-chat-draft-info';
+ draftInfo.setAttribute('role','status');
+ const discardDraft=document.createElement('button');
+ discardDraft.type='button';discardDraft.textContent='Discard unsent draft';
+ discardDraft.setAttribute('aria-label','Discard unsent chat draft on this device');
+ draftControls.append(draftInfo,discardDraft);
+ chatForm?.append(draftControls);
+ function clearDraftScope(){onlineDraftRoom=null;privateDraft=false;localDraft=false;}
+ function updateDraftControls(){
+  const hasText=!!chatInput?.value.trim();
+  draftControls.hidden=!hasText;
+  if(!hasText){clearDraftScope();return;}
   const link=typeof serverLink!=='undefined'?serverLink:null;
-  if(!onlineDraftRoom&&link?.room)onlineDraftRoom=link.room;
+  const differentRoom=!!onlineDraftRoom&&link?.room!==onlineDraftRoom;
+  const differentAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const wrongOrigin=localDraft&&!!link?.room;
+  const scope=privateDraft?'private TEAM draft':
+   localDraft?'local-game draft':'online room draft';
+  draftInfo.textContent=differentRoom||differentAudience||wrongOrigin?
+   'Unsent '+scope+' preserved. It cannot be sent to another room or audience. Discard it to start fresh.':
+   'Unsent '+scope+' · preserved if you close chat. Not sent.';
+ }
+ function preserveDraftAudience(){
+  if(!chatInput?.value.trim())return;
+  const link=typeof serverLink!=='undefined'?serverLink:null;
+  if(!onlineDraftRoom&&!localDraft){
+   if(link?.room)onlineDraftRoom=link.room;
+   else localDraft=true;
+  }
   // Never let a previously team-only draft silently turn public if the
   // native channel picker resets while a player reconnects or changes teams.
   if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
    privateDraft=true;
  }
  chatInput?.addEventListener('focus',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  preserveDraftAudience();sendFeedback.hidden=true;updateDraftControls();
  });
  chatInput?.addEventListener('input',()=>{
-  preserveDraftAudience();sendFeedback.hidden=true;
+  if(!chatInput.value.trim())clearDraftScope();
+  else preserveDraftAudience();
+  sendFeedback.hidden=true;updateDraftControls();
  });
  chatForm?.addEventListener('change',()=>{
   if(chatInput?.value.trim())preserveDraftAudience();
+  updateDraftControls();
  });
- chatForm?.addEventListener('focusout',event=>{
-  if(chatForm.hidden&&!chatForm.contains(event.relatedTarget)){
-   onlineDraftRoom=null;privateDraft=false;
+ discardDraft.addEventListener('click',()=>{
+  if(chatInput)chatInput.value='';
+  clearDraftScope();sendFeedback.hidden=true;
+  updateDraftControls();chatInput?.focus({preventScroll:true});
+ });
+ const nativeCloseChat=typeof closeChat==='function'?closeChat:null;
+ if(nativeCloseChat)closeChat=function(...args){
+  const text=chatInput?.value||'';
+  const preserve=!submittingNativeChat&&!!text.trim();
+  if(preserve)preserveDraftAudience();
+  closingNativeChat=true;
+  let result;
+  try{result=nativeCloseChat.apply(this,args);}
+  finally{closingNativeChat=false;}
+  if(preserve&&chatInput)chatInput.value=text;
+  else if(!preserve)clearDraftScope();
+  updateDraftControls();
+  return result;
+ };
+ const nativeSubmit=chatForm?.onsubmit;
+ if(typeof nativeSubmit==='function')chatForm.onsubmit=function(event){
+  submittingNativeChat=true;
+  try{return nativeSubmit.call(this,event);}
+  finally{
+   submittingNativeChat=false;
+   if(!chatInput?.value.trim())clearDraftScope();
+   updateDraftControls();
   }
+ };
+ window.addEventListener('fuckball:native-session-state',updateDraftControls);
+ chatForm?.addEventListener('focusout',event=>{
+  // Focus loss during Close is not permission to make a team draft public.
+  if(!closingNativeChat&&chatForm.hidden&&!chatForm.contains(event.relatedTarget)
+     &&!chatInput?.value.trim())clearDraftScope();
  });
  chatForm?.addEventListener('submit',event=>{
   const link=typeof serverLink!=='undefined'?serverLink:null;
@@ -69,12 +134,14 @@
   const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
   const blocked=link&&(!link.room||link.ws?.readyState!==1)||
     !!onlineDraftRoom&&!link?.room;
+  const wrongOrigin=localDraft&&!!link?.room;
   const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!blocked&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
   event.preventDefault();event.stopImmediatePropagation();
   sendFeedback.textContent=wrongRoom?
-   'This draft was written for another room. Close chat and start a new message before sending to these players.':
+   'This draft belongs to another room. Discard it explicitly before sending to these players.':
+   wrongOrigin?'This local-game draft cannot be sent to an online room. Discard it to start fresh.':
    blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
    wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
    'The room host muted your chat. Your unsent draft is still here.';
@@ -98,17 +165,24 @@
  chatDockHead.textContent='ROOM CHAT · THIS SESSION';
  const chatDockHelp=document.createElement('p');
  chatDockHelp.className='native-room-chat-inbox-help';
- chatDockHelp.textContent='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox.';
+ const normalInboxHelp='Messages visible to you from this room. Kept only in memory, never stored or sent by this inbox. Before replying, check the original ROOM/TEAM recipient.';
+ chatDockHelp.textContent=normalInboxHelp;
+ chatDockHelp.setAttribute('role','status');
+ chatDockHelp.setAttribute('aria-live','polite');
  const chatDockMessages=document.createElement('ol');
  chatDockMessages.className='native-room-chat-inbox-messages';
  chatDockMessages.setAttribute('aria-label','Recent messages from this connected room');
  const chatDockActions=document.createElement('div');
  chatDockActions.className='native-room-chat-inbox-actions';
+ const chatDockReply=document.createElement('button');
+ chatDockReply.type='button';
+ chatDockReply.textContent='↩ Reply in match';
+ chatDockReply.setAttribute('aria-label','Reply to the current room using the existing chat input');
  const chatDockView=document.createElement('button');
  chatDockView.type='button';chatDockView.textContent='↗ View match chat';
  const chatDockClose=document.createElement('button');
  chatDockClose.type='button';chatDockClose.textContent='Close';
- chatDockActions.append(chatDockView,chatDockClose);
+ chatDockActions.append(chatDockReply,chatDockView,chatDockClose);
  chatDockPanel.append(chatDockHead,chatDockHelp,chatDockMessages,chatDockActions);
  chatDock.append(chatDockSummary,chatDockPanel);document.body.append(chatDock);
  function renderInboxMessages(){
@@ -129,13 +203,26 @@
   }
   chatDockMessages.scrollTop=chatDockMessages.scrollHeight;
  }
+ function pitchChatReadable(){
+  // Opening a translucent match menu or another dialog does not mean the
+  // human actually saw recent messages behind that overlay. Keep the unread
+  // count until the genuine pitch chat is visible again.
+  return document.getElementById('matchView')?.hidden===false&&
+   document.hidden!==true&&
+   document.getElementById('pauseMenu')?.hidden!==false&&
+   !document.querySelector('dialog[open]');
+ }
  function updateRoomChatInbox(){
   const connected=currentRoom();
+  // Transient transport errors must not leave an obsolete reconnect warning
+  // on a restored native room or an entirely new human room.
+  if(serverLink?.ws?.readyState===1&&chatDockHelp.textContent!==normalInboxHelp)
+   chatDockHelp.textContent=normalInboxHelp;
   const match=document.getElementById('matchView');
   const onPitch=match?.hidden===false&&document.hidden!==true;
   // Authoritative ready/rematch/recovery decisions take priority over chat.
   const urgent=document.querySelector('.quick-ready-dock:not([hidden]),.native-rematch-dock:not([hidden]),.native-room-recovery:not([hidden])');
-  if(onPitch){unread=0;expanded=false;}
+  if(pitchChatReadable()){unread=0;expanded=false;}
   chatDock.hidden=!connected||onPitch||!!urgent;
   chatDockPanel.hidden=!expanded||chatDock.hidden;
   chatDockSummary.textContent=unread?
@@ -153,17 +240,41 @@
  chatDockClose.addEventListener('click',()=>{
   expanded=false;updateRoomChatInbox();chatDockSummary.focus?.();
  });
- chatDockView.addEventListener('click',()=>{
-  if(!currentRoom())return;
-  const go=document.getElementById('tabPlay');
-  go?.click();
-  if(document.getElementById('matchView')?.hidden===false){
-   unread=0;expanded=false;
+ // Both actions go back to the *original* pitch UI, never duplicate a
+ // WebSocket chat sender or silently change the current ROOM/TEAM audience.
+ function navigateToNativeChat(reply){
+  const roomAtClick=currentRoom();
+  if(!roomAtClick||chatDock.hidden)return;
+  const input=document.getElementById('chatInput');
+  const form=document.getElementById('chatForm');
+  // A transient socket closure may retain the room ID until cleanup.
+  // Do not open a composer that would discard a real player's message.
+  if(reply&&(!input||!form||serverLink?.ws?.readyState!==1)){
+   chatDockHelp.textContent='The room is reconnecting. Your messages were not sent; return after the connection is restored.';
+   return;
+  }
+  const savedDraft=reply?input.value:null;
+  document.getElementById('tabPlay')?.click();
+  if(currentRoom()!==roomAtClick||document.getElementById('matchView')?.hidden!==false)return;
+  // An unstarted online lobby opens the native match menu automatically.
+  // Hide that overlay so the original chat log/composer receives focus.
+  if(typeof closeMatchMenu==='function'&&
+     typeof menuOpen!=='undefined'&&menuOpen)closeMatchMenu();
+  if(reply){
+   if(typeof openChat!=='function')return;
+   openChat();
+   // Navigating through native views may close an existing composer; never
+   // overwrite or lose the player's unsent local draft.
+   if(savedDraft!==null&&input.value!==savedDraft)input.value=savedDraft;
+   input.focus?.({preventScroll:true});
+  }else{
    const original=document.getElementById('chatLog');
    if(original){original.tabIndex=-1;original.focus?.({preventScroll:true});original.scrollTop=original.scrollHeight;}
-   updateRoomChatInbox();
   }
- });
+  unread=0;expanded=false;updateRoomChatInbox();
+ }
+ chatDockReply.addEventListener('click',()=>navigateToNativeChat(true));
+ chatDockView.addEventListener('click',()=>navigateToNativeChat(false));
  const inboxTicker=setInterval(updateRoomChatInbox,1400);
  inboxTicker?.unref?.();
  for(const id of ['tabHome','tabPlay','tabReplay'])
@@ -287,7 +398,7 @@
    recentChat.push({from:message.from,channel,name:message.name,text:message.text});
    if(recentChat.length>20)recentChat.shift();
    const match=document.getElementById('matchView');
-   if(message.from!==networkPlayerId&&(match?.hidden!==false||document.hidden===true)&&!expanded)
+   if(message.from!==networkPlayerId&&!pitchChatReadable()&&!expanded)
     unread=Math.min(99,unread+1);
    if(expanded)renderInboxMessages();
    updateRoomChatInbox();

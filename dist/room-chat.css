@@ -116,3 +116,32 @@
 .native-chat-send-feedback{margin:7px 0 0;padding:9px 12px;
  border:1px solid #e7b29c;border-radius:8px;background:#342a25;
  color:#ffebd9;font-size:.84rem;line-height:1.35;max-width:65ch}
+
+/* Real human off-pitch chat: one-click reply keeps the original moderated
+   composer and sender. The two secondary actions remain visibly distinct. */
+.native-room-chat-inbox-actions button:first-child{flex:1 1 100%;background:#dbff9c;
+ color:#163329;border-color:#dbff9c}
+.native-room-chat-inbox-actions button:not(:first-child){flex:1 1 120px}
+@media(max-width:480px){
+ .native-room-chat-inbox-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+ .native-room-chat-inbox-actions button{width:100%;min-width:0}
+ .native-room-chat-inbox-actions button:first-child{grid-column:1/-1}
+}
+@media(max-width:335px){
+ .native-room-chat-inbox-actions{grid-template-columns:1fr}
+ .native-room-chat-inbox-actions button:first-child{grid-column:auto}
+}
+
+/* Local-only unsent draft: clear ownership is a deliberate human action. */
+.native-chat-draft-actions[hidden]{display:none!important}
+.native-chat-draft-actions{display:flex;align-items:center;justify-content:space-between;
+ gap:11px;flex-wrap:wrap;margin:8px 0 0;padding:10px 12px;
+ border:1px solid #9fc7b6;border-radius:10px;background:#18362d}
+.native-chat-draft-info{flex:1 1 200px;margin:0;min-width:0;line-height:1.4;
+ font-size:.82rem;color:#d9f3e4;overflow-wrap:anywhere}
+.native-chat-draft-actions button{font:inherit;font-size:.82rem;font-weight:750;
+ min-height:44px;padding:9px 12px;border-radius:8px;cursor:pointer;
+ border:1px solid #e5ae9e;color:#ffe3da;background:#402e2b}
+.native-chat-draft-actions button:focus-visible{outline:3px solid #d9ff99;outline-offset:3px}
+@media(max-width:500px){.native-chat-draft-actions{flex-direction:column;align-items:stretch}
+ .native-chat-draft-actions button{min-height:48px}}

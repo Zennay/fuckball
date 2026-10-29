@@ -28,6 +28,7 @@
   if(frame){
    replay.setSpeed(0);toggle.textContent='▶';
   }
+  suspendLoopOnManualSeek(next);
   replay.setTime(next);
   show((frame?'Frame step':'Seek')+' · '+Math.floor(next/1000)+'s / '+Math.floor(total/1000)+'s');
  };
@@ -61,6 +62,7 @@
     [...markers].reverse().find(x=>x.frameNo<current-15);
    if(!marker){show(direction>0?'No later recorded goals.':'No earlier recorded goals.');return;}
    const timestamp=Math.min(replay.length(),Math.max(0,marker.frameNo-120)*1000/60);
+   suspendLoopOnManualSeek(timestamp);
    replay.setTime(timestamp);
    show((marker.teamId===1?'Red':'Blue')+' goal marker · around '+Math.floor(marker.frameNo/60)+'s · local replay, unverified');
   }catch(error){show('Could not read local goal markers: '+(error.message||'Storage unavailable'));}
@@ -84,14 +86,34 @@
  const loopStart=document.createElement('button');loopStart.type='button';loopStart.textContent='A · Mark start';
  const loopEnd=document.createElement('button');loopEnd.type='button';loopEnd.textContent='B · Mark end';
  const loopToggle=document.createElement('button');loopToggle.type='button';loopToggle.textContent='▶ Repeat A–B';
+ const loopJumpA=document.createElement('button');loopJumpA.type='button';loopJumpA.textContent='↤ Review A';
+ const loopJumpB=document.createElement('button');loopJumpB.type='button';loopJumpB.textContent='Review B ↦';
  const loopClear=document.createElement('button');loopClear.type='button';loopClear.textContent='Clear loop';
  const loopState=document.createElement('p');loopState.className='replay-navigation-loop-state';
  loopState.setAttribute('role','status');loopState.setAttribute('aria-live','polite');
  let loopReplay=null,loopA=null,loopB=null,loopEnabled=false;
+ // Manual seeks outside the chosen study excerpt must not be silently
+ // redirected to A by the next playback tick. Preserve marks for reuse.
+ function suspendLoopOnManualSeek(target){
+  if(!loopEnabled||loopReplay!==replay||loopA===null||loopB===null)return;
+  if(!Number.isFinite(target)||target<loopA||target>loopB){
+   loopEnabled=false;
+   renderLoop('Manual navigation left A–B; repeat stopped, marks preserved');
+  }
+ }
+ // The slider belongs to the native replay player; listen to its original
+ // explicit user change, without replacing its event handler.
+ document.getElementById('replaySeek')?.addEventListener('change',()=>{
+  if(!available())return;
+  suspendLoopOnManualSeek(replay.length()*
+   Number(document.getElementById('replaySeek').value)/1000);
+ });
  const clock=n=>n===null?'not set':(n/1000).toFixed(2)+'s';
  function renderLoop(message){
   const valid=loopA!==null&&loopB!==null&&loopB-loopA>=250;
   loopToggle.disabled=!valid;loopToggle.textContent=loopEnabled?'Ⅱ Stop repeating':'▶ Repeat A–B';
+  loopJumpA.disabled=loopA===null;
+  loopJumpB.disabled=loopB===null;
   loopToggle.setAttribute('aria-pressed',String(loopEnabled));
   loopState.textContent=(message?message+' · ':'')+'A '+clock(loopA)+' / B '+clock(loopB)+
    (valid?' · '+((loopB-loopA)/1000).toFixed(2)+'s clip':' · Set A and B at least 0.25 seconds apart')+
@@ -132,19 +154,36 @@
   }
   renderLoop(loopEnabled?'Loop enabled':'Loop paused');
  };
+ // Review the actual frame at either marked boundary without triggering the
+ // running loop to immediately drag a deliberate B seek back to A.
+ function inspectMarker(which){
+  if(!available())return;
+  if(loopReplay!==replay)return resetLoop('Recording changed');
+  const target=which==='A'?loopA:loopB;
+  if(target===null||!Number.isFinite(target))return;
+  loopEnabled=false;
+  replay.setSpeed(0);toggle.textContent='▶';
+  replay.setTime(Math.min(replay.length(),Math.max(0,target)));
+  renderLoop('Reviewing '+which+' at '+clock(target)+' · paused for inspection');
+ }
+ loopJumpA.onclick=()=>inspectMarker('A');
+ loopJumpB.onclick=()=>inspectMarker('B');
  loopClear.onclick=()=>resetLoop('Loop disabled');
- loopActions.append(loopStart,loopEnd,loopToggle,loopClear);
+ loopActions.append(loopStart,loopEnd,loopToggle,loopJumpA,loopJumpB,loopClear);
  loop.append(loopTitle,loopIntro,loopActions,loopState);
  renderLoop();
  function maintainLoop(){
-  if(!available()){
+  // Switching Home/My Games hides the pitch but does not close the replay:
+  // views.js parks the same recording and pauses its playback. Keep the A/B
+  // marks bound to that instance until it really closes or is replaced.
+  if(typeof replay==='undefined'||!replay){
    if(loopReplay!==null)resetLoop('Replay closed');
    return;
   }
   if(loopReplay!==replay)return resetLoop('New replay selected');
-  if(!loopEnabled)return;
+  if(!available()||!loopEnabled||loopB===null||loopA===null)return;
   const time=replay.getTime();
-  if(Number.isFinite(time)&&replay.getSpeed()!==0&&time>=loopB&&loopB!==null)
+  if(Number.isFinite(time)&&replay.getSpeed()!==0&&time>=loopB)
    replay.setTime(loopA);
  }
  window.setInterval(()=>{if(!document.hidden)maintainLoop();},120);

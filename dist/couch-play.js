@@ -181,6 +181,50 @@
  const activeHint=node('span','P1 WASD + F · P2 arrows + / or Enter');
  const liveRuleHint=node('span');liveRuleHint.hidden=true;
  hud.append(activeHint,liveRuleHint);pitch.append(hud);
+ // Unlike Blue P3/P4, a two-person P2 controller loss previously offered
+ // recovery only in Home settings. Expose explicit rebind or keyboard
+ // fallback anywhere while the same local match is running. Never switch a
+ // Gamepad API port or resume the match without the human's click.
+ const p2Recovery=node('aside',null,'couch-p2-recovery');
+ p2Recovery.hidden=true;p2Recovery.setAttribute('role','region');
+ p2Recovery.setAttribute('aria-label','Local player two controller disconnected');
+ const p2RecoveryTitle=node('strong','PLAYER 2 · CONTROLLER LOST');
+ const p2RecoveryMessage=node('p','Movement and kick remain neutral until you explicitly bind a controller. Arrow keys and Enter still work.');
+ p2RecoveryMessage.setAttribute('role','status');
+ p2RecoveryMessage.setAttribute('aria-live','polite');
+ const p2RecoveryLabel=node('label','Available controller for Player 2');
+ const p2RecoveryPort=node('select');
+ p2RecoveryPort.setAttribute('aria-label','Replacement standard controller for local Player 2');
+ p2RecoveryLabel.append(p2RecoveryPort);
+ const p2RecoveryActions=node('div',null,'couch-p2-recovery-actions');
+ const p2RecoveryBind=node('button','↻ Bind selected P2 controller');
+ p2RecoveryBind.type='button';p2RecoveryBind.className='primary';
+ const p2RecoveryKeyboard=node('button','Use P2 keyboard');
+ p2RecoveryKeyboard.type='button';
+ const p2RecoveryPitch=node('button','↗ Return to pitch');
+ p2RecoveryPitch.type='button';
+ p2RecoveryActions.append(p2RecoveryBind,p2RecoveryKeyboard,p2RecoveryPitch);
+ p2Recovery.append(p2RecoveryTitle,p2RecoveryMessage,p2RecoveryLabel,p2RecoveryActions);
+ document.body.append(p2Recovery);
+ // Fullscreen only paints children of its active host. The main game
+ // portal (PR #554) predates this P2 prompt, so retain the *same* controls
+ // within an eligible fullscreen pitch/match container, then restore them
+ // to document.body on exit. No re-created controls or synthetic input.
+ function syncP2RecoveryFullscreen(){
+  const active=document.fullscreenElement;
+  const pitchHost=document.getElementById('pitch');
+  const matchHost=document.getElementById('matchView');
+  const target=active&&(active===pitchHost||active===matchHost)?
+   active:document.body;
+  if(!target||p2Recovery.parentElement===target)return;
+  const focus=document.activeElement;
+  const wasInside=focus===p2Recovery||p2Recovery.contains?.(focus);
+  target.append(p2Recovery);
+  if(wasInside&&focus?.isConnected&&document.activeElement!==focus)
+   focus.focus?.({preventScroll:true});
+ }
+ document.addEventListener('fullscreenchange',syncP2RecoveryFullscreen);
+ let acknowledgedP2Loss=null,p2RecoveryPorts=null;
  let pendingKickoffRules=null,kickoffObserved=false;
  // Only the native kickoff event confirms which rules the new room captured.
  // Any other local launcher clears this receipt, so it never mislabels a match.
@@ -188,6 +232,7 @@
   seatTwoSession=true;
   const pad=candidate();
   seatTwoLock=pad?{index:pad.index,id:pad.id}:null;
+  acknowledgedP2Loss=null;p2RecoveryPorts=null;
   if(pendingKickoffRules)kickoffObserved=true;
   liveRuleHint.textContent=pendingKickoffRules||'';
   liveRuleHint.hidden=!pendingKickoffRules;
@@ -210,7 +255,12 @@
  }
  function playerOneIndex(){
   const index=window.fuckballGamepad?.sourceIndex?.();
-  return Number.isSafeInteger(index)?index:null;
+  if(Number.isSafeInteger(index))return index;
+  // Once P1 loses its original controller, sourceIndex() becomes null.
+  // Keep that original reserved port unavailable to P2 until P1 explicitly
+  // rebinds or the current local match ends.
+  const lock=window.fuckballGamepad?.sourceStatus?.();
+  return lock?.locked&&Number.isSafeInteger(lock.port)?lock.port:null;
  }
  function candidate(){
   if(['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value))return null;
@@ -225,9 +275,12 @@
  // Reuse of the same Gamepad API port is not proof that the same human returned.
  function selected(){
   if(!seatTwoSession||!activeCouchSession())return candidate();
-  if(!seatTwoLock)return null;
+  if(!seatTwoLock||seatTwoLock.lost)return null;
   const connected=pads().find(p=>p.index===seatTwoLock.index&&p.id===seatTwoLock.id);
-  return connected&&connected.index!==playerOneIndex()?connected:null;
+  // Controller IDs identify models, not people or physical devices. Once
+  // disconnected, never restore P2's kick automatically on a reused port.
+  if(!connected){seatTwoLock.lost=true;return null;}
+  return connected.index!==playerOneIndex()?connected:null;
  }
  function bindSeatTwo(){
   const pad=candidate();
@@ -236,6 +289,7 @@
    return false;
   }
   seatTwoLock={index:pad.index,id:pad.id};
+  acknowledgedP2Loss=null;p2RecoveryPorts=null;
   seatTwoSession=true;lastInput='';
   if(isLocal()&&typeof refreshInput==='function')refreshInput();
   status.textContent='Player 2 bound to controller port '+(pad.index+1)+
@@ -243,6 +297,58 @@
   return true;
  }
  const reservedPort=()=>seatTwoSession&&activeCouchSession()?seatTwoLock?.index??null:null;
+ function updateP2Recovery(){
+  syncP2RecoveryFullscreen();
+  if(!activeCouchSession()||['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value)){
+   p2Recovery.hidden=true;acknowledgedP2Loss=null;p2RecoveryPorts=null;return;
+  }
+  // A hidden-tab browser may omit Gamepad API snapshots. The native focus
+  // boundary already neutralizes input; wait for a visible snapshot.
+  if(!document.hidden&&seatTwoSession&&seatTwoLock&&!seatTwoLock.lost)
+   selected();
+  const lost=seatTwoSession&&seatTwoLock?.lost===true;
+  const p1Notice=document.querySelector('.gamepad-seat-recovery');
+  p2Recovery.hidden=!lost||acknowledgedP2Loss===seatTwoLock||
+   document.hidden||p1Notice?.hidden===false;
+  if(p2Recovery.hidden)return;
+  p2RecoveryPitch.hidden=document.getElementById('matchView')?.hidden===false;
+  const free=pads().filter(p=>p.index!==playerOneIndex());
+  const signature=free.map(p=>p.index+':'+p.id).join('|');
+  if(signature!==p2RecoveryPorts){
+   p2RecoveryPorts=signature;
+   const before=p2RecoveryPort.value;
+   p2RecoveryPort.replaceChildren(new Option('Choose an available P2 controller',''));
+   for(const pad of free)
+    p2RecoveryPort.add(new Option('Port '+(pad.index+1)+' · '+String(pad.id||'Controller').slice(0,48),String(pad.index)));
+   p2RecoveryPort.value=free.some(p=>String(p.index)===before)?before:'';
+  }
+  p2RecoveryBind.disabled=!free.length||!p2RecoveryPort.value;
+ }
+ p2RecoveryBind.addEventListener('click',()=>{
+  if(p2Recovery.hidden||!activeCouchSession()||!seatTwoLock?.lost)return;
+  const port=Number(p2RecoveryPort.value);
+  if(!p2RecoveryPort.value||!Number.isSafeInteger(port)||port===playerOneIndex()){
+   p2RecoveryMessage.textContent='Choose a free controller port not reserved for Player 1.';return;
+  }
+  chosen=String(port);source.value=chosen;availableSignature='';
+  if(!bindSeatTwo()){
+   p2RecoveryMessage.textContent='Controller no longer available. Select a connected free port and retry explicitly.';
+  }else{
+   p2RecoveryMessage.textContent='Player 2 controller rebound. Existing match settings were not changed.';
+  }
+  updateP2Recovery();paint();
+ });
+ p2RecoveryKeyboard.addEventListener('click',()=>{
+  if(p2Recovery.hidden||!seatTwoLock?.lost)return;
+  acknowledgedP2Loss=seatTwoLock;
+  status.textContent='Player 2 continues using arrow keys and Enter. Lost gamepad remains neutral.';
+  updateP2Recovery();
+ });
+ p2RecoveryPitch.addEventListener('click',()=>{
+  if(p2Recovery.hidden)return;
+  document.getElementById('tabPlay')?.click();
+  updateP2Recovery();
+ });
  const held=(pad,index)=>pad.buttons?.[index]?.pressed===true||
   (Number(pad.buttons?.[index]?.value)||0)>.6;
  const axis=n=>Number.isFinite(n)&&Math.abs(n)>=.30?Math.sign(n):0;
@@ -282,6 +388,7 @@
   }
   paintBlueSources();
   paintBlueRecovery();
+  updateP2Recovery();
   bindP2.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
   // Four-human rivals exclusively reserve both gamepads for Blue.
   source.disabled=['couchRivals','couchRivals3v3','couchRivals4v4'].includes(document.getElementById('mode')?.value);
@@ -414,10 +521,15 @@
   requestAnimationFrame(frame);
  }
  window.fuckballCouchPad=Object.freeze({read,reservedPort});
- window.addEventListener('gamepadconnected',()=>{availableSignature='';});
- window.addEventListener('gamepaddisconnected',()=>{
+ window.addEventListener('gamepadconnected',()=>{availableSignature='';p2RecoveryPorts=null;updateP2Recovery();});
+ window.addEventListener('gamepaddisconnected',event=>{
+  const index=event?.gamepad?.index;
+  if(activeCouchSession()&&seatTwoSession&&seatTwoLock&&
+     Number.isSafeInteger(index)&&seatTwoLock.index===index)
+   seatTwoLock.lost=true;
   lastInput='0:0:false';availableSignature='';
   if(typeof refreshInput==='function'&&isLocal())refreshInput();
+  updateP2Recovery();
  });
  window.addEventListener('blur',()=>{lastInput='0:0:false';});
  requestAnimationFrame(frame);

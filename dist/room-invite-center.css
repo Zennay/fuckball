@@ -45,3 +45,36 @@
 .room-invite-qr .room-invite-qr-download{justify-self:center;width:min(100%,360px);
  background:#d7f5aa;color:#16332a;border-color:#e5ffc0;font-weight:850}
 .room-invite-qr .room-invite-qr-download:disabled{opacity:.55;cursor:wait}
+
+/* Entry point for real, server-confirmed Custom Room invites from Home/My Games.
+   Inline placement avoids interfering with in-game touch/keyboard controls. */
+.room-invite-view-card[hidden]{display:none!important}
+.room-invite-view-card{box-sizing:border-box;display:grid;gap:10px;
+ margin:0 0 18px;padding:17px 20px;border-radius:15px;
+ border:1px solid #85bba0;background:linear-gradient(110deg,#183832,#233b38);
+ color:#efffe9;box-shadow:0 12px 30px #081e1b55}
+.room-invite-view-heading{display:flex;justify-content:space-between;
+ align-items:center;gap:12px;flex-wrap:wrap}
+.room-invite-view-summary strong{display:block;font-size:.83rem;letter-spacing:.07em;
+ color:#d6ffa1}
+.room-invite-view-summary p{font-size:.85rem;line-height:1.4;color:#ccded5;margin:5px 0 0}
+.room-invite-view-code{font:800 1.05rem ui-monospace,monospace;letter-spacing:.11em;
+ border:1px solid #a6d2b7;border-radius:8px;padding:9px 11px;color:#f4ffdb}
+.room-invite-view-access{font-size:.78rem;line-height:1.5;color:#d1e7d8;margin:0}
+.room-invite-view-card input{box-sizing:border-box;width:100%;max-width:100%;
+ border-radius:8px;border:1px solid #86a99d;background:#112c2a;color:#f4fff0;
+ padding:10px 12px;font:12px ui-monospace,monospace;text-overflow:ellipsis}
+.room-invite-view-actions{display:flex;flex-wrap:wrap;gap:9px}
+.room-invite-view-actions button{min-height:46px;flex:1 1 120px;cursor:pointer;
+ border-radius:9px;padding:10px 14px;border:1px solid #94bba8;
+ color:#f4ffea;background:#294b42;font:800 .84rem system-ui,sans-serif}
+.room-invite-view-actions button:first-child{background:#d4ff99;color:#193626;
+ border-color:#d4ff99}
+.room-invite-view-actions button:focus-visible,.room-invite-view-card input:focus-visible{
+ outline:3px solid #eaffad;outline-offset:3px}
+.room-invite-view-message{font-size:.78rem;line-height:1.4;min-height:1em;
+ color:#eaffb5;margin:0}
+@media(max-width:520px){.room-invite-view-card{padding:14px;gap:11px}
+ .room-invite-view-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .room-invite-view-actions button{min-width:0}}
+@media(max-width:340px){.room-invite-view-actions{grid-template-columns:1fr}}

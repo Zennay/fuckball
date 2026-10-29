@@ -136,20 +136,37 @@
  function navigate(command){
   const tab=command.view==='games'?'tabReplay':command.view==='play'?'tabPlay':'tabHome';
   document.getElementById(tab)?.click();
-  if(command.click){
-   const control=document.getElementById(command.click);
-   if(control&&!control.disabled){control.click();return;}
-   return;
-  }
+  // Both Home's progressive disclosure and Launchpad's own Focus mode hide
+  // real tool sections. A search result must reveal them *before* scrolling,
+  // focusing or forwarding an explicitly requested original button click.
   if(command.view==='home')setFocusMode(false,false);
-  if(!command.selector)return;
-  const target=document.querySelector(command.selector);if(!target)return;
+  const target=command.click?document.getElementById(command.click):
+   command.selector?document.querySelector(command.selector):null;
+  function unavailable(){
+   const message=command.label+' is not available in the current game view.';
+   if(typeof notify==='function')notify(message);
+   else status.textContent=message;
+  }
+  if((command.click||command.selector)&&!target){unavailable();return;}
+  if(target&&command.view==='home'&&
+     window.FuckballHomeFocus?.revealFeature?.(target)===false){
+   unavailable();return;
+  }
+  if(command.click){
+   if(target.disabled||target.closest?.('[hidden]')){unavailable();return;}
+   target.click();return;
+  }
+  if(!target)return;
+  if(target.closest?.('[hidden]')){unavailable();return;}
   const details=target.matches('details')?target:target.querySelector('details');
   if(details)details.open=true;
   const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   target.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
-  const summary=details?.querySelector('summary');
-  if(summary){summary.setAttribute('tabindex','0');summary.focus({preventScroll:true});}
+  const focus=details?.querySelector('summary')||target.querySelector('h2,h3');
+  if(focus){
+   if(!focus.hasAttribute('tabindex'))focus.tabIndex=-1;
+   focus.focus({preventScroll:true});
+  }
  }
  function activate(command){
   recent=[command.id,...recent.filter(x=>x!==command.id)].slice(0,6);
