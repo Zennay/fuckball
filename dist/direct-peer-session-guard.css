@@ -9,3 +9,28 @@
 .direct-peer-pending-actions button:focus-visible{outline:3px solid #f5ffc0;outline-offset:3px}
 @media(max-width:740px){.direct-peer-pending{flex-direction:column;align-items:stretch;padding:14px}.direct-peer-pending-actions{display:grid;grid-template-columns:1fr 1fr}}
 @media(max-width:400px){.direct-peer-pending-actions{grid-template-columns:1fr}}
+
+/* WebRTC failure is not an active human game. Keep fresh-code retry explicit. */
+.direct-peer-pending-actions{flex-wrap:wrap;justify-content:flex-end}
+.direct-peer-pending-actions button[hidden]{display:none!important}
+.direct-peer-pending-actions button:disabled{opacity:.55;cursor:not-allowed}
+.direct-peer-pending-actions button:nth-child(3){border-color:#f1cf8e;color:#fff2cc}
+.direct-peer-pending:has(.direct-peer-pending-actions button:nth-child(3):not([hidden])){
+ border-color:#f1cf8e;background:#383027
+}
+@media(max-width:740px){
+ .direct-peer-pending-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .direct-peer-pending-actions button{width:100%;white-space:normal}
+}
+@media(max-width:400px){
+ .direct-peer-pending-actions{grid-template-columns:1fr}
+}
+
+/* ICE "checking" can stall without triggering the browser's failed event.
+   Make the strictly manual recovery affordance visible but not alarmist. */
+.direct-peer-pending[data-phase="stalled"]{border-color:#ffdb9a}
+.direct-peer-pending[data-phase="stalled"] strong{color:#fff0b7}
+.direct-peer-pending[data-phase="stalled"] .direct-peer-pending-actions button:nth-child(3):not([hidden]){
+ background:#3c3526;border-color:#ffdc92;color:#fff1ca}
+.direct-peer-pending[data-phase="failed"]{border-color:#ffac9e}
+.direct-peer-pending[data-phase="failed"] strong{color:#ffd2c6}

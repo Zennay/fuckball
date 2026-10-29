@@ -75,3 +75,15 @@ html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms
  background:#29452d;color:#e7ffbc}
 .fb-access-dialog .fb-access-message{min-height:1.6em}
 @media(prefers-reduced-motion:reduce){.fb-access-dialog{scroll-behavior:auto}}
+
+/* Read-only, on-demand scoreboard for screen-reader users. No gameplay overlay. */
+.fb-access-score-review{display:grid;gap:7px;padding:12px 14px;
+ border:1px solid #83aa98;border-radius:10px;background:#233e42}
+.fb-access-score-review button{justify-self:start;min-height:48px;
+ font:inherit;font-size:14px;font-weight:800;padding:10px 15px;
+ border:1px solid #c9efa3;border-radius:8px;background:#d9f6ae;color:#193329;
+ cursor:pointer}
+.fb-access-score-review button:focus-visible{outline:3px solid #fff9b0;outline-offset:3px}
+.fb-access-dialog .fb-access-score-review p{margin:0;font-size:13px;
+ line-height:1.5;color:#e3f3e4;overflow-wrap:anywhere}
+@media(max-width:480px){.fb-access-score-review button{width:100%}}

@@ -15,7 +15,18 @@
  const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const key=f=>f.type+':'+(f.tournamentId||f.cupId||f.seriesId)+':'+(f.fixtureId||f.matchId||f.gameId);
  const finalScore=f=>Number.isSafeInteger(f.homeScore)&&Number.isSafeInteger(f.awayScore);
- function create({onOpenFixture,onAttendance}){
+ // A printed run sheet can include private RSVPs. The source clubs, cups,
+ // series and attendance are independently editable in another tab.
+ // Compare exact local snapshots before and after any disclosure confirmation.
+ const sourceKeys=['fuckball.local-tournaments.v1','fuckball.private-knockout-cups.v1',
+  'fuckball.private-series.v1','fuckball.private-match-attendance.v1'];
+ function readSources(){
+  try{return sourceKeys.map(key=>localStorage.getItem(key));}
+  catch{return null;}
+ }
+ const sameSources=(left,right)=>left!==null&&right!==null&&
+  left.length===right.length&&left.every((value,i)=>value===right[i]);
+ function create({onOpenFixture,onAttendance,onRefresh}){
   const section=make('section',null,'game-night-run-sheet');
   section.setAttribute('aria-label','Private game night run sheet');
   section.append(make('h3','GAME NIGHT RUN SHEET'),
@@ -27,13 +38,18 @@
   const namesLabel=make('label',null,'game-night-run-private');
   namesLabel.append(includeNames,make('span','Include privately saved Going player names in print'));
   const printButton=button('↓ Print-ready HTML',savePrint);
-  controls.append(selectWrap,namesLabel,printButton);
+  const refreshButton=button('↻ Reload saved day',()=>{
+   if(typeof onRefresh!=='function')return;
+   onRefresh();
+   status.textContent='Reloaded current private fixtures and attendance from this device. Review the chosen day before printing.';
+  });
+  controls.append(selectWrap,namesLabel,printButton,refreshButton);
   const metrics=make('div',null,'game-night-run-stats');
   const list=make('div',null,'game-night-run-list');
   const status=make('p',null,'game-night-run-status');status.setAttribute('role','status');
   status.setAttribute('aria-live','polite');
   section.append(controls,metrics,list,status);
-  let fixtures=[],rosters=new Map(),readable=true;
+  let fixtures=[],rosters=new Map(),readable=true,sourceSnapshot=null;
   function chosen(){return fixtures.filter(f=>dateKey(f.time)===select.value);}
   function lookup(f){
    const people=rosters.get(key(f))||[];
@@ -113,24 +129,45 @@
     '<th>Result status</th><th>Private RSVP</th></tr></thead><tbody>'+body+
     '</tbody></table></body></html>';
   }
+  function sourceStillCurrent(){
+   return sameSources(sourceSnapshot,readSources());
+  }
+  function staleSourceWarning(){
+   // Remove private names from a stale preview before inviting a refresh.
+   includeNames.checked=false;
+   refresh();
+   status.textContent='Private fixtures or attendance changed in another tab (or storage is unreadable). Nothing was exported. Reload saved day, review the latest values and explicitly print again.';
+   status.classList.add('stale');
+  }
   function savePrint(){
    if(!chosen().length)return;
-   if(includeNames.checked&&!window.confirm(
+   if(!sourceStillCurrent())return staleSourceWarning();
+   const day=select.value,withNames=includeNames.checked&&readable;
+   if(withNames&&!window.confirm(
     'This printable report will disclose privately saved Going player names. Download and share it only with permission.'))return;
+   // The confirmation modal may have remained open while another browser tab
+   // changed a kickoff, score, room name or private RSVP. Never export the
+   // older source snapshot or apply newly checked names implicitly.
+   if(select.value!==day||includeNames.checked!==withNames||!sourceStillCurrent())
+    return staleSourceWarning();
    const url=URL.createObjectURL(new Blob([page()],{type:'text/html;charset=utf-8'}));
    const a=make('a');a.href=url;a.download='fuckball-private-game-night-'+select.value+'.html';
    document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
    status.textContent='Complete private day programme downloaded for offline opening or printing. Nothing was uploaded.';
   }
   function render(nextFixtures,nextRows,attendanceReadable){
+   sourceSnapshot=readSources();
+   status.classList.remove('stale');
    fixtures=(Array.isArray(nextFixtures)?nextFixtures:[])
     .filter(f=>Number.isSafeInteger(f.time)&&f.time>0&&
      (f.active!==false||finalScore(f)))
     .sort((a,b)=>a.time-b.time||fName(a).localeCompare(fName(b)));
    function fName(f){return f.competition+f.home+f.away;}
    readable=attendanceReadable;
+   // A rendered/printed roster must not be mutated through a different
+   // component's in-memory RSVP array after we captured the visible day.
    rosters=new Map((readable&&Array.isArray(nextRows)?nextRows:[])
-    .map(row=>[row.key,row.people]));
+    .map(row=>[row.key,row.people.map(person=>({...person}))]));
    const dates=[...new Set(fixtures.map(f=>dateKey(f.time)))];
    const previous=select.value;
    select.replaceChildren();
@@ -142,6 +179,9 @@
   }
   select.addEventListener('change',refresh);
   includeNames.addEventListener('change',refresh);
+  window.addEventListener('focus',()=>{
+   if(!sourceStillCurrent()&&fixtures.length)staleSourceWarning();
+  });
   return {element:section,render};
  }
  window.FuckballGameNightRunSheet=Object.freeze({create});

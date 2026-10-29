@@ -25,6 +25,7 @@
  const definitions=[
   {key:'account',label:'ACCOUNT',hint:'A locally saved sign-in session is required.'},
   {key:'server',label:'GAME SERVER',hint:'Set a compatible ws:// or wss:// address.'},
+  {key:'health',label:'OPTIONAL HTTP CHECK',hint:'An explicit health probe does not certify a human match.'},
   {key:'session',label:'CURRENT SESSION',hint:'Finish or cancel an active room or human queue.'},
   {key:'input',label:'CONTROLS',hint:'Keyboard ready; gamepad optional.'}
  ];
@@ -39,11 +40,12 @@
  const actions=node('div','play-readiness-actions');
  const account=node('button','','Sign in / create account');
  const server=node('button','','Configure game server');
+ const preflight=node('button','play-readiness-preflight','Check selected server · HTTP only');
  const find=node('button','primary','Open human Quick Match →');
  const invite=node('button','','Join by invite');
  const returnToSession=node('button','play-readiness-resume','↗ Return to current session');
  returnToSession.hidden=true;
- for(const b of [account,server,find,invite,returnToSession]){b.type='button';actions.append(b);}
+ for(const b of [account,server,preflight,find,invite,returnToSession]){b.type='button';actions.append(b);}
  const message=node('p','play-readiness-message');
  message.setAttribute('role','status');message.setAttribute('aria-live','polite');
  const foot=node('p','play-readiness-footnote',
@@ -104,13 +106,47 @@
    detail:count?'Standard connected controllers reported by this browser.':'Keyboard is available. Connect a compatible controller if preferred.'};
  }
  let lastSignature='';
- let prepared=false;
+ let prepared=false,verifiedHealth=null;
+ // Health is intentionally optional. Match readiness is still governed by
+ // actual server authentication, queue admission and unanimous human consent.
+ // The preflight checks only this website's own native /ws server. A
+ // successful health receipt must never follow the player onto an unrelated
+ // selected game server, even when a control changes programmatically.
+ function selectedHealthEndpoint(){
+  try{
+   const value=document.getElementById('serverAddress')?.value?.trim();
+   if(!value)return false;
+   const url=new URL(value);
+   return url.protocol===(location.protocol==='https:'?'wss:':'ws:')&&
+    url.host===location.host&&url.pathname==='/ws'&&
+    !url.username&&!url.password&&!url.search&&!url.hash;
+  }catch{return false;}
+ }
+ function httpPreflight(){
+  const config=serverConfig();
+  if(!config.ok)return{ok:false,label:'ADDRESS NEEDED',detail:'Configure a compatible game server first.'};
+  if(!selectedHealthEndpoint())return{
+   ok:false,label:'SELECTED SERVER NOT VERIFIED',
+   detail:'The optional HTTP check only verifies this website’s native /ws server, not the currently selected external or custom endpoint.'
+  };
+  const age=verifiedHealth?Date.now()-verifiedHealth.at:Infinity;
+  if(!verifiedHealth||age<0||age>45000)return{
+   ok:false,label:'NOT RECENTLY CHECKED',
+   detail:'Optional manual HTTP health check. Never implies WebSocket or match admission.'
+  };
+  return{
+   ok:true,label:verifiedHealth.queues?'HEALTH + QUEUE ENDPOINT CHECKED':'HTTP HEALTH CHECKED',
+   detail:'Read-only same-origin HTTP response '+Math.max(0,Math.floor((Date.now()-verifiedHealth.at)/1000))+
+    's ago. No promise of game connectivity, opponents, slot or login.'
+  };
+ }
  function snapshot(){
   return {
    account:hasAccount()?
     {ok:true,label:'SESSION STORED',detail:'Sign-in data is present locally; the server still validates it when searching.'}:
     {ok:false,label:'SIGN-IN REQUIRED',detail:'Create or sign in to a Fuckball account before human matchmaking.'},
-   server:serverConfig(),session:session(),input:gamepad()
+   server:serverConfig(),health:httpPreflight(),
+   session:session(),input:gamepad()
   };
  }
  function update(){
@@ -136,6 +172,15 @@
   // Account and network details can be viewed even if current socket is busy.
   account.textContent=state.account.ok?'Account session present':'Sign in / create account';
   return state;
+ }
+ function checkSelectedServer(){
+  // Delegate to the existing same-origin read-only Connection Doctor only
+  // from an explicit user click. No second network flow or private URL copy.
+  const started=window.FuckballServerDoctor?.checkSelected?.()===true;
+  message.textContent=started?
+   'Opened the original Connection Doctor. Checking only this website’s selected server; HTTP health is not a playable-match guarantee.':
+   'Open Online Rooms and choose this website’s native game server. No external host was probed.';
+  update();
  }
  function showAccount(){
   const state=update();
@@ -228,16 +273,31 @@
   target.querySelector('input[type="text"]')?.focus({preventScroll:true});
   message.textContent='Paste your room link or code and confirm yourself. Admission remains server-controlled.';
  }
- account.onclick=showAccount;server.onclick=showServer;find.onclick=openQueue;
+ account.onclick=showAccount;server.onclick=showServer;
+ preflight.onclick=checkSelectedServer;find.onclick=openQueue;
  invite.onclick=openInvite;returnToSession.onclick=resumeCurrentSession;
  const watch=()=>{if(!home.hidden&&document.visibilityState==='visible')update();};
- document.getElementById('serverAddress')?.addEventListener('input',update);
+ const selectedServerInput=document.getElementById('serverAddress');
+ for(const eventName of ['input','change'])
+  selectedServerInput?.addEventListener(eventName,()=>{
+   // Invalidate the prior receipt on both typing and committed selection.
+   verifiedHealth=null;update();
+  });
+ window.addEventListener('fuckball:native-http-preflight',event=>{
+  const d=event.detail;
+  verifiedHealth=d?.verified===true&&d.origin===location.origin&&
+   Number.isSafeInteger(d.at)&&Date.now()-d.at>=0&&Date.now()-d.at<=45000?
+   {at:d.at,queues:d.queues===true}:null;
+  update();
+ });
  document.addEventListener('visibilitychange',watch);
  window.addEventListener('gamepadconnected',watch);
  window.addEventListener('gamepaddisconnected',watch);
  window.addEventListener('focus',watch);
  window.addEventListener('online',watch);
- window.addEventListener('offline',watch);
+ window.addEventListener('offline',()=>{
+  verifiedHealth=null;watch();
+ });
  document.getElementById('tabHome')?.addEventListener('click',update);
  setInterval(watch,2000);
  update();

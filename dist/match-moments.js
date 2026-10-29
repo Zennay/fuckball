@@ -80,10 +80,16 @@
   const db=await openDb();
   return new Promise((resolve,reject)=>{
    const tx=db.transaction(STORE,'readwrite');
+   let abortReason=null;
    tx.oncomplete=()=>resolve();
-   tx.onerror=()=>reject(tx.error||Error('Photo could not be saved.'));
-   tx.onabort=()=>reject(tx.error||Error('Photo operation was cancelled.'));
-   operation(tx.objectStore(STORE));
+   tx.onerror=()=>reject(abortReason||tx.error||Error('Photo could not be saved.'));
+   tx.onabort=()=>reject(abortReason||tx.error||Error('Photo operation was cancelled.'));
+   const abort=error=>{
+    abortReason=error||Error('Photo operation was cancelled.');
+    try{tx.abort();}catch{reject(abortReason);}
+   };
+   try{operation(tx.objectStore(STORE),abort);}
+   catch(error){abort(error);}
   });
  }
  function cleanup(){for(const url of urls)URL.revokeObjectURL(url);urls=[];}
@@ -218,8 +224,21 @@
   const items=await all(),others=items.filter(item=>item.favorite!==true);
   if(!others.length)return;
   if(!confirm('Delete '+others.length+' non-favorite screenshots? Favorites are preserved.'))return;
-  try{await edit(store=>{for(const item of others)store.delete(item.id);});await render();}
-  catch(error){status.textContent=error.message||'Could not delete non-favorites.';}
+  try{
+   // The user confirmed only the photos visible as non-favorites. Reread
+   // each one in the SAME read-write transaction before deletion: another
+   // tab may have starred it during the confirmation dialog.
+   await edit(store=>{
+    for(const item of others){
+     const check=store.get(item.id);
+     check.onsuccess=()=>{
+      const latest=check.result;
+      if(latest&&latest.favorite!==true)store.delete(item.id);
+     };
+    }
+   });
+   await render();
+  }catch(error){status.textContent=error.message||'Could not delete non-favorites.';}
  };
  async function snap(){
   if(building)return;
@@ -246,12 +265,24 @@
    const blob=await new Promise((resolve,reject)=>canvas.toBlob(
     value=>value?resolve(value):reject(Error('Pitch screenshot could not be encoded.')),'image/png'));
    if(blob.size>MAX_IMAGE)throw Error('Screenshot exceeds 8 MB. Lower rendering resolution and try again.');
-   const existing=await all(),used=existing.reduce((sum,p)=>sum+p.blob.size,0);
-   if(existing.length>=LIMIT||used+blob.size>MAX_TOTAL)
-    throw Error('Moments gallery is full (24 pictures / 96 MB). Delete older photos first.');
    const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
    const entry={id,blob,at:Date.now(),label:'Pitch · '+score+' · '+String(document.getElementById('clock')?.textContent||'00:00')};
-   await edit(store=>store.add(entry));
+   // The size/count check and insertion MUST share one write transaction.
+   // Separate all() → add() transactions race across multiple open tabs and
+   // allow more than the promised 24 photos / 96 MB. IndexedDB serializes
+   // overlapping readwrite transactions on the same object store.
+   await edit((store,abort)=>{
+    const lookup=store.getAll();
+    lookup.onsuccess=()=>{
+     const existing=(lookup.result||[]).filter(p=>p&&p.blob instanceof Blob);
+     const used=existing.reduce((sum,p)=>sum+p.blob.size,0);
+     if(existing.length>=LIMIT||used+blob.size>MAX_TOTAL){
+      abort(Error('Moments gallery is full (24 pictures / 96 MB). Delete older photos first.'));
+      return;
+     }
+     store.add(entry);
+    };
+   });
    notify('Match moment saved on this device · open Moments to share or download.');
    if(dialog.open)await render();
   }catch(err){notify(err.message||'Could not capture pitch.');}
@@ -259,12 +290,25 @@
  }
  capture.onclick=snap;
  library.onclick=()=>{dialog.showModal();render().catch(e=>status.textContent=e.message);};
+ const refreshOpenGallery=()=>{
+  if(dialog.open)render().catch(e=>status.textContent=e.message||'Could not refresh moments.');
+ };
+ // Another tab may have saved, starred or removed a moment. Refresh from
+ // the authoritative IndexedDB store on return, not from stale card data.
+ window.addEventListener('focus',refreshOpenGallery);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshOpenGallery();});
  refresh.onclick=()=>render().catch(e=>status.textContent=e.message);
  erase.onclick=async()=>{
-  if(!confirm('Delete ALL local match screenshots, including favorites? Replay files stay untouched.'))return;
-  if(!confirm('This permanently removes every saved screenshot from this browser. Continue?'))return;
-  try{await edit(store=>store.clear());await render();}
-  catch(e){status.textContent=e.message||'Could not erase photos.';}
+  try{
+   const visibleAtPrompt=await all();
+   if(!visibleAtPrompt.length)return;
+   if(!confirm('Delete ALL '+visibleAtPrompt.length+' local match screenshots, including favorites? Replay files stay untouched.'))return;
+   if(!confirm('This permanently removes the screenshots you just reviewed. Continue?'))return;
+   // Never clear the whole store after a slow confirmation: another tab
+   // could have captured a NEW photo while the browser dialog was open.
+   await edit(store=>{for(const photo of visibleAtPrompt)store.delete(photo.id);});
+   await render();
+  }catch(e){status.textContent=e.message||'Could not erase photos.';}
  };
  dialog.addEventListener('close',()=>{rendering++;cleanup();});
  window.addEventListener('keydown',event=>{

@@ -37,3 +37,16 @@
  flex:1 1 230px;font-weight:900
 }
 @media(max-width:580px){.play-readiness-actions .play-readiness-resume{width:100%}}
+
+/* Optional live diagnostics are visible, but never an admission gate.
+   Five human-readiness indicators remain comfortably readable on devices. */
+.play-readiness-checks{grid-template-columns:repeat(5,minmax(0,1fr))}
+.play-readiness-actions .play-readiness-preflight{
+ border-color:#b7dcfb;background:#294650;color:#eff9ff;font-weight:850
+}
+.play-readiness-actions .play-readiness-preflight:focus-visible{
+ outline:3px solid #b6edff;outline-offset:3px
+}
+@media(max-width:1200px){.play-readiness-checks{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:980px){.play-readiness-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){.play-readiness-checks{grid-template-columns:1fr}}

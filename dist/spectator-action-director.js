@@ -59,7 +59,12 @@
  // renderer long after native transport stopped delivering new frames.
  // Local Watch Bots do not use native snapshot timing.
  function freshNativeFrame(){
-  if(!serverLink?.room)return true;
+// Keep local Watch Bots bound to genuine local play, while requiring a
+  // current server-session frame for native spectator auto-follow.
+  if(!serverLink?.room)
+   return !serverLink&&typeof started!=='undefined'&&started===true&&
+    typeof paused!=='undefined'&&paused===false&&
+    document.getElementById('mode')?.value==='watch';
   if(!hasCurrentNativeFrame||serverLink.roomState?.started!==true||
      serverLink.roomState?.paused===true)return false;
   const at=typeof net!=='undefined'?net?.lastSnapshot:0;
@@ -122,7 +127,9 @@
   if(!enabled)return;
   if(!freshNativeFrame()){
    previousId=null;lastChange=0;
-   status.textContent='Waiting for a fresh live server frame. Auto Cam is holding your last camera; no stale target selection.';
+   status.textContent=serverLink?.room?
+    'Waiting for a fresh live server frame. Auto Cam is holding the last camera; no stale target selection.':
+    'Local Watch Bots is paused or stopped. Resume play to auto-follow real ball movement.';
    return;
   }
   // A new round can use the same native room ID and reused player IDs.
