@@ -26,4 +26,6 @@ jobs:
           node-version: '22'
       - run: npm run build:solo
       - run: npm test
+      - name: Guard HaxLab trainer package resolution
+        run: python3 tests/haxlab-package-resolution.py
       - run: node --check server.js
