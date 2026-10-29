@@ -1,6 +1,6 @@
 /* Accurate, local-view-only match scoreboard. Never asserts invented stats. */
 .match-center-trigger{min-height:42px;letter-spacing:.04em;font-weight:850}
-.match-center{position:absolute;top:clamp(64px,11vh,105px);left:50%;
+.match-center{position:absolute;top:clamp(64px,11vh,105px);left:50%;right:auto;margin:0;
  transform:translateX(-50%);z-index:12;width:min(760px,calc(100vw - 24px));
  max-height:min(75vh,780px);overflow:auto;box-sizing:border-box;
  padding:clamp(14px,2vw,25px);border:1px solid #a5bfad;border-radius:16px;
@@ -86,3 +86,9 @@
 .match-center-feed-list li.match-center-feed-gap span{
  color:#e4e9dc;
 }
+
+/* This is a non-modal dialog, not an engine pause. While open, the common
+   input gate neutralizes every local, peer and gamepad player seat. */
+.match-center-input-status{font-size:10px;font-weight:800;letter-spacing:.07em;
+ color:#d9f5b0;margin:7px 0 0;line-height:1.55}
+.match-center:not([open]){display:none!important}

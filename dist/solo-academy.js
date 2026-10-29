@@ -14,7 +14,7 @@
   {chapter:'FINISHER',name:'Three on target',type:'goals',goal:3,duration:120,
    detail:'Meet the three-goal target during a completed 2-minute Goal Rush.'},
   {chapter:'FINISHER',name:'Win locally',type:'match',goal:1,
-   detail:'Win a real, completed, unranked solo-vs-AI match on this device.'},
+   detail:'Win a completed local match with a verified native opposing AI and no other human field players.'},
   {chapter:'FINISHER',name:'Five-goal focus',type:'goals',goal:5,duration:180,
    detail:'Meet the five-goal target during a completed 3-minute Goal Rush.'},
   {chapter:'LINK-UP',name:'Four-team chain',type:'team',goal:4,duration:180,
@@ -26,7 +26,7 @@
   {chapter:'FINAL THIRD',name:'Quick five',type:'goals',goal:5,duration:120,
    detail:'Meet the five-goal target during a completed two-minute Goal Rush.'},
   {chapter:'FINAL THIRD',name:'Win another solo match',type:'match',goal:1,
-   detail:'Win a fresh real solo-vs-AI match after arming this mission.'},
+   detail:'Win a fresh completed local match with a verified native opposing AI after arming this mission.'},
   {chapter:'FINAL THIRD',name:'Fast team six',type:'team',goal:6,duration:120,
    detail:'Complete six native team follow-ups in one two-minute Teamwork drill.'}
  ];
@@ -87,7 +87,7 @@
  const status=make('p',null,'solo-academy-status');status.setAttribute('role','status');
  status.setAttribute('aria-live','polite');
  active.append(activeHead,activeDetail,evidence,actions,status);
- const foot=make('p','A new timestamped drill record is required AFTER you arm each step. Existing completed records are not reused. Drill completions come from the existing local game; team kick follow-ups are not verified passes, and solo results are unranked. The campaign never submits or changes multiplayer results.');
+ const foot=make('p','A new timestamped drill record is required AFTER you arm each step. Existing completed records are not reused. Drill completions come from the existing local game; solo wins require a newly saved native AI-opponent receipt, and older ambiguous results are not eligible. Team kick follow-ups are not verified passes, and solo results are unranked. The campaign never submits or changes multiplayer results.');
  root.append(head,chapters,active,foot);
  const anchor=home.querySelector('.practice-focus-coach')||
   home.querySelector('.practice-circuit')||home.querySelector('.practice-lab');
@@ -135,7 +135,10 @@
     !Number.isSafeInteger(row.elapsed)||row.elapsed<0||row.elapsed>300||
     typeof row.completed!=='boolean')return null;
   }else if(type==='match'){
-   if(!['bot','practice','2v2','4v4'].includes(row.mode)||![1,2].includes(row.side)||
+   // Legacy practice journal rows have no proof that an AI opponent was on
+   // the pitch. They stay visible locally but cannot validate AI missions.
+   if(row.aiOpponent!==true||
+    !['bot','practice','2v2','4v4'].includes(row.mode)||![1,2].includes(row.side)||
     !Number.isSafeInteger(row.red)||row.red<0||row.red>999||
     !Number.isSafeInteger(row.blue)||row.blue<0||row.blue>999||
     !Number.isSafeInteger(row.seconds)||row.seconds<1||row.seconds>14400||
@@ -154,7 +157,7 @@
    .filter(x=>freshAt(x.at,armed))
    .filter(x=>{
     if(task.type==='match'){
-     return x.side===1?x.red>x.blue:x.blue>x.red;
+     return x.aiOpponent===true&&(x.side===1?x.red>x.blue:x.blue>x.red);
     }
     return x.completed===true&&
      (task.type==='goals'?x.goals:x.links)>=task.goal&&
@@ -185,7 +188,7 @@
    const quick=document.getElementById('quickPractice');
    quick?.scrollIntoView({block:'center'});
    quick?.focus({preventScroll:true});
-   status.textContent='Choose the existing SOLO TRAINING mode and finish a real local match against AI. Only an actual recorded win after arming will count.';
+   status.textContent='Choose SOLO TRAINING and finish a local match against a native AI opponent. Old journal results without verified opponents do not count.';
    return;
   }
   const lab=home.querySelector('.practice-lab-disclosure'),tab=document.getElementById('practice-lab-tab-'+tabByType[task.type]);

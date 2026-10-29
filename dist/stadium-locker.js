@@ -97,12 +97,29 @@
    tx.onabort=()=>reject(reason||tx.error||Error('Stadium import cancelled.'));
   });
  }
- async function remove(id){
+ async function savedCardRow(map){
+  const db=await database();
+  const stored=await request(db.transaction(STORE,'readonly').objectStore(STORE).get(map.id));
+  if(!stored||stored.code!==map.code)
+   throw Error('This saved stadium changed in another tab. Refresh the locker before continuing.');
+  return stored;
+ }
+ async function remove(map){
   const db=await database();
   await new Promise((resolve,reject)=>{
-   const tx=db.transaction(STORE,'readwrite');
-   tx.objectStore(STORE).delete(id);
-   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||Error('Could not remove stadium.'));
+   let reason=null;
+   const tx=db.transaction(STORE,'readwrite'),store=tx.objectStore(STORE);
+   const existing=store.get(map.id);
+   existing.onsuccess=()=>{
+    if(!existing.result||existing.result.code!==map.code){
+     reason=Error('The stadium changed in another tab. Refresh before deleting.');
+     tx.abort();return;
+    }
+    store.delete(map.id);
+   };
+   tx.oncomplete=resolve;
+   tx.onerror=()=>reject(reason||tx.error||Error('Could not remove stadium.'));
+   tx.onabort=()=>reject(reason||tx.error||Error('Delete was cancelled; the saved stadium was not changed.'));
   });
  }
  function download(content,name,type){
@@ -112,12 +129,25 @@
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  }
  function localRoomFree(){
-  if(typeof replay!=='undefined'&&replay)return 'Close the replay before changing a stadium.';
-  if(typeof serverLink!=='undefined'&&serverLink?.room)return 'Leave your online room before loading a local stadium.';
-  if(typeof peerConnected!=='undefined'&&peerConnected)return 'Disconnect your direct peer match before loading a stadium.';
+  // Switching a local map resets the native local engine. Never do that
+  // while a server/peer handshake, timed original-room recovery, human ready
+  // check or recording owns the same local renderer/gameplay state.
+  if(typeof replay!=='undefined'&&replay)
+   return 'Close the replay before loading a local stadium.';
+  if(typeof roomRecovery!=='undefined'&&roomRecovery.context)
+   return 'Your original online room is reconnecting. Choose Stop reconnecting first.';
+  if(typeof serverLink!=='undefined'&&serverLink)
+   return serverLink.room?
+    'Leave your online room explicitly before loading a local stadium.':
+    'Cancel the connecting online room or human search before loading a local stadium.';
+  if(typeof peerConnected!=='undefined'&&peerConnected||
+     typeof peer!=='undefined'&&peer)
+   return 'Disconnect or cancel your direct-peer connection before loading a local stadium.';
   if(document.querySelector('.quick-queue-actions button:not([hidden])')||
-    document.querySelector('.quick-ready:not([hidden])'))
-   return 'Cancel the active human Quick Match search before changing a stadium.';
+     document.querySelector('.quick-ready:not([hidden])'))
+   return 'Cancel the active human Quick Match search or ready check before changing a stadium.';
+  if(typeof room!=='undefined'&&room?.isRecording?.())
+   return 'Save or stop the current recording with the original Record control before switching stadiums.';
   return null;
  }
  function button(text,action){
@@ -131,23 +161,45 @@
   details.textContent='Actual stadium: '+map.name+' · '+map.width+' × '+map.height+
    ' · '+humanBytes(map.size)+' · device only';
   const tools=document.createElement('div');tools.className='stadium-locker-card-actions';
-  const load=button('▶ Load locally',()=>{
+  const load=button('▶ Load locally',async()=>{
    if(busy)return;
-   const blocked=localRoomFree();if(blocked){status.textContent=blocked;return;}
-   if(typeof started!=='undefined'&&started&&
-      !window.confirm('Switch stadium and restart your current local match? Unsaved gameplay may be lost.'))return;
+   const blocked=localRoomFree();
+   if(blocked){status.textContent=blocked;return;}
+   busy=true;
    try{
-    applyMap(map.code);
-    status.textContent='Loaded '+map.name+' through the native local stadium loader.';
-   }catch(error){status.textContent='Stadium could not be loaded: '+(error.message||'Invalid map.');}
+    // A card may be stale after another tab deletes/replaces the map. Read
+    // the actual saved row, then validate it with the same parser as import,
+    // BEFORE any restart, stadium selection or prompt.
+    const saved=await savedCardRow(map);
+    const candidate=normalize(saved.code,saved.alias);
+    const beforeConfirm=localRoomFree();
+    if(beforeConfirm)throw Error(beforeConfirm);
+    if(typeof started!=='undefined'&&started&&
+       !window.confirm('Switch stadium and restart your current local match? Unsaved gameplay may be lost.'))return;
+    // Confirm dialogs and IndexedDB await points can allow an online join or
+    // recording to start. Recheck immediately before the native mutation.
+    const immediatelyBefore=localRoomFree();
+    if(immediatelyBefore)throw Error(immediatelyBefore);
+    applyMap(candidate.code);
+    status.textContent='Loaded '+candidate.name+' locally using the game’s original stadium loader.';
+   }catch(error){
+    status.textContent='Stadium was not loaded: '+(error.message||'Invalid or unavailable saved map.');
+   }finally{busy=false;render();}
   });
-  const exportButton=button('↓ Export .hbs',()=>{
-   download(map.code,safeName(map.alias)+'.hbs','application/json');
-   status.textContent='Local stadium exported. No upload.';
+  const exportButton=button('↓ Export .hbs',async()=>{
+   if(busy)return;
+   busy=true;
+   try{
+    const saved=await savedCardRow(map);
+    const candidate=normalize(saved.code,saved.alias);
+    download(candidate.code,safeName(candidate.alias)+'.hbs','application/json');
+    status.textContent='Validated local stadium exported. No upload.';
+   }catch(error){status.textContent=error.message||'Cannot export a changed saved stadium.';}
+   finally{busy=false;render();}
   });
   const removeButton=button('Delete',async()=>{
    if(busy||!window.confirm('Delete '+map.alias+' from this device? Your game will not be changed.'))return;
-   busy=true;try{await remove(map.id);status.textContent='Deleted saved stadium '+map.alias+'.';}
+   busy=true;try{await remove(map);status.textContent='Deleted saved stadium '+map.alias+'.';}
    catch(error){status.textContent=error.message||'Delete failed.';}
    finally{busy=false;render();}
   });removeButton.className='stadium-locker-delete';
@@ -193,8 +245,11 @@
   if(busy)return;
   busy=true;try{
    const items=await all();if(!items.length)throw Error('Save a stadium before exporting a collection.');
+   // Refuse to back up corrupt or externally modified rows as though they
+   // were playable maps. The backup must round-trip through the real parser.
+   const exported=items.map(x=>normalize(x.code,x.alias));
    const content=JSON.stringify({format:'fuckball-stadium-locker',version:1,
-    stadiums:items.map(x=>({alias:x.alias,code:x.code}))});
+    stadiums:exported.map(x=>({alias:x.alias,code:x.code}))});
    download(content,'fuckball-stadium-collection.json','application/json');
    status.textContent='Saved '+items.length+' personal stadiums to a local JSON backup.';
   }catch(error){status.textContent=error.message||'Collection export failed.';}
