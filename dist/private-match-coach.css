@@ -7,7 +7,7 @@
 .private-coach-goal select,.private-coach-goal textarea,.private-coach-filter select{min-width:0;width:100%;background:#213d43;border:1px solid #75998c;border-radius:8px;color:#f4fff0;padding:10px;font:inherit}
 .private-coach-goal textarea{resize:vertical}
 .private-coach-actions{display:flex;flex-wrap:wrap;gap:9px;grid-column:1/-1}
-.private-coach-actions button{min-height:42px;padding:9px 13px;border:1px solid #81a58c;border-radius:8px;color:#effbe8;background:#284a44;cursor:pointer}
+.private-coach-actions button{min-height:48px;padding:10px 13px;border:1px solid #81a58c;border-radius:8px;color:#effbe8;background:#284a44;cursor:pointer}
 .private-coach-actions button:disabled{opacity:.45;cursor:default}
 .private-coach-goal>.private-coach-checkbox{display:flex;flex-direction:row;align-items:center;gap:9px;grid-column:1/-1}
 .private-coach-checkbox input{width:18px;height:18px;accent-color:#d2eea8}
@@ -40,3 +40,9 @@
 .private-coach-home button{grid-column:2;grid-row:2 / span 2;padding:10px 14px;border:1px solid #a0c996;border-radius:8px;background:#30564a;color:#f2ffe9;min-height:43px;cursor:pointer}
 .private-coach-home button:focus-visible{outline:3px solid #deffa6;outline-offset:3px}
 @media(max-width:600px){.private-coach-home{grid-template-columns:1fr}.private-coach-home button{grid-column:1;grid-row:auto}}
+
+/* Cross-tab edits stay private and explicit; a conflict never destroys a draft. */
+.private-coach-actions button[hidden]{display:none!important}
+.private-coach-actions button[disabled]{cursor:not-allowed}
+.private-coach-actions button:not([disabled]):active{transform:translateY(1px)}
+@media(max-width:480px){.private-coach-actions{display:grid;grid-template-columns:1fr 1fr}.private-coach-actions button{min-width:0;overflow-wrap:anywhere}.private-coach-actions button:nth-child(3){grid-column:1/-1}}

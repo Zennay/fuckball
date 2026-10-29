@@ -13,3 +13,31 @@
 
 /* The body-mounted recovery sheet stays reachable on any tab or viewport. */
 @media(max-width:480px){.native-room-recovery{width:calc(100vw - 20px);box-sizing:border-box;padding:16px;bottom:max(8px,env(safe-area-inset-bottom))}.native-room-recovery-actions{flex-direction:column}.native-room-recovery-actions button{width:100%;flex:0 0 auto}}
+
+/* Server-confirmed recovery: nonblocking return path on Home and My Games. */
+.native-room-restored[hidden]{display:none!important}
+.native-room-restored{position:fixed;z-index:110;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));display:flex;align-items:center;
+ justify-content:space-between;gap:16px;width:min(820px,calc(100vw - 24px));
+ padding:16px 18px;box-sizing:border-box;border:2px solid #c2f59f;
+ border-radius:14px;background:#1a3530;color:#e9ffe8;
+ box-shadow:0 15px 44px #071b21dc}
+.native-room-restored strong{font-size:.8rem;font-weight:900;
+ letter-spacing:.055em;color:#d9ffac}
+.native-room-restored p{margin:6px 0 0;color:#d0e6da;
+ font-size:.85rem;line-height:1.5;max-width:56ch}
+.native-room-restored-actions{display:flex;gap:9px;flex-shrink:0}
+.native-room-restored-actions button{min-height:48px;padding:10px 14px;
+ border-radius:9px;border:1px solid #9eb6a7;background:#264339;
+ color:#f4fff0;font:inherit;font-size:.84rem;font-weight:800;cursor:pointer}
+.native-room-restored-actions button.primary{background:#dcff9b;
+ border-color:#dcff9b;color:#173022}
+.native-room-restored-actions button:focus-visible{outline:3px solid #f1ffa8;outline-offset:3px}
+@media(max-width:720px){
+ .native-room-restored{flex-direction:column;align-items:stretch;
+  gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-room-restored-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:390px){
+ .native-room-restored-actions{grid-template-columns:1fr}
+}

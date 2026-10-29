@@ -19,3 +19,28 @@
 .match-quick-calls-fields input{box-sizing:border-box;width:100%;background:#0f2e32;color:#f3fde5;border:1px solid #769c86;border-radius:7px;padding:9px;font-size:12px}
 .match-quick-calls-tools{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:550px){.match-quick-calls{top:66px;right:5px;width:calc(100vw - 10px);padding:11px}.match-quick-calls-options,.match-quick-calls-fields{grid-template-columns:1fr}}
+
+/* Make the actual public-room audience clear before the user sends. */
+.match-quick-calls-destination{margin:10px 0 0;padding:9px 11px;
+ border:1px solid #a5c6a3;border-radius:9px;background:#24463c;
+ color:#e4f6e3!important;font-size:.79rem!important;font-weight:700;
+ overflow-wrap:anywhere}
+.match-quick-calls-message{min-height:48px!important}
+.match-quick-calls button:focus-visible{outline-offset:3px}
+@media(max-width:550px){
+ .match-quick-calls{max-height:calc(100dvh - 82px);
+  overscroll-behavior:contain}
+ .match-quick-calls-tools button{min-height:48px}
+}
+
+/* Conflicting saved presets never erase a human's uncommitted editor text.
+   Both resolution actions require a deliberate click in this tab. */
+.match-quick-calls-conflict[hidden],.match-quick-calls-conflict-actions[hidden]{display:none!important}
+.match-quick-calls-conflict{margin:11px 0 8px;padding:10px 12px;
+ border:1px solid #f6d08a;border-radius:9px;background:#453a24;
+ color:#ffefce!important;font-size:.83rem!important;line-height:1.55}
+.match-quick-calls-conflict-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.match-quick-calls-conflict-actions button{min-height:48px;text-align:center;font-weight:800;
+ white-space:normal;overflow-wrap:anywhere}
+.match-quick-calls-conflict-actions button:last-child{background:#e5f6ae;color:#213623;border-color:#e5f6ae}
+@media(max-width:550px){.match-quick-calls-conflict-actions{grid-template-columns:1fr}}

@@ -56,6 +56,23 @@
  const tracks=new Map();
  let open=false,roomRef=null,roomId='',lastSample=0,lastPaint=0,lastNotice=0,hits=[];
  let previousClock=null,previousScore=null,previousField=null;
+ // A renderer's lastSnapshot clock is shared across native rooms. Its
+ // timestamp alone is NOT proof that the new socket supplied a frame.
+ let observedLink=null,nativeBaseline=0,nativeRoundStarted=null;
+ let paintLink=null,paintRoom=null,paintRoomCode='',paintGeneration=0;
+ function observeSource(){
+  const link=typeof serverLink==='undefined'?null:serverLink;
+  if(link===observedLink)return;
+  observedLink=link;
+  nativeBaseline=typeof net!=='undefined'&&Number.isFinite(net?.lastSnapshot)?
+   Math.max(0,net.lastSnapshot):0;
+  nativeRoundStarted=null;
+  roomRef=null;roomId='';reset();
+ }
+ function samePaintSource(){
+  return paintLink===(typeof serverLink==='undefined'?null:serverLink)&&
+   paintRoom===room&&paintRoomCode===(serverLink?.room||'local-spectator');
+ }
  function saveSettings(){
   try{localStorage.setItem(KEY,JSON.stringify({version:1,trails:options.trails,side:options.side}));}
   catch{message.textContent='Preferences apply for this visit; local storage unavailable.';}
@@ -68,15 +85,32 @@
  // Only current authoritative WebSocket snapshots can drive a live native
  // radar. Do not export, follow or trail unobserved server positions.
  function freshNativeFrame(){
-  if(!serverLink?.room)return true; // Local Watch Bots uses local physics.
-  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
+  observeSource();
+  // A pending online join is not a local match. Local Watch Bots has no
+  // WebSocket snapshots, but must still respect the actual local pause/stop.
+  // Never treat a frozen local formation as live action or exportable radar.
+  if(!serverLink?.room)
+   return !serverLink&&typeof started!=='undefined'&&started===true&&
+    typeof paused!=='undefined'&&paused===false&&
+    document.getElementById('mode')?.value==='watch';
+  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true){
+   nativeRoundStarted=false;return false;
+  }
   const at=typeof net!=='undefined'?net?.lastSnapshot:0;
+  // A restarted round must first provide an actual frame *after* kickoff.
+  if(nativeRoundStarted===false){
+   nativeBaseline=Math.max(nativeBaseline,Number.isFinite(at)?at:0);
+   reset();
+  }
+  nativeRoundStarted=true;
   const age=performance.now()-at;
-  return Number.isFinite(at)&&at>0&&age>=0&&age<=3500;
+  return Number.isFinite(at)&&at>nativeBaseline&&age>=0&&age<=3500;
  }
  function reset(){
   tracks.clear();hits=[];lastSample=0;lastPaint=0;
   previousClock=null;previousScore=null;previousField=null;
+  paintLink=null;paintRoom=null;paintRoomCode='';
+  paintGeneration++;
  }
  function hide(){
   open=false;panel.hidden=true;toggle.setAttribute('aria-expanded','false');
@@ -128,7 +162,11 @@
    // selectable hit targets behind a visually updated, frozen radar.
    reset();
    const waiting=!!serverLink?.room&&!freshNativeFrame();
-   const detail=waiting?'Waiting for fresh server frames':'Waiting for real match positions';
+   const localStopped=!serverLink&&document.getElementById('mode')?.value==='watch'&&
+    (typeof started==='undefined'||!started||typeof paused==='undefined'||paused);
+   const detail=waiting?'Waiting for fresh live server frames':
+    localStopped?'Local Watch Bots is paused or stopped · resume play for live radar':
+    'Waiting for real match positions';
    ctx.fillStyle='#f5fbf4';ctx.textAlign='center';ctx.font='bold 22px sans-serif';
    ctx.fillText(detail,W/2,H/2-10);
    if(message.textContent!==detail+' · no live positions to follow or export.')
@@ -138,6 +176,9 @@
   download.disabled=false;
   const roomKey=serverLink?.room||'local-spectator';
   if(roomRef!==room||roomId!==roomKey){roomRef=room;roomId=roomKey;reset();}
+  // Remember the source of the painted dots, not only the source of the
+  // latest globally shared WebSocket snapshot clock.
+  paintLink=serverLink||null;paintRoom=room;paintRoomCode=roomKey;
   // Do not connect a previous round's or an unobserved interval's positions
   // to the new live positions. These trails are explicitly local
   // observations, not a replay or server-attested player route.
@@ -155,6 +196,9 @@
   const missingTime=lastSample>0&&now-lastSample>3500;
   if(newRound||newField||missingTime){
    reset();
+   // Clear the old frame's target anchors but allow the new frame in the
+   // same render to produce only new-round hits and trails.
+   paintLink=serverLink||null;paintRoom=room;paintRoomCode=roomKey;
    message.textContent=newRound?'New round or scoreboard reset: older player trails cleared.':
     newField?'Stadium dimensions changed: old trails cleared.':
     'Live position updates were missed: older trails cleared rather than inventing paths.';
@@ -217,7 +261,8 @@
   }
  }
  function followAt(event){
-  if(!eligible()||!open||!freshNativeFrame()||!hits.length)return;
+  if(!eligible()||!open||!freshNativeFrame()||!hits.length||
+     !samePaintSource())return;
   const rect=canvas.getBoundingClientRect();
   if(!rect.width||!rect.height)return;
   const x=(event.clientX-rect.left)*W/rect.width,y=(event.clientY-rect.top)*H/rect.height;
@@ -246,11 +291,25 @@
  trails.addEventListener('change',()=>{options.trails=trails.checked;saveSettings();if(open)render(performance.now());});
  side.addEventListener('change',()=>{options.side=side.value;saveSettings();if(open)render(performance.now());});
  download.addEventListener('click',()=>{
-  if(!open||!eligible()||!freshNativeFrame()||!sample()||typeof canvas.toBlob!=='function')return;
+  if(!open||!eligible()||!freshNativeFrame()||!samePaintSource()||
+     !sample()||typeof canvas.toBlob!=='function')return;
+  // toBlob is asynchronous. A room switch or round restart must not save
+  // previous-room pixels under the new room's now-fresh connection.
+  const source=paintGeneration,link=serverLink||null,sourceRoom=room;
+  const sourceCode=serverLink?.room||'local-spectator';
   download.disabled=true;
   canvas.toBlob(blob=>{
-   download.disabled=!freshNativeFrame();
-   if(!freshNativeFrame())return;
+   // Refresh frame evidence *before* checking the generation: observing a
+   // new connection or kickoff itself invalidates the old export token.
+   const fresh=freshNativeFrame();
+   const stillSame=fresh&&source===paintGeneration&&link===(serverLink||null)&&
+    sourceRoom===room&&sourceCode===(serverLink?.room||'local-spectator')&&
+    samePaintSource();
+   download.disabled=!stillSame;
+   if(!stillSame){
+    message.textContent='Radar source changed during export. No old-room image was saved.';
+    return;
+   }
    if(!blob||!blob.size||blob.size>6*1024*1024){
     message.textContent='Could not save this radar picture.';return;
    }

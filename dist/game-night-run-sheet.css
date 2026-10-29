@@ -37,3 +37,13 @@
  .game-night-run-controls>label{flex:1 1 100%}.game-night-run-controls select,
  .game-night-run-controls button{width:100%}}
 @media print{.game-night-run-controls,.game-night-run-actions{display:none!important}}
+
+/* Private score/attendance changed while this print preview was open. */
+.game-night-run-status.stale{border:1px solid #f1c18f;border-radius:9px;
+ padding:12px 13px;background:#453225;color:#ffe9c9;line-height:1.5;
+ font-weight:700}
+.game-night-run-controls button{min-height:46px}
+@media(max-width:630px){
+ .game-night-run-controls{display:flex;flex-wrap:wrap;align-items:stretch}
+ .game-night-run-controls button{flex:1 1 180px}
+}

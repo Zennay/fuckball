@@ -50,6 +50,10 @@
   const buttons=document.createElement('div');buttons.className='private-coach-actions';
   const save=document.createElement('button');save.type='button';save.textContent='Save next-game plan';
   const clear=document.createElement('button');clear.type='button';clear.textContent='Clear plan';
+  const reload=document.createElement('button');
+  reload.type='button';reload.textContent='↻ Load latest saved goal';
+  reload.hidden=true;
+  reload.setAttribute('aria-label','Review the latest goal saved in another browser tab');
   const exportBtn=document.createElement('button');exportBtn.type='button';exportBtn.textContent='↓ Export offline coaching sheet';
   const backup=document.createElement('button');backup.type='button';backup.textContent='↓ Backup personal goal';
   const restore=document.createElement('button');restore.type='button';restore.textContent='↑ Restore personal goal';
@@ -57,7 +61,8 @@
   const notesLabel=document.createElement('label');notesLabel.className='private-coach-checkbox';
   const includeNotes=document.createElement('input');includeNotes.type='checkbox';includeNotes.checked=false;
   notesLabel.append(includeNotes,document.createTextNode('Include private review note text in export'));
-  buttons.append(save,clear,exportBtn,backup,restore,input);form.append(focusLabel,actionLabel,buttons,notesLabel);
+  buttons.append(save,clear,reload,exportBtn,backup,restore,input);
+  form.append(focusLabel,actionLabel,buttons,notesLabel);
   const status=document.createElement('p');status.className='private-coach-status';
   status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const filters=document.createElement('div');filters.className='private-coach-filter';
@@ -73,7 +78,7 @@
   const limit=document.createElement('p');limit.className='private-coach-limit';
   section.append(title,help,form,status,filters,tiles,reviewsList,limit);
   host.append(section);
-  let savedRaw=null;
+  let savedRaw=null,externalChange=false;
   try{savedRaw=localStorage.getItem(key);}catch{status.textContent='Private browser storage is unavailable.';}
   const initial=readPlan(savedRaw);
   if(initial){focus.value=initial.focus;action.value=initial.action;}
@@ -83,13 +88,53 @@
    status.textContent='Account session changed. Reload your signed-in match history first.';
    return false;
   }
+  function markExternalChange(){
+   externalChange=true;reload.hidden=false;
+   status.textContent='Your goal changed in another tab. Your draft is preserved. Choose Load latest saved goal before changing or exporting this goal.';
+   save.disabled=clear.disabled=restore.disabled=backup.disabled=exportBtn.disabled=true;
+  }
   function unchanged(){
    try{
-    if(localStorage.getItem(key)===savedRaw)return true;
-    status.textContent='Your private goal changed in another tab. Reload My Games before saving.';
+    if(localStorage.getItem(key)===savedRaw){
+     if(externalChange){externalChange=false;reload.hidden=true;refresh();}
+     return true;
+    }
+    markExternalChange();
    }catch{status.textContent='Private browser storage is unavailable.';}
    return false;
   }
+  // Cross-tab writes do not trigger a same-tab storage event. Keep the
+  // current draft untouched and require an explicit reload before editing.
+  function inspectExternal(){
+   if(!section.isConnected){
+    window.removeEventListener('focus',inspectExternal);
+    window.removeEventListener('storage',onExternalStorage);
+    return;
+   }
+   if(!authorized())return;
+   try{
+    if(localStorage.getItem(key)!==savedRaw)markExternalChange();
+   }catch{status.textContent='Private browser storage is unavailable.';}
+  }
+  const onExternalStorage=event=>{
+   if(!section.isConnected){window.removeEventListener('storage',onExternalStorage);return;}
+   if(event.key===key||event.key===null)inspectExternal();
+  };
+  window.addEventListener('storage',onExternalStorage);
+  window.addEventListener('focus',inspectExternal);
+  reload.onclick=()=>{
+   if(!validSession())return;
+   if(!confirm('Load the newest saved goal from this browser and replace your unsaved form text? No verified match results or reviews will be changed.'))return;
+   if(!validSession())return;
+   try{
+    const raw=localStorage.getItem(key),goal=readPlan(raw);
+    savedRaw=raw;externalChange=false;reload.hidden=true;
+    focus.value=goal?.focus||focusKeys[0];action.value=goal?.action||'';
+    refresh();
+    status.textContent=goal?'Latest private goal loaded. You can edit it now.':
+     'No current saved goal. Your form has been reset for a new goal.';
+   }catch{status.textContent='Could not read your current private goal.';}
+  };
   function joined(){
    let notes=[];
    try{notes=readReviews();}catch{}
@@ -113,7 +158,11 @@
   };
   clear.onclick=()=>{
    if(!validSession()||!unchanged())return;
+   const expected=savedRaw;
    if(!confirm('Delete your private next-match plan from this browser? Match reviews and server results stay intact.'))return;
+   // A different tab may save while this modal is open. Never erase that
+   // newly saved private work on the basis of a pre-confirmation check.
+   if(!validSession()||!unchanged()||savedRaw!==expected)return;
    try{localStorage.removeItem(key);savedRaw=null;action.value='';clear.disabled=true;
     status.textContent='Private next-match plan cleared.';refresh();
    }catch{status.textContent='Could not clear your local plan.';}
@@ -153,9 +202,9 @@
     refresh();
     status.textContent='Private goal restored on this device. No match results or rankings were imported.';
    }catch(error){status.textContent=error?.message||'Could not restore the private goal.';}
-   finally{restore.disabled=false;}
+   finally{restore.disabled=externalChange;}
   };
-  function coachSheet(notes){
+  function coachSheet(notes,includePrivateNotes){
    const plan=readPlan(savedRaw);
    // A standalone offline report: no script, server URL, account identity, receipt IDs,
    // opponent handles, token or background network requests.
@@ -169,7 +218,7 @@
    const entries='<section><h2>Recent reviewed matches</h2>'+notes.map(x=>
     '<article><strong>'+safeText(date(x.match.at))+' · '+safeText(x.match.mode)+
     ' · '+result(x.match)+' · '+safeText(FOCI[x.focus]||'General')+'</strong>'+
-    (includeNotes.checked&&x.note?'<p>'+safeText(x.note).replace(/\n/g,'<br>')+'</p>':'')+
+    (includePrivateNotes&&x.note?'<p>'+safeText(x.note).replace(/\n/g,'<br>')+'</p>':'')+
     '</article>').join('')+'</section>';
    return '<!doctype html><html lang="en"><head><meta charset="utf-8">'+
     '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;; base-uri &#39;none&#39;; form-action &#39;none&#39;">'+
@@ -182,13 +231,17 @@
     '<footer><small>Private personal notes only. No online standings, ratings or verified skill claims. Generated locally.</small></footer></body></html>';
   }
   exportBtn.onclick=()=>{
-   if(!validSession())return;
+   if(!validSession()||!unchanged())return;
+   const includePrivateNotes=includeNotes.checked;
+   if(includePrivateNotes&&!confirm('Include your PRIVATE coaching note text in the exported HTML file? Keep the file safe.'))return;
+   // Confirmation dialogs yield to other tabs and sign-out. Do not export
+   // cached notes or a prior account's records after such a change.
+   if(!validSession()||!unchanged())return;
    const notes=joined();
    if(!notes.length&&!readPlan(savedRaw)){status.textContent='Save a plan or review a verified match first.';return;}
-   if(includeNotes.checked&&!confirm('Include your PRIVATE coaching note text in the exported HTML file? Keep the file safe.'))return;
    try{
-    download('fuckball-private-next-match-'+new Date().toISOString().slice(0,10)+'.html','text/html',coachSheet(notes));
-    status.textContent='Standalone offline coaching sheet exported'+(includeNotes.checked?' with private note text.':'. Notes were excluded by default.');
+    download('fuckball-private-next-match-'+new Date().toISOString().slice(0,10)+'.html','text/html',coachSheet(notes,includePrivateNotes));
+    status.textContent='Standalone offline coaching sheet exported'+(includePrivateNotes?' with private note text.':'. Notes were excluded by default.');
    }catch{status.textContent='Offline coaching sheet could not be created.';}
   };
   function refresh(){
@@ -197,7 +250,9 @@
    const visible=reviewFilter.value==='all'?notes:notes.filter(x=>x.focus===reviewFilter.value);
    const plan=readPlan(savedRaw);
    summary.textContent=visible.length+' shown of '+notes.length+' privately reviewed genuine recent matches.';
-   clear.disabled=backup.disabled=!plan;tiles.replaceChildren();reviewsList.replaceChildren();
+   clear.disabled=backup.disabled=!plan||externalChange;
+   save.disabled=restore.disabled=exportBtn.disabled=externalChange;
+   tiles.replaceChildren();reviewsList.replaceChildren();
    const cards=[['VERIFIED REVIEWS',String(notes.length)],['FOCUS CATEGORIES',String(new Set(notes.filter(x=>x.focus!=='none').map(x=>x.focus)).size)],
     ['NEXT MATCH GOAL',plan?FOCI[plan.focus]:'Not set']];
    cards.forEach(([label,value])=>{

@@ -43,11 +43,26 @@
  const gauge=el('progress');gauge.max=100;gauge.value=0;
  gauge.setAttribute('aria-label','Completed native unpaused play clock');
  const actions=el('div',null,'comeback-actions');
- const stop=el('button','Stop drill'),again=el('button','Retry challenge'),close=el('button','Close');
- for(const button of [stop,again,close])button.type='button';
- again.hidden=close.hidden=true;actions.append(stop,again,close);
+ const stop=el('button','Stop drill'),again=el('button','Retry challenge'),
+  close=el('button','Close'),resume=el('button','▶ Resume drill','primary');
+ for(const button of [stop,again,close,resume])button.type='button';
+ again.hidden=close.hidden=resume.hidden=true;actions.append(resume,stop,again,close);
  hud.append(badge,clock,score,gauge,actions);match.append(hud);
- let active=null;
+ // A view change must not discard an authentic native offline challenge.
+ // Offer an explicit return to the same paused 1v1 instead of auto-restarting.
+ const returnCard=el('aside',null,'comeback-return');
+ returnCard.hidden=true;returnCard.setAttribute('role','region');
+ returnCard.setAttribute('aria-label','Paused Comeback Arena session');
+ const returnText=el('div',null,'comeback-return-copy');
+ returnText.append(el('strong','COMEBACK SAVED IN THIS MATCH'),
+  el('p','Same native 1v1, score and unpaused challenge time. Return to the pitch, then resume explicitly.'));
+ const returnActions=el('div',null,'comeback-return-actions');
+ const returnMatch=el('button','↗ Return to Comeback','primary');
+ const endChallenge=el('button','End challenge');
+ returnMatch.type=endChallenge.type='button';
+ returnActions.append(returnMatch,endChallenge);
+ returnCard.append(returnText,returnActions);document.body.append(returnCard);
+ let active=null,windowFocused=true;
  const now=()=>Date.now();
  const valid=x=>x&&Number.isSafeInteger(x.at)&&x.at>0&&x.at<=now()+DAY&&
   DURATIONS.includes(x.duration)&&DEFICITS.includes(x.deficit)&&
@@ -98,8 +113,9 @@
   try{localStorage.removeItem(KEY);status.textContent='Only the local comeback history was cleared.';}
   catch{status.textContent='Could not clear browser storage.';}renderHistory();
  };
- function matchReady(){
-  if(serverLink||peerConnected||replay||!room||!started||match.hidden||!room.gameState)return false;
+ function matchReady(visible=true){
+  if(serverLink||peerConnected||replay||!room||!started||
+     (visible&&match.hidden)||!room.gameState)return false;
   if(!Number.isSafeInteger(room.currentFrameNo)||room.currentFrameNo<0||
      !Number.isSafeInteger(room.gameState.redScore)||!Number.isSafeInteger(room.gameState.blueScore))return false;
   const mine=room.state?.players?.find?.(p=>p.id===1);
@@ -130,6 +146,7 @@
  }
  function finish(message,complete=false){
   const s=active;if(!s)return;active=null;
+  returnCard.hidden=true;resume.hidden=true;
   if(complete)save(s);
   const adjustedAgainst=s.conceded+s.deficit;
   badge.textContent=message;
@@ -142,15 +159,52 @@
   if(complete)gauge.value=100;
   stop.hidden=true;again.hidden=false;close.hidden=false;
  }
- function dismiss(){active=null;hud.hidden=true;stop.hidden=false;again.hidden=true;close.hidden=true;}
+ function dismiss(){
+  active=null;hud.hidden=true;returnCard.hidden=true;
+  stop.hidden=false;again.hidden=true;close.hidden=true;resume.hidden=true;
+ }
+ function paintParked(){
+  const parked=!!active?.parked;
+  returnCard.hidden=!parked||!match.hidden||document.hidden;
+  resume.hidden=!parked||match.hidden||document.hidden;
+  if(parked){
+   badge.textContent='COMEBACK · PAUSED SAFELY';
+   if(active)clock.textContent=Math.max(0,Math.ceil((active.duration*60-active.frames)/60))+
+    's active play remaining · same native match';
+  }
+ }
+ function park(reason){
+  const s=active;if(!s||s.parked)return;
+  if(!matchReady(false)||room!==s.room||side()!==s.side){
+   finish('COMEBACK · MATCH CHANGED');return;
+  }
+  // Reuse the actual native local pause; never advance a virtual drill
+  // while the human cannot control the pitch.
+  if(!paused)togglePause();
+  if(!paused){finish('COMEBACK · COULD NOT PAUSE');return;}
+  if(typeof releaseInputs==='function')releaseInputs();
+  s.parked=true;s.frame=room.currentFrameNo;
+  status.textContent=reason+' Same match preserved; explicit Resume is required.';
+  paintParked();
+ }
  function tick(){
   const s=active;if(!s)return;
-  if(document.hidden){finish('COMEBACK · TAB HIDDEN');return;}
-  if(!matchReady()||room!==s.room||side()!==s.side||room.currentFrameNo<s.frame){
-   finish('COMEBACK · MATCH OR TEAM CHANGED');return;
-  }
+  if(!matchReady(false)||room!==s.room||side()!==s.side||
+     room.currentFrameNo<s.frame){finish('COMEBACK · MATCH OR TEAM CHANGED');return;}
   const [mine,theirs]=readScore(s);
   if(mine<s.initialFor||theirs<s.initialAgainst){finish('COMEBACK · MATCH RESTARTED');return;}
+  if(document.hidden||match.hidden||!windowFocused){
+   park('Comeback paused while you were away.');return;
+  }
+  if(s.parked){
+   // Resume applies only after an actual user action on the native match.
+   // No hidden/paused frames or kicks are credited on re-entry.
+   if(paused){paintParked();return;}
+   s.parked=false;s.frame=room.currentFrameNo;paintParked();
+   badge.textContent='COMEBACK · VIRTUAL HANDICAP';
+   status.textContent='Same offline challenge resumed; only active visible frames count.';
+   return;
+  }
   const delta=room.currentFrameNo-s.frame;
   if(delta>240){finish('COMEBACK · FRAME INTERRUPTED');return;}
   if(!paused)s.frames+=delta;
@@ -172,7 +226,7 @@
    if(!quickPlay('bot',true,true))throw Error('Native local 1v1 could not start without replacing your active session.');
    if(!matchReady())throw Error('Native 1v1 unavailable. Leave the online room first.');
    const team=side(),g=room.gameState;
-   active={room,side:team,duration:secs,deficit:goals,frames:0,
+   active={room,side:team,duration:secs,deficit:goals,frames:0,parked:false,
     frame:room.currentFrameNo,
     initialFor:team===1?g.redScore:g.blueScore,
     initialAgainst:team===1?g.blueScore:g.redScore,scored:0,conceded:0};
@@ -183,10 +237,32 @@
   }catch(error){dismiss();status.textContent=error?.message||'Could not launch local comeback.';}
  };
  stop.onclick=()=>finish('COMEBACK · STOPPED');
+ resume.onclick=()=>{
+  const s=active;
+  if(!s?.parked||match.hidden||document.hidden||!windowFocused||
+     !matchReady(false)||room!==s.room)return;
+  if(paused)togglePause();
+  if(!paused)tick();
+  else status.textContent='Native match could not resume; challenge remains paused.';
+ };
+ returnMatch.onclick=()=>{
+  if(!active?.parked||!matchReady(false))return;
+  document.getElementById('tabPlay')?.click();
+  queueMicrotask(paintParked);
+ };
+ endChallenge.onclick=()=>finish('COMEBACK · ENDED EXPLICITLY');
  again.onclick=()=>start.click();close.onclick=dismiss;
  window.setInterval(tick,150);
  window.addEventListener('storage',event=>{if(event.key===KEY||event.key===null)renderHistory();});
+ window.addEventListener('blur',()=>{windowFocused=false;park('Window lost focus.');});
+ window.addEventListener('focus',()=>{windowFocused=true;paintParked();});
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)park('Browser tab hidden.');else paintParked();
+ });
  const oldShowView=showView;
- showView=function(destination){if(destination!=='play'&&active)finish('COMEBACK · LEFT PITCH');oldShowView(destination);};
+ showView=function(destination){
+  if(destination!=='play'&&active)park('Browsing another view.');
+  oldShowView(destination);paintParked();
+ };
  renderHistory();
 })();
