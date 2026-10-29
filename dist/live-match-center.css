@@ -13,7 +13,7 @@
  letter-spacing:-.04em;margin:3px 0 5px}
 .match-center-head button{min-width:44px;min-height:44px;border-radius:9px;
  border:1px solid #91a9a1;background:#27414b;color:#f2f8ee;font-size:19px}
-.match-center-badge{font-size:10px;letter-spacing:.07em;color:#b8d0c5;line-height:1.5}
+.match-center-badge{font-size:10px;letter-spacing:.07em;color:#b8d0c5;line-height:1.5;overflow-wrap:anywhere}
 .match-center-score{display:flex;align-items:center;justify-content:center;gap:18px;
  border-block:1px solid #476467;padding:16px;margin:14px 0 17px;
  font-variant-numeric:tabular-nums}
