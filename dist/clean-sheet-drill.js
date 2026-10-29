@@ -134,10 +134,13 @@
   const players=room.state?.players;
   if(!Array.isArray(players))return false;
   const human=players.find(p=>p?.id===1),side=human?.team?.id;
-  // A defensive result requires a real opposing approved native bot.
-  return [1,2].includes(side)&&!botIds?.has?.(1)&&
-   players.some(p=>p&&Number.isSafeInteger(p.id)&&p.id!==1&&
-    botIds?.has?.(p.id)&&[1,2].includes(p.team?.id)&&p.team.id!==side);
+  const activePlayers=players.filter(p=>[1,2].includes(p?.team?.id));
+  // An authentic native 1v1 must have exactly one human and one genuine
+  // approved AI opponent; a stale bot ID or changed lineup is not proof.
+  const opponent=activePlayers.find(p=>p?.id!==1);
+  return [1,2].includes(side)&&human?.disc&&!botIds?.has?.(1)&&
+   activePlayers.length===2&&opponent?.disc&&opponent.aiControlled===true&&
+   botIds?.has?.(opponent.id)&&opponent.team.id===(side===1?2:1);
  };
  const team=()=>room?.state?.players?.find?.(p=>p.id===1)?.team?.id;
  function reason(){
