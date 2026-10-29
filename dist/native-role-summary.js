@@ -16,7 +16,8 @@
  function liveRole(){
   const link=typeof serverLink!=='undefined'?serverLink:null;
   if(!link?.room||link.quickMatchMode||link.ws?.readyState!==1||
-     !link.roomState||link.roomState.room&&link.roomState.room!==link.room)return null;
+     !link.roomState||link.roomState.room!==link.room||
+     !Number.isSafeInteger(link.roomState.round)||link.roomState.round<0)return null;
   const id=typeof networkPlayerId==='number'?networkPlayerId:null;
   const playerList=typeof room!=='undefined'?room?.state?.players:null;
   if(!Number.isSafeInteger(id)||id<=0||!Array.isArray(playerList))return null;
