@@ -26,8 +26,77 @@
  // original matchView is frequently hidden at the moment the socket drops.
  // This panel is strictly a view onto the existing reconnect/cancel callbacks.
  document.body.append(panel);
+ // Recovery is not over until the native server actually admits the room.
+ // After welcome, give players browsing Home/My Games an explicit way to
+ // return to the ongoing match without moving their team or auto-resuming.
+ const restored=document.createElement('aside');
+ restored.className='native-room-restored';restored.hidden=true;
+ restored.setAttribute('role','region');
+ restored.setAttribute('aria-label','Server-confirmed room reconnection');
+ const restoredText=document.createElement('div');
+ const restoredTitle=document.createElement('strong');
+ restoredTitle.textContent='ROOM CONNECTION RESTORED';
+ const restoredDetail=document.createElement('p');
+ restoredDetail.setAttribute('role','status');
+ restoredDetail.setAttribute('aria-live','polite');
+ restoredText.append(restoredTitle,restoredDetail);
+ const restoredActions=document.createElement('div');
+ restoredActions.className='native-room-restored-actions';
+ const returnButton=document.createElement('button');
+ returnButton.type='button';returnButton.className='primary';
+ returnButton.textContent='↗ Return to match';
+ const stayButton=document.createElement('button');
+ stayButton.type='button';stayButton.textContent='Stay here';
+ restoredActions.append(returnButton,stayButton);
+ restored.append(restoredText,restoredActions);
+ document.body.append(restored);
  let refreshTimer=null,deadline=0,handlers=null;
+ let pendingWelcomeLink=null,restoredLink=null;
+ function forgetRestored(){
+  pendingWelcomeLink=null;restoredLink=null;restored.hidden=true;
+ }
+ function refreshRestored(){
+  const link=typeof serverLink==='undefined'?null:serverLink;
+  if(restoredLink&&(link!==restoredLink||!link.room)){
+   forgetRestored();return;
+  }
+  restored.hidden=!restoredLink||!link?.room||!match.hidden;
+ }
+ function observeNativeSession(){
+  const link=typeof serverLink==='undefined'?null:serverLink;
+  if(pendingWelcomeLink){
+   const expected=pendingWelcomeLink;
+   pendingWelcomeLink=null;
+   // A welcome-admitted native room is the *only* success receipt.
+   // A failed or deliberately cancelled recovery cannot show success.
+   if(link===expected&&link?.room&&link.reconnect===true){
+    restoredLink=link;
+    restoredTitle.textContent=link.identityChanged?
+     'ROOM CONNECTED · NEW PLAYER ID':'ROOM CONNECTION RESTORED';
+    restoredDetail.textContent=link.identityChanged?
+     'The server admitted a new player identity. Review your team before continuing.':
+     'The server accepted your room connection. Check the lineup before resuming play.';
+   }
+  }
+  refreshRestored();
+ }
+ returnButton.addEventListener('click',()=>{
+  if(!restoredLink||typeof serverLink==='undefined'||
+     serverLink!==restoredLink||!serverLink.room){forgetRestored();return;}
+  document.getElementById('tabPlay')?.click();
+  forgetRestored();
+ });
+ stayButton.addEventListener('click',forgetRestored);
+ window.addEventListener('fuckball:native-session-state',observeNativeSession);
+ const restoredTicker=setInterval(refreshRestored,1000);
+ restoredTicker?.unref?.();
  function hide(){
+  // Native welcome calls hide immediately before publishing the admitted
+  // room + native-session-state. Bind the resulting receipt to this *exact*
+  // reconnect socket; any other socket/failed leave is ignored.
+  if(handlers?.phase==='connecting'&&typeof serverLink!=='undefined'&&
+     serverLink?.reconnect===true&&!serverLink?.room)
+   pendingWelcomeLink=serverLink;
   if(refreshTimer!==null){clearInterval(refreshTimer);refreshTimer=null;}
   handlers=null;deadline=0;panel.hidden=true;
   retry.onclick=null;cancel.onclick=null;
@@ -35,7 +104,7 @@
  function show(info){
   if(!info||!['waiting','connecting','offline','failed'].includes(info.phase))return;
   const firstAppearance=panel.hidden;
-  hide();handlers=info;panel.hidden=false;
+  hide();forgetRestored();handlers=info;panel.hidden=false;
   if(firstAppearance)panel.focus({preventScroll:true});
   tag.textContent=info.quickMatchMode?'HUMAN QUICK MATCH · '+info.quickMatchMode.toUpperCase():
    'ROOM CONNECTION';
@@ -72,5 +141,7 @@
   cancel.onclick=()=>{if(handlers!==info)return;info.cancel?.();};
  }
  window.FuckballRoomRecovery={show,hide};
- window.addEventListener('pagehide',hide);
+ window.addEventListener('pagehide',()=>{
+  hide();forgetRestored();clearInterval(restoredTicker);
+ });
 })();

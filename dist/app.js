@@ -523,7 +523,31 @@ function receiveSnapshot(buffer){if(peerRole!=='guest'||buffer.byteLength>2*1024
  stadium=data.roomData.stadium;$('stadiumLabel').textContent=stadium.name.toUpperCase();updateRoster();}
 function setupStateChannel(dc){stateChannel=dc;dc.binaryType='arraybuffer';dc.onmessage=e=>{if(e.data instanceof ArrayBuffer)try{receiveSnapshot(e.data);}catch{notify('Could not read snapshot.');}};}
 function lockGuest(){setButtons();}
-function setupChannel(dc){channel=dc;dc.binaryType='arraybuffer';dc.onopen=()=>{peerConnected=true;$('mode').value='bot';$('networkStatus').textContent='Connected. Red hosts; Blue joins.';$('connectionText').textContent='Direct connection · 1v1';$('networkDialog').close();if(peerRole==='host'){myTeam=1;$('mode').value='bot';resetMatch(true);botIds.delete(2);sendSnapshot();}else{room.setSimulationSpeed(0);started=true;paused=false;renderer.followPlayerId=networkPlayerId;}lockGuest();log('Player connected.');if(peerRole==='guest'&&settings.netcode!=='classic')send({type:'hello',netcode:3});
+function setupChannel(dc){channel=dc;dc.binaryType='arraybuffer';dc.onopen=()=>{
+ // Native WebSocket rooms intentionally reuse the original peer renderer and
+ // channel, but are already admitted/negotiated by their own server welcome.
+ // The direct-peer "hello" is NOT a legal room control message: sending it
+ // over a native room gave every admitted guest a spurious host-only error.
+ const nativeRoom=!!serverLink?.room;
+ peerConnected=true;
+ if(!nativeRoom){
+  $('mode').value='bot';
+  $('networkStatus').textContent='Connected. Red hosts; Blue joins.';
+  $('connectionText').textContent='Direct connection · 1v1';
+  $('networkDialog').close();
+ }
+ if(peerRole==='host'){
+  myTeam=1;$('mode').value='bot';resetMatch(true);botIds.delete(2);sendSnapshot();
+ }else{
+  room.setSimulationSpeed(0);
+  // Server-authoritative room status, not a direct-peer assumption, decides
+  // whether a newly admitted Custom Room has actually kicked off.
+  if(!nativeRoom){started=true;paused=false;}
+  renderer.followPlayerId=networkPlayerId;
+ }
+ lockGuest();log('Player connected.');
+ if(!nativeRoom&&peerRole==='guest'&&settings.netcode!=='classic')
+  send({type:'hello',netcode:3});
  // A successful direct-peer handshake is a real playable match, not an idle
  // background connection: show the pitch before accepting controller inputs.
  // No forced navigation until the data channel is actually open.

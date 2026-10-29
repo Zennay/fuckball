@@ -69,6 +69,9 @@
  }
  save.onclick=()=>{
   try{
+   // Read at the moment of editing rather than overwriting changes another
+   // game tab made after this panel was opened.
+   items=read();
    const label=name.value.trim();
    if(!validName(label))throw Error('Choose a name of 1–32 characters.');
    if(items.length>=MAX)throw Error('Eight presets saved; delete one first.');
@@ -89,8 +92,14 @@
  };
  remove.onclick=()=>{
   try{
-   const chosen=choose();
+   const selected=pick.value;
+   items=read();
+   const chosen=items.find(x=>x.name===selected);
+   if(!chosen)throw Error('This preset changed in another tab. Refresh and choose again.');
+   const before=localStorage.getItem(KEY);
    if(!confirm('Delete local preset "'+chosen.name+'"? Existing practice attempts will remain.'))return;
+   if(localStorage.getItem(KEY)!==before)
+    throw Error('Presets changed in another tab while confirming. Nothing was removed.');
    items=write(items.filter(x=>x.name!==chosen.name));
    render();feedback.textContent='Removed '+chosen.name+'. Goal Rush records are unchanged.';
   }catch(error){feedback.textContent=error.message||'Cannot remove preset.';}
@@ -110,19 +119,34 @@
  restore.onclick=()=>upload.click();
  upload.onchange=async()=>{
   const file=upload.files?.[0];upload.value='';if(!file)return;
+  // File parsing and confirmation are asynchronous; a second browser tab
+  // can save new drills meanwhile. Never overwrite those unseen updates.
+  let original;
+  try{original=localStorage.getItem(KEY);}
+  catch{feedback.textContent='Cannot access local preset storage. Nothing was changed.';return;}
   if(file.size<=0||file.size>MAX_FILE){feedback.textContent='Import refused: JSON must be at most 12 KB.';return;}
   try{
    const data=JSON.parse(await file.text());
    if(data?.format!=='fuckball-goal-rush-presets'||data.version!==1||data.source!=='local-user-defined')
     throw Error('Unsupported Goal Rush preset backup.');
    const incoming=normalize(data.presets);
-   if(!confirm('Replace '+items.length+' local Goal Rush presets with '+incoming.length+
+   if(localStorage.getItem(KEY)!==original)
+    throw Error('Saved drills changed in another tab during file reading. Import cancelled; try again.');
+   const current=read();
+   if(!confirm('Replace '+current.length+' local Goal Rush presets with '+incoming.length+
     ' from this file? Attempts, best scores and weekly goals will not change.'))return;
+   if(localStorage.getItem(KEY)!==original)
+    throw Error('Saved drills changed while import confirmation was open. Import cancelled.');
    items=write(incoming);render();
    feedback.textContent='Restored '+items.length+' saved drill setups on this device.';
   }catch(error){feedback.textContent='Import refused: '+(error.message||'Cannot read file');}
  };
  pick.onchange=()=>render(pick.value);
- window.addEventListener('storage',event=>{if(event.key===KEY){items=read();render();}});
+ window.addEventListener('storage',event=>{
+  if(event.key===KEY||event.key===null){
+   items=read();render();
+   feedback.textContent='Saved drills were updated in another tab. Review selection before playing.';
+  }
+ });
  render();
 })();

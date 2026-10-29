@@ -36,3 +36,26 @@
 .first-play-card>button:focus-visible{outline:3px solid #edff9d;outline-offset:3px}
 @media(max-width:600px){.first-play-card{padding:16px}
  .first-play-card>button{width:100%;min-height:48px;text-align:center}}
+
+/* Lesson state is explicitly parked while its original local match is paused.
+   Never present an off-screen goal as freshly completed coaching progress. */
+.first-play-card.first-play-parked{border-color:#d3e59d;background:linear-gradient(120deg,#273c35,#243b40)}
+.first-play-card.first-play-parked .first-play-home-status{color:#e3f8c2}
+.first-play-card.first-play-parked .first-play-return{background:#d6f8a5;color:#1e392c;border-color:#d6f8a5}
+.first-play-card.first-play-parked button:focus-visible{outline:3px solid #eaffb9;outline-offset:3px}
+
+/* First Touch teaches the player's currently configured controls while the
+   approved engine alone verifies movement, kicks and goals. */
+.first-play-hud .first-play-controls-hint{
+ margin:0 0 12px;padding:9px 11px;border:1px solid #8cbdb0;
+ border-radius:9px;background:#24433dcc;color:#e2ffda;
+ font-size:12px;font-weight:650;line-height:1.5;overflow-wrap:anywhere
+}
+@media(max-width:750px){
+ .first-play-hud .first-play-controls-hint{font-size:12px;padding:8px 10px}
+ .first-play-hud .first-play-detail{margin-bottom:8px}
+}
+@media(max-width:370px){
+ .first-play-hud{max-height:calc(100dvh - 160px);overflow-y:auto}
+ .first-play-actions button{min-height:46px}
+}

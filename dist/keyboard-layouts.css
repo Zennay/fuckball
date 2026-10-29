@@ -54,3 +54,14 @@
  background:#172e2a;border:1px solid #a3d3bc;color:#e2ffed;
  font-size:.8rem;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:560px){.keyboard-couch-keys{font-size:.8rem;padding:10px}}
+
+/* Keyboard profile recovery stays explicit, keyboard-accessible and unavailable
+   unless a real local human-triggered profile switch can be undone. */
+.keyboard-profile-undo{min-height:48px!important;font-weight:800!important}
+.keyboard-profile-undo:disabled{opacity:.48;cursor:not-allowed!important;
+ filter:none!important}
+.keyboard-layouts .keyboard-profile-undo:focus-visible,
+.keyboard-quick-start .keyboard-profile-undo:focus-visible{
+ outline:3px solid #e0ff9d;outline-offset:3px}
+@media(max-width:680px){.keyboard-quick-slots .keyboard-profile-undo{
+ flex:1 1 100%;min-width:0}}

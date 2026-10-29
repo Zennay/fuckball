@@ -11,25 +11,28 @@
  moments.className='replay-bookmarks';moments.hidden=true;
  moments.setAttribute('aria-label','Your saved replay moments');
  controls.append(markButton,moments);
- let generation=0;
- // A moment belongs to one exact stored recording AND one active replay
- // instance. Stale asynchronous IndexedDB results or an old dialog must not
- // control, rename or delete a different playback after navigation.
- const stillViewing=(id,instance)=>!!instance&&replay===instance&&activeLocalReplayId===id;
- const selectFrame=(id,instance,frameNo)=>{
-  if(!stillViewing(id,instance))return;
+ let generation=0,editor=null;
+ function closeEditor(){
+  const pending=editor;editor=null;
+  if(pending?.open)pending.close();
+ }
+ const selectFrame=(frameNo,id,playback)=>{
+  if(!replay||replay!==playback||activeLocalReplayId!==id||controls.hidden)return;
+  // Bookmarks are review markers, just like the local event timeline and
+  // coaching notes: arrive paused so a goal/decision cannot pass unnoticed.
   replay.setTime(Math.min(replay.length(),frameNo*1000/60));
-  replay.setSpeed(1);$('replayToggle').textContent='Ⅱ';
+  replay.setSpeed(0);$('replayToggle').textContent='▶';
  };
  async function refreshReplayBookmarks(){
-  const token=++generation,id=activeLocalReplayId,instance=replay;
-  markButton.hidden=!id||!instance;
+  const token=++generation,id=activeLocalReplayId,playback=replay;
+  markButton.hidden=!id||!playback;
+  // Prevent recording-mismatched saves while IndexedDB is still loading.
   markButton.disabled=true;
   moments.replaceChildren();moments.hidden=true;
   if(!id||!replay)return;
   try{
    const item=(await ReplayLibrary.list()).find(x=>x.id===id);
-   if(token!==generation||!stillViewing(id,instance))return;
+   if(token!==generation||id!==activeLocalReplayId||replay!==playback)return;
    if(!item){markButton.hidden=true;return;}
    const saved=ReplayLibrary.normalizeBookmarks(item.bookmarks,item.frames);
    markButton.disabled=saved.length>=30;
@@ -44,22 +47,18 @@
     go.className='replay-moment';
     go.textContent=fmt(entry.frameNo/60)+' · '+entry.label;
     go.title='Jump to '+entry.label;
-    go.onclick=()=>selectFrame(id,instance,entry.frameNo);
+    go.onclick=()=>selectFrame(entry.frameNo,id,playback);
     const remove=document.createElement('button');remove.type='button';
     remove.className='replay-remove-bookmark';remove.textContent='×';
     remove.setAttribute('aria-label','Remove moment '+entry.label);
     remove.onclick=async()=>{
-     if(!stillViewing(id,instance))return;
+     if(id!==activeLocalReplayId||replay!==playback||remove.disabled)return;
      remove.disabled=true;
-     try{
-      await ReplayLibrary.removeBookmark(id,entry.frameNo);
-      if(stillViewing(id,instance))await refreshReplayBookmarks();
-     }catch(e){
-      if(stillViewing(id,instance)){
-       notify('Could not delete moment: '+(e.message||'storage error'));
-       remove.disabled=false;
-      }
-     }
+     try{await ReplayLibrary.removeBookmark(id,entry.frameNo);
+      if(id===activeLocalReplayId&&replay===playback)await refreshReplayBookmarks();}
+     catch(e){if(id===activeLocalReplayId&&replay===playback)
+      notify('Could not delete moment: '+(e.message||'storage error'));
+      remove.disabled=false;}
     };
     group.append(go,remove);moments.append(group);
    }
@@ -70,10 +69,11 @@
  window.refreshReplayBookmarks=refreshReplayBookmarks;
  markButton.onclick=()=>{
   if(!activeLocalReplayId||!replay)return;
-  const id=activeLocalReplayId,instance=replay,
-  position=Math.round(replay.getTime()/1000*60);
+  const id=activeLocalReplayId,playback=replay,position=Math.round(replay.getTime()/1000*60);
   if(!Number.isSafeInteger(position)||position<0)return;
+  closeEditor();
   const dialog=document.createElement('dialog');dialog.className='replay-bookmark-dialog';
+  editor=dialog;
   const form=document.createElement('form');form.className='replay-bookmark-form';
   const h=document.createElement('h2');h.textContent='Save replay moment';
   const note=document.createElement('p');note.textContent='Bookmark this recording at '+fmt(position/60)+'.';
@@ -86,18 +86,21 @@
   const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Save moment';
   cancel.onclick=()=>dialog.close();actions.append(cancel,save);
   form.append(h,note,label,actions);dialog.append(form);document.body.append(dialog);
-  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  dialog.addEventListener('close',()=>{
+   if(editor===dialog)editor=null;
+   dialog.remove();
+  },{once:true});
   form.onsubmit=async event=>{
    event.preventDefault();
-   if(!stillViewing(id,instance)){
-    note.textContent='The active replay changed. Close this dialog and reopen Save moment for the current recording.';
-    save.disabled=true;return;
+   if(id!==activeLocalReplayId||replay!==playback||editor!==dialog){
+    note.textContent='Recording changed. Reopen the current replay to save this moment.';
+    return;
    }
    save.disabled=true;
    try{
     await ReplayLibrary.addBookmark(id,position,input.value);
-    dialog.close();
-    if(stillViewing(id,instance))await refreshReplayBookmarks();
+    if(editor===dialog)dialog.close();
+    if(id===activeLocalReplayId&&replay===playback)await refreshReplayBookmarks();
    }catch(e){
     note.textContent=e.message||'Could not save this moment.';
     save.disabled=false;
@@ -107,24 +110,30 @@
  };
  const oldLoad=loadReplay;
  loadReplay=function(bytes,name){
-  // Native loadReplay first checks active online/peer/queue/local-game gates
-  // and validates the recording. If it throws, keep existing saved moments
-  // bound to the still-active original replay, not a phantom new session.
-  oldLoad(bytes,name);
-  activeLocalReplayId=null;
-  generation++;
-  void refreshReplayBookmarks();
+  // The engine may reject corrupt HBR2 or an active human match before
+  // changing playback. Never detach the *previous* saved replay's ID first.
+  const previousReplay=replay,previousId=activeLocalReplayId;
+  try{oldLoad(bytes,name);}
+  catch(error){
+   if(replay===previousReplay)activeLocalReplayId=previousId;
+   else{activeLocalReplayId=null;closeEditor();
+    refreshReplayBookmarks();window.refreshReplayNotes?.();}
+   throw error;
+  }
+  // A real recording switch invalidates any old bookmark/editor and notes.
+  // My Games binds the new ID after load, then explicitly refreshes both.
+  closeEditor();activeLocalReplayId=null;generation++;
+  refreshReplayBookmarks();
+  window.refreshReplayNotes?.();
  };
- const oldClose=closeReplay;
- closeReplay=function(){
-  activeLocalReplayId=null;generation++;
-  oldClose();markButton.hidden=true;markButton.disabled=true;
-  moments.hidden=true;moments.replaceChildren();
- };
- // The library already broadcasts metadata changes across browser tabs.
- // Reconcile saved moments only for the active recording; deletion in
- // another tab immediately disables stale Save/Jump/Delete affordances.
+ // The replay library broadcasts local and other-tab bookmark updates.
+ // Reconcile only the exact active source; old async results are fenced.
  window.addEventListener('fuckball:local-replay-library-change',()=>{
   if(activeLocalReplayId&&replay)void refreshReplayBookmarks();
  });
+ const oldClose=closeReplay;
+ closeReplay=function(){
+  closeEditor();activeLocalReplayId=null;generation++;
+  oldClose();markButton.hidden=true;moments.hidden=true;moments.replaceChildren();
+ };
 })();

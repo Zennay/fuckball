@@ -91,3 +91,26 @@
  .knockout-series-handoff-actions{width:100%}
  .knockout-series-handoff-actions>*{flex:1 1 125px}}
 @media print{.knockout-series-handoff{display:none!important}}
+
+/* Fail-closed recovery for genuine device-local knockout progress. */
+.knockout-storage-recovery[hidden]{display:none!important}
+.knockout-storage-recovery{display:grid;gap:12px;margin:14px 0 20px;padding:16px 18px;
+ border:2px solid #f4bc81;border-radius:12px;background:#402a23;color:#fff1e3;
+ box-sizing:border-box}
+.knockout-storage-recovery strong{letter-spacing:.045em;font-weight:900;
+ font-size:.91rem;color:#ffe3b1}
+.knockout-storage-recovery p{margin:0;max-width:75ch;line-height:1.5;
+ font-size:.89rem;color:#f4dfc8;overflow-wrap:anywhere}
+.knockout-storage-recovery-actions{display:flex;gap:10px;flex-wrap:wrap}
+.knockout-storage-recovery-actions button{min-height:48px;padding:10px 14px;
+ font:inherit;font-weight:800;font-size:.84rem;border:1px solid #f0cb9e;
+ color:#fff1df;background:#50362c;border-radius:9px;cursor:pointer}
+.knockout-storage-recovery-actions button:first-child{background:#dff9ad;
+ color:#1e3528;border-color:#dff9ad}
+.knockout-storage-recovery-actions button:disabled{opacity:.48;cursor:not-allowed}
+.knockout-storage-recovery-actions button:focus-visible{outline:3px solid #fff0c5;outline-offset:3px}
+@media(max-width:640px){
+ .knockout-storage-recovery{padding:14px}
+ .knockout-storage-recovery-actions{display:grid;grid-template-columns:1fr}
+}
+@media print{.knockout-storage-recovery{display:none!important}}

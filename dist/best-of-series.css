@@ -77,3 +77,14 @@
  font-weight:850;letter-spacing:.01em}
 .series-game .series-game-poster:focus-visible{outline:3px solid #e6ffab;outline-offset:3px}
 @media print{.series-game .series-game-poster{display:none!important}}
+
+/* Recovery is a two-step explicit human action. Never make destructive
+   replacement look identical to a harmless ordinary JSON import. */
+.series-recovery .series-recovery-restore{min-height:48px;
+ border:1px solid #ffe9bd;background:#f6dfac;color:#35250e;font-weight:900}
+.series-recovery .series-recovery-restore:disabled{background:#776d59;
+ color:#f4ede1;border-color:#a3957e;opacity:.65;cursor:not-allowed}
+.series-recovery button{flex:1 1 260px;white-space:normal}
+.series-recovery :is(button):focus-visible{outline:3px solid #fff7ad;outline-offset:3px}
+@media(max-width:560px){.series-recovery{flex-direction:column;align-items:stretch}
+ .series-recovery button{flex:0 0 auto;width:100%}}
