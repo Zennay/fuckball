@@ -26,6 +26,8 @@
  async function refreshReplayBookmarks(){
   const token=++generation,id=activeLocalReplayId,playback=replay;
   markButton.hidden=!id||!playback;
+  // Prevent recording-mismatched saves while IndexedDB is still loading.
+  markButton.disabled=true;
   moments.replaceChildren();moments.hidden=true;
   if(!id||!replay)return;
   try{
@@ -124,6 +126,11 @@
   refreshReplayBookmarks();
   window.refreshReplayNotes?.();
  };
+ // The replay library broadcasts local and other-tab bookmark updates.
+ // Reconcile only the exact active source; old async results are fenced.
+ window.addEventListener('fuckball:local-replay-library-change',()=>{
+  if(activeLocalReplayId&&replay)void refreshReplayBookmarks();
+ });
  const oldClose=closeReplay;
  closeReplay=function(){
   closeEditor();activeLocalReplayId=null;generation++;
