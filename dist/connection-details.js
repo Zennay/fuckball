@@ -140,10 +140,9 @@
   else if(playingSince===null)playingSince=now;
   const last=Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0?
    net.lastSnapshot:null;
-  // On the first 1s UI tick, an already-received snapshot may predate the
-  // observation slightly. Allow the current tick's 1s window, never a stale
-  // reading from an older play period.
-  const snapshotReceived=playing&&last!==null&&last>=playingSince-1000;
+  // Only a frame from THIS active-play interval is evidence of playback.
+  // Do not credit cached prior-round frames or timestamps in the future.
+  const snapshotReceived=playing&&last!==null&&last>=playingSince&&last<=now;
   const sinceUpdate=playing?Math.max(0,now-(snapshotReceived?last:playingSince)):null;
   const ageMs=snapshotReceived?sinceUpdate:null;
   const waitingForFirstSnapshotMs=playing&&!snapshotReceived?sinceUpdate:null;

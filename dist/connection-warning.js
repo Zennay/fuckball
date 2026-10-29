@@ -84,7 +84,8 @@
   // Start timing from observed active play, not from stale previous rounds;
   // paused lobbies and hidden/background tabs restart this grace window.
   const freshFrame=running&&Number.isFinite(net.lastSnapshot)&&
-   net.lastSnapshot>0&&playStartedAt!==null&&net.lastSnapshot>=playStartedAt;
+   net.lastSnapshot>0&&playStartedAt!==null&&
+   net.lastSnapshot>=playStartedAt&&net.lastSnapshot<=now;
   const last=running?(freshFrame?net.lastSnapshot:playStartedAt):null;
   const recent=running&&last!==null?Math.max(0,now-last):null;
   // A snapshot from the *previous* server round does not prove that even one
