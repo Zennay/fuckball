@@ -267,6 +267,8 @@ function game(makeRoom, candidate, incumbent, mapName, candidateSide, seed, fram
       if (keeperRelease && tick - keeperRelease.tick > 180) finishKeeper(null);
     }
 
+    if (pendingPass) finishPass('unresolved');
+    if (keeperRelease) finishKeeper(null);
     const elapsedSeconds = Number(process.hrtime.bigint() - start) / 1e9;
     const final = room.gameState;
     const red = Number(final.redScore) || 0;
