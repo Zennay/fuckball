@@ -1,0 +1,44 @@
+name: QA Account Record Schema
+on:
+  pull_request:
+    paths:
+      - headless/accounts.cjs
+      - tests/account-record-schema-qa.cjs
+      - .github/workflows/qa-account-record-schema.yml
+  push:
+    branches: [main]
+    paths:
+      - headless/accounts.cjs
+      - tests/account-record-schema-qa.cjs
+      - .github/workflows/qa-account-record-schema.yml
+permissions:
+  contents: read
+jobs:
+  account-records:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Assert exact triggering source SHA and clean checkout
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail-closed persisted record schema and existing account API
+        run: |
+          node --check headless/accounts.cjs
+          node --check tests/account-record-schema-qa.cjs
+          node tests/account-record-schema-qa.cjs
+          node tests/account-file-admission-qa.cjs
+          node tests/account-state-integrity-qa.cjs
+          node tests/account-persistence-write-failure-qa.cjs
+          node tests/account-prototype-name-qa.cjs
+          node tests/accounts.cjs

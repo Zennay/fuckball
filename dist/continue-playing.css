@@ -1,0 +1,36 @@
+/* Compact local shortcuts; Play and human matchmaking remain the primary home action. */
+.continue-playing{max-width:1160px;margin:23px auto;padding:clamp(15px,3vw,26px);background:#182e32;border:1px solid #5b7a70;border-radius:16px;color:#edf7e7}
+.continue-playing-head{display:flex;justify-content:space-between;align-items:start;gap:16px;flex-wrap:wrap}
+.continue-playing-head h2{font-size:clamp(23px,3vw,32px);letter-spacing:-.05em;font-style:italic;font-weight:950;margin:7px 0 8px}
+.continue-playing-head p{margin:0;max-width:625px;color:#c1d5ca;font-size:12px;line-height:1.6}
+.continue-playing-actions{display:flex;gap:8px;flex-wrap:wrap}
+.continue-playing button{border:1px solid #7fa38c;border-radius:8px;background:#315449;color:#edf7e6;padding:11px 14px;cursor:pointer;font-size:12px;font-weight:700;min-height:42px}
+.continue-playing button:hover{background:#496853}
+.continue-playing button:focus-visible{outline:3px solid #ddf8ac;outline-offset:3px}
+.continue-playing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0 8px}
+.continue-playing-card{display:grid;align-content:start;gap:10px;padding:16px;border-radius:11px;background:#223c42;border:1px solid #5d7f76;min-width:0}
+.continue-playing-badge{font-size:10px;letter-spacing:.12em;font-weight:900;color:#d2eea9}
+.continue-playing-card strong{font-size:15px;color:#f6faef;overflow-wrap:anywhere}
+.continue-playing-card p{font-size:12px;line-height:1.5;color:#b3d0c2;margin:0}
+.continue-playing-card button{justify-self:start;align-self:end}
+.continue-playing-note{min-height:17px;margin:13px 0 0;font-size:11px;color:#b3cdbc}
+@media(max-width:900px){.continue-playing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:590px){.continue-playing{margin:18px 12px}.continue-playing-grid{grid-template-columns:1fr}.continue-playing-card{padding:14px}.continue-playing-actions{width:100%}.continue-playing-actions button{flex:1}}
+
+/* Home must never advertise replacing a still-open human or local game. */
+.continue-playing-live[hidden]{display:none!important}
+.continue-playing-live{display:flex;align-items:center;justify-content:space-between;gap:18px;
+ margin:8px 0 17px;padding:15px 18px;box-sizing:border-box;border-radius:14px;
+ border:1px solid #cee9a6;background:linear-gradient(115deg,#1c3831,#233e3b);
+ color:#effceb;box-shadow:0 9px 24px #071e2266}
+.continue-playing-live strong{display:block;font-size:.86rem;letter-spacing:.065em;color:#e5ffb4}
+.continue-playing-live-copy{min-width:0}
+.continue-playing-live-copy p{color:#d3e5d9;margin:5px 0 0;
+ font-size:.85rem;line-height:1.45;max-width:65ch}
+.continue-playing-live button{min-height:46px;min-width:185px;flex-shrink:0;
+ background:#d6ff92;border:1px solid #d6ff92;border-radius:9px;color:#18301e;
+ font:inherit;font-weight:800;font-size:.83rem;padding:10px 15px;cursor:pointer}
+.continue-playing-live button:focus-visible{outline:3px solid #f5ffac;outline-offset:3px}
+.continue-playing-card button:disabled{opacity:.58;cursor:not-allowed}
+@media(max-width:680px){.continue-playing-live{flex-direction:column;align-items:stretch;
+ padding:13px;gap:10px}.continue-playing-live button{width:100%;min-width:0}}

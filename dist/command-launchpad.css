@@ -1,0 +1,56 @@
+/* Game-wide feature search and optional home focus mode; no gameplay hooks. */
+.launchpad-open{border:1px solid #c7e8ab;background:#d9f8b9;color:#15342f;
+ border-radius:8px;padding:7px 13px;font:inherit;font-weight:850;cursor:pointer;white-space:nowrap}
+.launchpad-open:hover{filter:brightness(1.06)}
+.launchpad-open:focus-visible,.launchpad-dialog :is(button,input):focus-visible{
+ outline:3px solid #ffdc89;outline-offset:3px}
+.launchpad-dialog{width:min(670px,calc(100vw - 22px));max-height:min(80vh,780px);
+ margin:auto;border:1px solid #678c7c;border-radius:20px;background:#152d31;color:#eff9ee;
+ padding:0;box-shadow:0 24px 80px #0009;overflow:hidden}
+.launchpad-dialog::backdrop{background:rgba(2,16,22,.72);backdrop-filter:blur(6px)}
+.launchpad-header{display:flex;justify-content:space-between;align-items:center;gap:12px;
+ padding:18px 20px;border-bottom:1px solid #496962;background:#1d3b3d}
+.launchpad-header>div{display:grid;gap:4px}
+.launchpad-header strong{letter-spacing:.09em;font-size:1.05rem}
+.launchpad-header small{color:#c5dbce;font-size:.83rem}
+.launchpad-close{padding:7px 11px;cursor:pointer;background:#2f5152;color:#f0f9ee;
+ border:1px solid #719089;border-radius:8px;font:inherit}
+.launchpad-dialog>input[type=search]{display:block;width:calc(100% - 36px);margin:17px 18px 11px;
+ background:#244547;color:#fff;border:1px solid #84a69b;border-radius:10px;padding:14px 15px;font:inherit;font-size:1rem;box-sizing:border-box}
+.launchpad-dialog>input::placeholder{color:#bdd8ce}
+.launchpad-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+ padding:0 18px 13px;border-bottom:1px solid #47645b}
+.launchpad-mode{font:inherit;font-size:.79rem;font-weight:750;color:#16302b;background:#d9f2b4;
+ padding:8px 11px;border:1px solid #c0dba1;border-radius:8px;cursor:pointer}
+.launchpad-mode[aria-pressed=true]{background:#ffe0a1}
+.launchpad-hint{color:#b5cec1;font-size:.75rem}
+.launchpad-list{padding:8px 12px;overflow:auto;max-height:min(52vh,490px);scrollbar-gutter:stable}
+.launchpad-result{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:7px;
+ border-radius:11px;border:1px solid transparent;margin:3px 0}
+.launchpad-result.selected{border-color:#7cad91;background:#244747}
+.launchpad-result-main{display:grid;gap:4px;text-align:left;cursor:pointer;border:none;background:transparent;
+ color:#fff;padding:11px 9px;min-width:0;font:inherit}
+.launchpad-result-main strong{font-size:.93rem;overflow-wrap:anywhere}
+.launchpad-result-main span{font-size:.78rem;color:#c6dfd0;line-height:1.4;overflow-wrap:anywhere}
+.launchpad-result-group{font-size:.69rem;color:#cef0ab;white-space:nowrap}
+.launchpad-pin{font:inherit;cursor:pointer;font-size:1.25rem;color:#ffe1a3;background:transparent;
+ border:1px solid transparent;padding:6px 9px;border-radius:9px}
+.launchpad-pin:hover,.launchpad-pin[aria-pressed=true]{background:#375551}
+.launchpad-empty{color:#c7dbce;padding:22px 13px}
+.launchpad-status{min-height:20px;color:#c1d8c9;font-size:.78rem;padding:11px 20px;margin:0;
+ border-top:1px solid #45625d;background:#19383a}
+.launchpad-focus-home #homeView :is(
+ .practice-lab,.practice-plan,.practice-circuit,.practice-journal,
+ .tournament-desk,.knockout-desk,.matchday-hub,.formation-studio,.game-night-pack,
+ .room-browser,.friend-party,.continue-playing,.matchday-posters){display:none!important}
+@media(max-width:650px){
+ .launchpad-open{padding:6px 9px;font-size:.75rem}
+ .launchpad-dialog{max-height:90vh}
+ .launchpad-header{padding:13px}
+ .launchpad-header strong{font-size:.94rem}
+ .launchpad-result-group{display:none}
+ .launchpad-result{grid-template-columns:minmax(0,1fr) auto}
+ .launchpad-toolbar{align-items:flex-start}
+ .launchpad-hint{font-size:.7rem}
+}
+@media(prefers-reduced-motion:reduce){.launchpad-dialog::backdrop{backdrop-filter:none}}

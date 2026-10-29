@@ -1,0 +1,67 @@
+.keyboard-layouts{margin:18px 0;padding:17px;border:1px solid var(--border,#60727a);background:#1d323a;border-radius:12px;max-width:750px}
+.keyboard-layouts h3{font-size:17px;font-weight:900;letter-spacing:.06em;margin:0 0 6px;color:#d8f6b2}
+.keyboard-layouts p{max-width:660px;line-height:1.5;color:#d0dee0;font-size:13px;margin:7px 0 14px}
+.keyboard-layouts .keyboard-layout-presets,.keyboard-layouts .keyboard-layout-actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+.keyboard-layouts button{min-height:40px;white-space:normal}
+.keyboard-layouts label{font-size:13px;font-weight:600;max-width:290px;color:#e0e9ed}
+.keyboard-layouts select{min-width:180px;min-height:38px;margin-top:8px}
+.keyboard-layouts .keyboard-layout-status{color:#d8f6b2;font-weight:600;min-height:20px}
+.keyboard-layouts .keyboard-layout-status.error{color:#ffb5b5}
+.keyboard-layouts .keyboard-layout-disclaimer{font-size:12px;color:#c7d3d7}
+@media(max-width:560px){.keyboard-layouts{padding:12px}.keyboard-layouts button{min-height:44px;flex-grow:1}.keyboard-layouts label{max-width:none}}
+
+/* Home keyboard onboarding: explicit profile actions, never active game input. */
+.keyboard-quick-start{width:min(1130px,calc(100% - 32px));margin:22px auto;padding:22px;
+ box-sizing:border-box;border-radius:16px;border:1px solid #60878b;
+ background:linear-gradient(135deg,#142e37,#213e35);color:#edf9f0}
+.keyboard-quick-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.keyboard-quick-head span{color:#d3f6a3;font-weight:900;font-size:.75rem;letter-spacing:.09em}
+.keyboard-quick-head h2{font-size:clamp(1.35rem,3vw,2rem);margin:6px 0}
+.keyboard-quick-head p,.keyboard-quick-help{font-size:.86rem;color:#c4dfd8;
+ line-height:1.5;max-width:75ch}
+.keyboard-quick-start button,.keyboard-quick-start select{font:inherit;color:#ebf9ee;
+ background:#25494a;border:1px solid #7ca09b;border-radius:9px;padding:10px 13px;
+ min-height:44px;cursor:pointer}
+.keyboard-quick-start button:hover{filter:brightness(1.12)}
+.keyboard-quick-start :is(button,select,.keyboard-quick-live):focus-visible{
+ outline:3px solid #d3f5a0;outline-offset:3px}
+.keyboard-quick-presets{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.keyboard-quick-presets button{background:#d0f3a7;color:#19332f;border-color:#b0d895;font-weight:750}
+.keyboard-quick-slots{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:12px 0 20px}
+.keyboard-quick-slots label{display:grid;gap:6px;min-width:210px;font-size:.85rem}
+.keyboard-quick-slots select{min-width:210px}
+.keyboard-quick-start h3{font-size:.9rem;letter-spacing:.07em;margin:12px 0}
+.keyboard-quick-map{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.keyboard-quick-key{display:grid;gap:5px;min-width:0;padding:11px;
+ border:1px solid #50746f;background:#1c3538;border-radius:10px;font-size:.84rem}
+.keyboard-quick-key strong{color:#d3f6a3}
+.keyboard-quick-key span{color:#f3f9ee;overflow-wrap:anywhere}
+.keyboard-quick-live{padding:16px;background:#0c222b;border:1px dashed #a4c1a8;
+ border-radius:10px;color:#e2f8cf;margin-top:14px;min-height:21px;line-height:1.45;cursor:text}
+.keyboard-quick-status{font-size:.85rem;min-height:20px;color:#d0f3b4}
+.keyboard-quick-status.error{color:#ffb2b2}
+@media(max-width:680px){
+ .keyboard-quick-start{width:calc(100% - 20px);margin:18px auto;padding:13px}
+ .keyboard-quick-map{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .keyboard-quick-slots label,.keyboard-quick-slots select{width:100%;min-width:0}
+ .keyboard-quick-presets button{flex:1 1 44%}
+}
+@media print{.keyboard-quick-start{display:none!important}}
+
+/* In couch mode the physical P2 keyboard is reserved; disclose actual P1
+   keys including safe conflict fallbacks before launching a local match. */
+.keyboard-couch-keys{margin:8px 0 12px;padding:11px 13px;border-radius:10px;
+ background:#172e2a;border:1px solid #a3d3bc;color:#e2ffed;
+ font-size:.8rem;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:560px){.keyboard-couch-keys{font-size:.8rem;padding:10px}}
+
+/* Keyboard profile recovery stays explicit, keyboard-accessible and unavailable
+   unless a real local human-triggered profile switch can be undone. */
+.keyboard-profile-undo{min-height:48px!important;font-weight:800!important}
+.keyboard-profile-undo:disabled{opacity:.48;cursor:not-allowed!important;
+ filter:none!important}
+.keyboard-layouts .keyboard-profile-undo:focus-visible,
+.keyboard-quick-start .keyboard-profile-undo:focus-visible{
+ outline:3px solid #e0ff9d;outline-offset:3px}
+@media(max-width:680px){.keyboard-quick-slots .keyboard-profile-undo{
+ flex:1 1 100%;min-width:0}}

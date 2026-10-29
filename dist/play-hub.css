@@ -1,0 +1,246 @@
+/* Play Hub: primary navigation without changing game physics or queue authority. */
+.play-hub{
+ max-width:1340px;margin:0 auto 28px;padding:22px clamp(15px,2.5vw,30px);
+ border-radius:20px;color:#f0f8ef;
+ border:1px solid rgba(193,232,206,.25);
+ background:linear-gradient(130deg,#112a31 10%,#173535 50%,#142830 100%);
+ box-shadow:0 18px 45px rgba(0,16,20,.27);
+}
+.play-hub-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px}
+.play-hub-kicker,.play-hub-label{font-size:.73rem;letter-spacing:.095em;font-weight:800;color:#c5ef8f}
+.play-hub-heading h2{font-size:clamp(1.5rem,3vw,2.55rem);line-height:1.1;margin:6px 0}
+.play-hub-heading p{color:#d3e3dd;font-size:.92rem;margin:7px 0 0;max-width:66ch}
+.play-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.play-hub-card{
+ border:1px solid rgba(211,241,229,.25);border-radius:15px;
+ padding:clamp(16px,2vw,23px);min-width:0;
+ background:rgba(9,23,29,.46);display:flex;flex-direction:column;align-items:flex-start
+}
+.play-hub-human{background:linear-gradient(140deg,rgba(56,81,56,.56),rgba(9,33,31,.63))}
+.play-hub-card h3{font-size:clamp(1.05rem,1.8vw,1.4rem);line-height:1.2;margin:7px 0}
+.play-hub-card p{font-size:.9rem;line-height:1.52;color:#d4e4de;margin:0 0 15px;max-width:61ch}
+.play-hub-formats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.play-hub button{
+ font:inherit;border:1px solid #698a80;background:#26413f;color:#f7fffa;
+ border-radius:10px;cursor:pointer;min-height:44px;padding:9px 14px;font-weight:800
+}
+.play-hub button:hover:not(:disabled){filter:brightness(1.14)}
+.play-hub button:focus-visible{outline:3px solid #deff85;outline-offset:3px}
+.play-hub .play-hub-format{min-width:63px;padding:8px 10px}
+.play-hub .play-hub-format.selected{background:#d4f779;color:#122820;border-color:#d4f779}
+.play-hub .play-hub-primary{background:#d6f879;color:#152a1f;border-color:#d6f879;margin-top:auto}
+.play-hub .play-hub-resume{background:transparent;color:#defab9;white-space:normal}
+.play-hub .play-hub-resume[hidden]{display:none}
+.play-hub-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:auto}
+.play-hub .play-hub-secondary{background:#28403d}
+.play-hub-status{min-height:24px;margin:14px 0 0;color:#dcf5c0;font-size:.85rem}
+.play-hub-footer{display:flex;gap:12px;align-items:center;justify-content:space-between;
+ border-top:1px solid rgba(225,252,229,.2);padding-top:12px;margin-top:5px}
+.play-hub-hint,.play-hub-network{font-size:.78rem;line-height:1.4;color:#c6d9d2}
+.play-hub-network{font-weight:800;color:#d9fbaa;text-align:right;white-space:normal}
+@media(max-width:940px){.play-hub-grid{grid-template-columns:1fr}}
+@media(max-width:600px){
+ .play-hub{margin:0 10px 22px;border-radius:12px;padding:13px}
+ .play-hub-header,.play-hub-footer{flex-direction:column;align-items:stretch}
+ .play-hub-network{text-align:left}
+ .play-hub-card{padding:15px}
+ .play-hub-card h3{font-size:1.13rem}
+ .play-hub .play-hub-primary{width:100%}
+ .play-hub-formats{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+ .play-hub .play-hub-format{min-width:0}
+ .play-hub-actions{width:100%}
+ .play-hub-actions button{flex:1 1 45%}
+}
+@media(prefers-reduced-motion:reduce){.play-hub *{scroll-behavior:auto!important}}
+@media print{.play-hub{display:none!important}}
+
+/* A direct, deliberate human-queue action; configure/view remains separate. */
+.play-hub .play-hub-queue-now{background:#d6f879;color:#153122;border-color:#d6f879;
+ width:100%;font-size:1.04rem;min-height:50px;margin-top:auto}
+.play-hub-human .play-hub-primary{width:100%;margin-top:9px;background:#244b47;color:#dff6dc;border-color:#78a397}
+@media(max-width:600px){.play-hub .play-hub-queue-now{min-height:52px}}
+
+/* Match-first lobby: the two immediate online paths stay above the fold.
+   Offline training and replay tools remain accessible via progressive disclosure. */
+.play-hub-extras{margin-top:12px;border:1px solid rgba(211,241,229,.22);
+ border-radius:13px;background:rgba(9,23,29,.33)}
+.play-hub-extras>summary{cursor:pointer;list-style-position:inside;padding:14px 18px;
+ font-size:.88rem;font-weight:850;color:#d5eccf;min-height:46px}
+.play-hub-extras>summary:hover{color:#e6ffa9;background:rgba(215,248,121,.06)}
+.play-hub-extras>summary:focus-visible{outline:3px solid #deff85;outline-offset:2px}
+.play-hub-extras-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ padding:0 13px 13px;gap:13px}
+.play-hub-extras-grid>.play-hub-card{min-width:0}
+.play-hub .play-hub-queue-now:disabled{opacity:.77;cursor:default}
+.home-view #heroFindMatch[data-play-state-label^="ACCEPT MATCH"]{
+ background:#e3ff8a;color:#102921;outline:2px solid #f2ffd0;outline-offset:4px}
+.home-view #heroFindMatch[data-play-state-label^="RETURN TO GAME"],
+.home-view #heroFindMatch[data-play-state-label^="VIEW CURRENT SEARCH"]{
+ background:#b8e7d3;color:#0c2d28}
+.home-view #heroFindMatch:focus-visible{outline:3px solid #e1ff8d;outline-offset:5px}
+@media(max-width:940px){.play-hub-extras-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.play-hub-extras>summary{padding:13px 15px}
+ .play-hub-extras-grid{padding:0 10px 10px}}
+
+/* Reserve full heading/description height across the legacy global header
+   typography: the first mode card must never overlap the introduction. */
+.play-hub-header{height:auto;min-height:118px;align-items:flex-start;margin-bottom:22px}
+.play-hub-heading{height:auto;min-height:0}
+.play-hub-heading>p{position:static;line-height:1.5;margin:8px 0 0}
+@media(max-width:600px){.play-hub-header{min-height:0;gap:12px;margin-bottom:18px}}
+
+/* P0 small-screen kickoff: prioritize real actions over decorative pitch art. */
+@media(max-width:650px){
+ .home-view .hero-grid{display:block;min-height:0;padding-top:20px}
+ .home-view .hero-art{display:none}
+ .home-view .hero-copy{max-width:100%}
+ .home-view .hero-copy p{max-width:44ch;line-height:1.6}
+ .home-view .hero-actions{display:grid;grid-template-columns:1fr;gap:9px;max-width:440px}
+ .home-view .hero-button,.home-view .hero-solo{
+  width:100%;min-width:0;margin:0;min-height:48px;text-align:center;transform:none}
+ .home-view .hero-meta{margin:17px 0 21px;gap:14px;flex-wrap:wrap}
+ .play-hub-heading h2{font-size:1.35rem}
+ .play-hub-heading>p{font-size:.82rem;line-height:1.45}
+ .play-hub-header{margin-bottom:12px}
+}
+
+/* An actual finished online round gets one clear next action, without changing
+   rendering or room authority. Hidden during live play and while the native
+   result/consent menu is open. */
+.play-postmatch-ribbon[hidden]{display:none!important}
+.play-postmatch-ribbon{
+ position:fixed;left:50%;bottom:max(22px,env(safe-area-inset-bottom));
+ transform:translateX(-50%);z-index:85;box-sizing:border-box;
+ display:flex;align-items:center;justify-content:space-between;gap:18px;
+ width:min(920px,calc(100vw - 30px));padding:16px 20px;
+ border:1px solid #c2ef91;border-radius:17px;
+ background:linear-gradient(120deg,#142e2c 15%,#1d3430 100%);
+ color:#f4ffee;box-shadow:0 17px 45px #000b;
+}
+body.menu-open .play-postmatch-ribbon{display:none!important}
+.play-postmatch-content{display:grid;gap:4px;min-width:0}
+.play-postmatch-eyebrow{color:#c6ef9b;font-weight:900;font-size:.64rem;letter-spacing:.12em}
+.play-postmatch-score{font-size:clamp(1.18rem,2vw,1.7rem);font-weight:900;line-height:1.25}
+.play-postmatch-info{font-size:.78rem;color:#b9d3c8;line-height:1.4}
+.play-postmatch-actions{display:flex;gap:8px;flex-shrink:0}
+.play-postmatch-actions button{font:inherit;border-radius:9px;min-height:44px;padding:10px 12px;
+ font-weight:800;cursor:pointer;border:1px solid #829b88}
+.play-postmatch-open{background:#cfff7e;color:#162a1b;border-color:#cfff7e!important}
+.play-postmatch-dismiss{background:transparent;color:#e7eee5}
+.play-postmatch-actions button:focus-visible{outline:3px solid #e4ffa8;outline-offset:3px}
+@media(max-width:650px){
+ .play-postmatch-ribbon{flex-direction:column;align-items:stretch;gap:12px;
+  width:calc(100vw - 20px);padding:14px;bottom:max(12px,env(safe-area-inset-bottom))}
+ .play-postmatch-actions{flex-wrap:wrap}
+ .play-postmatch-open{flex:1 1 60%}
+ .play-postmatch-dismiss{flex:1 1 28%}
+}
+@media(prefers-reduced-motion:reduce){.play-postmatch-ribbon{scroll-behavior:auto}}
+
+/* Human queue recovery: two deliberate paths, no automatic reconnect, retry,
+   ready-check consent or synthetic server activity. */
+.play-hub .play-hub-cancel[hidden],.play-hub .play-hub-recovery[hidden]{display:none!important}
+.play-hub .play-hub-cancel{background:transparent;border-color:#e0ba8e;color:#ffe5bd;
+ margin-top:9px;font-size:.84rem;width:100%;text-align:center}
+.play-hub-recovery{width:100%;box-sizing:border-box;padding:14px 16px;margin-top:12px;
+ background:#352b24;border:1px solid #dfa05c;border-radius:12px;
+ display:grid;gap:8px}
+.play-hub-recovery>strong{font-size:.73rem;letter-spacing:.09em;color:#ffdcaa}
+.play-hub-recovery .play-hub-recovery-detail{color:#f5dec6;font-size:.84rem;
+ line-height:1.45;margin:0;overflow-wrap:anywhere;max-width:80ch}
+.play-hub-recovery-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.play-hub .play-hub-retry{background:#d5ff88;color:#1d3021;border-color:#d5ff88}
+.play-hub-recovery-actions button{flex:1 1 auto}
+@media(max-width:600px){
+ .play-hub-recovery{padding:12px}
+ .play-hub-recovery-actions{display:grid;grid-template-columns:1fr 1fr}
+ .play-hub-recovery-actions .play-hub-retry{grid-column:1/-1}
+}
+
+/* Pending native room: keep the original, cancelable socket visible on Home. */
+.play-hub-connecting[hidden]{display:none!important}
+.play-hub-connecting{display:flex;align-items:center;justify-content:space-between;gap:18px;
+ box-sizing:border-box;padding:16px 19px;margin:0 0 18px;border-radius:14px;
+ border:1px solid #9fc4ee;background:linear-gradient(115deg,#192d3e,#1a383c);
+ box-shadow:0 12px 32px #05141b6b;color:#f0f9ff}
+.play-hub-connecting strong{display:block;font-size:.78rem;letter-spacing:.07em;color:#c6e5fc}
+.play-hub-connecting-detail{font-size:.86rem;line-height:1.48;margin:4px 0 0;
+ color:#d2e4eb;max-width:58ch;overflow-wrap:anywhere}
+.play-hub-connecting-actions{display:flex;gap:9px;flex-shrink:0;flex-wrap:wrap}
+.play-hub-connecting-actions button{font:inherit;font-weight:800;font-size:.83rem;
+ min-height:46px;padding:10px 14px;cursor:pointer;border-radius:9px;
+ border:1px solid #91bbca;color:#ebfaff;background:transparent}
+.play-hub-connecting-actions .play-hub-connection-cancel{border-color:#e4ad9d;color:#ffe5dc}
+.play-hub-connecting-actions button:focus-visible{outline:3px solid #d3f49f;outline-offset:3px}
+@media(max-width:720px){
+ .play-hub-connecting{flex-direction:column;align-items:stretch;gap:12px;padding:14px}
+ .play-hub-connecting-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:380px){.play-hub-connecting-actions{grid-template-columns:1fr}}
+
+/* A single admitted-room toolbar: return, invite, share or explicitly leave
+   without navigating a room-options dashboard. All actions remain native. */
+.play-hub-current-room[hidden]{display:none!important}
+.play-hub.is-in-room>.play-hub-grid,.play-hub.is-in-room>.play-hub-extras{display:none!important}
+.play-hub-current-room{display:flex;align-items:center;justify-content:space-between;
+ gap:18px;box-sizing:border-box;margin:0 0 16px;padding:15px 18px;
+ border-radius:15px;border:1px solid rgba(200,250,164,.76);
+ background:linear-gradient(112deg,#234035,#1b363d);color:#f2fff0;
+ box-shadow:0 9px 30px rgba(5,20,24,.36)}
+.play-hub-current-room-copy{min-width:0}
+.play-hub-current-room-copy strong{display:block;color:#e6ffaa;
+ letter-spacing:.07em;font-size:.82rem}
+.play-hub-current-room-detail{font-size:.89rem;line-height:1.45;
+ color:#e1f4e9;margin:5px 0}
+.play-hub-current-room-admission{display:block;font-size:.76rem;
+ color:#b9d8ce;line-height:1.38}
+.play-hub-current-room-actions{display:flex;gap:8px;align-items:center;
+ flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.play-hub .play-hub-current-room-actions button{font-size:.85rem;
+ min-height:48px;padding:10px 14px;background:#2b5045;
+ border:1px solid #86ac9e;color:#f4fff2}
+.play-hub .play-hub-current-room-actions .play-hub-current-room-return{
+ background:#dfff97;color:#203522;border-color:#dfff97}
+.play-hub .play-hub-current-room-actions .play-hub-current-room-leave{
+ color:#ffe7dd;border-color:#cb9f91;background:transparent}
+.play-hub-current-room-actions button:focus-visible{outline:3px solid #f2ff9a;outline-offset:3px}
+@media(max-width:1000px){
+ .play-hub-current-room{flex-direction:column;align-items:stretch;gap:12px}
+ .play-hub-current-room-actions{justify-content:stretch;display:grid;
+ grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:680px){
+ .play-hub-current-room{padding:14px}
+ .play-hub-current-room-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:380px){
+ .play-hub-current-room-actions{grid-template-columns:1fr}
+}
+
+/* Native local full-time receipt. Offline rematch only uses the original
+   Start game control; no synthetic multiplayer or ranked result. */
+.play-local-fulltime[hidden]{display:none!important}
+.play-local-fulltime{box-sizing:border-box;display:flex;align-items:center;
+ justify-content:space-between;gap:16px;margin:14px 0;padding:16px 18px;
+ border:1px solid #d3ed94;border-radius:15px;
+ background:linear-gradient(125deg,#1b352e,#263831);color:#f5ffef;
+ box-shadow:0 14px 34px #0b181a69}
+.play-local-fulltime-content{min-width:0}
+.play-local-fulltime-label{font-size:.71rem;font-weight:900;letter-spacing:.08em;color:#c9f6a3}
+.play-local-fulltime-score{display:block;font-size:clamp(1.15rem,2vw,1.6rem);line-height:1.3}
+.play-local-fulltime-detail{margin:5px 0 0;color:#ccdfd0;font-size:.84rem;line-height:1.5}
+.play-local-fulltime-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.play-local-fulltime-actions button{min-height:46px;cursor:pointer;font:inherit;
+ font-weight:800;font-size:.84rem;padding:9px 13px;border-radius:9px;
+ background:#2b453b;color:#f6fff3;border:1px solid #94b2a0}
+.play-local-fulltime-actions button.primary{background:#d8fc91;color:#1a3321;border-color:#d8fc91}
+.play-local-fulltime-actions button:disabled{opacity:.55;cursor:not-allowed}
+.play-local-fulltime-actions button:focus-visible{outline:3px solid #ecffad;outline-offset:3px}
+.play-local-fulltime-menu{margin:10px 0;border-color:#bfe78a}
+@media(max-width:700px){
+ .play-local-fulltime{flex-direction:column;align-items:stretch;padding:14px;gap:12px}
+ .play-local-fulltime-actions{display:grid;grid-template-columns:1fr 1fr}
+ .play-local-fulltime-actions button.primary{grid-column:1/-1}
+}
+@media(max-width:380px){.play-local-fulltime-actions{grid-template-columns:1fr}
+ .play-local-fulltime-actions button.primary{grid-column:auto}}

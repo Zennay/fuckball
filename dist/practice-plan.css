@@ -1,0 +1,42 @@
+/* Weekly, browser-private training goals; no server stats or gameplay hooks. */
+.practice-weekly-plan{max-width:1160px;margin:26px auto 38px;padding:clamp(16px,3vw,28px);border:1px solid #71967b;border-radius:18px;background:linear-gradient(130deg,#1c3438,#23372b);color:#eff7ed}
+.practice-plan-top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.practice-plan-kicker{font-size:10px;font-weight:850;letter-spacing:.18em;color:#c8e7ab}
+.practice-plan-top h2{font-size:clamp(24px,3.5vw,36px);font-weight:950;letter-spacing:-.05em;line-height:1.1;margin:8px 0}
+.practice-plan-top p{max-width:690px;color:#c0d6d1;font-size:13px;line-height:1.6;margin:0}
+.practice-plan-week{font-size:11px;font-weight:800;color:#ddf7bc;background:#315144;border:1px solid #729480;border-radius:99px;padding:9px 13px;white-space:nowrap}
+.practice-plan-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:22px}
+.practice-plan-card{padding:16px;border-radius:12px;background:#162b33;border:1px solid #55756e;min-width:0;display:grid;align-content:start;gap:14px}
+.practice-plan-card-head{display:flex;align-items:start;justify-content:space-between;gap:9px}
+.practice-plan-card h3{margin:0;color:#f1f8ed;font-size:15px}
+.practice-plan-value{font-size:23px;color:#d8f4a4;font-variant-numeric:tabular-nums;white-space:nowrap}
+.practice-plan-bar{height:10px;border-radius:8px;background:#0b1b25;overflow:hidden}
+.practice-plan-bar span{display:block;background:#c1ed91;height:100%;border-radius:8px;transition:width .2s ease}
+.practice-plan-card-caption{font-size:11px;color:#c0d7d0;min-height:16px}
+.practice-plan-card-footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:end}
+.practice-plan-goal-label{font-size:11px;color:#e3f3db;display:grid;gap:5px}
+.practice-weekly-plan select,.practice-weekly-plan button{border-radius:8px;border:1px solid #819d8c;background:#2e5246;color:#f5faed;padding:10px;min-height:42px;max-width:100%;font-size:12px}
+.practice-weekly-plan select{width:100%;background:#132b32}
+.practice-weekly-plan button{cursor:pointer;font-weight:700}
+.practice-weekly-plan button:hover:not(:disabled){background:#456756}
+.practice-weekly-plan :is(button,select):focus-visible{outline:3px solid #e2f9ad;outline-offset:3px}
+.practice-weekly-plan button:disabled{opacity:.5;cursor:default}
+.practice-plan-trend{margin-top:19px;display:flex;align-items:center;justify-content:space-between;gap:17px;background:#162b30;border:1px solid #526e6a;border-radius:12px;padding:15px}
+.practice-plan-summary{display:grid;gap:6px;min-width:140px;font-size:13px}
+.practice-plan-summary span{font-size:11px;color:#bfd6c9}
+.practice-plan-days{display:grid;grid-template-columns:repeat(7,minmax(23px,36px));gap:8px;align-items:end}
+.practice-plan-day{display:grid;gap:6px;justify-items:center;font-size:10px;color:#bdd2c8}
+.practice-plan-day-bar{height:48px;width:100%;display:flex;align-items:end;background:#0a1e27;border-radius:5px;overflow:hidden}
+.practice-plan-day-bar span{display:block;width:100%;background:#a9df85;border-radius:4px 4px 0 0}
+.practice-plan-day small{font-size:10px}
+.practice-plan-streak{color:#d6e8da;font-size:12px;margin:15px 0}
+.practice-plan-actions{display:flex;gap:10px;flex-wrap:wrap}
+.practice-plan-notice{font-size:12px;color:#e1f9bc;min-height:15px}
+@media(max-width:900px){.practice-plan-cards{grid-template-columns:1fr}.practice-plan-card-footer{grid-template-columns:1fr 1fr}.practice-plan-card{gap:10px}}
+@media(max-width:560px){.practice-weekly-plan{margin:20px 12px;padding:15px}.practice-plan-top{display:grid}.practice-plan-trend{display:grid}.practice-plan-days{justify-content:space-between;width:100%;grid-template-columns:repeat(7,minmax(0,1fr))}.practice-plan-actions button{flex:1}}
+@media(prefers-reduced-motion:reduce){.practice-plan-bar span{transition:none}}
+/* Explicit opt-in for private training-goal restore; never changes server stats. */
+.practice-plan-restore-goals{display:inline-flex;align-items:center;gap:9px;min-height:42px;color:#dcebd9;font-size:12px}
+.practice-plan-restore-goals input{width:17px;height:17px;accent-color:#b9e891}
+.practice-plan-restore-goals:focus-within{outline:2px solid #d1efb8;outline-offset:4px}
+@media(max-width:560px){.practice-plan-restore-goals{flex:1 1 100%}}

@@ -1,0 +1,40 @@
+.match-view-presets{margin:15px 0;padding:12px 13px;border-radius:12px;border:1px solid #70998a;background:#1a3539;color:#eaf6df}
+.match-view-presets h3{font-size:13px;letter-spacing:.07em;color:#dff4ab;margin:0 0 8px}
+.match-view-presets p{font-size:12px;line-height:1.5;color:#c9dfd5}
+.match-view-presets-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.match-view-preset-card{display:grid;gap:5px;align-content:start;text-align:left;min-height:84px;background:#254640;border:1px solid #81a398;border-radius:10px;color:#eef8e8;padding:12px;cursor:pointer}
+.match-view-preset-card strong{font-size:12px;letter-spacing:.04em;color:#def3b4}
+.match-view-preset-card small{line-height:1.45;font-size:11px;color:#cce6da}
+.match-view-preset-card:hover{background:#34564b}
+.match-view-presets button:focus-visible{outline:3px solid #d2f0a0;outline-offset:2px}
+.match-view-presets>button{background:#143339;color:#d9f3ca;border:1px solid #97b29e;border-radius:7px;font-weight:700;padding:9px 12px;margin-top:10px;cursor:pointer}
+.match-view-presets-status{min-height:20px}
+@media(max-width:560px){.match-view-presets-grid{grid-template-columns:1fr 1fr}.match-view-preset-card{min-height:95px}}
+@media(max-width:390px){.match-view-presets-grid{grid-template-columns:1fr}}
+
+/* The selected preset reflects the actual native settings, not a guessed
+   local toggle. Manual preference changes immediately clear stale selection. */
+.match-view-preset-card[aria-pressed="true"]{
+ border:2px solid #dbffa1;
+ background:#365745;
+ box-shadow:inset 0 0 0 1px rgba(224,255,181,.25)
+}
+.match-view-preset-card[aria-pressed="true"] strong::after{
+ content:" · ACTIVE";font-size:10px;color:#f0ffca
+}
+.match-view-preset-card:disabled{
+ opacity:.55;cursor:not-allowed;filter:saturate(.55)
+}
+.match-view-presets>button[hidden]{display:none!important}
+.match-view-presets-status{overflow-wrap:anywhere;line-height:1.55}
+
+/* Clear disclosure of the opt-in local sound/chat side effects.
+   Other view presets only touch on-device visuals/performance. */
+.match-view-preset-card em{font-size:11px;line-height:1.35;font-style:normal;
+ color:#d0ebd1;opacity:.95;margin-top:3px}
+.match-view-preset-card[aria-pressed="true"] em{color:#e7ffd4}
+.match-view-presets-status[role="status"]{max-width:70ch}
+@media(max-width:560px){
+ .match-view-preset-card{min-height:120px;padding:12px}
+ .match-view-preset-card em{font-size:11px}
+}

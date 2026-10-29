@@ -1,0 +1,364 @@
+'use strict';
+// Offline support is EXCLUSIVELY for local, casual browser practice and user-owned
+// replay playback. Do not cache credentials, account APIs, matchmaking, rooms
+// or any live match state. Every online action still requires the actual server.
+const CACHE='fuckball-offline-practice-v154'
+const CORE=[
+ "./",
+ "./style.css",
+ "./club.css",
+ "./play-home.css",
+ "./play-first-home.css",
+ "./play-first-home.js",
+ "./local-focus-pause.css",
+ "./local-focus-pause.js",
+ "./verified-queue-status.css",
+ "./play-hub.css",
+ "./play-hub.js",
+ "./play-readiness.js",
+ "./play-readiness.css",
+ "./match.css",
+ "./room.css",
+ "./spectator-action-director.js",
+ "./spectator-action-director.css",
+ "./spectator-tactical-radar.js",
+ "./spectator-tactical-radar.css",
+ "./spectator-broadcast.js",
+ "./spectator-cheers.js",
+ "./spectator-cheers.css",
+ "./spectator-broadcast.css",
+ "./live-match-center.js",
+ "./in-game-quick-actions.js",
+ "./in-game-quick-actions.css",
+ "./live-match-center.css",
+ "./my-games.css",
+ "./replay-import-desk.css",
+ "./replay-import-desk.js",
+ "./replay-bulk-organizer.js",
+ "./replay-bulk-organizer.css",
+ "./replay-selective-archive.js",
+ "./replay-selective-archive.css",
+ "./replay-goal-gallery.css",
+ "./replay-insights.css",
+ "./replay-storage-manager.css",
+ "./replay-clip-export.css",
+ "./social.css",
+ "./clubs.css",
+ "./room-admin.css",
+ "./room-access-key.css",
+ "./room-rotation-desk.js",
+ "./room-rotation-desk.css",
+ "./room-self-bench.js",
+ "./room-self-bench.css",
+ "./live-formation-capture.js",
+ "./live-formation-capture.css",
+ "./match-view-presets.js",
+ "./match-view-presets.css",
+ "./frame-performance-meter.js",
+ "./frame-performance-meter.css",
+ "./native-sub-timeline.js",
+ "./native-sub-timeline.css",
+ "./room-referee-console.js",
+ "./native-lobby-ready.js",
+ "./native-stadium-ballot.js",
+ "./native-match-format.js",
+ "./native-match-format.css",
+ "./native-stadium-ballot.css",
+ "./native-lobby-ready.css",
+ "./room-referee-console.css",
+ "./match-quick-calls.js",
+ "./match-quick-calls.css",
+ "./room-presets.css",
+ "./stadium-locker.js",
+ "./stadium-locker.css",
+ "./quick-match.css",
+ "./goal-rush.css",
+ "./goal-rush-presets.js",
+ "./goal-rush-presets.css",
+ "./friend-party.css",
+ "./room-browser.css",
+ "./direct-invite-join.css",
+ "./direct-peer-session-guard.js",
+ "./direct-peer-session-guard.css",
+ "./career-profile.css",
+ "./native-career-milestones.css",
+ "./offline-player-passport.js",
+ "./offline-player-passport.css",
+ "./local-data-vault.js",
+ "./local-data-vault.css",
+ "./account-security.css",
+ "./server-results.css",
+ "./server-session-explorer.css",
+ "./native-match-calendar.css",
+ "./private-match-coach.css",
+ "./private-match-coach.js",
+ "./match-card.css",
+ "./gamepad.css",
+ "./couch-play.js",
+ "./couch-rivals.js",
+ "./couch-seat-manager.js",
+ "./couch-seat-manager.css",
+ "./couch-rivals-series.js",
+ "./couch-rivals-series.css",
+ "./couch-play.css",
+ "./controller-setup.css",
+ "./vendor/json5.min.js",
+ "./vendor/pako-jszip.min.js",
+ "./vendor/haxball.js",
+ "./vendor/language.js",
+ "./vendor/renderer.js",
+ "./ai/policy.js",
+ "./prediction-controls.js",
+ "./netcode.js",
+ "./room-core.js",
+ "./peer-net.js",
+ "./render-timing.js",
+ "./stadiums/bff-big-v4.js",
+ "./app.js",
+ "./views.js",
+ "./match-ui.js",
+ "./room-recovery.js",
+ "./server-client.js",
+ "./server-connection-doctor.js",
+ "./replay-library.js",
+ "./replay-archive.js",
+ "./replay-bookmarks.js",
+ "./replay-goal-gallery.js",
+ "./replay-insights.js",
+ "./replay-compare.js",
+ "./replay-review-queue.js",
+ "./replay-collections.js",
+ "./replay-collections.css",
+ "./replay-tactics-board.js",
+ "./replay-navigation.js",
+ "./replay-resume.js",
+ "./replay-resume.css",
+ "./replay-timeline-notes.js",
+ "./replay-event-timeline.js",
+ "./replay-timeline-notes.css",
+ "./replay-event-timeline.css",
+ "./replay-study-dashboard.js",
+ "./replay-study-dashboard.css",
+ "./replay-navigation.css",
+ "./replay-tactics-board.css",
+ "./replay-review-queue.css",
+ "./replay-compare.css",
+ "./replay-storage-manager.js",
+ "./replay-clip-export.js",
+ "./social.js",
+ "./clubs.js",
+ "./room-admin.js",
+ "./room-access-key.js",
+ "./lineup-planner.js",
+ "./room-presets.js",
+ "./quick-match.js",
+ "./verified-queue-status.js",
+ "./queue-watch.js",
+ "./queue-watch.css",
+ "./goal-rush.js",
+ "./friend-party.js",
+ "./room-browser.js",
+ "./direct-invite-join.js",
+ "./room-invite-center.js",
+ "./vendor/qrcodejs.min.js",
+ "./room-invite-center.css",
+ "./room-match-sheet.js",
+ "./room-match-sheet.css",
+ "./native-career-milestones.js",
+ "./career-profile.js",
+ "./account-security.js",
+ "./native-match-calendar.js",
+ "./server-session-explorer.js",
+ "./server-results.js",
+ "./server-review-notes.js",
+ "./server-review-notes.css",
+ "./match-card.js",
+ "./gamepad.js",
+ "./controller-setup.js",
+ "./account-export.js",
+ "./room-chat.js",
+ "./room-notice.js",
+ "./room-notice.css",
+ "./recording-studio.js",
+ "./recording-studio.css",
+ "./team-chat.js",
+ "./team-chat.css",
+ "./player-report.js",
+ "./room-chat.css",
+ "./player-report.css",
+ "./mobile-controls.js",
+ "./mobile-match-session.js",
+ "./mobile-match-session.css",
+ "./mobile-controls.css",
+ "./match-moments.js",
+ "./moments-backup.js",
+ "./moments-backup.css",
+ "./accessibility.js",
+ "./personal-setup-passport.js",
+ "./keyboard-layouts.js",
+ "./connection-warning.js",
+ "./first-play-guide.js",
+ "./practice-journal.js",
+ "./teamwork-drill.js",
+ "./clean-sheet-drill.js",
+ "./native-ball-burst.js",
+ "./ai-gauntlet.js",
+ "./ai-gauntlet.css",
+ "./comeback-arena.js",
+ "./comeback-arena.css",
+ "./keep-away.js",
+ "./keep-away.css",
+ "./sudden-death-card.js",
+ "./sudden-death-series.js",
+ "./sudden-death-series.css",
+ "./practice-lab.js",
+ "./challenge-exchange.js",
+ "./challenge-exchange.css",
+ "./match-audio-guide.js",
+ "./daily-practice.js",
+ "./daily-practice.css",
+ "./match-audio-guide.css",
+ "./local-match-loadouts.js",
+ "./local-match-loadouts.css",
+ "./practice-plan.js",
+ "./practice-focus-coach.js",
+ "./practice-focus-coach.css",
+ "./practice-circuit.js",
+ "./solo-academy.js",
+ "./solo-academy.css",
+ "./continue-playing.js",
+ "./tournament-desk.js",
+ "./tournament-desk.css",
+ "./formation-studio.js",
+ "./formation-studio.css",
+ "./knockout-cup.js",
+ "./knockout-cup.css",
+ "./matchday-hub.js",
+ "./matchday-hub.css",
+ "./matchday-ops.js",
+ "./matchday-ops.css",
+ "./game-night-run-sheet.js",
+ "./game-night-run-sheet.css",
+ "./league-season-report.js",
+ "./league-season-report.css",
+ "./game-night-pack.js",
+ "./game-night-pack.css",
+ "./best-of-series.js",
+ "./best-of-series.css",
+ "./command-launchpad.js",
+ "./command-launchpad.css",
+ "./matchday-posters.js",
+ "./matchday-posters.css",
+ "./matchday-poster-studio.js",
+ "./matchday-poster-studio.css",
+ "./continue-playing.css",
+ "./practice-plan.css",
+ "./practice-circuit.css",
+ "./connection-details.js",
+ "./match-moments.css",
+ "./accessibility.css",
+ "./keyboard-layouts.css",
+ "./connection-warning.css",
+ "./first-play-guide.css",
+ "./practice-journal.css",
+ "./teamwork-drill.css",
+ "./clean-sheet-drill.css",
+ "./native-ball-burst.css",
+ "./practice-lab.css",
+ "./connection-details.css",
+ "./server-connection-doctor.css",
+ "./room-recovery.css",
+ "./pwa.js",
+ "./pwa.css",
+ "./manifest.json",
+ "./icons/fuckball-192.png",
+ "./icons/fuckball-512.png"
+];
+const scope=new URL(self.registration.scope);
+const root=scope.pathname;
+const allow=new Set(CORE.map(p=>new URL(p,scope).pathname));
+const shell=new URL('./',scope).href;
+
+self.addEventListener('install',event=>{
+ event.waitUntil((async()=>{
+  const cache=await caches.open(CACHE);
+  // A failed cache.addAll can leave behind some of the 268 requested files.
+  // The old active worker must remain the only playable offline pack.
+  try{
+   await cache.addAll(CORE.map(p=>new Request(new URL(p,scope),{
+    cache:'reload',credentials:'omit'
+   })));
+   // Do not activate a partially installed app after a quota/storage failure.
+   // Every entry must exist in this *versioned*, public-asset-only snapshot.
+   for(const file of CORE){
+    if(!await cache.match(new URL(file,scope).href))
+     throw Error('Offline pack incomplete: '+file);
+   }
+   await self.skipWaiting();
+  }catch(error){
+   await caches.delete(CACHE).catch(()=>{});
+   throw error;
+  }
+ })());
+});
+self.addEventListener('activate',event=>{
+ event.waitUntil((async()=>{
+  for(const key of await caches.keys())
+   if(key.startsWith('fuckball-offline-practice-')&&key!==CACHE)
+    await caches.delete(key);
+  await self.clients.claim();
+ })());
+});
+self.addEventListener('fetch',event=>{
+ const request=event.request;
+ if(request.method!=='GET')return;
+ const url=new URL(request.url);
+ if(url.origin!==scope.origin||!url.pathname.startsWith(root))return;
+ if(request.mode==='navigate'){
+  // A private match invitation MUST NOT turn into a fake offline online room.
+  // Queries are always resolved by the live origin, never an offline shell.
+  event.respondWith((async()=>{
+   try{
+    const response=await fetch(request);
+    // Only the public query-free home may fall back to the installed solo
+    // game during a temporary origin outage. Never render an offline copy
+    // as though it were a live online room, invitation or account page.
+    if(response.status>=500&&url.pathname===root&&!url.search){
+     const cached=await (await caches.open(CACHE)).match(shell);
+     if(cached)return cached;
+    }
+    // The install snapshot is immutable until a complete verified update.
+    return response;
+   }catch{
+    if(url.pathname===root&&!url.search){
+     const cached=await (await caches.open(CACHE)).match(shell);
+     if(cached)return cached;
+    }
+    return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fuckball is offline</title><body style="font:16px system-ui;background:#15272e;color:#f0f8ed;padding:24px"><h1>Connection needed</h1><p>Joining online rooms needs the game server. Reconnect and reopen the invitation. Offline practice is available from the installed app home screen.</p><a href="./" style="color:#d3f4aa">Open local practice</a></body></html>',{
+     status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}
+    });
+   }
+  })());
+  return;
+ }
+ // Only explicitly packaged, public assets are eligible. /api, /health, /ws,
+ // account endpoints, arbitrary paths and all query-bearing responses bypass SW.
+ if(!allow.has(url.pathname)||url.search)return;
+ event.respondWith((async()=>{
+  try{
+   const response=await fetch(request);
+   // For packaged public local-play assets only, a temporary 5xx origin
+   // error should not break the installed offline practice. Never use this
+   // fallback for room invitations, account endpoints, or private APIs.
+   if(response.status>=500){
+    const cached=await (await caches.open(CACHE)).match(request);
+    if(cached)return cached;
+   }
+   // Serve fresh successful assets without mutating the immutable pack.
+   return response;
+  }catch{
+   const cached=await (await caches.open(CACHE)).match(request);
+   return cached||Response.error();
+  }
+ })());
+});

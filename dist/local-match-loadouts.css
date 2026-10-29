@@ -1,0 +1,30 @@
+/* Device-private native solo practice loadouts, no server room presets. */
+.local-match-loadouts{margin:16px 0 23px;padding:clamp(16px,3vw,26px);
+ border:1px solid #789589;border-radius:15px;background:#1a393a;color:#ecf6ea}
+.local-match-loadouts-head{display:flex;justify-content:space-between;gap:15px;align-items:start;flex-wrap:wrap}
+.local-match-loadouts-head>div{flex:1 1 300px}
+.local-match-loadouts h2{margin:0 0 9px;font-size:clamp(24px,4vw,36px);
+ font-style:italic;letter-spacing:-.04em;color:#eaf9c6}
+.local-match-loadouts-head p{font-size:.82rem;line-height:1.6;color:#c9ded1;margin:0}
+.local-loadouts-count{padding:9px 13px;border:1px solid #8ab38d;border-radius:8px;
+ background:#2a5144;color:#e2f6b9;font-weight:850;white-space:nowrap;font-size:.75rem}
+.local-loadouts-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:12px;margin:20px 0}
+.local-loadouts-fields label{display:grid;gap:7px;font-size:.78rem;font-weight:750;color:#e4f2df}
+.local-loadouts-fields :is(input,select){box-sizing:border-box;width:100%;min-width:0;
+ min-height:44px;background:#123431;border:1px solid #8caea0;border-radius:9px;
+ font:inherit;color:#f3f9e8;padding:9px 11px}
+.local-loadouts-actions{display:flex;gap:9px;flex-wrap:wrap}
+.local-loadouts-actions button{min-height:44px;border:1px solid #adcca9;
+ padding:9px 13px;border-radius:9px;background:#d0ecb5;color:#18362b;
+ font:inherit;font-weight:780;font-size:.81rem;cursor:pointer}
+.local-loadouts-actions button:first-child{background:#e5f3a5}
+.local-loadouts-actions button:disabled{opacity:.5;cursor:not-allowed}
+.local-loadouts-actions button:nth-child(4){background:#5b4242;color:#f4dada;border-color:#ae8f87}
+.local-match-loadouts :is(button,input,select):focus-visible{outline:3px solid #ffe4a4;outline-offset:3px}
+.local-match-loadouts>p{line-height:1.6;color:#c5dccb;font-size:.78rem;margin:16px 0 0}
+.local-match-loadouts>.local-loadouts-status{color:#e8f6c0;min-height:19px}
+@media(max-width:790px){.local-loadouts-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:530px){.local-loadouts-fields{grid-template-columns:1fr}
+ .local-loadouts-actions button{flex:1 1 100%}}
+@media print{.local-loadouts-actions{display:none!important}}

@@ -1,0 +1,45 @@
+/* Read-only spectator presentation overlay; never captures player names or room IDs. */
+.spectator-broadcast{position:absolute;z-index:17;top:12px;left:50%;transform:translateX(-50%);
+ pointer-events:none;width:min(470px,calc(100% - 55px));box-sizing:border-box;
+ border:1px solid #9cb1aa;border-radius:14px;background:rgba(16,36,44,.92);
+ box-shadow:0 10px 28px #0008;color:#f2faf7;padding:9px 16px 10px;text-align:center;
+ backdrop-filter:blur(8px)}
+.spectator-broadcast[hidden]{display:none!important}
+.spectator-broadcast-stamp{font-size:.61rem;letter-spacing:.13em;font-weight:800;color:#d6f2bc}
+.spectator-broadcast-score{display:grid;grid-template-columns:minmax(0,1fr) auto 18px auto minmax(0,1fr) auto;
+ align-items:center;gap:9px;margin:3px 0}
+.spectator-broadcast-score span{font-weight:750;line-height:1.25;overflow-wrap:anywhere;font-size:.83rem}
+.spectator-broadcast-red-label,.spectator-broadcast-red{color:#ffa49e}
+.spectator-broadcast-blue-label,.spectator-broadcast-blue{color:#b5d9ff}
+.spectator-broadcast-score strong{font-size:1.85rem;min-width:22px;font-variant-numeric:tabular-nums}
+.spectator-broadcast-dash{font-size:1.15rem}
+.spectator-broadcast-time{font-size:.77rem;color:#dbf2e4;white-space:nowrap;font-variant-numeric:tabular-nums}
+.spectator-broadcast-foot{font-size:.62rem;color:#bdcfc8}
+.spectator-broadcast.compact{width:min(310px,calc(100% - 25px));padding:5px 10px}
+.spectator-broadcast.compact .spectator-broadcast-score{gap:4px}
+.spectator-broadcast.compact .spectator-broadcast-score strong{font-size:1.27rem}
+.spectator-broadcast.compact .spectator-broadcast-score span{font-size:.68rem}
+.spectator-broadcast.compact .spectator-broadcast-foot{display:none}
+.spectator-broadcast-toggle[aria-pressed=true]{background:#d2f6ae;color:#1d3432}
+.spectator-broadcast-settings{display:grid;gap:10px;padding:14px 0;border-top:1px solid #5c766f}
+.spectator-broadcast-settings h3{margin:0;font-size:.91rem;letter-spacing:.07em}
+.spectator-broadcast-settings p{font-size:.84rem;line-height:1.5;margin:0;color:#ccdfd5}
+.spectator-broadcast-settings label{display:grid;gap:5px;font-weight:650;font-size:.85rem}
+.spectator-broadcast-settings input,.spectator-broadcast-settings select{box-sizing:border-box;max-width:100%;padding:8px;border-radius:7px;background:#1e3938;color:#fff;border:1px solid #73938c;font:inherit}
+.spectator-broadcast-settings button{padding:8px 12px;border-radius:7px;font-weight:700}
+.spectator-broadcast-settings :is(input,select,button):focus-visible,.spectator-broadcast-toggle:focus-visible,.spectator-broadcast-save:focus-visible{outline:3px solid #e9e88e;outline-offset:2px}
+.spectator-broadcast-feedback{min-height:16px}
+@media(max-width:640px){
+ .spectator-broadcast{top:6px;max-width:85%;padding:5px 8px}
+ .spectator-broadcast-score{gap:4px}
+ .spectator-broadcast-score strong{font-size:1.15rem}
+ .spectator-broadcast-score span{font-size:.66rem}
+ .spectator-broadcast-foot{display:none}
+}
+@media(prefers-reduced-transparency:reduce){
+ .spectator-broadcast{backdrop-filter:none;background:#10272c}
+}
+/* A stopped round is a genuine local score snapshot, never a live feed. */
+.spectator-broadcast.between-rounds{border-style:dashed;border-color:#bbafa0;background:rgba(35,39,38,.94)}
+.spectator-broadcast.between-rounds .spectator-broadcast-stamp{color:#f1d5ab;letter-spacing:.055em}
+@media(max-width:640px){.spectator-broadcast.between-rounds .spectator-broadcast-stamp{font-size:.55rem}}

@@ -1,0 +1,19 @@
+/* Online multiplayer is the default; local practice remains clearly available. */
+.home-view .mode-cards{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.home-view .mode-card{min-height:166px;min-width:0;padding:19px 16px}
+.home-view .mode-card strong{font-size:clamp(16px,1.8vw,24px);line-height:1.12;white-space:normal}
+.home-view .mode-card>span:last-of-type{white-space:normal;overflow-wrap:anywhere;gap:8px}
+.home-view .mode-card .card-number{font-size:9px;letter-spacing:.035em}
+.home-view .hero-copy p{max-width:520px}
+.home-view .hero-button{min-width:245px}
+.quick-queue-panel{scroll-margin-top:24px}
+.home-view .mode-card:focus-visible,.home-view .hero-button:focus-visible{outline:3px solid #e1ff8d;outline-offset:5px}
+@media(max-width:1170px){.home-view .mode-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.home-view .mode-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.home-view .mode-card{min-height:150px}}
+@media(max-width:400px){.home-view .mode-card{padding:14px 11px}.home-view .mode-card strong{font-size:17px}.home-view .hero-button{min-width:205px}}
+
+.home-view .hero-actions{display:flex;gap:13px;align-items:center;flex-wrap:wrap}
+.home-view .hero-solo{padding:16px 19px;border:1px solid #658071;background:#172322;color:#e7f2e5;letter-spacing:.04em;font-weight:750;min-height:49px}
+.home-view .hero-solo:hover{border-color:#b8e68d;background:#2a3930}
+.home-view .hero-solo span{margin-left:15px}
+.home-view .hero-solo:focus-visible{outline:3px solid #d4f69d;outline-offset:4px}

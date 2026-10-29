@@ -1,0 +1,44 @@
+.recording-studio{margin:15px 0;padding:16px 17px;background:#183437;border:1px solid #60867b;border-radius:10px;color:#e7f7ed}
+.recording-studio>strong{display:block;letter-spacing:.09em;font-size:13px}
+.recording-studio p{font-size:12px;line-height:1.5;color:#cee2d8;margin:9px 0}
+.recording-studio-choices{display:grid;gap:10px;margin:13px 0}
+.recording-studio-choices label{display:flex;align-items:flex-start;gap:10px;line-height:1.5;font-size:13px;cursor:pointer}
+.recording-studio-choices input{margin:3px 0 0;min-width:18px;min-height:18px;accent-color:#c7eca0}
+.recording-studio-actions{display:flex;flex-wrap:wrap;gap:9px}
+.recording-studio-actions button{min-height:40px}
+.recording-studio-status{min-height:20px}
+.recording-studio[data-active=yes]{border-color:#edaa8f}
+.recording-studio-hud{position:absolute;bottom:clamp(80px,12vh,140px);right:clamp(7px,3vw,26px);z-index:16;display:grid;gap:3px;min-width:175px;max-width:calc(100vw - 20px);padding:11px 13px;border:1px solid #f2a9a6;border-radius:9px;background:rgba(34,20,24,.9);color:#fff6ef;pointer-events:none;box-shadow:0 5px 20px #0006}
+.recording-studio-hud[hidden]{display:none}
+.recording-studio-hud strong{font-size:12px;letter-spacing:.08em}
+.recording-studio-hud span{font-size:11px}
+.recording-studio :focus-visible{outline:3px solid #d4f3a4;outline-offset:3px}
+@media(max-width:650px){.recording-studio-hud{right:8px;bottom:95px}.recording-studio-actions button{flex:1 1 130px}}
+
+/* Real local HBR2 keeps recording across Home/My Games. This card never
+   starts another engine, posts data or silently ends a human's capture. */
+.recording-studio-continuity[hidden]{display:none!important}
+.recording-studio-continuity{position:fixed;z-index:116;left:50%;
+ transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(960px,calc(100vw - 24px));box-sizing:border-box;
+ display:flex;align-items:center;justify-content:space-between;gap:18px;
+ padding:15px 18px;border:2px solid #ffcba8;border-radius:16px;
+ color:#fff9ee;background:#332923;box-shadow:0 14px 40px #000a}
+.recording-studio-continuity-copy{min-width:0}
+.recording-studio-continuity-copy strong{font-size:.78rem;
+ letter-spacing:.065em;color:#ffdcbd}
+.recording-studio-continuity-copy p{margin:6px 0 0;font-size:.85rem;
+ line-height:1.45;color:#ffe7d9;overflow-wrap:anywhere}
+.recording-studio-continuity-actions{display:flex;gap:9px;
+ flex-shrink:0;flex-wrap:wrap}
+.recording-studio-continuity-actions button{font:inherit;font-size:.84rem;
+ font-weight:800;cursor:pointer;min-height:48px;padding:10px 15px;
+ border:1px solid #dfb49b;border-radius:10px;background:#4f3b30;color:#fff5ec}
+.recording-studio-continuity-actions button.primary{background:#fce0b0;
+ color:#34251b;border-color:#fce0b0}
+.recording-studio-continuity-actions button:focus-visible{outline:3px solid #ebffa7;outline-offset:3px}
+@media(max-width:710px){.recording-studio-continuity{flex-direction:column;
+ align-items:stretch;gap:12px;padding:14px}
+ .recording-studio-continuity-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:400px){.recording-studio-continuity-actions{grid-template-columns:1fr}}

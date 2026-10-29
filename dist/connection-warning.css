@@ -1,0 +1,26 @@
+.connection-warning{position:fixed;left:clamp(12px,3vw,40px);bottom:78px;width:min(380px,calc(100vw - 24px));z-index:40;padding:14px 15px;background:#193039f2;border:2px solid #efba78;border-radius:10px;box-shadow:0 15px 40px #09191bbc;color:#fff;pointer-events:auto;backdrop-filter:blur(5px)}
+.connection-warning[hidden]{display:none!important}
+.connection-warning[data-level="poor"],.connection-warning[data-level="stalled"]{border-color:#f7998a}
+.connection-warning strong{display:block;letter-spacing:.07em;font-size:13px;color:#ffe2ad}
+.connection-warning[data-level="poor"] strong,.connection-warning[data-level="stalled"] strong{color:#ffc0b4}
+.connection-warning p{font-size:12px;color:#f0f5ef;line-height:1.5;margin:6px 0}
+.connection-warning-metric{display:block;font-size:11px;color:#d3e5e7;font-variant-numeric:tabular-nums}
+.connection-warning-actions{display:flex;gap:8px;justify-content:flex-end;
+ align-items:center;flex-wrap:wrap;margin-top:12px}
+.connection-warning-actions button{min-height:44px;padding:8px 12px;font:inherit;
+ font-size:12px;font-weight:700;cursor:pointer;border:1px solid #a9d0c9;
+ border-radius:8px;background:#294851;color:#f1fffa}
+.connection-warning-actions button[hidden]{display:none}
+.connection-warning-actions button:focus-visible{outline:3px solid #e1f4a6;outline-offset:3px}
+@media(max-width:700px){.connection-warning{bottom:max(130px,env(safe-area-inset-bottom));left:10px;width:calc(100vw - 20px);padding:12px;backdrop-filter:none}
+ .connection-warning-actions{display:grid;grid-template-columns:1fr 1fr}
+ .connection-warning-actions button{width:100%}}
+@media(max-width:380px){.connection-warning-actions{grid-template-columns:1fr}}
+@media(prefers-reduced-transparency:reduce){.connection-warning{backdrop-filter:none;background:#122731}}
+
+/* Clearly distinguish the current authoritative server round from RTT
+   measurements or snapshots carried over by an earlier local/peer session. */
+.connection-warning-context{display:block;margin:5px 0 1px;
+ color:#d1e9db;font-size:10px;line-height:1.45;font-weight:800;
+ letter-spacing:.055em;overflow-wrap:anywhere}
+@media(max-width:700px){.connection-warning-context{font-size:11px}}

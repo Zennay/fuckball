@@ -1,0 +1,30 @@
+name: QA Native Room Handover and Benches
+on:
+  pull_request:
+    paths:
+      - 'tests/handover-spectator-qa.cjs'
+      - 'dist/room-core.js'
+      - 'dist/netcode.js'
+      - '.github/workflows/qa-handover-spectators.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/handover-spectator-qa.cjs'
+      - 'dist/room-core.js'
+      - 'dist/netcode.js'
+      - '.github/workflows/qa-handover-spectators.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-handover:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/handover-spectator-qa.cjs

@@ -1,0 +1,32 @@
+/* Ephemeral watch based on verified same-origin human queue snapshots only. */
+.human-queue-watch{margin:10px 0 18px;padding:17px;display:grid;gap:11px;
+ border-radius:12px;border:1px solid #769a91;background:#102b2a;color:#eff8ed}
+.human-queue-watch h3{margin:0;font-size:.84rem;letter-spacing:.08em;color:#dcf6ad}
+.human-queue-watch p{margin:0;line-height:1.5;color:#e0f0e6;font-size:.87rem}
+.human-queue-watch small{line-height:1.5;color:#b8d1c9}
+.human-queue-watch-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px}
+.human-queue-watch-controls label{display:grid;gap:5px;flex:1 1 125px;font-size:.79rem}
+.human-queue-watch-controls select{width:100%;min-height:43px;border-radius:8px;
+ padding:9px;border:1px solid #8aaea2;background:#193c39;color:#f3ffee;font:inherit}
+.human-queue-watch button{min-height:43px;border-radius:8px;padding:9px 15px;
+ border:1px solid #a7d4bb;background:#23473e;color:#f2fbe6;font:inherit;font-weight:750;cursor:pointer}
+.human-queue-watch button.primary{justify-self:start;background:#d3f09c;color:#163124}
+.human-queue-watch button[hidden]{display:none!important}
+.human-queue-watch :is(button,select):focus-visible{outline:3px solid #f6ffa3;outline-offset:3px}
+.human-queue-watch :is(button,select):disabled{opacity:.6;cursor:default}
+.human-queue-watch-status{border-left:3px solid #b9e898;padding-left:10px}
+@media(max-width:560px){.human-queue-watch{padding:13px}
+ .human-queue-watch-controls>*{flex:1 1 100%}
+ .human-queue-watch button.primary{width:100%}}
+@media(prefers-reduced-motion:reduce){.human-queue-watch *{transition:none!important;animation:none!important}}
+
+/* Human queue watch remains a read-only observation until a deliberate join. */
+.human-queue-watch[data-watch-state="ready"]{border-color:#c5ef9e}
+.human-queue-watch[data-watch-state="ready"] .human-queue-watch-status{border-left-color:#d1ff91}
+.human-queue-watch[data-watch-state="paused"] .human-queue-watch-status,
+.human-queue-watch[data-watch-state="stale"] .human-queue-watch-status{
+ border-left-color:#ffbf87;color:#fbe4cd}
+.human-queue-watch[data-watch-state="paused"] .human-queue-watch-controls button,
+.human-queue-watch[data-watch-state="stale"] .human-queue-watch-controls button{
+ min-height:44px}
+.human-queue-watch .human-queue-watch-controls button[hidden]{display:none!important}

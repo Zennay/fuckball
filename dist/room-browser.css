@@ -1,0 +1,100 @@
+/* Public Custom Rooms — only explicit host listings appear in the directory. */
+.room-browser{margin:28px 0 38px;padding:clamp(19px,3vw,32px);
+ border:1px solid #60756c;border-radius:15px;background:#1a2b31}
+.room-browser-heading{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.room-browser-heading h2{font-size:clamp(23px,3vw,37px);font-weight:900;
+ font-style:italic;letter-spacing:-.055em;margin:0;color:#e9f4da}
+.room-browser-heading span{font-size:10px;letter-spacing:.11em;font-weight:800;color:#a6d59c}
+.room-browser>p{margin:12px 0 17px;color:#b7c8c7;font-size:13px;line-height:1.55}
+.room-browser-tools{display:flex;gap:9px;flex-wrap:wrap;margin:8px 0}
+.room-browser-tools button,.room-browser-actions button{border-radius:8px;padding:10px 16px;min-height:43px}
+.room-browser-tools button:disabled{opacity:.6}
+.room-browser-body[hidden]{display:none!important}
+.room-browser-status{min-height:22px;font-size:12px;color:#c4d4c4;line-height:1.55}
+.room-browser-list{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.room-browser-entry{border:1px solid #54726c;border-radius:10px;
+ background:#22383a;padding:15px;display:grid;gap:14px}
+.room-browser-info{display:grid;gap:6px;min-width:0}
+.room-browser-info strong{color:#d6fda8;font-size:16px;font-weight:900}
+.room-browser-info small{color:#bfd3c9;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.room-browser-actions{display:flex;flex-wrap:wrap;gap:9px}
+.room-browser-actions button{flex:1 1 118px;font-weight:700}
+.room-listing-toggle[aria-pressed="true"]{background:#314e34!important;border-color:#94d68f!important;color:#d9ffb6!important}
+.room-browser button:focus-visible,.room-listing-toggle:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-actions button,.room-browser-tools button{flex:1 1 130px}}
+
+/* Client-only search over the host-published, never-private directory. */
+.room-browser-filters:not([hidden]){display:flex;flex-wrap:wrap;gap:9px;padding:12px 0 4px}
+.room-browser-filters input,.room-browser-filters select{min-height:43px;background:#13262b;color:#e7f4e8;
+ border:1px solid #688780;border-radius:8px;padding:10px;min-width:0;flex:1 1 145px}
+.room-browser-filters input{flex:2 1 210px}
+.room-browser-filters input:focus-visible,.room-browser-filters select:focus-visible{
+ outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-filters input,.room-browser-filters select{flex:1 1 100%}}
+
+/* Explicit device-only bookmarks; never a public/private room directory. */
+.room-browser-saved[hidden]{display:none!important}
+.room-browser-saved{margin:8px 0 19px;padding:15px;border-radius:11px;
+ border:1px solid #6a9179;background:#1c3532}
+.room-browser-saved-heading{display:flex;align-items:center;justify-content:space-between;
+ gap:10px;flex-wrap:wrap}
+.room-browser-saved-heading strong{font-size:12px;letter-spacing:.1em;color:#d3f4a4}
+.room-browser-saved-heading button{border-radius:7px;padding:9px 13px;min-height:40px;
+ border:1px solid #9e777b;background:#452e33;color:#ffd8d8}
+.room-browser-saved>p{font-size:11px;line-height:1.55;color:#c0d5c2;margin:8px 0 13px}
+.room-browser-saved-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:9px}
+.room-browser-saved-card{display:grid;gap:10px;padding:13px;
+ border:1px solid #5b8978;border-radius:10px;background:#254038}
+.room-browser-saved-card .room-browser-actions button{min-height:41px}
+.room-browser-actions button[aria-pressed="true"]{background:#365d3a;border-color:#acda8a;color:#e4ffcb}
+
+/* Public-only room discovery; no private links or game-server bypass. */
+.room-browser-tools .room-browser-find{
+ border:1px solid #a9d7a1;background:#d3eeae;color:#193229;
+ font-weight:900;min-height:44px
+}
+.room-browser-tools .room-browser-find:disabled{opacity:.6;cursor:progress}
+.room-browser-entry[data-public-room]:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+.room-browser-entry .room-browser-actions button:disabled{opacity:.6;cursor:not-allowed}
+@media(max-width:600px){.room-browser-tools .room-browser-find{flex:1 1 100%;min-height:48px}}
+
+/* Portable public-room bookmarks: read/write only intentionally pinned room codes. */
+.room-browser-transfer{display:grid;gap:10px;margin:14px 0 18px;padding:16px;
+ background:#16343c;border:1px solid #658d88;border-radius:13px}
+.room-browser-transfer strong{font-size:.93rem;letter-spacing:.065em;color:#d9f9b5}
+.room-browser-transfer p{font-size:.85rem;line-height:1.5;color:#bfded7;margin:0;max-width:72ch}
+.room-browser-transfer-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.room-browser-transfer-actions button{min-height:44px}
+.room-browser-transfer-replace{display:flex;align-items:center;gap:9px;min-height:44px;
+ font-size:.83rem;color:#d4ebe2}
+.room-browser-transfer-replace input{accent-color:#c9efa7;width:19px;height:19px}
+.room-browser-transfer-actions :focus-visible{outline:3px solid #d9f9b5;outline-offset:3px}
+@media(max-width:580px){.room-browser-transfer{padding:12px}
+ .room-browser-transfer-actions button{flex:1 1 100%}
+ .room-browser-transfer-replace{flex:1 1 100%}}
+
+/* Discoverability: keep reset control visible and keyboard-accessible on mobile. */
+.room-browser-filters .room-browser-reset{min-height:43px;min-width:115px;
+ border:1px solid #8cafaa;background:#29474b;color:#e6f6db;border-radius:8px;
+ padding:9px 13px;font-weight:750;cursor:pointer}
+.room-browser-filters .room-browser-reset:hover{background:#33575a}
+.room-browser-filters .room-browser-reset:focus-visible{outline:3px solid #e0ffb1;outline-offset:3px}
+@media(max-width:600px){.room-browser-filters .room-browser-reset{flex:1 1 100%}}
+
+/* Opt-in room-seat watch uses only fresh, host-approved listings while visible. */
+.room-browser-watch{margin:10px 0 14px;padding:14px;border:1px solid #8fb3a2;
+ border-radius:10px;background:#1e403b;display:grid;gap:9px}
+.room-browser-watch[hidden]{display:none!important}
+.room-browser-watch button{justify-self:start;min-height:44px;border-radius:8px;
+ border:1px solid #a1c9ad;background:#365d4a;color:#f3ffe7;
+ font:inherit;font-weight:750;font-size:.88rem;padding:9px 13px;cursor:pointer}
+.room-browser-watch button[aria-pressed="true"]{background:#b5e3aa;color:#173d2f}
+.room-browser-watch p{font-size:.81rem;line-height:1.5;color:#d9eee1;margin:0}
+.room-browser-availability{display:inline-block;padding:4px 7px;max-width:max-content;
+ font-size:.7rem;letter-spacing:.04em;font-weight:800;border-radius:6px;
+ border:1px solid #88a7a1;color:#e1e8e6;background:#254b4d}
+.room-browser-availability[data-open="yes"]{border-color:#a8e0ae;
+ color:#efffdc;background:#2b654b}
+.room-browser-actions .room-browser-live-join:not(:disabled){background:#c7e5b1;color:#203b2c}
+.room-browser-actions .room-browser-live-join:disabled{opacity:.48;cursor:not-allowed}
+@media(max-width:600px){.room-browser-watch button{width:100%}}

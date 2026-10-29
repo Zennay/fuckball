@@ -1,0 +1,176 @@
+/* Replay archive is intentionally distinct from official results/rankings. */
+.my-games-view{max-width:1120px;min-height:calc(100dvh - 75px);margin:0 auto;padding:clamp(25px,5vw,70px) clamp(18px,4vw,50px)}
+.my-games-head{display:flex;align-items:end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:34px}
+.my-games-head h1{font-size:clamp(40px,6vw,72px);font-style:italic;letter-spacing:-.06em;margin:12px 0}
+.my-games-head p,.games-disclaimer{color:#a7b9ba;line-height:1.6;max-width:650px}
+.my-games-tools{display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+.my-games-tools button,.game-entry-actions button{padding:12px 18px;border-radius:7px}
+#gamesCount{font-size:12px;color:#d1e7bd}
+#gamesStatus{min-height:22px;color:#c1d1d3;margin:12px 0}
+#gamesEmpty{padding:52px 20px;text-align:center;border:1px dashed #60737b;border-radius:12px;background:#202f34}
+#gamesEmpty strong{display:block;font-size:19px;margin-bottom:8px}
+#gamesEmpty p{color:#a7b9ba}
+#gamesList{display:grid;gap:10px}
+.game-entry{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:19px;background:#24353c;border:1px solid #47575b;border-radius:10px}
+.game-entry-info{display:grid;gap:8px;min-width:0}
+.game-entry-info strong{font-size:15px;overflow-wrap:anywhere}
+.game-entry-info span{color:#9aafb2;font-size:11px}
+.game-entry-actions{display:flex;gap:8px;flex-wrap:wrap}
+.game-entry-actions button:first-child{background:#caec86;color:#182a1d;font-weight:bold}
+.game-entry-actions button:last-child{color:#ffc1b9}
+.game-entry-actions button:focus-visible,.my-games-tools button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:660px){.game-entry{align-items:stretch;flex-direction:column}.game-entry-actions button{flex:1}.my-games-view{padding-bottom:40px}}
+
+
+.my-games-tools label{display:grid;gap:6px;font-size:11px;color:#b7c9cb}
+.my-games-tools input,.my-games-tools select{
+ min-height:40px;min-width:160px;max-width:260px;padding:8px 12px;border-radius:7px;
+ background:#13252d;border:1px solid #688187;color:#f1f5ee;
+}
+.my-games-tools input:focus-visible,.my-games-tools select:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:2px;
+}
+.replay-controls:not([hidden]){display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px}
+.replay-controls #replaySeek{flex:1 1 170px;min-width:120px}
+.replay-moments:not([hidden]){
+ display:flex;gap:6px;align-items:center;flex-basis:100%;overflow-x:auto;padding:8px 2px 2px;
+ scrollbar-width:thin;
+}
+.replay-moments strong{font-size:10px;white-space:nowrap;text-transform:uppercase;color:#c8d9cd;margin-right:6px}
+.replay-moment{flex-shrink:0;min-height:35px;padding:6px 11px;border-radius:7px;border:1px solid #708489;color:white;font-size:11px}
+.replay-moment.red{border-color:#bd6e7a;color:#ffe0e0}
+.replay-moment.blue{border-color:#6f94c3;color:#d8e8ff}
+.replay-moment:focus-visible{outline:3px solid #d3ef9f;outline-offset:2px}
+@media(max-width:660px){.my-games-tools{align-items:stretch}.my-games-tools label{flex:1 1 130px}.my-games-tools input,.my-games-tools select{width:100%;min-width:0}.replay-controls{bottom:55px!important}}
+
+
+.game-entry.game-entry-favorite{border-color:#9aaf66;background:#293a36}
+.game-entry-actions .game-star[aria-pressed="true"]{
+ color:#e7f5ab;background:#425038;border-color:#acc779;
+}
+.game-entry-actions .game-star[aria-pressed="false"]{color:#cdd7cc}
+.my-games-tools .games-favorites-toggle[aria-pressed="true"]{
+ background:#d3ef9f;color:#1b2c1c;border-color:#c3e990;font-weight:bold;
+}
+.game-rename-dialog{width:min(450px,94vw);max-width:94vw;padding:0;
+ background:#1b2b32;color:#f0f6f3;border:1px solid #7c9693;border-radius:12px;
+ box-shadow:0 30px 100px #0009}
+.game-rename-dialog::backdrop{background:#071115b8}
+.game-rename-form{padding:28px;display:grid;gap:20px}
+.game-rename-form h2{font-size:23px;margin:0}
+.game-rename-form label{display:grid;gap:10px;font-size:13px;color:#d1dedd}
+.game-rename-form input{background:#0f2027;border:1px solid #799395;border-radius:6px;
+ color:#f0f6f3;padding:12px;font-size:16px;width:100%}
+.game-rename-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.game-rename-actions button{padding:11px 18px;border-radius:6px}
+.game-rename-actions button:focus-visible,.game-rename-form input:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:3px}
+
+/* Portable offline replay archives: discoverable, keyboard-friendly controls. */
+.my-games-tools .games-backup-button{
+ padding:11px 16px;border:1px solid #6a8585;border-radius:7px;
+ background:#1d363c;color:#d9ede4;font-size:12px;font-weight:700;
+ transition:background-color .15s ease,border-color .15s ease;
+}
+.my-games-tools .games-backup-button:hover:not(:disabled){background:#345159;border-color:#b0d5bc}
+.my-games-tools .games-backup-button:disabled{opacity:.55;cursor:wait}
+.my-games-tools .games-backup-button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:660px){.my-games-tools .games-backup-button{flex:1 1 145px;min-height:44px}}
+@media(prefers-reduced-motion:reduce){.my-games-tools .games-backup-button{transition:none}}
+
+/* Replay annotations are private to the local HBR2 library. */
+.replay-controls .replay-add-bookmark{
+ min-height:35px;padding:7px 12px;background:#283d35;
+ border:1px solid #a4c778;border-radius:7px;color:#e4ffbe;
+ font-size:11px;font-weight:750;white-space:nowrap;
+}
+.replay-add-bookmark[hidden],.replay-bookmarks[hidden]{display:none!important}
+.replay-add-bookmark:disabled{opacity:.5;cursor:not-allowed}
+.replay-bookmarks:not([hidden]){
+ display:flex;align-items:center;flex-basis:100%;gap:8px;max-width:100%;
+ overflow-x:auto;scrollbar-width:thin;padding:6px 2px;
+}
+.replay-bookmarks>strong{
+ font-size:10px;color:#e1f0d2;text-transform:uppercase;white-space:nowrap;
+}
+.replay-bookmark{display:inline-flex;align-items:stretch;flex:0 0 auto;gap:1px}
+.replay-bookmark .replay-moment{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.replay-remove-bookmark{
+ min-width:32px;border:1px solid #81575b;border-radius:5px;
+ background:#3a292d;color:#ffd1d1;font-size:20px;cursor:pointer;
+}
+.replay-controls button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+.replay-bookmark-dialog{
+ width:min(470px,94vw);max-width:94vw;border-radius:12px;
+ background:#152730;border:1px solid #75968a;color:#f2f6e9;
+ box-shadow:0 22px 80px #0009;
+}
+.replay-bookmark-dialog::backdrop{background:#06151cbd}
+.replay-bookmark-form{display:grid;gap:17px;padding:24px}
+.replay-bookmark-form h2{margin:0;font-size:24px}
+.replay-bookmark-form p{margin:0;color:#b9cac0}
+.replay-bookmark-form label{display:grid;gap:8px;font-size:13px;color:#d3ebd4}
+.replay-bookmark-form input{
+ font:inherit;width:100%;max-width:100%;min-height:43px;
+ padding:9px 12px;border:1px solid #82958a;background:#101e24;color:#fff;border-radius:7px;
+}
+.replay-bookmark-actions{display:flex;justify-content:flex-end;gap:10px}
+.replay-bookmark-actions button{padding:10px 16px;border-radius:7px}
+.replay-bookmark-dialog button:focus-visible,.replay-bookmark-dialog input:focus-visible{
+ outline:3px solid #d3ef9f;outline-offset:3px;
+}
+@media(max-width:660px){
+ .replay-controls .replay-add-bookmark{order:2}
+ .replay-bookmarks:not([hidden]){order:3}
+ .replay-bookmark .replay-moment{max-width:160px}
+}
+
+/* Personal replay collections are local labels, never server-sourced categories. */
+.games-tag-hint{font-size:13px;line-height:1.5;color:#c2d2cb;margin:0}
+.games-tag-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:3px}
+.games-tag-chip{font-size:11px;padding:5px 9px;border:1px solid #84a49a;background:#2d4c4b;color:#e2f2d9;border-radius:999px;max-width:100%;overflow-wrap:anywhere}
+.my-games-tools .games-tags-filter{min-width:135px}
+@media(max-width:660px){.my-games-tools .games-tags-filter{width:100%;min-width:0}}
+
+/* Optional private HBR2 reflections. Local subjective rating is not official. */
+.game-review-summary{display:grid;gap:5px;padding:10px 12px;background:#1d3a3b;border-left:3px solid #bde997;border-radius:6px;max-width:620px}
+.game-review-summary strong{font-size:12px!important;color:#d8f1bd}
+.game-review-summary span{font-size:12px!important;line-height:1.5;color:#c4dbce;overflow-wrap:anywhere;white-space:pre-wrap}
+.game-review-dialog{background:#162b32;color:#f2faee;border:1px solid #7b9b8d;border-radius:14px;padding:0;max-width:95vw;width:min(560px,95vw)}
+.game-review-dialog::backdrop{background:#061116e0}
+.game-review-form{padding:clamp(18px,3vw,29px);display:grid;gap:16px}
+.game-review-form h2{font-size:24px;letter-spacing:-.03em;font-style:italic;margin:0}
+.game-review-form p{font-size:12px;line-height:1.6;color:#c0d5c9;margin:0}
+.game-review-form label{display:grid;gap:7px;font-size:12px;color:#dbecdf}
+.game-review-form :is(select,textarea){box-sizing:border-box;min-height:42px;width:100%;max-width:100%;padding:10px;border:1px solid #8aa99a;border-radius:8px;background:#0b222a;color:#eef8ee;font-size:14px}
+.game-review-form textarea{resize:vertical;line-height:1.55;min-height:82px}
+.game-review-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.game-review-actions button{min-height:43px;padding:10px 13px;border-radius:8px;border:1px solid #829989;color:#eff6e7;background:#345145}
+.game-review-actions .danger{border-color:#c58c89;color:#ffcbc5}
+.game-review-form :is(button,select,textarea):focus-visible{outline:3px solid #e1f6a6;outline-offset:3px}
+@media(max-width:550px){.game-review-actions button{flex:1 1 115px}.game-review-form{padding:17px}}
+
+/* Online game continuity: local replays never silently replace a live match. */
+.games-session-notice[hidden]{display:none!important}
+.games-session-notice{box-sizing:border-box;display:flex;align-items:center;
+ justify-content:space-between;gap:18px;margin:0 0 20px;padding:16px 20px;
+ border:1px solid rgba(218,250,153,.7);border-radius:16px;
+ background:linear-gradient(110deg,#19332f,#243c32);color:#f4ffeb;
+ box-shadow:0 10px 28px #071a1a55}
+.games-session-notice strong{display:block;color:#d8ff91;font-size:.78rem;
+ font-weight:900;letter-spacing:.085em}
+.games-session-notice p{max-width:63ch;font-size:.88rem;line-height:1.5;
+ color:#c6dbce;margin:6px 0 0}
+.games-session-actions{display:flex;gap:8px;flex-shrink:0}
+.games-session-actions button{min-height:46px;font:inherit;font-size:.85rem;
+ font-weight:800;padding:10px 15px;border:1px solid #80a99d;
+ border-radius:10px;background:transparent;color:#ebffee;cursor:pointer}
+.games-session-actions button.primary{background:#dbff8b;color:#173122;border-color:#dbff8b}
+.games-session-actions button:focus-visible{outline:3px solid #e6ff98;outline-offset:3px}
+.games-session-actions button[hidden]{display:none}
+@media(max-width:750px){
+ .games-session-notice{flex-direction:column;align-items:stretch;padding:15px;gap:12px}
+ .games-session-actions{display:grid;grid-template-columns:1fr 1fr}
+ .games-session-actions button[hidden]+button{grid-column:1/-1}
+}
+@media(max-width:410px){.games-session-actions{grid-template-columns:1fr}}

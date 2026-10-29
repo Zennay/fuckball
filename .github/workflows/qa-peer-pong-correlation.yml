@@ -1,0 +1,38 @@
+name: Fuckball correlated peer RTT QA
+
+on:
+  pull_request:
+    paths:
+      - dist/peer-net.js
+      - tests/peer-pong-correlation-qa.cjs
+      - .github/workflows/qa-peer-pong-correlation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  peer-rtt:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable pull request source
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+      - name: Correlated RTT, peer signaling and live-synthetic hosting regression
+        run: |
+          node --check dist/peer-net.js
+          node --check tests/peer-pong-correlation-qa.cjs
+          node tests/peer-pong-correlation-qa.cjs
+          node tests/peer-signal-isolation-qa.cjs
+          node tests/peer-hosting.cjs

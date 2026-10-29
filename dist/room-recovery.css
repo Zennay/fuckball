@@ -1,0 +1,43 @@
+.native-room-recovery{position:fixed;z-index:110;left:50%;bottom:max(14px,env(safe-area-inset-bottom));max-height:calc(100dvh - 28px);overflow-y:auto;transform:translateX(-50%);width:min(430px,calc(100vw - 28px));padding:22px;border:1px solid #a1c7a1;border-radius:14px;color:#eaf9ec;background:rgba(19,38,43,.97);box-shadow:0 18px 64px #0009;backdrop-filter:blur(10px)}
+.native-room-recovery[hidden]{display:none!important}
+.native-room-recovery-tag{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;color:#c7e5a6}
+.native-room-recovery h2{font-size:22px;margin:9px 0 10px;letter-spacing:-.04em}
+.native-room-recovery-description{font-size:13px;line-height:1.55;color:#d3e3dd}
+.native-room-recovery-progress{font-weight:700;font-size:13px;color:#e6f9b2;min-height:24px}
+.native-room-recovery-actions{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}
+.native-room-recovery-actions button{flex:1 1 130px;min-height:42px;padding:8px 12px;border-radius:8px}
+.native-room-recovery-note{font-size:11px;color:#b3c9c4;line-height:1.5;margin-bottom:0}
+.native-room-recovery button:focus-visible{outline:3px solid #d7f49d;outline-offset:4px}
+@media(prefers-reduced-transparency:reduce){.native-room-recovery{backdrop-filter:none;background:#172e33}}
+@media(max-height:450px){.native-room-recovery{bottom:6px;padding:12px}.native-room-recovery h2{font-size:17px;margin:4px 0}.native-room-recovery-note{display:none}}
+
+/* The body-mounted recovery sheet stays reachable on any tab or viewport. */
+@media(max-width:480px){.native-room-recovery{width:calc(100vw - 20px);box-sizing:border-box;padding:16px;bottom:max(8px,env(safe-area-inset-bottom))}.native-room-recovery-actions{flex-direction:column}.native-room-recovery-actions button{width:100%;flex:0 0 auto}}
+
+/* Server-confirmed recovery: nonblocking return path on Home and My Games. */
+.native-room-restored[hidden]{display:none!important}
+.native-room-restored{position:fixed;z-index:110;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));display:flex;align-items:center;
+ justify-content:space-between;gap:16px;width:min(820px,calc(100vw - 24px));
+ padding:16px 18px;box-sizing:border-box;border:2px solid #c2f59f;
+ border-radius:14px;background:#1a3530;color:#e9ffe8;
+ box-shadow:0 15px 44px #071b21dc}
+.native-room-restored strong{font-size:.8rem;font-weight:900;
+ letter-spacing:.055em;color:#d9ffac}
+.native-room-restored p{margin:6px 0 0;color:#d0e6da;
+ font-size:.85rem;line-height:1.5;max-width:56ch}
+.native-room-restored-actions{display:flex;gap:9px;flex-shrink:0}
+.native-room-restored-actions button{min-height:48px;padding:10px 14px;
+ border-radius:9px;border:1px solid #9eb6a7;background:#264339;
+ color:#f4fff0;font:inherit;font-size:.84rem;font-weight:800;cursor:pointer}
+.native-room-restored-actions button.primary{background:#dcff9b;
+ border-color:#dcff9b;color:#173022}
+.native-room-restored-actions button:focus-visible{outline:3px solid #f1ffa8;outline-offset:3px}
+@media(max-width:720px){
+ .native-room-restored{flex-direction:column;align-items:stretch;
+  gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-room-restored-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:390px){
+ .native-room-restored-actions{grid-template-columns:1fr}
+}

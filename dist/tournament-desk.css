@@ -1,0 +1,123 @@
+/* The Tournament Desk is intentionally an optional private home-page disclosure. */
+.tournament-desk{width:min(1130px,calc(100% - 32px));margin:32px auto 44px;color:var(--text,#edf4ef)}
+.tournament-disclosure{border:1px solid #5b7470;border-radius:18px;background:#12282a;overflow:hidden;box-shadow:0 12px 34px #0002}
+.tournament-disclosure>summary{cursor:pointer;padding:18px 22px;font-size:1rem;font-weight:800;letter-spacing:.055em;list-style-position:inside}
+.tournament-disclosure>summary:focus-visible,.tournament-desk button:focus-visible,.tournament-desk select:focus-visible,.tournament-desk input:focus-visible,.tournament-desk textarea:focus-visible{outline:3px solid #cbffa1;outline-offset:3px}
+.tournament-inner{padding:0 22px 24px}
+.tournament-inner>p{max-width:75ch;line-height:1.55;color:#c4d5cf}
+.tournament-desk button,.tournament-desk select,.tournament-desk input,.tournament-desk textarea{font:inherit;border-radius:8px;border:1px solid #718b85;color:#ecf8f0;background:#1e3839;padding:9px 12px}
+.tournament-desk button{background:#d7f8ac;color:#17302e;border-color:#d7f8ac;cursor:pointer;font-weight:700}
+.tournament-desk button:hover:not(:disabled){filter:brightness(1.07)}
+.tournament-desk button:disabled{opacity:.48;cursor:not-allowed}
+.tournament-desk .tournament-danger{color:#ffd3ca;border-color:#ba7065;background:#44302e}
+.tournament-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.tournament-actions select{flex:1 1 190px;min-width:0}
+.tournament-setup{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #55726e;padding:16px;border-radius:12px;margin:16px 0;background:#193336}
+.tournament-setup label{display:flex;flex-direction:column;gap:6px;color:#d2e6db;font-weight:600}
+.tournament-setup label:nth-child(2){grid-row:span 2}
+.tournament-setup textarea{resize:vertical;min-height:120px}
+.tournament-status{min-height:24px}
+.tournament-progress{display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap}
+.tournament-progress strong{font-size:1.15rem}
+.tournament-overview progress{display:block;width:100%;height:10px;accent-color:#b9f48f;margin:10px 0 24px}
+.tournament-standings h3,.tournament-fixtures h3{font-size:.95rem;letter-spacing:.07em;margin:18px 0 12px}
+.tournament-table-scroll{overflow-x:auto}
+.tournament-table-scroll table{width:100%;border-collapse:collapse;text-align:right;white-space:nowrap}
+.tournament-table-scroll th,.tournament-table-scroll td{padding:10px;border-bottom:1px solid #46635f;font-variant-numeric:tabular-nums}
+.tournament-table-scroll th:nth-child(2),.tournament-table-scroll td:nth-child(2){text-align:left;font-weight:700}
+.tournament-table-scroll th:last-child,.tournament-table-scroll td:last-child{color:#c4ff9c;font-weight:800}
+.tournament-fixtures-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.tournament-match{display:grid;grid-template-columns:minmax(150px,1fr) 70px 15px 70px auto auto;align-items:center;gap:10px;border-top:1px solid #42605c;padding:12px 0}
+.tournament-match-name{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.tournament-match-name small{color:#acccc1;font-size:.75rem;letter-spacing:.07em}
+.tournament-match input{text-align:center;width:100%;min-width:0;box-sizing:border-box;font-variant-numeric:tabular-nums}
+@media(max-width:650px){
+ .tournament-desk{width:calc(100% - 20px);margin:20px auto}
+ .tournament-inner{padding:0 12px 16px}
+ .tournament-setup{grid-template-columns:1fr}
+ .tournament-setup label:nth-child(2){grid-row:auto}
+ .tournament-match{grid-template-columns:minmax(0,1fr) 58px 12px 58px;gap:7px}
+ .tournament-match button{grid-column:span 2}
+ .tournament-match button:nth-last-child(2){grid-column:1/span 2}
+ .tournament-match button:last-child{grid-column:3/span 2}
+}
+@media print{
+ .tournament-desk{color:#000;background:#fff}
+ .tournament-actions,.tournament-setup,.tournament-fixtures,.tournament-status{display:none!important}
+ .tournament-disclosure{border:0;box-shadow:none;background:#fff}
+ .tournament-inner,.tournament-table-scroll{color:#000}
+ .tournament-table-scroll td,.tournament-table-scroll th{color:#000!important;border-color:#999}
+}
+.tournament-scheduling{grid-column:1/-1;display:grid;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr) auto auto;gap:10px;align-items:end;padding:10px 12px;margin-bottom:8px;border:1px solid #496a5f;border-radius:10px;background:#1c3c3b}
+.tournament-scheduling label{display:grid;gap:6px;color:#cce7d8;font-size:.84rem}
+.tournament-scheduling input{width:100%;box-sizing:border-box;text-align:left;color:#fff;background:#204746}
+.tournament-scheduling button{white-space:nowrap}
+@media(max-width:700px){
+ .tournament-scheduling{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .tournament-scheduling label{grid-column:1/-1}
+ .tournament-scheduling button{grid-column:auto!important}
+}
+
+/* Cross-panel fixture handoff never edits results without the original form. */
+.tournament-match.tournament-match-target{
+ border:2px solid #d8ff9c;background:#2c4b3c;scroll-margin-top:25vh;
+ box-shadow:0 0 0 3px rgba(205,251,153,.22)
+}
+
+/* Explicit, backup-first recovery only for unreadable local league data. */
+.tournament-recovery:not([hidden]){display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+ border:1px solid #d5a56f;background:#42352b;border-radius:10px;padding:15px;margin:16px 0}
+.tournament-recovery p{flex:1 1 100%;margin:0;color:#ffe5c7;line-height:1.5}
+.tournament-recovery button{min-height:43px}
+.tournament-recovery[hidden]{display:none!important}
+
+/* Playoffs require one deliberate action; private league standings stay intact. */
+.tournament-playoff{margin:20px 0 5px;border:1px solid #73966c;border-radius:12px;
+ padding:16px;background:#1b3630}
+.tournament-playoff h3{margin:0 0 7px;color:#d5f69f;letter-spacing:.065em;font-size:.96rem}
+.tournament-playoff>p{font-size:.85rem;line-height:1.5;margin:0 0 12px;color:#c2d8cc}
+.tournament-playoff-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tournament-playoff-actions select{flex:1 1 160px}
+.tournament-playoff-actions button{min-height:44px;flex:1 1 180px}
+.tournament-playoff-preview{margin:13px 0 0!important}
+@media print{.tournament-playoff-actions{display:none!important}}
+
+/* Transactional local league batch scheduler. Never implies an official match time. */
+.tournament-batch-planner:not([hidden]){display:grid;gap:12px;margin:16px 0;padding:18px;
+ border:1px solid #87b0a2;border-radius:14px;background:#193838}
+.tournament-batch-planner[hidden]{display:none!important}
+.tournament-batch-planner h3{margin:0;letter-spacing:.065em;font-size:1.04rem}
+.tournament-batch-planner>p{color:#c3dfd1;line-height:1.5;margin:0;max-width:75ch}
+.tournament-batch-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.tournament-batch-form label{display:grid;gap:6px;font-size:.88rem;color:#d3e8de;font-weight:700;min-width:0}
+.tournament-batch-form input{box-sizing:border-box;width:100%;min-width:0}
+.tournament-batch-form .tournament-batch-keep{display:flex;align-items:center;gap:9px;justify-content:flex-start;min-height:44px}
+.tournament-batch-keep input{width:19px;height:19px;accent-color:#b9f48f}
+.tournament-batch-form button{min-height:44px;min-width:0}
+.tournament-batch-preview{padding:12px;border:1px dashed #6f9787;border-radius:10px;background:#112e32;color:#e5f4eb}
+.tournament-batch-preview:empty{display:none}
+.tournament-batch-preview strong{color:#d2f9a4}
+.tournament-batch-preview ol{display:grid;gap:8px;max-height:270px;overflow:auto;padding-left:25px;margin:14px 0}
+.tournament-batch-preview li{line-height:1.4;overflow-wrap:anywhere}
+.tournament-batch-preview p{color:#c2d8cf;font-size:.88rem;line-height:1.5;margin:8px 0 0}
+@media(max-width:660px){.tournament-batch-planner:not([hidden]){padding:12px}
+ .tournament-batch-form{grid-template-columns:1fr}
+ .tournament-batch-preview ol{max-height:210px}}
+@media print{.tournament-batch-planner{display:none!important}}
+
+/* Per-team view and portable calendars are private, not authoritative fixtures. */
+.tournament-fixtures-head .tournament-team-picker{display:flex;align-items:center;gap:10px;
+ font-size:.78rem;font-weight:850;letter-spacing:.07em;color:#d5eddd;min-width:0}
+.tournament-team-picker select{font-size:.91rem;min-height:43px;max-width:240px;min-width:150px;
+ text-overflow:ellipsis;letter-spacing:normal}
+.tournament-team-summary{display:grid;gap:8px;margin:14px 0;border:1px solid #84a98a;
+ background:#1a3935;border-radius:12px;padding:16px;line-height:1.45}
+.tournament-team-summary strong{font-size:1.08rem;color:#d5f7aa;overflow-wrap:anywhere}
+.tournament-team-summary span{font-size:.92rem;color:#e0f2e7;overflow-wrap:anywhere}
+.tournament-team-summary small{color:#bad8cd;line-height:1.5}
+@media(max-width:620px){
+ .tournament-fixtures-head .tournament-team-picker{width:100%;justify-content:space-between}
+ .tournament-team-picker select{min-width:0;width:100%;max-width:75%}
+ .tournament-team-summary{padding:12px}}
+@media print{.tournament-team-picker{display:none!important}
+ .tournament-team-summary{background:white;color:#111;border-color:#999}}

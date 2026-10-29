@@ -1,0 +1,47 @@
+/* Dropzone is device-local; imported recordings are parsed by the native library. */
+.replay-import-desk{
+ margin:0 0 25px;padding:clamp(16px,2.6vw,24px);
+ border-radius:16px;border:1px solid #526e72;
+ background:linear-gradient(125deg,#20363c,#152b31);
+ color:#ebf5ed;
+}
+.replay-import-head{display:flex;justify-content:space-between;gap:14px;align-items:start;margin-bottom:16px}
+.replay-import-label{font-size:.72rem;letter-spacing:.12em;font-weight:800;color:#d4f69e}
+.replay-import-intro h2{font-size:clamp(1.35rem,2.8vw,2rem);margin:4px 0}
+.replay-import-intro p{color:#c4d3cd;margin:6px 0;max-width:70ch;line-height:1.5;font-size:.89rem}
+.replay-import-usage{white-space:normal;color:#d9f0c8;font-size:.78rem;font-weight:800;text-align:right;flex-shrink:0}
+.replay-import-zone{
+ padding:26px 16px;min-height:154px;border:2px dashed #79a8a0;
+ border-radius:12px;background:rgba(1,19,23,.38);
+ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+ cursor:pointer;text-align:center;transition:border-color .13s,background-color .13s;
+}
+.replay-import-zone .replay-import-icon{font-size:2.5rem;line-height:1;color:#d6f998}
+.replay-import-zone>strong:not(.replay-import-icon){font-size:1rem}
+.replay-import-zone span{font-size:.81rem;color:#bfd1cc}
+.replay-import-zone.dragging{border-color:#d5fb8c;background:#314e3d}
+.replay-import-zone.is-busy{opacity:.65;pointer-events:none}
+.replay-import-zone:focus-visible,.replay-import-desk button:focus-visible{
+ outline:3px solid #d9fc96;outline-offset:3px
+}
+.replay-import-previews{display:grid;gap:7px;margin:14px 0}
+.replay-import-row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+ background:#253d42;border:1px solid #4e6969;border-radius:8px;padding:9px 12px}
+.replay-import-file{min-width:0;display:grid;gap:3px}
+.replay-import-file strong{overflow-wrap:anywhere;font-size:.89rem}
+.replay-import-file small{color:#b7cfc8}
+.replay-import-empty{margin:0;color:#c2d3d0;font-size:.82rem}
+.replay-import-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.replay-import-desk button{border:1px solid #88a39b;background:#2b4543;
+ border-radius:9px;padding:10px 15px;color:#f2fbf7;min-height:42px;cursor:pointer;font:inherit;font-weight:750}
+.replay-import-actions button:first-child{background:#d3f496;color:#132c24;border-color:#d3f496}
+.replay-import-desk button:disabled{opacity:.55;cursor:not-allowed}
+.replay-import-status{font-size:.85rem;line-height:1.5;color:#e3f4d4;min-height:22px;margin:12px 0}
+@media(max-width:650px){
+ .replay-import-head{flex-direction:column}
+ .replay-import-usage{text-align:left}
+ .replay-import-zone{min-height:120px}
+ .replay-import-actions button{flex:1 1 140px}
+}
+@media(prefers-reduced-motion:reduce){.replay-import-zone{transition:none}}
+@media print{.replay-import-desk{display:none!important}}

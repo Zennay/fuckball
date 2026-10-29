@@ -1,0 +1,30 @@
+name: QA Account API Flood Window
+on:
+  pull_request:
+    paths:
+      - 'tests/account-throttle-qa.cjs'
+      - 'headless/accounts.cjs'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-account-throttle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/account-throttle-qa.cjs'
+      - 'headless/accounts.cjs'
+      - 'headless/server.cjs'
+      - '.github/workflows/qa-account-throttle.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  account-throttle:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/account-throttle-qa.cjs

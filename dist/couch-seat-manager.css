@@ -1,0 +1,47 @@
+.couch-seat-manager{border-top:1px solid #55786b;margin:12px 0 2px;padding-top:12px}
+.couch-seat-manager h3{font-size:13px;letter-spacing:.1em;margin:0 0 5px;color:#c7f29e}
+.couch-seat-manager>p{font-size:12px;line-height:1.45;color:#d5e9dc}
+.couch-seat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}
+.couch-seat{display:grid;gap:6px;min-width:0;padding:12px;border-radius:9px;border:1px solid #805d60;background:#3b282d;color:#fce8dd}
+.couch-seat.ready{border-color:#8abf98;background:#163d34;color:#e2f6e6}
+.couch-seat strong{font-size:12px;letter-spacing:.08em}
+.couch-seat-location{font-size:11px;overflow-wrap:anywhere;line-height:1.45}
+.couch-seat-input{font-family:ui-monospace,monospace;font-size:12px;font-weight:750;letter-spacing:.04em}
+.couch-seat-readiness{font-size:12px;font-weight:750;color:#ecf8ed}
+
+/* Local four-human fairness: a lost Blue pad pauses only the local match.
+   All seat changes are explicit, never reassigned from another human. */
+.couch-live-recovery[hidden]{display:none!important}
+.couch-live-recovery{position:fixed;z-index:125;bottom:max(14px,env(safe-area-inset-bottom));
+ left:50%;transform:translateX(-50%);box-sizing:border-box;
+ width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 30px);
+ overflow-y:auto;padding:20px;border-radius:16px;border:2px solid #e8cd83;
+ background:#24332a;box-shadow:0 16px 54px #081610e0;color:#f6ffeb}
+.couch-live-recovery>strong{font-weight:900;font-size:.9rem;letter-spacing:.07em;
+ color:#ffe3a8}
+.couch-live-recovery-status{font-size:.88rem;line-height:1.55;
+ margin:8px 0 14px;color:#e5f1e3}
+.couch-live-recovery-seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:12px;margin-bottom:12px}
+.couch-live-recovery-seat[hidden]{display:none!important}
+.couch-live-recovery-seat{display:flex;flex-direction:column;gap:9px;
+ padding:12px;border:1px solid #819686;border-radius:12px}
+.couch-live-recovery-seat label{font-size:.85rem;font-weight:700;display:flex;
+ flex-direction:column;gap:8px}
+.couch-live-recovery-seat select{width:100%;max-width:100%;min-height:46px;
+ background:#102e25;color:#f2ffef;padding:8px;border:1px solid #8eafa0;
+ border-radius:8px}
+.couch-live-recovery button{min-height:46px;cursor:pointer;font:inherit;
+ font-size:.86rem;font-weight:800;padding:11px 14px;border-radius:9px;
+ border:1px solid #a6b5a5;color:#e7ffe8;background:#365347}
+.couch-live-recovery button.primary{background:#e5f99c;color:#1a3426;
+ border-color:#e5f99c}
+.couch-live-recovery button:disabled{opacity:.53;cursor:not-allowed}
+.couch-live-recovery button[hidden]{display:none!important}
+.couch-live-recovery button:focus-visible,.couch-live-recovery select:focus-visible{
+ outline:3px solid #e4ff9b;outline-offset:3px}
+.couch-live-recovery-actions{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:600px){.couch-live-recovery{padding:14px;
+ bottom:max(8px,env(safe-area-inset-bottom))}
+ .couch-live-recovery-seats{grid-template-columns:1fr}
+ .couch-live-recovery-actions{display:grid;grid-template-columns:1fr}}

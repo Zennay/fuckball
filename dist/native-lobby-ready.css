@@ -1,0 +1,121 @@
+.native-lobby-ready{padding:17px;margin:16px 0;border:1px solid #698b79;background:#22383a;border-radius:11px;color:#eaf7e8}
+.native-lobby-ready[hidden]{display:none!important}
+.native-lobby-ready-header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.native-lobby-ready-header strong{letter-spacing:.08em;font-size:13px}
+.native-lobby-ready-header span{font-size:10px;color:#c8e8ac}
+.native-lobby-ready p{font-size:12px;line-height:1.5;color:#d0e1da}
+.native-lobby-ready-progress{font-weight:700;color:#d7f7ad!important;min-height:18px}
+.native-lobby-ready-roster{list-style:none;padding:0;display:grid;gap:6px;max-height:260px;overflow-y:auto;margin:12px 0}
+.native-lobby-ready-player{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 11px;border-radius:8px;background:#182b2e;border:1px solid #46625d;font-size:12px}
+.native-lobby-ready-player span:first-child{overflow-wrap:anywhere}
+.native-lobby-ready-player .is-ready{color:#d1f5a5;font-weight:700;white-space:nowrap}
+.native-lobby-ready-player .is-waiting{color:#e5bdb5;font-weight:700;white-space:nowrap}
+.native-lobby-ready-actions{display:flex;gap:8px;flex-wrap:wrap}
+.native-lobby-ready-actions button{min-height:42px;padding:9px 12px;border-radius:8px;flex:1 1 140px}
+.native-lobby-ready button:focus-visible{outline:3px solid #e2f7ad;outline-offset:3px}
+.native-lobby-ready-note{font-size:11px!important;color:#b6cbc1!important}
+.native-lobby-kickoff-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end;margin:16px 0 8px;padding-top:14px;border-top:1px solid #4f7267}
+.native-lobby-kickoff-controls[hidden]{display:none!important}
+.native-lobby-kickoff-controls label{display:grid;gap:5px;font-size:12px;font-weight:700;color:#d5e6dc}
+.native-lobby-kickoff-controls select{min-height:43px;padding:8px 10px;border:1px solid #86a69b;border-radius:7px;background:#152d31;color:#ecf8ed}
+.native-lobby-kickoff-controls button{min-height:43px;flex:1 1 130px;padding:8px 12px;border-radius:8px}
+.native-lobby-kickoff-status{color:#def3b7!important;font-weight:700;line-height:1.5;min-height:20px}
+.native-lobby-kickoff-hud{position:absolute;z-index:18;top:clamp(100px,19vh,215px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 25px);padding:14px 24px;border-radius:12px;border:2px solid #c3e69d;background:rgba(17,35,39,.92);box-shadow:0 16px 40px #0009;font-weight:900;letter-spacing:.08em;text-align:center;color:#edffcd;font-size:clamp(16px,3.4vw,26px);pointer-events:none}
+.native-lobby-kickoff-hud[hidden]{display:none!important}
+.native-lobby-kickoff-controls select:focus-visible,.native-lobby-kickoff-controls button:focus-visible{outline:3px solid #e2f7ad;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.native-lobby-kickoff-hud{transition:none;animation:none}}
+
+/* Native Custom Room readiness: global view-only mirror of the same
+   server roster and original voluntary native readiness button. */
+.native-lobby-ready-dock[hidden]{display:none!important}
+.native-lobby-ready-dock{box-sizing:border-box;position:fixed;z-index:112;
+ left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(920px,calc(100vw - 24px));padding:16px 18px;display:flex;
+ align-items:center;justify-content:space-between;gap:18px;
+ border:2px solid #c8edaa;border-radius:14px;background:#173530;
+ box-shadow:0 16px 44px #031218d9;color:#f2f9ee}
+.native-lobby-ready-dock-content{min-width:0}
+.native-lobby-ready-dock-content strong{font-size:.84rem;
+ letter-spacing:.055em;color:#e2ffaf}
+.native-lobby-ready-dock-progress{margin:6px 0 0;font-size:.85rem;
+ line-height:1.48;color:#d1e6db;overflow-wrap:anywhere}
+.native-lobby-ready-dock-actions{display:flex;gap:9px;flex-shrink:0}
+.native-lobby-ready-dock-actions button{min-height:48px;padding:10px 15px;
+ font:inherit;font-size:.84rem;font-weight:800;border:1px solid #9bb7a6;
+ background:#2a4d40;color:#f2fff2;border-radius:9px;cursor:pointer}
+.native-lobby-ready-dock-actions button.primary{background:#ddffa1;
+ color:#193527;border-color:#ddffa1}
+.native-lobby-ready-dock-actions button[hidden]{display:none!important}
+.native-lobby-ready-dock-actions button:disabled{opacity:.55;cursor:not-allowed}
+.native-lobby-ready-dock-actions button:focus-visible{outline:3px solid #f5ffb5;outline-offset:3px}
+@media(max-width:700px){.native-lobby-ready-dock{flex-direction:column;
+ align-items:stretch;padding:14px;gap:12px;bottom:max(8px,env(safe-area-inset-bottom))}
+ .native-lobby-ready-dock-actions{display:grid;grid-template-columns:1fr 1fr}}
+@media(max-width:360px){.native-lobby-ready-dock-actions{grid-template-columns:1fr}}
+
+/* One authoritative kickoff workflow across match, Home and My Games:
+   the host's actions delegate to the existing game menu, never auto-start. */
+.native-lobby-ready-dock-host[hidden],
+.native-lobby-ready-dock-host label[hidden],
+.native-lobby-ready-dock-host button[hidden]{display:none!important}
+.native-lobby-ready-dock-host{display:flex;flex-wrap:wrap;align-items:center;
+ gap:8px;padding-left:15px;border-left:1px solid #83a893}
+.native-lobby-ready-dock-host label{display:grid;gap:4px;font-size:.74rem;
+ font-weight:800;color:#d4ead9}
+.native-lobby-ready-dock-host select{border:1px solid #9bb7a6;
+ color:#f2fff2;background:#24463c;border-radius:8px;
+ min-height:48px;padding:10px 11px}
+.native-lobby-ready-dock-host button{min-height:48px;padding:10px 12px;
+ font:inherit;font-size:.82rem;font-weight:800;cursor:pointer;
+ border-radius:9px;border:1px solid #b8ceaa;background:#315444;
+ color:#f2fff2}
+.native-lobby-ready-dock-host button.primary{background:#ddffa1;
+ border-color:#ddffa1;color:#173527}
+.native-lobby-ready-dock-host button:disabled{opacity:.53;cursor:not-allowed}
+.native-lobby-ready-dock-host button:focus-visible,
+.native-lobby-ready-dock-host select:focus-visible{outline:3px solid #f5ffb5;outline-offset:3px}
+.native-lobby-ready-dock-feedback{flex-basis:100%;font-size:.76rem;
+ line-height:1.35;color:#d9ead2;max-width:31ch}
+@media(max-width:1050px){
+ .native-lobby-ready-dock{flex-wrap:wrap}
+ .native-lobby-ready-dock-host{border-left:0;border-top:1px solid #83a893;
+  padding:12px 0 0;width:100%}
+ .native-lobby-ready-dock-feedback{flex:1 0 150px}
+}
+@media(max-width:700px){
+ .native-lobby-ready-dock-host{display:grid;grid-template-columns:1fr 1fr;
+  gap:9px}
+ .native-lobby-ready-dock-host label,.native-lobby-ready-dock-feedback{
+  grid-column:1/-1;max-width:none}
+ .native-lobby-ready-dock-host label select{width:100%}
+}
+
+/* Finished room: original server result and native rematch actions, not
+   the unrelated pre-kickoff readiness controls. */
+.native-finished-round-dock[hidden]{display:none!important}
+.native-finished-round-dock{box-sizing:border-box;position:fixed;
+ z-index:112;left:50%;transform:translateX(-50%);
+ bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(920px,calc(100vw - 24px));display:flex;align-items:center;
+ justify-content:space-between;gap:16px;padding:16px 19px;
+ border:2px solid #c9ec9d;border-radius:14px;
+ background:#17332e;color:#f3ffee;box-shadow:0 15px 42px #041b1bd4}
+.native-finished-round-copy{min-width:0}
+.native-finished-round-copy strong{display:block;font-size:.84rem;
+ letter-spacing:.075em;color:#e3ffa7}
+.native-finished-round-detail{margin:6px 0 0;color:#d1e5d9;
+ line-height:1.5;font-size:.86rem;overflow-wrap:anywhere}
+.native-finished-round-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.native-finished-round-actions button{min-height:48px;border:1px solid #a1b9aa;
+ border-radius:9px;background:#264940;color:#f4fff4;
+ font:inherit;font-weight:800;font-size:.83rem;cursor:pointer;padding:10px 14px}
+.native-finished-round-actions button.primary{background:#dbff93;color:#183426;
+ border-color:#dbff93}
+.native-finished-round-actions button[hidden]{display:none}
+.native-finished-round-actions button:focus-visible{outline:3px solid #f6ffab;outline-offset:3px}
+@media(max-width:680px){
+ .native-finished-round-dock{flex-direction:column;align-items:stretch;
+ gap:12px;padding:14px;bottom:max(9px,env(safe-area-inset-bottom))}
+ .native-finished-round-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:410px){.native-finished-round-actions{grid-template-columns:1fr}}

@@ -1,0 +1,43 @@
+name: QA Account State Integrity
+on:
+  pull_request:
+    paths:
+      - 'headless/accounts.cjs'
+      - 'tests/account-state-integrity-qa.cjs'
+      - 'tests/account-persistence-write-failure-qa.cjs'
+      - 'tests/account-prototype-name-qa.cjs'
+      - '.github/workflows/qa-account-state-integrity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'headless/accounts.cjs'
+      - 'tests/account-state-integrity-qa.cjs'
+      - '.github/workflows/qa-account-state-integrity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  account-state:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # pinned v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact clean source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check headless/accounts.cjs && node --check tests/account-state-integrity-qa.cjs && node --check tests/account-persistence-write-failure-qa.cjs && node --check tests/account-prototype-name-qa.cjs
+      - run: node tests/account-state-integrity-qa.cjs
+      - run: node tests/account-persistence-write-failure-qa.cjs
+      - run: node tests/account-prototype-name-qa.cjs
+      - run: node tests/accounts.cjs
+      - run: node tests/account-room-session-qa.cjs

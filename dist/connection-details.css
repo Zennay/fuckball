@@ -1,0 +1,51 @@
+/* Honest, passive live connection history. No requests, no game-state changes. */
+.connection-details-trigger{border:1px solid #9dbbaf;background:#253d42;color:#effadd;border-radius:5px;padding:3px 6px;font-size:11px;cursor:pointer;white-space:nowrap}
+.connection-details-trigger[hidden]{display:none!important}
+.connection-details-trigger:focus-visible{outline:2px solid #ccf2ac;outline-offset:3px}
+.connection-details-dialog{position:fixed;inset:0;margin:auto;width:min(640px,calc(100vw - 28px));max-height:min(88vh,850px);overflow:auto;border:2px solid #b6d49c;border-radius:16px;background:#1d323b;color:#e6f2ee;box-shadow:0 22px 65px #0009;padding:24px;box-sizing:border-box}
+.connection-details-dialog::backdrop{background:#060e16b5}
+.connection-details-header{display:flex;align-items:start;justify-content:space-between;gap:18px}
+.connection-details-header h2{font-size:22px;color:#e0f4b8;margin:0}
+.connection-details-header p{font-size:12px;line-height:1.5;color:#c6dcd9;max-width:470px}
+.connection-details-header button{min-width:42px;min-height:42px;border:1px solid #9bb1b0;border-radius:9px;background:#283d46;color:#fff;font-size:19px}
+.connection-details-dialog button:focus-visible{outline:3px solid #d5f3a6;outline-offset:3px}
+.connection-details-state{border-left:4px solid #a7cb91;background:#294449;padding:11px 12px;border-radius:4px;font-size:13px;line-height:1.5;color:#e3f6dd}
+.connection-details-dialog[data-level=slow] .connection-details-state{border-left-color:#ffc375}
+.connection-details-dialog[data-level=poor] .connection-details-state,.connection-details-dialog[data-level=stalled] .connection-details-state{border-left-color:#f1a1a1}
+.connection-details-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:15px 0 23px}
+.connection-details-tile{border:1px solid #55747a;background:#29434a;border-radius:9px;padding:12px;display:grid;gap:8px}
+.connection-details-tile span{font-size:10px;letter-spacing:.06em;color:#c0d6d0}
+.connection-details-tile strong{font-size:22px;letter-spacing:.01em;color:#daf5af}
+.connection-details-tile small{font-size:10px;line-height:1.4;color:#d1dfdb}
+.connection-details-chart-box{padding:15px;background:#142a34;border:1px solid #54777d;border-radius:11px}
+.connection-details-chart-heading{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.connection-details-chart-heading strong{font-size:12px;color:#def4be}
+.connection-details-chart-heading span{font-size:10px;color:#c1d4d5}
+.connection-details-chart{height:100px;display:flex;align-items:end;gap:3px;padding-top:15px}
+.connection-details-bar{height:5%;min-width:2px;flex:1;background:#b2e3a9;border-radius:2px 2px 0 0}
+.connection-details-bar[data-level=slow]{background:#ebc77f}
+.connection-details-bar[data-level=poor]{background:#e7a5a4}
+.connection-details-bar.missing{background:#6e8d90;opacity:.65}
+.connection-details-tips{margin-top:20px}
+.connection-details-tips strong{font-size:12px;color:#dbf4ae;letter-spacing:.07em}
+.connection-details-tips p,.connection-details-privacy{font-size:12px;line-height:1.6;color:#c6d9d4}
+.connection-details-privacy{margin-bottom:0;font-size:11px}
+@media(max-width:530px){.connection-details-dialog{padding:15px}.connection-details-metrics{grid-template-columns:1fr}.connection-details-tile{grid-template-columns:1fr 1fr;align-items:center;gap:5px}.connection-details-tile small{grid-column:1/-1}.connection-details-header h2{font-size:18px}}
+@media(prefers-reduced-motion:reduce){.connection-details-dialog{scroll-behavior:auto}}
+
+.connection-session-overview{margin-top:16px;border:1px solid #6b8c81;background:#203b3d;
+ border-radius:10px;padding:14px;display:grid;gap:10px}
+.connection-session-overview>strong{font-size:12px;letter-spacing:.07em;color:#e5f9bb}
+.connection-session-summary{font-size:13px;line-height:1.6;color:#e4eee5;margin:0;overflow-wrap:break-word}
+.connection-session-actions{display:flex;gap:10px;flex-wrap:wrap}
+.connection-session-actions button{min-height:44px;border:1px solid #bedcaa;border-radius:8px;
+ background:#38584d;color:#f4ffe6;padding:9px 15px;font-weight:750}
+.connection-session-actions button:disabled{opacity:.5;cursor:not-allowed}
+.connection-session-export-status{font-size:11px;min-height:1.2em;color:#d4e3d5;margin:0}
+@media(max-width:530px){.connection-session-overview{padding:12px}
+ .connection-session-actions button{width:100%}}
+
+/* Missing or expired RTT is an unknown reading, not a healthy green sample. */
+.connection-details-dialog[data-level=unknown] .connection-details-state{border-left-color:#a4bec9}
+.connection-details-tile small{overflow-wrap:anywhere}
+@media(max-width:530px){.connection-details-tile strong{font-size:19px;overflow-wrap:anywhere}}

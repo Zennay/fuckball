@@ -1,0 +1,31 @@
+/* Connected Custom Room spectator applause; public, rate-limited, purely visual. */
+.spectator-cheer-actions[hidden],.spectator-cheer-feed[hidden],.spectator-cheer-hide[hidden]{display:none!important}
+.spectator-cheer-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px;
+ border-left:1px solid #7eaaa3;margin:0 3px;padding-left:7px;pointer-events:auto}
+.spectator-cheer-label{font-size:10px;font-weight:900;letter-spacing:.07em;color:#d5efda}
+.spectator-cheer-actions button{border:1px solid #9cc4b4;border-radius:8px;
+ padding:5px 8px;background:#22453d;color:#eefeea;
+ min-width:38px;min-height:38px;font-size:19px}
+.spectator-cheer-actions button:hover:not(:disabled){background:#39684b}
+.spectator-cheer-actions button:disabled{opacity:.52;cursor:not-allowed;
+ background:#243934;border-color:#5e7970}
+.spectator-cheer-status{overflow-wrap:anywhere}
+@media(pointer:coarse){.spectator-cheer-actions button{min-height:44px;min-width:44px}}
+.spectator-cheer-actions button:focus-visible,.spectator-cheer-hide:focus-visible{
+ outline:3px solid #c6f38c;outline-offset:2px}
+.spectator-cheer-status{flex:1 1 110px;max-width:205px;min-height:12px;
+ font-size:10px;line-height:1.3;color:#e1f4db}
+.spectator-cheer-hide{border:1px solid #9dbeb5;border-radius:8px;
+ padding:7px;background:#24423f;color:#eaf8ed;font-size:10px}
+.spectator-cheer-feed{position:absolute;bottom:115px;right:14px;z-index:19;
+ display:grid;gap:5px;max-width:min(285px,calc(100vw - 24px));pointer-events:none}
+.spectator-cheer-line{display:flex;align-items:center;gap:9px;
+ padding:9px 11px;border:1px solid #84a6a0;border-radius:9px;
+ background:#163633e8;color:#eaffea;box-shadow:0 5px 16px #07121595;
+ font-size:12px;font-weight:750;overflow-wrap:anywhere}
+.spectator-cheer-line span:first-child{font-size:19px;flex:none}
+@media(max-width:580px){
+ .spectator-cheer-actions{width:100%;justify-content:center}
+ .spectator-cheer-feed{bottom:95px;right:7px}
+}
+@media(prefers-reduced-motion:reduce){.spectator-cheer-line{animation:none;transition:none}}

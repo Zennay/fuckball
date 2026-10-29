@@ -1,0 +1,30 @@
+name: QA AI Model Schema Admission
+on:
+  pull_request:
+    paths:
+      - 'tests/ai-model-schema-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/ai/trained-model.json'
+      - '.github/workflows/qa-ai-model-schema.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/ai-model-schema-qa.cjs'
+      - 'dist/ai/policy.js'
+      - 'dist/ai/trained-model.json'
+      - '.github/workflows/qa-ai-model-schema.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  model-admission:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run build:solo
+      - run: node tests/ai-model-schema-qa.cjs

@@ -1,0 +1,9 @@
+# Personal account data export
+
+The signed-in **Profile** page offers **All my server data**, a self-service JSON download of the data about the current account that this individual Fuckball native server can access.
+
+An authenticated `GET /api/account/export` returns a bounded `fuckball-account-export` version-1 snapshot containing: the current username; this server's existing cumulative career totals; the last 50 unranked, native-server match receipts; that account's friends, pending requests and blocked users; authorized Club view; and current, ephemeral party/invitation snapshot. The response has `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. Only the existing bearer identity selects whose data is returned: the client cannot specify another username, a room, a file path or a club identifier to export.
+
+No password hash, password salt, session token, WebSocket ticket, client IP, other people's account records, globally enumerated rooms or raw storage files enter the JSON. Download happens only on explicit user action, with the browser checking that the signed-in identity has not changed during the request. Because the export includes private friends/Clubs information, the UI warns the player to keep it private.
+
+**Important limitations:** This is a snapshot from one server, not a cloud backup or cross-server account recovery. Clubs/parties may change; party invitations expire and may not be reusable. The lifetime career may outlive the most recent 50 receipts. Locally stored HBR2 replays and browser-only custom room presets are *not on the server* and need their separate My Games ZIP / preset export functions. No exported JSON can be imported as an authenticated match, official ranking, or another user's account. The game's existing privacy, identity and mandatory release gates remain intact.

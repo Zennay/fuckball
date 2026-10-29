@@ -1,0 +1,142 @@
+/* Unranked real-player matchmaking. Never imply a ranked rating or bot fills. */
+.quick-queue-panel{
+ margin:clamp(24px,5vw,58px) auto 12px;padding:clamp(22px,4vw,38px);
+ max-width:1160px;border:1px solid #698569;border-radius:18px;
+ background:linear-gradient(120deg,#1b3031,#213927);color:#f0f5e8;
+ box-shadow:0 15px 50px #07120d33;
+}
+.quick-queue-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.quick-queue-heading h2{margin:0;font-size:clamp(30px,4.3vw,54px);font-style:italic;letter-spacing:-.075em}
+.quick-queue-badge{border-radius:40px;background:#d2fa9a;color:#193126;font-size:10px;font-weight:850;letter-spacing:.1em;padding:8px 11px}
+.quick-queue-panel>p{font-size:13px;line-height:1.6;max-width:800px;color:#adc6b8}
+.quick-queue-modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}
+.quick-queue-mode{display:grid;text-align:left;gap:7px;padding:20px;border:1px solid #658879;background:#182d30;border-radius:10px;color:#edf6ea;cursor:pointer;min-width:0}
+.quick-queue-mode:hover:not(:disabled){background:#2b4534;border-color:#bce88c}
+.quick-queue-mode strong{font-size:clamp(22px,3vw,34px);letter-spacing:-.04em}
+.quick-queue-mode small{font-size:11px;color:#b1ccbc}
+.quick-queue-mode:disabled{opacity:.45;cursor:not-allowed}
+.quick-queue-status{margin:10px 0;color:#ddf4c5!important;font-size:12px;min-height:20px}
+.quick-queue-actions{display:flex;justify-content:flex-start}
+.quick-queue-actions button{border:1px solid #a77d7c;background:#4b2e32;color:#fbd9d9;padding:12px 20px;border-radius:9px;font-size:12px;cursor:pointer}
+.quick-queue-actions button[hidden]{display:none}
+.quick-queue-mode:focus-visible,.quick-queue-actions button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+@media(max-width:750px){.quick-queue-modes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:360px){.quick-queue-mode{padding:13px}.quick-queue-panel{margin:20px 12px}}
+
+/* Human Quick Match ready check: explicit consent before the server starts play. */
+.quick-ready[hidden]{display:none!important}
+.quick-ready{
+ margin:18px 0 2px;padding:18px 20px;border:1px solid #b8e58e;
+ border-radius:12px;background:linear-gradient(135deg,#263c30,#1b3035);
+ box-shadow:inset 0 1px 0 #ffffff18;
+}
+.quick-ready h3{margin:0 0 8px;font-size:clamp(20px,2.3vw,30px);
+ font-weight:900;font-style:italic;letter-spacing:-.04em;color:#d3ffa1}
+.quick-ready p{margin:0 0 12px;color:#d2e2d2;font-size:13px;line-height:1.5}
+.quick-ready .quick-ready-progress{color:#f2ffde;font-weight:750;font-variant-numeric:tabular-nums}
+.quick-ready-actions{display:flex;gap:10px;flex-wrap:wrap}
+.quick-ready-actions button{min-height:44px;padding:10px 19px;border-radius:8px;font-weight:800}
+.quick-ready-actions button:disabled{opacity:.58;cursor:not-allowed}
+.quick-ready-actions button:focus-visible{outline:3px solid #efffb0;outline-offset:3px}
+@media(max-width:540px){.quick-ready-actions button{flex:1 1 140px}.quick-ready{padding:16px}}
+@media(prefers-reduced-motion:reduce){.quick-ready *{animation:none!important;transition:none!important}}
+
+/* Real queue population from the native server, distinct from local bot games. */
+.quick-queue-panel>.quick-queue-availability{display:flex;align-items:center;gap:8px;
+ color:#d3eac5;font-weight:750;font-size:12px;line-height:1.5;margin:4px 0 13px}
+.quick-queue-mode small{line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:550px){.quick-queue-panel>.quick-queue-availability{font-size:11px}}
+
+/* Only explicitly opted-in hidden-tab ready checks generate system notifications. */
+.quick-queue-alerts{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:2px 0 12px}
+.quick-queue-alerts button{min-height:42px;padding:10px 14px;border:1px solid #a8c69a;
+ border-radius:9px;color:#e2f7da;background:#264237;font-weight:700;cursor:pointer}
+.quick-queue-alerts button[aria-pressed="true"]{background:#34522e;border-color:#b8e58e}
+.quick-queue-alerts button:disabled{opacity:.55;cursor:not-allowed}
+.quick-queue-alerts button:focus-visible{outline:3px solid #d3ef9f;outline-offset:3px}
+.quick-queue-alerts span{flex:1 1 250px;font-size:11px;line-height:1.55;color:#bdd3bd}
+@media(max-width:550px){.quick-queue-alerts button{width:100%}}
+
+/* Explicit, saved quick-start choice: human matchmaking remains authoritative. */
+.quick-queue-shortcut{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid #8daf7d;border-radius:12px;background:#12322c;padding:15px 17px;margin:19px 0 7px}
+.quick-queue-shortcut-copy{flex:2 1 250px}.quick-queue-shortcut-copy>strong{color:#d2faa0;letter-spacing:.08em;font-size:12px}
+.quick-queue-shortcut-copy p{font-size:12px;line-height:1.5;color:#ceded5;margin:7px 0 0}
+.quick-queue-shortcut-actions{flex:1 1 280px;display:flex;align-items:end;gap:9px;flex-wrap:wrap}
+.quick-queue-shortcut-actions label{display:grid;gap:5px;flex:1 1 135px;color:#eff8eb;font-size:12px}
+.quick-queue-shortcut-actions select{box-sizing:border-box;width:100%;min-height:43px;padding:8px;border-radius:7px;background:#0c2824;border:1px solid #95b6a2;color:white}
+.quick-queue-shortcut-actions .primary{flex:1 1 145px;min-height:43px;padding:10px 13px;background:#d1f78b;border:1px solid #d1f78b;border-radius:7px;color:#173122;font-weight:850;cursor:pointer}
+.quick-queue-shortcut-actions :is(select,button):focus-visible{outline:3px solid #f3ffa9;outline-offset:3px}
+.quick-queue-shortcut-actions :is(select,button):disabled{opacity:.52;cursor:default}
+.quick-queue-mode.is-preferred{border-color:#bde892;box-shadow:inset 0 0 0 1px #bde892}
+.quick-queue-mode.is-preferred strong::after{content:'★';font-size:13px;color:#cfff91;margin-left:7px;vertical-align:middle}
+@media(max-width:580px){.quick-queue-shortcut{padding:13px}.quick-queue-shortcut-actions{flex-basis:100%}}
+
+/* Never imply website queue occupancy describes a different selected server. */
+.quick-queue-availability-actions{display:flex;justify-content:flex-end;gap:8px;margin:3px 0 12px}
+.quick-queue-availability-actions button{background:#1a3835;color:#d2f2cf;border:1px solid #72978b;border-radius:7px;padding:8px 13px;min-height:36px;font-size:12px;cursor:pointer}
+.quick-queue-availability-actions button:disabled{opacity:.5;cursor:default}
+.quick-queue-availability-actions button:focus-visible{outline:3px solid #d3ff91;outline-offset:3px}
+
+/* Honest selected-server human queue occupancy, never a wait-time prediction. */
+.quick-queue-pulse{margin:7px 0 17px;border:1px solid #a0c5ac;border-radius:12px;
+ background:#173936;padding:15px;display:grid;gap:9px}
+.quick-queue-pulse[hidden]{display:none!important}
+.quick-queue-pulse strong{color:#e1f8af;font-size:.82rem;letter-spacing:.065em}
+.quick-queue-pulse p{margin:0;color:#f0f8e9;font-weight:650;font-size:.87rem;line-height:1.6}
+.quick-queue-pulse small{font-size:.73rem;color:#c5ded2;line-height:1.55;max-width:67ch}
+.quick-queue-pulse button{justify-self:start;min-height:44px;border-radius:8px;
+ padding:10px 16px;font:inherit;font-weight:800;cursor:pointer}
+.quick-queue-pulse button:focus-visible{outline:3px solid #e4ffb5;outline-offset:3px}
+.quick-queue-pulse button:disabled{opacity:.55;cursor:default}
+@media(max-width:580px){.quick-queue-pulse{padding:12px}
+ .quick-queue-pulse button{width:100%}}
+
+
+/* Explicit human queue recovery after an interrupted or expired ready check. */
+.quick-queue-recovery{margin:13px 0;padding:15px;border:1px solid #b5caa2;
+ border-radius:11px;background:#263e37;display:grid;gap:9px}
+.quick-queue-recovery[hidden]{display:none!important}
+.quick-queue-recovery strong{font-size:.82rem;letter-spacing:.07em;color:#f0efbd}
+.quick-queue-recovery p{line-height:1.6;color:#e0ebdf;font-size:.82rem;margin:0}
+.quick-queue-recovery-actions{display:flex;flex-wrap:wrap;gap:9px}
+.quick-queue-recovery-actions button{min-height:44px;padding:9px 13px;border-radius:8px;
+ border:1px solid #acc7aa;background:#325647;color:#edf9df;font:inherit;font-weight:760;cursor:pointer}
+.quick-queue-recovery-actions button.primary{background:#cff1ae;color:#18392b}
+.quick-queue-recovery-actions button:focus-visible{outline:3px solid #ffe5a2;outline-offset:3px}
+@media(max-width:550px){.quick-queue-recovery-actions button{flex:1 1 100%}}
+
+/* Authentic human ready check follows the player across My Games and pitch.
+   This mirror never issues its own socket action or auto-confirms consent. */
+.quick-ready-dock[hidden]{display:none!important}
+.quick-ready-dock{box-sizing:border-box;position:fixed;left:50%;
+ transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom));
+ z-index:115;display:flex;align-items:center;justify-content:space-between;
+ gap:18px;width:min(940px,calc(100vw - 24px));padding:16px 19px;
+ border-radius:16px;border:2px solid #c8fa9a;background:#17302d;
+ box-shadow:0 15px 45px #000d;color:#f1ffed}
+.quick-ready-dock-copy{min-width:0}
+.quick-ready-dock-copy strong{font-size:.95rem;letter-spacing:.055em;color:#deffac}
+.quick-ready-dock-progress{margin:6px 0 0;color:#d1e3db;font-size:.83rem;
+ line-height:1.45;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.quick-ready-dock-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.quick-ready-dock-actions button{font:inherit;font-size:.84rem;font-weight:800;
+ min-height:48px;border-radius:9px;padding:10px 14px;cursor:pointer;
+ border:1px solid #8fa59a;color:#eef9ec;background:#25433b}
+.quick-ready-dock-actions button.primary{background:#d3ff8b;color:#172b1c;
+ border-color:#d3ff8b}
+.quick-ready-dock-actions button:disabled{opacity:.56;cursor:not-allowed}
+.quick-ready-dock-actions button:focus-visible{outline:3px solid #f5ffa6;outline-offset:3px}
+@media(max-width:740px){
+ .quick-ready-dock{flex-direction:column;align-items:stretch;padding:14px;gap:12px;
+  bottom:max(10px,env(safe-area-inset-bottom))}
+ .quick-ready-dock-actions{display:grid;grid-template-columns:1fr 1fr}
+ .quick-ready-dock-actions button.primary{grid-column:1/-1}
+}
+@media(max-width:370px){.quick-ready-dock-actions{grid-template-columns:1fr}
+ .quick-ready-dock-actions button.primary{grid-column:auto}}
+
+/* A real server receipt changes the card from a consent request to a
+   read-only waiting state: do not suggest players can revoke acceptance. */
+.quick-ready.is-confirmed,.quick-ready-dock.is-confirmed{border-color:#a3d8c5}
+.quick-ready.is-confirmed h3,.quick-ready-dock.is-confirmed strong{color:#c9eedf}
+.quick-ready-actions button[hidden],.quick-ready-dock-actions button[hidden]{display:none!important}

@@ -1,0 +1,25 @@
+/* Secret-free host control and opt-in private room admission. */
+.room-access-key[hidden]{display:none!important}
+.room-access-key{margin:13px 0;padding:14px 15px;display:grid;gap:11px;
+ border:1px solid #94bbab;border-radius:11px;background:#173b39;color:#ecfff5}
+.room-access-key h3{margin:0;font-size:13px;font-weight:900;letter-spacing:.075em}
+.room-access-key p{margin:0;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.room-access-key-summary{color:#cbecdb}
+.room-access-key-fields{border-top:1px solid #63887e;padding-top:11px;display:grid;gap:9px}
+.room-access-key-fields label{display:grid;gap:5px;font-size:12px;font-weight:700}
+.room-access-key-fields input{width:100%;max-width:480px;min-height:42px;
+ background:#102b30;color:#f5ffec;border:1px solid #9ac1b2;
+ border-radius:7px;padding:9px;font:inherit}
+.room-access-key-actions{display:flex;gap:8px;flex-wrap:wrap}
+.room-access-key-actions button{min-height:42px;padding:8px 13px;
+ background:#2b5143;color:#f1ffed;border:1px solid #96bca8;
+ font-size:12px;font-weight:750;border-radius:7px}
+.room-access-key-actions button:disabled{opacity:.5}
+.room-access-key-notice{font-size:11px;color:#e6efb9;min-height:15px}
+.room-access-key :is(button,input):focus-visible,.join-room-key input:focus-visible{
+ outline:3px solid #cbfc8f;outline-offset:3px}
+.join-room-key{display:grid!important;gap:7px;align-items:start;font-weight:750;color:#e9f5ef}
+.join-room-key input{width:100%;min-height:42px;border:1px solid #9fb9b3;
+ background:#162d31;color:#f2fff4;border-radius:8px;padding:8px 11px}
+.join-room-key-hint{font-size:11px;line-height:1.45;color:#bcd7d0;margin:4px 0 10px}
+@media(max-width:500px){.room-access-key{padding:12px}.room-access-key-actions button{flex:1 1 160px}}

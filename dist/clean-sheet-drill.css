@@ -1,0 +1,45 @@
+/* Clean Sheet: real offline native game frames and scoreboard only. */
+.clean-sheet-setup{margin:16px 0;padding:17px;background:#1d343a;color:#ecf4e9;border:1px solid #779a8b;border-radius:12px;display:grid;gap:13px}
+.clean-sheet-setup h2{color:#e4f2b4;font-size:clamp(20px,2vw,26px);margin:0}
+.clean-sheet-setup>p{line-height:1.5;font-size:12px;color:#c5dace;margin:0}
+.clean-sheet-fields{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.clean-sheet-fields label{display:grid;gap:6px;font-size:12px;color:#d5e5d4;flex:1 1 150px}
+.clean-sheet-fields select{color:#f2fced;background:#244b46;border:1px solid #85a998;border-radius:8px;padding:10px;min-height:42px}
+.clean-sheet-fields button{min-height:43px;padding:10px 15px;border-radius:8px;cursor:pointer}
+.clean-sheet-status{min-height:17px}
+.clean-sheet-history{display:grid;gap:12px}
+.clean-sheet-history-head{display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+.clean-sheet-history-head h3{margin:0 auto 0 0;font-size:14px;color:#dff0be}
+.clean-sheet-history-head button,.clean-sheet-actions button{background:#32564b;color:#eefce9;border:1px solid #8fb29b;border-radius:8px;min-height:42px;padding:10px;cursor:pointer}
+.clean-sheet-history-head button:disabled{opacity:.4;cursor:default}
+.clean-sheet-records{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
+.clean-sheet-record{padding:10px;border:1px solid #648d80;border-radius:8px;background:#264840;display:grid;gap:5px}
+.clean-sheet-record strong{font-size:12px;color:#e4f3bb}
+.clean-sheet-record span,.clean-sheet-history-summary{font-size:11px;color:#cbded2}
+.clean-sheet-history-summary{grid-column:1/-1}
+.clean-sheet-hud[hidden]{display:none!important}
+.clean-sheet-hud{position:absolute;top:88px;left:50%;transform:translateX(-50%);z-index:25;width:min(420px,calc(100vw - 24px));display:grid;gap:7px;background:#152c32f0;border:1px solid #9abea5;border-radius:12px;padding:13px 15px;color:#f6fce7;box-shadow:0 6px 25px #07161d88;pointer-events:auto}
+.clean-sheet-hud strong{letter-spacing:.05em;color:#e0f2b5}
+.clean-sheet-clock{font-size:19px;font-weight:900}
+.clean-sheet-progress{font-size:12px;color:#c9e1d0;margin:0}
+.clean-sheet-hud progress{width:100%;height:12px;accent-color:#bbeca1}
+.clean-sheet-actions{display:flex;gap:8px;flex-wrap:wrap}
+.clean-sheet-actions button{flex:1}
+.clean-sheet-setup :is(button,select):focus-visible,.clean-sheet-hud button:focus-visible{outline:3px solid #e9ffaf;outline-offset:2px}
+@media(max-width:650px){.clean-sheet-setup{padding:12px}.clean-sheet-hud{top:65px}.clean-sheet-records{grid-template-columns:1fr}.clean-sheet-history-head button{flex:1}}
+@media(prefers-reduced-motion:reduce){.clean-sheet-setup *, .clean-sheet-hud *{transition:none!important;animation:none!important}}
+
+/* Same native match, paused while navigating away. Never auto-resume. */
+.clean-sheet-return[hidden]{display:none!important}
+.clean-sheet-return{position:fixed;z-index:108;bottom:max(12px,env(safe-area-inset-bottom));
+ left:50%;transform:translateX(-50%);width:min(770px,calc(100vw - 24px));
+ box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:13px;padding:14px 16px;border:2px solid #d6eda9;border-radius:13px;
+ color:#f4fff0;background:#203a37;box-shadow:0 16px 44px #07151bd9}
+.clean-sheet-return p{font-size:.85rem;line-height:1.5;margin:0;color:#e1eee5}
+.clean-sheet-return button{flex-shrink:0;min-height:48px;min-width:175px;
+ border:1px solid #dfffa8;background:#dfffa8;color:#183023;border-radius:9px;
+ padding:10px 14px;font:inherit;font-weight:800;cursor:pointer}
+.clean-sheet-return button:focus-visible{outline:3px solid #f4ffcc;outline-offset:3px}
+@media(max-width:600px){.clean-sheet-return{flex-direction:column;align-items:stretch}
+ .clean-sheet-return button{width:100%}}

@@ -1,0 +1,56 @@
+/* Real local engine 1v1 + explicitly virtual practice-only comeback deficit. */
+.comeback-arena{display:grid;gap:13px;margin:16px 0;padding:18px;border:1px solid #92af8b;border-radius:14px;background:#1a3536;color:#effbe8}
+.comeback-arena h2{font-size:clamp(21px,2.6vw,29px);margin:0;color:#e9f9ac;letter-spacing:.05em}
+.comeback-arena>p{font-size:13px;color:#d6e5d8;line-height:1.6;margin:0}
+.comeback-fields{display:flex;gap:9px;flex-wrap:wrap;align-items:end}
+.comeback-fields label{display:grid;gap:6px;flex:1 1 165px;color:#dae9d5;font-size:12px}
+.comeback-fields select,.comeback-fields button,.comeback-history button,.comeback-hud button{min-height:43px;border:1px solid #a3bda1;border-radius:9px;background:#284a44;color:#eaf8e3;padding:9px 12px;font-size:12px;cursor:pointer}
+.comeback-fields .primary{background:#d2efa4;border-color:#e6ffb4;color:#203733;font-weight:850}
+.comeback-arena button:disabled{opacity:.45;cursor:not-allowed}
+.comeback-status{font-size:12px;color:#e2efd4;min-height:22px}
+.comeback-history{display:grid;gap:10px}
+.comeback-history-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.comeback-history-head h3{margin:0 auto 0 0;color:#d9f3aa;font-size:15px}
+.comeback-records{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}
+.comeback-record{display:grid;gap:7px;border:1px solid #709384;border-radius:9px;background:#264540;padding:12px;min-width:0}
+.comeback-record strong{font-size:13px;color:#e8f9bf}
+.comeback-record span{font-size:12px;color:#dae9dc;line-height:1.5}
+.comeback-history-summary{font-size:12px;grid-column:1/-1;color:#c8dfcb}
+.comeback-hud[hidden]{display:none!important}
+.comeback-hud{position:absolute;z-index:28;top:82px;left:50%;transform:translateX(-50%);width:min(430px,calc(100vw - 20px));box-sizing:border-box;display:grid;gap:10px;padding:14px;border-radius:12px;border:1px solid #def3a8;background:#162e36ee;color:#f0ffe5;box-shadow:0 9px 28px #091a2088;pointer-events:auto}
+.comeback-hud strong{font-size:14px;color:#def6ac;letter-spacing:.05em}
+.comeback-hud>span{font-weight:850;font-size:20px}
+.comeback-hud p{margin:0;font-size:12px;line-height:1.5}
+.comeback-hud progress{width:100%;height:12px;accent-color:#c4eba3}
+.comeback-actions{display:flex;gap:9px;flex-wrap:wrap}
+.comeback-actions button{flex:1}
+.comeback-arena :is(button,select):focus-visible,.comeback-hud button:focus-visible{outline:3px solid #e1f9aa;outline-offset:3px}
+@media(max-width:540px){.comeback-arena{padding:12px}.comeback-hud{top:62px}.comeback-actions button{min-width:95px}}
+@media(prefers-reduced-motion:reduce){.comeback-arena *,.comeback-hud *{animation:none!important;transition:none!important}}
+
+
+/* The same native match is parked, never recreated or credited while hidden. */
+.comeback-return[hidden]{display:none!important}
+.comeback-return{box-sizing:border-box;position:fixed;z-index:113;left:50%;
+ transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));
+ width:min(860px,calc(100vw - 24px));display:flex;gap:16px;
+ justify-content:space-between;align-items:center;padding:15px 18px;
+ border-radius:14px;border:2px solid #d4f3a3;background:#193630;
+ color:#f0ffeb;box-shadow:0 14px 38px #041417dd}
+.comeback-return-copy{min-width:0}
+.comeback-return-copy strong{display:block;color:#e2fda7;font-size:.88rem;letter-spacing:.055em}
+.comeback-return-copy p{font-size:.85rem;line-height:1.45;color:#cfe6d8;margin:6px 0 0}
+.comeback-return-actions{display:flex;flex-shrink:0;flex-wrap:wrap;gap:9px}
+.comeback-return-actions button,.comeback-hud .comeback-actions button{
+ min-height:48px;padding:11px 14px;border-radius:9px;font:inherit;
+ font-size:.86rem;font-weight:800;cursor:pointer;border:1px solid #a7bdad;
+ background:#29483d;color:#f0ffeb}
+.comeback-return-actions button.primary,.comeback-hud .comeback-actions button.primary{
+ background:#d9ffa1;color:#153225;border-color:#d9ffa1}
+.comeback-return :is(button):focus-visible{outline:3px solid #f7ffaa;outline-offset:3px}
+@media(max-width:730px){
+ .comeback-return{flex-direction:column;align-items:stretch;gap:11px;
+  bottom:max(8px,env(safe-area-inset-bottom))}
+ .comeback-return-actions{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:390px){.comeback-return-actions{grid-template-columns:1fr}}

@@ -1,0 +1,18 @@
+/* Personal account controls; never expose passwords after submit. */
+.account-security[hidden]{display:none!important}
+.account-security{display:grid;gap:15px;margin:18px 0 25px;padding:clamp(16px,3vw,26px);
+ background:#1c3032;border:1px solid #7f9b83;border-radius:14px;color:#eaf4e7}
+.account-security h2{font-size:clamp(18px,2.5vw,26px);margin:0;letter-spacing:-.035em}
+.account-security>p{font-size:12px;line-height:1.6;margin:0;color:#bfd2c3}
+.account-security form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:13px}
+.account-security label{display:grid;gap:7px;font-size:12px;font-weight:700;color:#e2f2da}
+.account-security input{width:100%;box-sizing:border-box;min-height:44px;
+ border:1px solid #72938b;border-radius:8px;padding:11px 13px;
+ background:#0f2228;color:#f1ffef}
+.account-security input:focus-visible,.account-security button:focus-visible{outline:3px solid #d4f6a7;outline-offset:3px}
+.account-security-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px}
+.account-security-actions button{min-height:44px;padding:10px 17px;border-radius:8px;cursor:pointer}
+.account-security-actions button:not(.primary){color:#e7f4e0;border:1px solid #9eafa1;background:#315044}
+.account-security-actions button:disabled{opacity:.55;cursor:not-allowed}
+.account-security .account-security-status{grid-column:1/-1;font-weight:650;color:#dff6c4;min-height:19px}
+@media(max-width:520px){.account-security-actions button{width:100%}}

@@ -1,0 +1,36 @@
+/* Installable, privacy-bounded practice: not a replacement for multiplayer. */
+.pwa-panel{margin:25px 0 36px;padding:clamp(18px,3vw,26px);
+ background:linear-gradient(115deg,#203a34,#192e36);border:1px solid #719176;
+ border-radius:15px;display:grid;gap:13px}
+.pwa-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.pwa-heading strong{font-weight:900;letter-spacing:-.04em;font-size:clamp(19px,2.8vw,28px);color:#e4ffb1}
+.pwa-network{font-size:11px;letter-spacing:.04em;color:#cbe9ae;font-weight:800}
+.pwa-network.offline{color:#ffe0a6}
+.pwa-panel>p{margin:0;max-width:830px;line-height:1.65;font-size:13px;color:#c4d7cf}
+.pwa-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.pwa-actions button{min-height:44px;flex:1 1 155px;padding:11px 17px;
+ font-size:13px;font-weight:800;border:1px solid #77968b;border-radius:8px;
+ background:#294940;color:#f2f9eb}
+.pwa-actions button.primary{background:#d0ef9d;color:#172923;border-color:#d0ef9d}
+.pwa-actions button[hidden]{display:none}
+.pwa-setup{font-size:11px!important;color:#bdd5ca!important;min-height:19px}
+.pwa-help summary{font-size:12px;color:#d9efa8;font-weight:800;cursor:pointer}
+.pwa-help p{margin:9px 0 0;line-height:1.6;font-size:12px;color:#b8d0c1}
+.pwa-panel :is(button,summary):focus-visible{outline:3px solid #e2ffab;outline-offset:3px}
+@media(max-width:640px){.pwa-actions button{flex:1 1 100%}.pwa-panel{margin-bottom:25px}}
+@media(prefers-reduced-motion:reduce){.pwa-panel *{animation:none!important;transition:none!important}}
+
+.pwa-offline-readiness{padding:15px;border:1px solid #719879;border-radius:10px;
+ background:#17302e;display:grid;gap:9px}
+.pwa-offline-readiness>strong{font-size:12px;letter-spacing:.07em;color:#e1fbb2}
+.pwa-offline-readiness>p{margin:0;line-height:1.55;color:#e4eee2;font-size:12px}
+.pwa-offline-actions{display:flex;flex-wrap:wrap;gap:9px}
+.pwa-offline-actions button{padding:10px 13px;border:1px solid #7c9d8b;
+ background:#315348;color:#f0ffe9;border-radius:8px;font-size:12px;font-weight:750;
+ min-height:44px;flex:1 1 160px}
+.pwa-offline-actions button:disabled{opacity:.55;cursor:not-allowed}
+.pwa-offline-actions button[hidden]{display:none!important}
+.pwa-offline-actions button:focus-visible{outline:3px solid #d6ffa4;outline-offset:3px}
+
+/* Explicit local-practice handoff and session-safety messages. */
+.pwa-launch-notice{min-height:17px;margin:0;color:#dff4b7;line-height:1.55;font-size:12px}

@@ -1,0 +1,57 @@
+/* Real spectator tactics rendered from current room-state snapshots only. */
+.spectator-radar-toggle{
+ min-height:42px;padding:8px 11px;border-radius:8px;border:1px solid #94b6a6;
+ background:#203c44;color:#e2f5d6;font-size:11px;font-weight:850;white-space:nowrap
+}
+.spectator-radar-toggle[aria-expanded="true"]{
+ background:#d6f3ad;color:#142d27;border-color:#c7eba5
+}
+.spectator-radar-toggle[hidden],.spectator-radar[hidden]{display:none!important}
+.spectator-radar{position:absolute;z-index:9;right:clamp(12px,3vw,30px);
+ bottom:max(114px,calc(env(safe-area-inset-bottom) + 110px));
+ width:min(420px,calc(100vw - 24px));max-height:min(75vh,610px);
+ box-sizing:border-box;overflow:auto;padding:12px;border-radius:14px;
+ background:#13272df5;color:#ecf9e5;border:1px solid #7fa698;
+ box-shadow:0 18px 46px #061217ba;backdrop-filter:blur(9px)
+}
+.spectator-radar-header{display:flex;align-items:center;justify-content:space-between;
+ gap:10px;padding:0 0 9px}
+.spectator-radar-header strong{font-size:13px;letter-spacing:.11em;font-weight:950;
+ color:#e0f7b3}
+.spectator-radar-header button{min-height:40px;min-width:40px;border-radius:8px;
+ border:1px solid #8ca49b;background:#29424b;color:#f5fff1;font-size:18px}
+.spectator-radar canvas{display:block;width:100%;aspect-ratio:720/380;height:auto;
+ background:#102c28;border:1px solid #648c76;border-radius:8px;cursor:crosshair;
+ touch-action:manipulation}
+.spectator-radar-legend{display:flex;gap:14px;align-items:center;padding:9px 0;
+ font-size:11px;font-weight:800;color:#dceacb}
+.spectator-radar-legend span:first-child{color:#ffa8aa}
+.spectator-radar-legend span:nth-child(2){color:#a9c9ff}
+.spectator-radar-legend span:nth-child(3){color:#faf9da}
+.spectator-radar-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px}
+.spectator-radar-controls label{display:grid;gap:4px;flex:1 1 120px;
+ font-size:11px;color:#dbebd7}
+.spectator-radar-controls label.spectator-radar-trail{display:flex;align-items:center;
+ gap:8px;min-height:43px}
+.spectator-radar-controls select{min-width:0;width:100%;min-height:43px;
+ padding:7px;border-radius:8px;border:1px solid #8dad9c;
+ background:#1e3a42;color:#e9f6de}
+.spectator-radar-controls input{width:20px;height:20px;accent-color:#d9f6a9}
+.spectator-radar-controls button{min-height:43px;padding:8px 11px;
+ border:1px solid #a4bc9c;border-radius:8px;background:#34534a;
+ color:#e9f9df;font-size:11px;font-weight:850;flex:1 1 125px}
+.spectator-radar-message{min-height:27px;margin:11px 0 5px;color:#daf4c6;
+ font-size:12px;line-height:1.45}
+.spectator-radar-hint{font-size:10px;line-height:1.5;margin:0;
+ color:#bbd0c8}
+.spectator-radar :is(button,select,input,canvas):focus-visible,
+.spectator-radar-toggle:focus-visible{outline:3px solid #deffab;outline-offset:3px}
+@media(max-width:610px){
+ .spectator-radar{right:10px;bottom:max(130px,calc(env(safe-area-inset-bottom) + 125px));
+  width:calc(100vw - 20px);max-height:54vh;padding:10px}
+ .spectator-radar-toggle{font-size:10px;min-height:44px}
+ .spectator-radar-legend{gap:10px}
+}
+@media(prefers-reduced-transparency:reduce){
+ .spectator-radar{background:#13272d;backdrop-filter:none}
+}

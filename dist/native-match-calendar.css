@@ -1,0 +1,32 @@
+/* Server-receipt-only monthly calendar, independent of fixtures and ranked competition. */
+.native-activity-calendar{padding:16px;margin:15px 0 22px;background:#192f34;border:1px solid #739589;border-radius:12px;display:grid;gap:12px}
+.native-activity-calendar h3{font-size:clamp(18px,2.4vw,23px);color:#e0f5b5;letter-spacing:.04em;margin:0}
+.native-calendar-info{margin:0;color:#c0d8c8;font-size:12px;line-height:1.55}
+.native-calendar-toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.native-calendar-toolbar label{display:grid;gap:6px;color:#d3e3cf;font-size:11px}
+.native-calendar-toolbar select{padding:10px;min-height:43px;background:#234b46;border:1px solid #8aab94;color:#f2fbe6;border-radius:8px}
+.native-calendar-toolbar button{background:#345850;border:1px solid #94b09e;border-radius:8px;min-height:42px;padding:9px 13px;color:#f5f9ed;font-size:12px;cursor:pointer}
+.native-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.native-calendar-weekday{text-align:center;font-size:10px;font-weight:800;letter-spacing:.08em;color:#bfd2c7;padding:7px 0}
+.native-calendar-day{min-height:66px;display:grid;align-content:space-between;gap:5px;text-align:left;padding:8px 6px;background:#20363b;border:1px solid #3f5c61;border-radius:6px;color:#bdcfc8;min-width:0;font:inherit}
+.native-calendar-day b{font-size:12px}
+.native-calendar-day.has-match{background:#32584b;color:#f7fff0;border-color:#b2d399;cursor:pointer}
+.native-calendar-day.selected{background:#50744b;outline:3px solid #d4f09b}
+.native-calendar-day-count{font-size:9px;line-height:1.4;overflow-wrap:anywhere;font-weight:800}
+.native-calendar-day:disabled{opacity:.55;cursor:default}
+.native-calendar-day.no-match:disabled{opacity:.7}
+.native-calendar-empty{min-height:60px}
+.native-activity-calendar :is(select,button):focus-visible{outline:3px solid #e0ffa1;outline-offset:2px}
+@media(max-width:620px){.native-activity-calendar{padding:11px}.native-calendar-grid{gap:3px}.native-calendar-day{min-height:58px;padding:4px 2px}.native-calendar-day-count{font-size:8px}.native-calendar-empty{min-height:50px}.native-calendar-toolbar button{flex:1}}
+@media(prefers-reduced-motion:reduce){.native-activity-calendar *{animation:none!important;transition:none!important}}
+/* Calendar and private downloads use the same account-scoped result filters. */
+.native-calendar-export-count{margin:0;padding:9px 11px;border-radius:9px;
+ background:#29473e;border:1px solid #6b9980;color:#e6f4e3;
+ font-size:12px;line-height:1.5}
+.native-calendar-toolbar button.native-calendar-export:disabled{opacity:.55;
+ cursor:not-allowed;border-color:#586a64;color:#b8c8bc}
+.native-calendar-day.has-match:disabled{background:#263d3b;
+ border-color:#506b67;color:#aebfb3;opacity:.72;cursor:not-allowed}
+.native-calendar-day.has-match:disabled .native-calendar-day-count{font-weight:600}
+@media(max-width:620px){.native-calendar-export-count{padding:10px}
+ .native-calendar-day-count{font-variant-numeric:tabular-nums}}

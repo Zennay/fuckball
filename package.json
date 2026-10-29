@@ -6,8 +6,12 @@
   "scripts": {
     "start": "node server.js",
     "test": "node scripts/test-core.cjs",
-    "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/team-ai.cjs",
-    "build:solo": "python3 scripts/build-sdk.py"
+    "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/team-ai.cjs && node tests/high-refresh.cjs && node tests/substitution-client-ui.cjs",
+    "build:solo": "python3 scripts/build-sdk.py",
+    "test:browser": "node tests/browser-peer-hosting.cjs",
+    "test:roster-acceptance": "node tests/room-roster-acceptance.cjs",
+    "test:input-replay-acceptance": "node tests/input-replay-acceptance.cjs",
+    "netsim": "node scripts/netsim.cjs"
   },
   "engines": {"node": ">=22"},
   "license": "MIT"

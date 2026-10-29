@@ -1,0 +1,29 @@
+.practice-circuit{max-width:1160px;margin:35px auto;padding:clamp(20px,3vw,32px);background:linear-gradient(140deg,#172d36,#1d382c);border:1px solid #6d8b79;border-radius:18px;color:#eaf5ef;scroll-margin-top:24px}.practice-circuit-header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.practice-circuit-header h2{margin:3px 0 12px;font-size:clamp(26px,4vw,44px);font-style:italic;letter-spacing:-.05em}.practice-circuit-header p{max-width:690px;line-height:1.5;color:#c1d4cc}.practice-circuit-controls,.practice-circuit-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.practice-circuit-controls{flex-direction:column;align-items:stretch;max-width:340px;flex:1 1 235px}.practice-circuit button,.practice-circuit select,.practice-circuit-hud button{min-height:42px;padding:9px 13px;border:1px solid #829d9e;border-radius:8px;background:#234451;color:#f6fffa;cursor:pointer}.practice-circuit .primary{background:#9ed965;border-color:#9ed965;color:#122619;font-weight:800}.practice-circuit button:disabled,.practice-circuit select:disabled{opacity:.5;cursor:default}.practice-circuit :is(button,select):focus-visible,.practice-circuit-hud button:focus-visible{outline:3px solid #d9ffae;outline-offset:3px}.practice-circuit-live{margin-top:20px;padding:18px;background:#0c222dc9;border-radius:12px;border:1px solid #4b7176}.practice-circuit-live[hidden],.practice-circuit-hud[hidden]{display:none!important}.practice-circuit-progress{font-weight:800;letter-spacing:.06em;color:#d9ffae}.practice-circuit-steps{list-style:none;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.practice-circuit-steps li{display:grid;gap:8px;padding:13px;border:1px solid #43656a;border-radius:9px;min-width:0}.practice-circuit-steps .is-current{border-color:#9ed965;background:#1e3b32}.practice-circuit-steps .is-complete{border-color:#71bb9d}.practice-circuit-steps .is-upcoming{opacity:.7}.practice-circuit-steps li span{color:#bbd0cc;font-size:12px;line-height:1.45}.practice-circuit-detail{color:#d7efdb;line-height:1.5}.practice-circuit-history{margin-top:22px;padding-top:15px;border-top:1px solid #557579}.practice-circuit-history h3{font-size:15px;letter-spacing:.06em}.practice-circuit-history>p,.practice-circuit-status{font-size:12px;color:#c4d9d0;line-height:1.4}.practice-circuit-records{display:grid;gap:8px;padding:0;list-style:none;max-width:900px}.practice-circuit-record{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;padding:9px 11px;border:1px solid #456467;border-radius:7px}.practice-circuit-record span{font-size:12px}.practice-circuit-hud{position:absolute;top:max(68px,env(safe-area-inset-top));left:14px;z-index:5;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#10292ddd;border:1px solid #96cd99;border-radius:10px;padding:8px 11px;color:#e8f9ed;font-size:11px;pointer-events:auto}.practice-circuit-hud button{min-height:32px;font-size:11px;padding:5px 8px}@media(max-width:700px){.practice-circuit{margin:25px 12px}.practice-circuit-steps{grid-template-columns:1fr}.practice-circuit-controls{max-width:none;flex-basis:100%}.practice-circuit-hud{top:auto;bottom:90px;max-width:calc(100vw - 34px)}}
+/* Keep human rooms, queued matches and active reconnects ahead of offline drills. */
+.practice-circuit-busy[hidden]{display:none!important}
+.practice-circuit-busy{display:flex;justify-content:space-between;align-items:center;
+ gap:12px;margin-top:18px;padding:14px 16px;border:1px solid #c5db9c;
+ border-radius:12px;background:#24382e;color:#e8f6db}
+.practice-circuit-busy p{margin:0;line-height:1.5;font-size:.86rem;max-width:70ch}
+.practice-circuit-busy button{min-height:46px;padding:9px 14px;
+ flex-shrink:0;border:1px solid #d7f8a3;border-radius:9px;background:#d7f8a3;
+ color:#173322;font-weight:800;cursor:pointer}
+.practice-circuit-busy button:focus-visible{outline:3px solid #f3ffa3;outline-offset:3px}
+@media(max-width:750px){.practice-circuit-busy{flex-direction:column;align-items:stretch}
+ .practice-circuit-busy button{width:100%}}
+
+/* Local save corruption is a recoverable player state, never a blank circuit. */
+.practice-circuit-storage-recovery[hidden]{display:none!important}
+.practice-circuit-storage-recovery{margin:16px 0;padding:17px 19px;box-sizing:border-box;
+ border-radius:12px;border:2px solid #f9d396;background:#3b2926;color:#fff2de}
+.practice-circuit-storage-recovery p{font-size:.91rem;line-height:1.55;margin:0 0 13px;
+ max-width:75ch}
+.practice-circuit-storage-recovery .practice-circuit-actions{display:flex;gap:10px;flex-wrap:wrap}
+.practice-circuit-storage-recovery button{min-height:46px;padding:10px 15px;
+ border:1px solid #f4d09c;background:#493530;color:#fff4df;border-radius:9px;
+ font:inherit;font-weight:700;cursor:pointer}
+.practice-circuit-storage-recovery button:first-child{background:#ffe0a5;color:#382119}
+.practice-circuit-storage-recovery button:focus-visible{outline:3px solid #fffbc2;outline-offset:3px}
+@media(max-width:600px){.practice-circuit-storage-recovery{padding:15px}
+ .practice-circuit-storage-recovery .practice-circuit-actions{flex-direction:column}
+ .practice-circuit-storage-recovery button{width:100%}}

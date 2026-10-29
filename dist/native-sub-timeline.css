@@ -1,0 +1,28 @@
+.native-sub-timeline{margin:13px 0;padding:13px;border:1px solid #759a84;border-radius:10px;background:#172e34;color:#e7f5df}
+.native-sub-timeline[hidden]{display:none}
+.native-sub-timeline>summary{cursor:pointer;font-size:12px;letter-spacing:.05em;font-weight:900;color:#deefad;line-height:1.5}
+.native-sub-timeline>summary:focus-visible,.native-sub-timeline button:focus-visible,.native-sub-timeline select:focus-visible{outline:3px solid #d1f0a0;outline-offset:2px}
+.native-sub-timeline p{font-size:12px;line-height:1.5;color:#d0e4d4}
+.native-sub-timeline-controls{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.native-sub-timeline-controls select,.native-sub-timeline-controls button{flex:1 1 120px;padding:9px;border:1px solid #8baf9b;border-radius:8px;background:#21453d;color:#eef9dd;font-size:12px}
+.native-sub-timeline-controls button{cursor:pointer;font-weight:700}
+.native-sub-timeline-controls button:disabled{opacity:.5;cursor:not-allowed}
+.native-sub-timeline-list{display:grid;gap:7px;padding:0;margin:12px 0;list-style:none}
+.native-sub-timeline-row{display:grid;gap:5px;border:1px solid #5d8174;background:#1e393a;padding:10px;border-radius:8px}
+.native-sub-timeline-row strong{font-size:12px;color:#e7f8bd;overflow-wrap:anywhere}
+.native-sub-timeline-row small{font-size:11px;color:#c3dccb}
+
+/* A native substitution is a server-reported swap, not a reconstructed or
+   signed match result. Keep the consent/status and export controls legible. */
+.native-sub-timeline-controls select,.native-sub-timeline-controls button{min-height:46px;
+ font-size:.85rem}
+.native-sub-timeline-status{padding:10px 12px;border-left:3px solid #bad997;
+ border-radius:3px;background:#213f42;overflow-wrap:anywhere}
+.native-sub-timeline-row small{line-height:1.5}
+.native-sub-timeline-row strong{line-height:1.45}
+@media(max-width:440px){
+ .native-sub-timeline{padding:12px}
+ .native-sub-timeline-controls{display:grid;grid-template-columns:1fr}
+ .native-sub-timeline-controls select,.native-sub-timeline-controls button{width:100%;
+  min-height:48px}
+}

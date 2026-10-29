@@ -1,0 +1,74 @@
+/* A sequential local campaign on native saved practice evidence. */
+.solo-academy{color:#edf7ec;border:1px solid #628678;border-radius:16px;
+ background:#182e2d;margin:18px 0 25px;padding:clamp(17px,3vw,27px)}
+.solo-academy-head{display:flex;justify-content:space-between;align-items:start;
+ flex-wrap:wrap;gap:18px;margin-bottom:19px}
+.solo-academy-head>div:first-child{flex:1 1 300px;min-width:0}
+.solo-academy-kicker{font-size:.72rem;color:#cde8a7;letter-spacing:.12em;font-weight:900}
+.solo-academy h2{font-size:clamp(25px,4.4vw,39px);font-weight:950;
+ font-style:italic;letter-spacing:-.05em;margin:8px 0}
+.solo-academy-head p{font-size:.83rem;color:#c3d8ce;line-height:1.6;max-width:75ch}
+.solo-academy-progress{display:grid;gap:5px;align-content:center;
+ border:1px solid #a4c79b;border-radius:12px;background:#24503e;
+ padding:13px 20px;text-align:center}
+.solo-academy-progress strong{font-size:clamp(25px,3.3vw,36px);color:#e2fbbd;
+ font-variant-numeric:tabular-nums}
+.solo-academy-progress span{font-size:.67rem;letter-spacing:.07em;color:#cae5d2}
+.solo-academy-chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.solo-academy-chapter{border:1px solid #5e8978;border-radius:11px;
+ padding:14px;background:#25423c;min-width:0}
+.solo-academy-chapter h3{font-size:.9rem;color:#ecf7b5;margin:0 0 6px;letter-spacing:.04em}
+.solo-academy-chapter>p{font-size:.72rem;color:#bdd6c6;margin:0 0 14px}
+.solo-academy-chapter ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.solo-academy-task{display:grid;grid-template-columns:26px minmax(0,1fr);
+ column-gap:8px;align-items:center;padding:9px;border:1px solid #527669;
+ border-radius:8px;background:#193c37}
+.solo-academy-task span{grid-row:span 2;display:grid;place-items:center;
+ border-radius:50%;background:#385c4c;width:25px;height:25px;font-size:.82rem}
+.solo-academy-task strong{font-size:.82rem;overflow-wrap:anywhere}
+.solo-academy-task small{font-size:.67rem;color:#b4cfc1;line-height:1.4}
+.solo-academy-task[data-state=complete]{border-color:#80aa7b}
+.solo-academy-task[data-state=complete] span{background:#b5eab0;color:#1c402a}
+.solo-academy-task[data-state=current]{border-color:#e4cb98}
+.solo-academy-task[data-state=current] span{background:#f0d898;color:#40301e}
+.solo-academy-task[data-state=locked]{opacity:.78}
+.solo-academy-active{margin-top:16px;border:1px solid #a0baa3;border-radius:12px;
+ background:#21483f;padding:clamp(13px,2vw,19px)}
+.solo-academy-active h3{color:#e7f4c6;font-size:1.05rem;margin:0 0 10px}
+.solo-academy-active>p{font-size:.84rem;color:#d3e4d7;line-height:1.6}
+.solo-academy-evidence{border-left:3px solid #cbdd9e;padding:9px 12px;background:#2c5045}
+.solo-academy-actions{display:flex;flex-wrap:wrap;gap:9px;margin:15px 0}
+.solo-academy-actions button{font:inherit;font-weight:770;font-size:.81rem;
+ border:1px solid #a4c5a2;border-radius:8px;min-height:44px;padding:9px 12px;
+ color:#17362a;background:#d7f3b9;cursor:pointer}
+.solo-academy-actions button:disabled{opacity:.55;cursor:not-allowed}
+.solo-academy-actions button[hidden]{display:none!important}
+.solo-academy-actions button:last-child{color:#fbe8e4;background:#62403e;border-color:#ae8886}
+.solo-academy :is(button,select):focus-visible{outline:3px solid #ffe2a4;outline-offset:3px}
+.solo-academy-status{color:#e0f3bd!important;min-height:1em}
+.solo-academy>p{font-size:.74rem;line-height:1.65;color:#b5d3c3;margin-top:15px}
+@media(max-width:730px){.solo-academy-chapters{grid-template-columns:1fr}}
+@media(max-width:500px){.solo-academy{padding:14px}
+ .solo-academy-actions button{flex:1 1 100%}
+ .solo-academy-progress{flex:1 1 100%}}
+@media print{.solo-academy-actions{display:none!important}
+ .solo-academy-chapter{break-inside:avoid}}
+
+/* Live mission companion is a nonmodal reminder, not a live result oracle. */
+.solo-academy-companion{position:absolute;z-index:4;bottom:max(76px,env(safe-area-inset-bottom));
+ left:clamp(10px,2vw,27px);width:min(340px,calc(100vw - 30px));
+ background:#183633ed;border:1px solid #c2dea9;border-radius:11px;padding:12px;
+ box-shadow:0 14px 42px #061e1e9e;color:#eff9e4;display:grid;gap:8px}
+.solo-academy-companion[hidden]{display:none!important}
+.solo-academy-companion strong{font-size:.79rem;letter-spacing:.045em;color:#e8f6b9}
+.solo-academy-companion span{font-size:.75rem;line-height:1.5;color:#d2e9dc}
+.solo-academy-companion[data-complete=yes]{border-color:#a5efb0;background:#1c453aec}
+.solo-academy-companion-actions{display:flex;flex-wrap:wrap;gap:8px}
+.solo-academy-companion button{min-height:38px;font:inherit;font-size:.75rem;font-weight:800;
+ border:1px solid #b0d3a8;border-radius:7px;padding:7px 10px;background:#d8f3b5;
+ color:#19392b;cursor:pointer}
+.solo-academy-companion button[hidden]{display:none!important}
+.solo-academy-companion button:focus-visible{outline:3px solid #ffe3a1;outline-offset:3px}
+@media(max-width:640px){.solo-academy-companion{bottom:max(102px,env(safe-area-inset-bottom));
+ width:min(260px,calc(100vw - 22px));padding:10px;left:10px}}
+@media print{.solo-academy-companion{display:none!important}}

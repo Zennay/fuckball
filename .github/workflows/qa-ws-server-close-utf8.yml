@@ -1,0 +1,44 @@
+name: QA WebSocket Server Close UTF-8
+on:
+  pull_request:
+    paths:
+      - headless/websocket.cjs
+      - tests/ws-server-close-utf8-qa.cjs
+      - .github/workflows/qa-ws-server-close-utf8.yml
+  push:
+    branches: [main]
+    paths:
+      - headless/websocket.cjs
+      - tests/ws-server-close-utf8-qa.cjs
+      - .github/workflows/qa-ws-server-close-utf8.yml
+permissions:
+  contents: read
+jobs:
+  server-close:
+    if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || (github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'Zennay'))
+    runs-on: [self-hosted, portfolio-pool, vps]
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # exact v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exact clean source identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify native server and WebSocket close protocol
+        run: |
+          node --check headless/websocket.cjs
+          node --check tests/ws-server-close-utf8-qa.cjs
+          node tests/ws-server-close-utf8-qa.cjs
+          node tests/ws-protocol-failclosed.cjs
+          node tests/ws-control-frame-qa.cjs
+          node tests/ws-utf8-close-qa.cjs
+          node tests/ws-utf8-network-qa.cjs
+          node tests/ws-length-encoding-qa.cjs

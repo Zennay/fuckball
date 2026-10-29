@@ -1,0 +1,41 @@
+/* Optional, unranked local Goal Rush on top of the unchanged solo engine. */
+.goal-rush-setup{margin:25px auto;max-width:1160px;padding:clamp(18px,4vw,29px);border:1px solid #587968;background:linear-gradient(120deg,#24352e,#1a3032);border-radius:16px;color:#edf5eb}
+.goal-rush-setup h2{font-size:clamp(26px,4vw,39px);font-weight:950;font-style:italic;letter-spacing:-.05em;margin:0 0 11px}
+.goal-rush-setup>p{font-size:13px;line-height:1.6;color:#c5d8c8;max-width:750px}
+.goal-rush-fields{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;margin-top:18px}
+.goal-rush-fields label{display:grid;gap:6px;font-size:11px;color:#d3e6d1}
+.goal-rush-fields select{min-width:135px;min-height:44px;background:#13292c;border:1px solid #789785;border-radius:7px;padding:10px;color:#f2f8e9}
+.goal-rush-fields button{min-height:44px;border-radius:8px;padding:10px 18px;font-weight:850;letter-spacing:.04em}
+.goal-rush-history{margin:14px 0 0;color:#d5f0c8!important;font-size:12px}
+.goal-rush-hud{position:absolute;top:max(91px,calc(env(safe-area-inset-top) + 84px));right:20px;z-index:4;width:min(260px,calc(100vw - 40px));padding:15px;background:#111f24ee;border:1px solid #b2d58a;border-radius:12px;box-shadow:0 14px 45px #0009;color:#f1f8eb;display:grid;gap:9px}
+.goal-rush-hud[hidden]{display:none!important}
+.goal-rush-hud strong{font-size:13px;font-weight:900;color:#d8faa6;letter-spacing:.04em}
+.goal-rush-clock{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.goal-rush-progress{font-size:11px;color:#c3d9d6;line-height:1.5;margin:0}
+.goal-rush-hud button{padding:10px 13px;text-align:center;border-radius:8px;border:1px solid #8faa8f;background:#354b3f;font-size:11px;color:#f7f9ec}
+.goal-rush-hud button:first-of-type{color:#ffdad0;border-color:#c48b7f;background:#422f31}
+.goal-rush-setup button:focus-visible,.goal-rush-hud button:focus-visible,.goal-rush-setup select:focus-visible{outline:3px solid #e1f7ad;outline-offset:3px}
+@media(max-width:690px){.goal-rush-fields label{flex:1 1 120px}.goal-rush-fields select{width:100%}.goal-rush-fields button{flex:1 1 100%}.goal-rush-hud{right:12px;top:max(75px,calc(env(safe-area-inset-top) + 70px));width:min(205px,calc(100vw - 28px));padding:12px}.goal-rush-clock{font-size:14px}}
+
+.goal-rush-journey{margin-top:21px;padding-top:17px;border-top:1px solid #648773}
+.goal-rush-journey h3{font-size:14px;letter-spacing:.08em}.goal-rush-journey>p{font-size:11px;color:#b4cbbc}
+.goal-rush-journey-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:9px;margin:15px 0}
+.goal-rush-journey-row{display:grid;gap:9px;background:#1b3534;border:1px solid #547f70;border-radius:9px;padding:12px}
+.goal-rush-journey-row strong{font-size:12px;color:#e1f5ca}.goal-rush-journey-row>span{color:#acc4ba;font-size:10px}
+.goal-rush-attempt-meter{height:8px;border-radius:5px;overflow:hidden;background:#0f2027}.goal-rush-attempt-meter span{display:block;height:100%;background:#c6f18a}
+.goal-rush-journey-actions{display:flex;flex-wrap:wrap;gap:9px}.goal-rush-journey-actions button{padding:9px 13px;border:1px solid #8aac8f;background:#315345;color:#e8f3dc;border-radius:8px;font-size:11px}
+.goal-rush-journey-actions button:last-child{color:#ffd4c6;border-color:#bb8e83;background:#3e3436}.goal-rush-journey-actions button:disabled{opacity:.45;cursor:default}
+.goal-rush-journey-actions button:focus-visible{outline:3px solid #e1f7ad;outline-offset:3px}
+
+/* Active offline drill remains actionable after Home/My Games navigation. */
+.goal-rush-return[hidden]{display:none!important}
+.goal-rush-return{margin:15px 0 0;padding:15px 17px;border:1px solid #b8e696;
+ border-radius:12px;background:#153732;color:#edfce8;display:flex;
+ justify-content:space-between;align-items:center;gap:16px}
+.goal-rush-return p{margin:0;font-size:.86rem;line-height:1.48;color:#ddf0df}
+.goal-rush-return button{font:inherit;min-height:46px;flex-shrink:0;
+ font-size:.82rem;font-weight:850;cursor:pointer;color:#163525;
+ background:#d7ff9c;border:1px solid #d7ff9c;border-radius:9px;padding:10px 14px}
+.goal-rush-return button:focus-visible{outline:3px solid #fff2a7;outline-offset:3px}
+@media(max-width:700px){.goal-rush-return{flex-direction:column;align-items:stretch;
+ padding:13px}.goal-rush-return button{width:100%}}
