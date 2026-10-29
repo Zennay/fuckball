@@ -18,6 +18,7 @@ LOCAL_PACKAGE = TRAINING / "haxlab"
 def run_smoke(training_root: Path, installed_root: Path, script: str, expected: Path) -> None:
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join((str(training_root), str(installed_root)))
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     subprocess.run(
         [sys.executable, "-c", script, str(expected)],
         cwd=ROOT,
@@ -90,19 +91,64 @@ print("HaxLab trainer package resolution: PASS")
 """
         run_smoke(TRAINING, installed_root, positive_smoke, LOCAL_PACKAGE)
 
-        # Exercise the real CLI entry point in the same installed-package
-        # collision environment. --help exits before touching training data;
-        # the NumPy stub keeps this import-only check independent of training.
+        # Exercise the actual CLI entry point with the installed-package
+        # collision present, then inspect the modules it really imported. The
+        # previous CLI smoke only checked argparse output and could pass without
+        # proving that train.py resolved haxlab.baseline from the bundled tree.
+        # Keep this bounded and import-only: --help exits before reading data,
+        # training, or exporting a model.
         (installed_root / "numpy.py").write_text(
             '"""Import-only NumPy stub; this smoke test never trains."""\n',
             encoding="utf-8",
         )
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.pathsep.join((str(TRAINING), str(installed_root)))
+        cli_cwd = temp_root / "cli-cwd"
+        cli_cwd.mkdir()
         cli = subprocess.run(
-            [sys.executable, str(TRAINING / "train.py"), "--help"],
-            cwd=ROOT,
-            env=env,
+            [
+                sys.executable,
+                "-c",
+                r"""
+import runpy
+import sys
+from pathlib import Path
+
+training_root = Path(sys.argv[1]).resolve()
+installed_root = Path(sys.argv[2]).resolve()
+expected_package = Path(sys.argv[3]).resolve()
+sys.path[:] = [
+    str(training_root),
+    str(installed_root),
+    *[
+        entry for entry in sys.path
+        if entry not in {str(training_root), str(installed_root)}
+    ],
+]
+sys.argv = [str(training_root / "train.py"), "--help"]
+try:
+    runpy.run_path(str(training_root / "train.py"), run_name="__main__")
+except SystemExit as exc:
+    if exc.code not in (None, 0):
+        raise
+else:
+    raise AssertionError("trainer CLI --help did not exit normally")
+
+import haxlab
+from haxlab import baseline
+assert Path(haxlab.__file__).resolve() == expected_package / "__init__.py", haxlab.__file__
+assert Path(baseline.__file__).resolve() == expected_package / "baseline.py", baseline.__file__
+assert not hasattr(haxlab, "ORIGIN"), "installed haxlab package shadowed trainer CLI"
+print("HaxLab trainer CLI import provenance: PASS")
+""",
+                str(TRAINING),
+                str(installed_root),
+                str(LOCAL_PACKAGE),
+            ],
+            cwd=cli_cwd,
+            env={
+                **os.environ,
+                "PYTHONPATH": os.pathsep.join((str(TRAINING), str(installed_root))),
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
             check=True,
             capture_output=True,
             text=True,
@@ -110,7 +156,13 @@ print("HaxLab trainer package resolution: PASS")
         )
         if "--epochs" not in cli.stdout or "--data" not in cli.stdout:
             raise AssertionError("trainer CLI help omitted expected training options")
-        print("HaxLab trainer CLI import smoke: PASS")
+        if "HaxLab trainer CLI import provenance: PASS" not in cli.stdout:
+            raise AssertionError("trainer CLI did not verify its imported package provenance")
+        if (cli_cwd / "training" / "output").exists():
+            raise AssertionError("trainer --help unexpectedly created a training output directory")
+        if (cli_cwd / "dist" / "ai" / "trained-model.json").exists():
+            raise AssertionError("trainer --help unexpectedly exported a model")
+        print("HaxLab trainer CLI import provenance: PASS (no training or export side effects)")
 
 
 if __name__ == "__main__":
