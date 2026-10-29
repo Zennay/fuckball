@@ -2,12 +2,16 @@
 // Offline support is EXCLUSIVELY for local, casual browser practice and user-owned
 // replay playback. Do not cache credentials, account APIs, matchmaking, rooms
 // or any live match state. Every online action still requires the actual server.
-const CACHE='fuckball-offline-practice-v152'
+const CACHE='fuckball-offline-practice-v154'
 const CORE=[
  "./",
  "./style.css",
  "./club.css",
  "./play-home.css",
+ "./play-first-home.css",
+ "./play-first-home.js",
+ "./local-focus-pause.css",
+ "./local-focus-pause.js",
  "./verified-queue-status.css",
  "./play-hub.css",
  "./play-hub.js",
@@ -74,6 +78,8 @@ const CORE=[
  "./friend-party.css",
  "./room-browser.css",
  "./direct-invite-join.css",
+ "./direct-peer-session-guard.js",
+ "./direct-peer-session-guard.css",
  "./career-profile.css",
  "./native-career-milestones.css",
  "./offline-player-passport.js",
@@ -276,12 +282,23 @@ const shell=new URL('./',scope).href;
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
-  // An incomplete offline copy must not be activated or shown as ready.
-  // Precaching a bounded allowlist avoids ever touching private endpoints.
-  await cache.addAll(CORE.map(p=>new Request(new URL(p,scope),{
-   cache:'reload',credentials:'omit'
-  })));
-  await self.skipWaiting();
+  // A failed cache.addAll can leave behind some of the 268 requested files.
+  // The old active worker must remain the only playable offline pack.
+  try{
+   await cache.addAll(CORE.map(p=>new Request(new URL(p,scope),{
+    cache:'reload',credentials:'omit'
+   })));
+   // Do not activate a partially installed app after a quota/storage failure.
+   // Every entry must exist in this *versioned*, public-asset-only snapshot.
+   for(const file of CORE){
+    if(!await cache.match(new URL(file,scope).href))
+     throw Error('Offline pack incomplete: '+file);
+   }
+   await self.skipWaiting();
+  }catch(error){
+   await caches.delete(CACHE).catch(()=>{});
+   throw error;
+  }
  })());
 });
 self.addEventListener('activate',event=>{
@@ -303,10 +320,14 @@ self.addEventListener('fetch',event=>{
   event.respondWith((async()=>{
    try{
     const response=await fetch(request);
-    if(response.ok&&url.pathname===root&&!url.search){
-     const cache=await caches.open(CACHE);
-     await cache.put(shell,response.clone());
+    // Only the public query-free home may fall back to the installed solo
+    // game during a temporary origin outage. Never render an offline copy
+    // as though it were a live online room, invitation or account page.
+    if(response.status>=500&&url.pathname===root&&!url.search){
+     const cached=await (await caches.open(CACHE)).match(shell);
+     if(cached)return cached;
     }
+    // The install snapshot is immutable until a complete verified update.
     return response;
    }catch{
     if(url.pathname===root&&!url.search){
@@ -326,10 +347,14 @@ self.addEventListener('fetch',event=>{
  event.respondWith((async()=>{
   try{
    const response=await fetch(request);
-   if(response.ok&&response.type==='basic'){
-    const cache=await caches.open(CACHE);
-    await cache.put(request,response.clone());
+   // For packaged public local-play assets only, a temporary 5xx origin
+   // error should not break the installed offline practice. Never use this
+   // fallback for room invitations, account endpoints, or private APIs.
+   if(response.status>=500){
+    const cached=await (await caches.open(CACHE)).match(request);
+    if(cached)return cached;
    }
+   // Serve fresh successful assets without mutating the immutable pack.
    return response;
   }catch{
    const cached=await (await caches.open(CACHE)).match(request);

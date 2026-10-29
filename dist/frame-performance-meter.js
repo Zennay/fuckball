@@ -21,6 +21,10 @@
  const title=make('div');
  title.append(make('span','LOCAL RENDER DIAGNOSTICS','frame-meter-eyebrow'),
   make('h2','FRAME PERFORMANCE.'));
+ const sourceLabel=make('p','Waiting for a verified game session…','frame-meter-source');
+ const confidence=make('span','Awaiting real rendered frames','frame-meter-confidence');
+ confidence.dataset.state='preliminary';
+ title.append(sourceLabel,confidence);
  const close=make('button','✕');close.type='button';close.setAttribute('aria-label','Close frame performance panel');
  top.append(title,close);
  const intro=make('p','Uses the FPS value this game already renders. Observes up to 90 recent foreground seconds; no extra benchmark, server ping, hardware profiling or uploads. FPS is display performance, not the native 60 Hz physics tick.');
@@ -50,8 +54,15 @@
  notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');
  panel.append(top,intro,targetWrap,stats,gauge,bars,legend,gaps,actions,notice);
  match.append(panel);
- let samples=[],second=0,wasVisible=false,sessionKey='',sessionStartedAt=0;
+ const MIN_RELIABLE_READINGS=12;
+ let samples=[],second=0,wasVisible=false,sessionStartedAt=0;
+ // fpsValue is updated by the renderer every ~500ms. Polling it each
+ // second must never turn one frozen/stale value into many 'measurements'.
+ let lastNativeFpsWindow=null,renderEvidenceStale=false;
  let awayAt=0,gapCount=0,gapSeconds=0,lastGameElapsed=null;
+ // Real in-memory transport/room identity, not a reused room code or
+ // a generic 'direct-peer' label. Only the original engine knows round ids.
+ let observedSource=null,observedKind='',observedRound=null;
  const games=document.getElementById('gamesView');
  const evidence=games?make('aside',null,'frame-meter-evidence'):null;
  const evidenceText=evidence?make('div',null,'frame-meter-evidence-copy'):null;
@@ -70,10 +81,40 @@
   if(typeof games.prepend==='function')games.prepend(evidence);
   else games.append(evidence);
  }
- function matchKey(){
-  return serverLink?.room?'native:'+serverLink.room:
-   typeof peerConnected!=='undefined'&&peerConnected?'direct-peer':
-   typeof replay!=='undefined'&&replay?'replay':'local';
+ function matchSource(){
+  const native=typeof serverLink!=='undefined'?serverLink:null;
+  if(native){
+   const round=native.roomState?.round;
+   return{ref:native,kind:native.room?'native':'connecting',
+    round:Number.isSafeInteger(round)&&round>=0&&round<=100000?round:null};
+  }
+  const direct=typeof peerConnected!=='undefined'&&peerConnected;
+  if(direct||typeof peer!=='undefined'&&peer)
+   return{ref:typeof channel!=='undefined'&&channel||peer||room,
+    kind:direct?'direct-peer':'connecting',round:null};
+  if(typeof replay!=='undefined'&&replay)
+   return{ref:replay,kind:'replay',round:null};
+  return{ref:room,kind:'offline',round:null};
+ }
+ function reconcileSource(next){
+  // Connection replacement, a different replay, or a server-issued round
+  // change invalidates all previous FPS evidence even if the old timer did
+  // not visibly rewind and even when the player is currently on Home.
+  const changed=observedSource!==null&&(
+   observedSource!==next.ref||observedKind!==next.kind||
+   observedRound!==null&&next.round!==null&&observedRound!==next.round);
+  if(changed)clearData();
+  observedSource=next.ref;observedKind=next.kind;
+  if(next.round!==null)observedRound=next.round;
+  const label=next.kind==='native'?'Native online match':
+   next.kind==='direct-peer'?'Direct-peer match':
+   next.kind==='replay'?'Local recording playback':
+   next.kind==='connecting'?'Connecting · no FPS measurements':
+   'Offline local match';
+  const copy=label+(next.kind==='native'&&observedRound!==null?
+   ' · server round '+observedRound:'')+
+   (next.kind==='connecting'?'':' · visible, running frames only');
+  if(sourceLabel.textContent!==copy)sourceLabel.textContent=copy;
  }
  function matchClock(){
   const elapsed=typeof replay!=='undefined'&&replay?
@@ -92,7 +133,14 @@
    totalGaps+' unmeasured period'+(totalGaps===1?'':'s')+
    ' (about '+(gapSeconds+activeGap)+'s away). '+
    (awayAt>0?'Sampling paused outside the game. ':'')+
-   'Only locally observed data; not a device benchmark or official match evidence.';
+   'Source: '+(observedKind==='native'?'native online match':
+    observedKind==='direct-peer'?'direct-peer match':
+    observedKind==='replay'?'local replay':'offline match')+
+   (observedKind==='native'&&observedRound!==null?' · server round '+observedRound:'')+
+   (samples.length<MIN_RELIABLE_READINGS?
+    ' · Preliminary evidence only ('+samples.length+'/'+MIN_RELIABLE_READINGS+' required).':'')+
+   (renderEvidenceStale?' · No fresh painted frames now; prior readings are historical.':'')+
+   '. One observed session only; not an official device benchmark.';
  }
  evidenceReturn?.addEventListener('click',()=>document.getElementById('tabPlay')?.click());
  evidenceSave?.addEventListener('click',()=>save.click());
@@ -104,6 +152,8 @@
  };
  function clearData(){
   samples=[];second=0;sessionStartedAt=0;awayAt=0;gapCount=0;gapSeconds=0;lastGameElapsed=null;
+  lastNativeFpsWindow=null;renderEvidenceStale=false;
+  observedSource=null;observedKind='';observedRound=null;wasVisible=false;
   median.textContent=low.textContent='—';count.textContent='0';
   bars.replaceChildren();gauge.textContent='Waiting for native rendered FPS samples.';
   bars.setAttribute('aria-label','No observed FPS readings yet');
@@ -113,6 +163,12 @@
  function render(){
   const values=samples.map(x=>x.fps),sorted=values.slice().sort((a,b)=>a-b);
   const m=quantile(sorted,.5),p10=quantile(sorted,.1),goal=Number(target.value);
+  const credible=!renderEvidenceStale&&values.length>=MIN_RELIABLE_READINGS;
+  confidence.dataset.state=renderEvidenceStale?'stale':
+   credible?'measured':'preliminary';
+  confidence.textContent=renderEvidenceStale?'RENDER STALLED · LAST READINGS HISTORICAL':
+   credible?'FRESH FPS EVIDENCE · '+values.length+' READINGS':
+   'COLLECTING REAL FRAMES · '+values.length+'/'+MIN_RELIABLE_READINGS;
   median.textContent=m??'—';low.textContent=p10??'—';count.textContent=String(samples.length);
   gaps.textContent=gapCount?
    gapCount+' unmeasured period'+(gapCount===1?'':'s')+
@@ -120,8 +176,13 @@
    'No unmeasured navigation or background periods in this sample window.';
   updateEvidence();
   if(!values.length){gauge.textContent='Waiting for real foreground FPS readings.';bars.replaceChildren();save.disabled=true;return;}
-  gauge.textContent=m>=goal*.9?'Rendering near your '+goal+' FPS goal':
-   'Rendering below your selected '+goal+' FPS goal · use native Performance or lower FPS target';
+  gauge.textContent=renderEvidenceStale?
+   'No new painted frames. Previous FPS readings are historical, not a live performance result.':
+   values.length<MIN_RELIABLE_READINGS?
+   'Collecting fresh, independent FPS readings ('+values.length+'/'+MIN_RELIABLE_READINGS+
+    '). Performance goal not evaluated yet.':
+   m>=goal*.9?'Observed rendering near your '+goal+' FPS goal':
+   'Observed rendering below your '+goal+' FPS goal · try native Performance settings';
   // Keep this display small: repaint the history only if the player opened
   // PERF; sample collection itself never causes a chart repaint.
   bars.replaceChildren();
@@ -137,10 +198,18 @@
   save.disabled=false;
  }
  function capture(){
+  const source=matchSource();
+  reconcileSource(source);
   const visible=!match.hidden&&!document.hidden&&document.visibilityState==='visible';
   const active=typeof started==='undefined'||started===true||
    typeof replay!=='undefined'&&!!replay;
-  const observing=visible&&active&&!(typeof paused!=='undefined'&&paused===true);
+  const nativeReady=source.kind!=='native'||serverLink?.roomState?.started===true;
+  const replayRunning=source.kind!=='replay'||
+   typeof replay?.getSpeed!=='function'||replay.getSpeed()>0;
+  // Do not certify stale local paint as live server FPS during admission,
+  // a paused recording, a finished server round or a pending direct peer.
+  const observing=visible&&active&&nativeReady&&replayRunning&&
+   source.kind!=='connecting'&&!(typeof paused!=='undefined'&&paused===true);
   open.hidden=!visible;
   if(!observing){
    if(wasVisible){wasVisible=false;if(samples.length)awayAt=Date.now();}
@@ -148,14 +217,12 @@
    if(samples.length&&!games?.hidden)updateEvidence();
    return;
   }
-  const key=matchKey(),elapsed=matchClock();
-  // Keep only one active local/peer/native/replay session. If the native
-  // room or playback changes, or a new round resets the clock, never blend
-  // unrelated FPS evidence into one session.
-  if(sessionKey!==key||lastGameElapsed!==null&&elapsed!==null&&
-     elapsed+2<lastGameElapsed){
+  const elapsed=matchClock();
+  // Genuine local resets with the same room instance also invalidate the
+  // prior round. Server round boundaries were already checked above.
+  if(lastGameElapsed!==null&&elapsed!==null&&elapsed+2<lastGameElapsed){
    clearData();
-   sessionKey=key;
+   reconcileSource(source);
   }
   if(!wasVisible){
    wasVisible=true;
@@ -165,11 +232,30 @@
    }
    awayAt=0;
   }
+  // A native FPS reading is meaningful only if the actual renderer painted
+  // frames recently AND its 500ms aggregation window changed since the
+  // previous sample. This rules out duplicated counters after a tab resumes
+  // or when RAF is stalled despite a visible, connected room.
+  const paintedWindow=typeof frameStats!=='undefined'?
+   frameStats?.fpsStart:null;
+  const paintNow=performance.now();
+  const fresh=Number.isFinite(paintedWindow)&&paintedWindow>0&&
+   paintNow>=paintedWindow&&paintNow-paintedWindow<=1500;
+  if(!fresh){
+   renderEvidenceStale=true;
+   if(wasVisible){wasVisible=false;if(samples.length)awayAt=Date.now();}
+   if(!panel.hidden)render();
+   else updateEvidence();
+   return;
+  }
+  if(paintedWindow===lastNativeFpsWindow)return;
+  renderEvidenceStale=false;
   const raw=nativeFPS.textContent?.trim()||'';
   if(!/^\d{1,4}$/.test(raw))return;
   const fps=Number(raw);
   if(!Number.isSafeInteger(fps)||fps<1||fps>2000)return;
   const now=Date.now();
+  lastNativeFpsWindow=paintedWindow;
   if(!sessionStartedAt)sessionStartedAt=now;
   samples.push({t:Math.round((now-sessionStartedAt)/1000),fps});
   second++;
@@ -200,6 +286,19 @@
  save.onclick=()=>{
   if(!samples.length){notice.textContent='No real FPS measurements to export.';return;}
   const rows=['Elapsed seconds since first foreground sample,Observed painted FPS,Measurement note',
+   ['SESSION_KIND',observedKind,
+    'One in-memory session; no room code, identity, account or network address exported'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
+   ['SERVER_ROUND',observedKind==='native'&&observedRound!==null?observedRound:'not available',
+    'Server-issued numeric round only; no room identifier'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
+   ['EVIDENCE_QUALITY',renderEvidenceStale?'stale / historical':
+    samples.length<MIN_RELIABLE_READINGS?'preliminary / not enough fresh readings':'measured / distinct native FPS windows',
+    'Never treat a repeated or stale painted FPS counter as independent proof'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
+   ['MINIMUM_READINGS_FOR_GOAL',MIN_RELIABLE_READINGS,
+    'Goal status is preliminary until sufficient distinct renderer windows were observed'].map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"').join(','),
    ['UNMEASURED_PERIODS',gapCount+(awayAt>0?1:0),
     'Approximately '+(gapSeconds+(awayAt>0?Math.max(0,Math.round((Date.now()-awayAt)/1000)):0))+
     ' seconds excluded; no missing FPS inferred'].map(v=>
@@ -220,7 +319,7 @@
  // Local practice starts a fresh game without changing room ID. Keep its FPS
  // evidence separate even when the previous round had only just kicked off.
  window.addEventListener('fuckball:local-match-kickoff',()=>{
-  clearData();sessionKey='local';wasVisible=false;
+  clearData();
  });
  window.setInterval(capture,1000);
 })();

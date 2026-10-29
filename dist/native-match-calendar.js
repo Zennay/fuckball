@@ -22,7 +22,7 @@
   const a=document.createElement('a');a.href=u;a.download=filename;
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);
  };
- function calendarHtml(rows,selectedMonth){
+ function calendarHtml(rows,selectedMonth,selectedDay,total){
   const ordered=rows.slice().sort((a,b)=>a.at-b.at);
   const counts={W:0,D:0,L:0};
   for(const row of ordered)counts[result(row)]++;
@@ -38,7 +38,9 @@
    '<style>body{font:16px system-ui;max-width:850px;margin:auto;padding:20px;color:#123037}'+
    'h1{line-height:1.2}table{width:100%;border-collapse:collapse}th,td{padding:9px;border:1px solid #9ab;text-align:left}'+
    '@media print{body{padding:0}}</style></head><body><h1>Private unranked monthly play</h1>'+
-   '<p><b>'+safeText(monthLabel(selectedMonth))+'</b> · '+ordered.length+' of the latest 50 authenticated native-server receipts. '+
+   '<p><b>'+safeText(selectedDay||monthLabel(selectedMonth))+'</b> · '+ordered.length+
+   ' selected, filter-matching result'+(ordered.length===1?'':'s')+
+   ' of '+total+' recent authenticated native-server receipts. '+
    counts.W+' wins, '+counts.D+' draws, '+counts.L+' losses. This is not an official season, a lifetime history or a ranked table.</p>'+
    '<table><thead><tr><th>Local completion</th><th>Mode</th><th>Outcome</th><th>My score</th><th>Active seconds</th></tr></thead><tbody>'+lines+'</tbody></table>'+
    '<p><small>Generated locally. No username, opponent identity, match identifier, chat or access token included.</small></p></body></html>';
@@ -48,6 +50,15 @@
   host.replaceChildren();
   if(typeof authorized!=='function'||!authorized()||!Array.isArray(receipts)||!Array.isArray(scope))return null;
   const rows=receipts.filter(isReceipt).slice(0,50);
+  // The caller owns the authenticated server receipt set and applies mode
+  // and period. Intersect IDs with only those genuine receipts; never export
+  // excluded rows merely because they share a local calendar month.
+  const permitted=new Set(scope.filter(isReceipt).map(row=>row.id));
+  const outcomeSelect=document.querySelector('.server-results select[aria-label="Filter online results"]');
+  const outcomeName=outcomeSelect?.value||'all';
+  const outcomeCode={win:'W',draw:'D',loss:'L'}[outcomeName]||null;
+  const matches=row=>permitted.has(row.id)&&(!outcomeCode||result(row)===outcomeCode);
+  const matching=rows.filter(matches);
   const dates=[...new Set(rows.map(row=>monthKey(localDay(row.at))))].sort().reverse();
   const activeDay=chosenDay&&/^\d{4}-\d{2}-\d{2}$/.test(chosenDay)?chosenDay:null;
   if(!dates.length)return null;
@@ -55,8 +66,8 @@
   const frame=node('section',null,'native-activity-calendar');
   frame.setAttribute('aria-label','Recent authenticated online match calendar');
   const title=node('h3','MY RECENT MATCH CALENDAR');
-  const intro=node('p','Days marked here are based only on your latest '+rows.length+
-   ' genuine, unranked server results. Older matches and other servers are not included. Dates use your device’s local timezone.','native-calendar-info');
+  const intro=node('p','Only '+matching.length+' of your '+rows.length+
+   ' genuine recent unranked results match the current filters. Calendar counts and private exports use this same selection. Dates use your device’s local timezone; older matches and other servers are not included.','native-calendar-info');
   const toolbar=node('div',null,'native-calendar-toolbar');
   const caption=node('label','Month');
   const picker=node('select',null);picker.setAttribute('aria-label','Choose a month with verified recent results');
@@ -68,13 +79,24 @@
   };
   const clear=node('button','Show all days','native-calendar-clear');clear.type='button';
   clear.hidden=!activeDay;clear.onclick=()=>{if(authorized())onSelect(null);};
-  const printable=node('button','↓ Export this month','native-calendar-export');printable.type='button';
-  printable.title='Generate a private printable report from original server receipts, with no user identity';
-  const allMonth=rows.filter(x=>monthKey(localDay(x.at))===month);
+  // The selected day is part of the visible result filter too; when set,
+  // the download must never silently include other days in the month.
+  const exportRows=matching.filter(row=>monthKey(localDay(row.at))===month&&
+   (!activeDay||localDay(row.at)===activeDay));
+  const printable=node('button',activeDay?'↓ Export selected day':'↓ Export filtered month','native-calendar-export');
+  printable.type='button';printable.disabled=!exportRows.length;
+  printable.title='Private printable HTML: '+exportRows.length+
+   ' selected genuine server results, no username or receipt ID';
+  const exportSummary=node('p',exportRows.length+' selected result'+
+   (exportRows.length===1?'':'s')+' will be included in this private '+(activeDay?'day':'month')+
+   ' report. Excluded games are never exported.','native-calendar-export-count');
+  exportSummary.setAttribute('role','status');
   printable.onclick=()=>{
-   if(!authorized())return;
-   try{download('fuckball-my-matches-'+month+'.html',calendarHtml(allMonth,month));}
-   catch{info.textContent='Could not export the month locally.';}
+   if(!authorized()||!exportRows.length)return;
+   try{
+    download('fuckball-my-matches-'+(activeDay||month)+'.html',
+     calendarHtml(exportRows,month,activeDay,rows.length));
+   }catch{info.textContent='Could not export the selected results locally.';}
   };
   toolbar.append(caption,clear,printable);
   const info=node('p','Select a highlighted day to see its real match cards and use the existing filters.','native-calendar-info');
@@ -87,7 +109,7 @@
   for(let i=0;i<pad;i++){
    const spacer=node('span',null,'native-calendar-empty');spacer.setAttribute('aria-hidden','true');grid.append(spacer);
   }
-  const scoped=new Set(scope.map(x=>x.id));
+  const scoped=new Set(matching.map(x=>x.id));
   const days=new Date(y,m+1,0).getDate();
   const keys=new Map();
   rows.forEach(row=>{const key=localDay(row.at);if(!keys.has(key))keys.set(key,[]);keys.get(key).push(row);});
@@ -95,25 +117,26 @@
    const key=month+'-'+String(n).padStart(2,'0');
    const existing=keys.get(key)||[],matched=existing.filter(row=>scoped.has(row.id));
    const button=node('button',null,'native-calendar-day');
-   button.type='button';button.setAttribute('aria-label',n+' '+monthLabel(month)+': '+existing.length+
-    ' verified recent matches, '+matched.length+' match selected mode and period');
+   button.type='button';button.setAttribute('aria-label',n+' '+monthLabel(month)+': '+
+    matched.length+' filtered of '+existing.length+' verified recent results');
    button.append(node('b',String(n)));
    if(existing.length){
     button.classList.add('has-match');
     const badges=node('span',null,'native-calendar-day-count');
-    const stat={W:0,D:0,L:0};for(const r of existing)stat[result(r)]++;
-    badges.textContent=existing.length+' · '+stat.W+'W '+stat.D+'D '+stat.L+'L';
+    const stat={W:0,D:0,L:0};for(const r of matched)stat[result(r)]++;
+    badges.textContent=matched.length+' shown · '+stat.W+'W '+stat.D+'D '+stat.L+'L';
     button.append(badges);
-    button.title=existing.length+' real unranked matches on '+key;
+    button.title=matched.length+' filtered results of '+existing.length+
+     ' verified unranked matches on '+key;
     if(activeDay===key)button.classList.add('selected');
-    if(!matched.length){button.disabled=true;button.title+='; no matches with current mode and period filters';}
+    if(!matched.length){button.disabled=true;button.title+='; no results matching current filters';}
     button.onclick=()=>{if(authorized())onSelect(activeDay===key?null:key);};
    }else{button.disabled=true;button.classList.add('no-match');}
    grid.append(button);
   }
-  const hint=node('p','Calendar marks genuine receipts only. Blank days may simply fall outside the server’s most recent 50; no inferred inactivity or streaks.','native-calendar-info');
-  frame.append(title,intro,toolbar,info,grid,hint);host.append(frame);
-  const selected=activeDay?new Set((keys.get(activeDay)||[]).map(x=>x.id)):null;
+  const hint=node('p','Day badges and downloads reflect your current filters, not unselected games. Blank days may fall outside the last 50 server results; no inferred inactivity or ranking.','native-calendar-info');
+  frame.append(title,intro,toolbar,exportSummary,info,grid,hint);host.append(frame);
+  const selected=activeDay?new Set((keys.get(activeDay)||[]).filter(matches).map(x=>x.id)):null;
   return selected;
  }
  window.FuckballNativeMatchCalendar={render};

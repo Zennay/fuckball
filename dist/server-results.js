@@ -170,14 +170,19 @@
    selectedDay=day;render();
    if(day)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
   },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
-  const sessionSet=window.FuckballNativePlaySessions?.render(sessionHost,items,scope,selectedSession,session=>{
+  // Match the exact on-screen set before applying a session-group choice:
+  // period + mode + outcome + (optional) server-receipt calendar day.
+  // Otherwise a grouped export can still include hidden losses or dates.
+  const sessionScope=scope.filter(item=>
+   (filter.value==='all'||outcome(item)===filter.value)&&
+   (!daySet||daySet.has(item.id)));
+  const sessionSet=window.FuckballNativePlaySessions?.render(sessionHost,items,sessionScope,selectedSession,session=>{
    if(!items||!currentToken||authenticated()?.token!==currentToken||
     authenticated()?.username!==currentUser)return;
    selectedSession=session;render();
    if(session)list.scrollIntoView({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches?'auto':'smooth',block:'start'});
   },()=>!!items&&!!currentToken&&authenticated()?.token===currentToken&&authenticated()?.username===currentUser);
-  const filtered=scope.filter(item=>(filter.value==='all'||outcome(item)===filter.value)&&
-   (!sessionSet||sessionSet.has(item.id))&&(!daySet||daySet.has(item.id)));
+  const filtered=sessionScope.filter(item=>!sessionSet||sessionSet.has(item.id));
   visibleRows=filtered;
   summary.textContent=filtered.length+' shown · '+scope.length+' in this period and mode · '+
    items.length+' recent server receipts · unranked';
