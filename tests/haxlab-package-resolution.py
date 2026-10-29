@@ -90,6 +90,28 @@ print("HaxLab trainer package resolution: PASS")
 """
         run_smoke(TRAINING, installed_root, positive_smoke, LOCAL_PACKAGE)
 
+        # Exercise the real CLI entry point in the same installed-package
+        # collision environment. --help exits before touching training data;
+        # the NumPy stub keeps this import-only check independent of training.
+        (installed_root / "numpy.py").write_text(
+            '"""Import-only NumPy stub; this smoke test never trains."""\n',
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.pathsep.join((str(TRAINING), str(installed_root)))
+        cli = subprocess.run(
+            [sys.executable, str(TRAINING / "train.py"), "--help"],
+            cwd=ROOT,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if "--epochs" not in cli.stdout or "--data" not in cli.stdout:
+            raise AssertionError("trainer CLI help omitted expected training options")
+        print("HaxLab trainer CLI import smoke: PASS")
+
 
 if __name__ == "__main__":
     main()
