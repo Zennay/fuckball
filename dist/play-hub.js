@@ -25,7 +25,7 @@
  };
  let playlist=chooseFromStorage();
  let nativeQueue={searching:false,ready:false,accepted:false,confirming:false,mode:null,waiting:0,needed:0,expiresAt:null,recovery:null};
- let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null;
+ let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null,postMatchRequest=null;
  let dismissedMatchKey=null;
  function verifiedResult(){
   // A client never fabricates a final score or grants an online rematch.
@@ -574,10 +574,16 @@
   const detail=requesting?'Server response pending · your request was sent; do not resubmit.':
    vote&&waiting>0?'Human rematch · '+accepted+' of '+waiting+' confirmed. Each player chooses.':
    retry?postgameRequestNotice.message:
+   link.ws?.readyState!==1?'Server connection unavailable · reconnect before requesting a rematch.':
    'Official room result · next match remains server-controlled.';
   if(postMatchInfo.textContent!==detail)postMatchInfo.textContent=detail;
   postMatchOpen.textContent=requesting?'View pending server request →':
    vote?'Review rematch consent →':'Review result & rematch →';
+ const eligible=!!result&&!vote&&(!!link.quickMatchMode||!!link.isOwner);
+ postMatchRequest.hidden=!eligible;
+ postMatchRequest.disabled=!!requesting||link.ws?.readyState!==1;
+ postMatchRequest.textContent=requesting?'Waiting for server receipt…':
+  link.ws?.readyState!==1?'Reconnect to request rematch':'↻ Request rematch';
  }
  // Local full-time has no server proposal: use the original offline
  // engine's result receipt and original native Start button for a rematch.
@@ -700,7 +706,24 @@
    const receipt=verifiedResult();
    if(receipt){dismissedMatchKey=receipt.key;refreshPostMatch();}
   },'play-postmatch-dismiss');
-  controls.append(postMatchOpen,dismiss);postMatch.append(contents,controls);
+  // One explicit postgame click forwards to the original native request
+  // gate. A guest cannot create a private-room proposal. Nothing auto-votes.
+  postMatchRequest=action('↻ Request rematch',()=>{
+   const receipt=verifiedResult();
+   if(!receipt||typeof renderNextMatchPanel!=='function')return;
+   renderNextMatchPanel();
+   const original=document.getElementById('rematchRequest');
+   if(!original||original.hidden||original.disabled){
+    showNativeRematch();return;
+   }
+   original.click();
+   refreshPostMatch();
+   const pending=typeof postgameRequestPending!=='undefined'&&
+    postgameRequestPending?.link===receipt.link;
+   announce(pending?'Native rematch request sent · awaiting server response.':
+    'Review the native match menu for current server status.');
+  },'play-postmatch-request');
+  controls.append(postMatchRequest,postMatchOpen,dismiss);postMatch.append(contents,controls);
   match.append(postMatch);
   observer.observe(match,{attributes:true,attributeFilter:['hidden']});
  }

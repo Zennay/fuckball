@@ -219,7 +219,9 @@ body.lobby .scoreboard{opacity:.35}
 .native-rematch-dock-actions button:focus-visible{outline:3px solid #f6ffa8;outline-offset:3px}
 @media(max-width:760px){
  .native-rematch-dock{flex-direction:column;align-items:stretch;gap:12px;
- padding:14px;bottom:max(8px,env(safe-area-inset-bottom))}
+ padding:14px;left:50vw;bottom:auto;
+ top:calc(100dvh - max(8px,env(safe-area-inset-bottom)));
+ transform:translate(-50%,-100%)}
  .native-rematch-dock-actions{display:grid;grid-template-columns:1fr 1fr}
  .native-rematch-dock-actions button:last-child{grid-column:1/-1}
 }
