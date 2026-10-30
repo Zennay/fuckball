@@ -46,6 +46,38 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright'),{cre
   assert.equal(await page.evaluate(()=>window.syntheticRematchSends.length),2);
   assert.deepEqual(errors,[],'no browser errors');
   await page.evaluate(()=>{clearPostgameRequest();serverLink=null});
-  console.log('PASS Chromium postgame rematch ribbon: real native request once, no guest override, quick-match native path, no duplicate proposal (all fixtures synthetic)');
+  // In mobile Chrome, other game panels can widen the *layout* viewport;
+  // ensure these fixed, consent-critical controls use the visual viewport.
+  const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true});
+  const mobileErrors=[];mobile.on('pageerror',e=>mobileErrors.push(e.message));
+  await mobile.goto('http://127.0.0.1:'+port);
+  await mobile.evaluate(()=>{
+   networkPlayerId=2;window.mobileRematchSends=[];
+   serverLink={room:'SYNTHETIC',isOwner:true,quickMatchMode:null,ws:{readyState:1},
+    send:d=>window.mobileRematchSends.push(d),roomState:{room:'SYNTHETIC',round:6,
+    started:false,lastResult:{round:6,red:2,blue:2,winner:0,finalPlayers:[]},rematch:null}};
+   document.getElementById('homeView').hidden=true;
+   document.getElementById('matchView').hidden=false;
+   document.getElementById('pauseMenu').hidden=true;
+   document.body.classList.remove('menu-open');
+   window.dispatchEvent(new Event('fuckball:native-session-state'));
+  });
+  const inside=rect=>rect&&rect.x>=0&&rect.y>=0&&rect.x+rect.width<=390&&rect.y+rect.height<=844;
+  const mobileRequest=mobile.locator('.play-postmatch-request');
+  assert(inside(await mobileRequest.boundingBox()),'mobile rematch CTA fits visual viewport');
+  await mobileRequest.tap({timeout:8000});
+  assert.deepEqual(await mobile.evaluate(()=>window.mobileRematchSends.map(x=>x.type)),['rematchRequest']);
+  await mobile.evaluate(()=>{
+   clearPostgameRequest();serverLink.roomState.rematch={id:10,required:[1,2],accepted:[1],expiresAt:Date.now()+45000};
+   document.getElementById('matchView').hidden=true;renderGlobalRematchDock();
+  });
+  const mobileVote=mobile.locator('.native-rematch-dock-actions button.primary');
+  assert(inside(await mobileVote.boundingBox()),'mobile consent CTA fits visual viewport');
+  await mobileVote.tap({timeout:8000});
+  assert.deepEqual(await mobile.evaluate(()=>window.mobileRematchSends.map(x=>x.type)),['rematchRequest','rematchVote']);
+  assert.deepEqual(mobileErrors,[],'no mobile browser errors');
+  await mobile.evaluate(()=>{clearNativeRematchVote();serverLink=null});
+  await mobile.close();
+  console.log('PASS Chromium postgame rematch ribbon: real native request once, no guest override, quick-match native path, no duplicate proposal, mobile touch request + consent (all fixtures synthetic)');
  }finally{await browser.close();await app.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
