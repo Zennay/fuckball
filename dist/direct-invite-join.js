@@ -194,7 +194,7 @@
  const scannerHint=document.createElement('p');
  scannerHint.textContent='Point at a QR with a Fuckball invite from this website. Scanning only fills the invitation field; joining requires your own confirmation.';
  scanner.append(video,scannerHint,close);qrActions.insertAdjacentElement('afterend',scanner);
- let stream=null,scanTimer=null,detecting=false,lastInvalid='';
+ let stream=null,scanTimer=null,lastInvalid='';
  // Every request captures an epoch. A slow permission or decoder promise
  // must never reactivate an abandoned camera after navigating away.
  let scanEpoch=0,imageEpoch=0;
@@ -259,8 +259,11 @@
    if(attempt!==scanEpoch||home.hidden||document.hidden){stopScan();return;}
    scannerHint.textContent='Point at a QR from this site. A scan only fills the invite field; you must explicitly choose Join room.';
    status.textContent='Camera active on your device. No footage is uploaded or retained.';
+   // A stale, pending detector belongs solely to its previous camera epoch.
+   // New scans must not inherit the earlier frame's busy flag after Stop.
+   let detecting=false;
    scanTimer=setInterval(async()=>{
-    if(detecting||!stream||home.hidden||document.hidden||scanner.hidden||video.readyState<2)return;
+    if(detecting||attempt!==scanEpoch||!stream||home.hidden||document.hidden||scanner.hidden||video.readyState<2)return;
     const currentStream=stream;detecting=true;
     try{
      const found=await decodeQR(video);

@@ -45,9 +45,22 @@ async function until(f,msg){for(let i=0;i<100;i++){if(await f())return;await pau
   await page.locator('.direct-invite-qr-camera button').click();
   await until(()=>page.evaluate(()=>window.__tracksStopped===2),'manual stop track');
   const before=await page.locator('.direct-invite-status').textContent();
+  await pause(50);
+  assert.equal(await page.locator('.direct-invite-status').textContent(),before,'manual Stop message retained');
+  // The old detector still awaits its six-second timeout. A fresh user's
+  // Scan must not inherit the previous camera's busy flag.
+  await page.evaluate(()=>{window.__abandonedDeadline=window.__nativeDeadline;});
+  await start.click();
+  await page.waitForFunction(()=>window.__nativeCount>=3,null,{timeout:2200});
+  await page.evaluate(()=>window.__abandonedDeadline());
+  await pause(60);
+  assert.match(await page.locator('.direct-invite-status').textContent(),/Camera active/,'late old error does not stop the new camera');
+  await page.locator('.direct-invite-qr-camera button').click();
+  await until(()=>page.evaluate(()=>window.__tracksStopped===3),'fresh scan camera stopped');
+  const stopped=await page.locator('.direct-invite-status').textContent();
   await page.evaluate(()=>window.__nativeDeadline());
   await pause(50);
-  assert.equal(await page.locator('.direct-invite-status').textContent(),before,'late timeout does not overwrite human Stop');
+  assert.equal(await page.locator('.direct-invite-status').textContent(),stopped,'late native timeout does not overwrite human Stop');
   assert.deepEqual(errors,[]);
   console.log('PASS Chromium: stalled native QR scan times out, releases camera, retries and preserves human Stop');
  }finally{await browser.close();await server.close();}
