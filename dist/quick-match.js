@@ -653,6 +653,13 @@
    done('Matched with '+d.players+' real people. Your casual '+playlistLabel(d.mode)+' game is starting.');
    notify('Real-player Quick Match '+playlistLabel(d.mode)+' · no bots, no ranked rating.');
   }else if(d.type==='quickMatchCancelled'){
+   // A match can be cancelled before this client receives its room receipt.
+   // In that case the original queue socket is still admission-owned;
+   // release it or the next explicit human search hits a stale-session guard.
+   // Preserve an already joined room so the player can inspect its result.
+   if(serverLink?.quickMatchMode&&!serverLink.room){
+    try{disconnect();}catch{}
+   }
    done(d.reason||'Your match was cancelled.',true);
   }else if(d.type==='queueStatus'){
    if(d.status==='partyGathering'&&searching&&d.mode===matchMode&&d.humanOnly===true){
