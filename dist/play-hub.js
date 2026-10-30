@@ -438,8 +438,8 @@
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
    const link=typeof serverLink!=='undefined'?serverLink:null;
    const timed=link?.admissionTimer!=null&&Number.isFinite(link.admissionStartedAt)&&
-    Date.now()<link.admissionStartedAt+20000;
-   const left=timed?Math.max(1,Math.ceil((link.admissionStartedAt+20000-Date.now())/1000)):null;
+    performance.now()<link.admissionStartedAt+20000;
+   const left=timed?Math.max(1,Math.ceil((link.admissionStartedAt+20000-performance.now())/1000)):null;
    const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
     (link?.quickQueueAcknowledged?' Human-only queue acknowledged; no bots added.':
      left===null?' The connection outcome appears here.':

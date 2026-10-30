@@ -309,7 +309,7 @@
     readyNoReceipt?'The server has not acknowledged your confirmation. Try again before time runs out.':
     'Your proposed match is waiting for every player to accept.';
   }else if(searching&&queuedAt){
-   const duration=Math.max(0,Math.floor((Date.now()-queuedAt)/1000));
+   const duration=Math.max(0,Math.floor((performance.now()-queuedAt)/1000));
    // The client has only *requested* queue admission until the server
    // answers. Do not display made-up player occupancy while connecting.
    const acknowledged=serverLink?.quickQueueAcknowledged===true;
@@ -370,7 +370,7 @@
   if(!party&&standardModes.includes(mode))setPreferred(mode);
   hideRecovery();lastAttempt={mode,party};
   clearReadyReceipt();
-  searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=Date.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
+  searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=performance.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
   if(connectServer(false,'','',null,mode,party)===false){
    // Reject invalid server setup without leaving a fictitious active search
@@ -414,7 +414,7 @@
  const clearPulse=()=>{pulse.hidden=true;pulseMode=null;pulseAt=0;previousPulse=null;};
  pulseAction.addEventListener('click',()=>{
   if(!pulseMode||searching||document.hidden||home.hidden||
-     !sameOriginGameServer().valid||Date.now()-pulseAt>25000){
+     !sameOriginGameServer().valid||performance.now()-pulseAt>25000){
    clearPulse();notice.textContent='Current queue snapshot expired. Refresh queue counts before choosing an observed playlist.';
    return;
   }
@@ -428,7 +428,7 @@
   const best=candidates[0],total=best.waiting+best.confirming;
   const delta=previousPulse&&previousPulse.mode===best.mode?
     total-previousPulse.total:null;
-  previousPulse={mode:best.mode,total};pulseAt=Date.now();pulse.hidden=false;
+  previousPulse={mode:best.mode,total};pulseAt=performance.now();pulse.hidden=false;
   pulseMode=total>0?best.mode:null;
   pulseDetail.textContent=total?
    'Most occupied right now: '+best.mode+' · '+best.waiting+' waiting, '+best.confirming+
@@ -495,7 +495,7 @@
    }
    updatePulse(data);
    window.dispatchEvent(new CustomEvent('fuckball:queue-availability',{detail:{
-    modes:data.modes,humanOnly:data.humanOnly,ranked:data.ranked,server:location.host,at:Date.now()
+    modes:data.modes,humanOnly:data.humanOnly,ranked:data.ranked,server:location.host,at:Date.now(),observedMono:performance.now()
    }}));
    availability.textContent='Real-player queues on your selected server ('+location.host+') · refreshed just now. Ready-check acceptance is still required.';
   }catch{

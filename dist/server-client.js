@@ -88,7 +88,7 @@ function armNativeAdmissionDeadline(link,stage){
  clearNativeAdmissionDeadline(link);
  if(!link||link.room||link.quickQueueAcknowledged)return;
  link.admissionStage=stage;
- link.admissionStartedAt=Date.now();
+ link.admissionStartedAt=performance.now();
  link.admissionTimer=setTimeout(()=>{
   if(serverLink!==link||link.room||link.quickQueueAcknowledged)return;
   link.admissionTimedOut=true;
