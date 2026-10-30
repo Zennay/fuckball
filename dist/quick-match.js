@@ -572,20 +572,26 @@
   if(d.type==='queueReady'){
    if(!searching||!Number.isSafeInteger(d.expiresAt)||typeof d.id!=='string'||
       d.mode!==matchMode||d.players!==needed||d.humanOnly!==true)return;
+   // A repeated server proposal is not a new invitation to vote. In
+   // particular, retain pending and acknowledged consent and the original
+   // monotonic deadline; a replay cannot restart the human ready window.
+   if(ready?.id===d.id){refresh();return;}
    clearReadyReceipt();
    ready={id:d.id,mode:d.mode,players:d.players,expiresAt:d.expiresAt,ready:0,
     deadlineMono:FuckballQuickReadyTime.deadline(d.expiresAt,d.serverNow,performance.now(),Date.now())};
    readyAccepted=false;refresh();alertReady(d.mode,d.expiresAt);
   }else if(d.type==='queueReadyProgress'){
    if(!ready||ready.id!==d.id)return;
-   if(Number.isSafeInteger(d.ready)&&d.ready>=0&&d.ready<=ready.players)
+   // Accepted votes only accumulate inside one proposal. Delayed
+   // progress events must not make an acknowledged teammate disappear.
+   if(Number.isSafeInteger(d.ready)&&d.ready>=ready.ready&&d.ready<=ready.players)
     ready.ready=d.ready;
    refresh();
   }else if(d.type==='queueReadyAccepted'){
    if(ready&&ready.id===d.id){
     clearReadyReceipt();readyAccepted=true;clearReadyAlert();
     if(Number.isSafeInteger(d.ready)&&d.ready>=0&&d.ready<=ready.players)
-     ready.ready=d.ready;
+     ready.ready=Math.max(ready.ready,d.ready);
     refresh();
    }
   }else if(d.type==='queueReadyAborted'){
