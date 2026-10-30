@@ -55,7 +55,25 @@ const response=n=>({humanOnly:true,ranked:false,modes:{
   await sleep(150);
   assert.match(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
    'late expired body cannot replace newer server-verified queue occupancy');
+  // Backgrounding invalidates *displayed* real-human counts immediately,
+  // even without a server response or a reconnect. Returning must fetch
+  // fresh evidence before showing any numbers again.
+  await page.evaluate(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,value:true});
+   Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+   document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.doesNotMatch(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
+   'hidden tab cannot retain verified player occupancy');
+  assert.match(await page.locator('.quick-queue-availability').innerText(),/paused/i);
+  await page.evaluate(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,value:false});
+   Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+   document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
+   'foreground refresh restores real verified occupancy');
   assert.deepEqual(errors,[],'no real browser runtime errors');
-  console.log('PASS Chromium: hung queue JSON deadline, manual retry, new verified occupancy, stale completion ignored');
+  console.log('PASS Chromium: hung queue JSON deadline, manual retry, stale completion ignored, tab-hide invalidation and foreground recovery');
  }finally{await browser.close();await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
