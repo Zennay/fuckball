@@ -55,7 +55,41 @@ const response=n=>({humanOnly:true,ranked:false,modes:{
   await sleep(150);
   assert.match(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
    'late expired body cannot replace newer server-verified queue occupancy');
+  // Backgrounding invalidates *displayed* real-human counts immediately,
+  // even without a server response or a reconnect. Returning must fetch
+  // fresh evidence before showing any numbers again.
+  await page.evaluate(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,value:true});
+   Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+   document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.doesNotMatch(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
+   'hidden tab cannot retain verified player occupancy');
+  assert.match(await page.locator('.quick-queue-availability').innerText(),/paused/i);
+  await page.evaluate(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,value:false});
+   Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});
+   document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
+   'foreground refresh restores real verified occupancy');
+  // Some browsers/credential managers commit a selected server with only a
+  // change event. Never leave counts from the previous endpoint visible.
+  await page.evaluate(()=>{
+   const selected=document.getElementById('serverAddress');
+   selected.value='ws://another-server.invalid/ws';
+   selected.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  assert.doesNotMatch(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
+   'server selection change must immediately invalidate old human counts');
+  await page.evaluate(()=>{
+   const selected=document.getElementById('serverAddress');
+   selected.value=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+   selected.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
+   'same-site server reselect loads real human counts again');
   assert.deepEqual(errors,[],'no real browser runtime errors');
-  console.log('PASS Chromium: hung queue JSON deadline, manual retry, new verified occupancy, stale completion ignored');
+  console.log('PASS Chromium: hung queue JSON deadline, manual retry, stale completion ignored, tab-hide invalidation, foreground recovery and server change event invalidation');
  }finally{await browser.close();await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

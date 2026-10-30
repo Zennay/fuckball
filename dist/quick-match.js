@@ -517,18 +517,31 @@
   }finally{clearTimeout(timer);if(requestId===listingRequest)manualRefresh.disabled=false;}
  }
  manualRefresh.onclick=loadAvailability;
- document.getElementById('serverAddress')?.addEventListener('input',()=>{
-  // Abandon any obsolete response before displaying counts from a new target.
+ // Autocomplete and server selection can commit through change alone;
+ // both event paths must revoke any old verified occupancy immediately.
+ function onServerAddressChange(){
   clearPulse();++listingRequest;clearTimeout(addressTimer);genericLabels();
+  manualRefresh.disabled=false;
+  window.dispatchEvent(new Event('fuckball:queue-unavailable'));
   availability.textContent='Checking whether live counts belong to your selected game server…';
   addressTimer=setTimeout(loadAvailability,450);
- });
+ }
+ const selectedAddress=document.getElementById('serverAddress');
+ selectedAddress?.addEventListener('input',onServerAddressChange);
+ selectedAddress?.addEventListener('change',onServerAddressChange);
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
+  // An observed human queue count is only evidence from the foreground
+  // session. Invalidate any in-flight body as soon as the player leaves;
+  // otherwise stale tiles keep claiming real opponents on return.
+  ++listingRequest;
+  clearPulse();genericLabels();manualRefresh.disabled=false;
+  window.dispatchEvent(new Event('fuckball:queue-unavailable'));
   if(document.visibilityState==='visible'){
+   availability.textContent='Refreshing real-player counts for this server…';
    clearReadyAlert();loadAvailability();
   }else{
-   clearPulse();
+   availability.textContent='Queue counts paused while this tab is hidden. Return to refresh.';
    // A player may background the browser AFTER the server sent the 15s
    // proposal. The original alert only ran at proposal-arrival time, so this
    // path would silently hide the only confirmation controls. Existing
