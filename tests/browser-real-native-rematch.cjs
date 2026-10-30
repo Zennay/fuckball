@@ -45,6 +45,15 @@ try{
  await until(()=>r.disconnected.has(spectatorId)||!r.clients.has(spectatorId),7000,'spectator connection dropped');
  assert(r.rematch,'spectator disconnect must preserve the active rematch ballot');
  assert.equal(r.rematch.accepted.size,1,'no added or forged consent after spectator leaves');
+ // Native substitution and captain controls must not claim to work while a
+ // two-human rematch ballot locks all roster changes on the server.
+ await until(()=>A.evaluate(()=>!!serverLink?.roomState?.rematch),5000,'pending native vote after spectator drop');
+ assert.equal(await A.locator('#subAppointCaptain').isDisabled(),true,'captain reassignment locked during human vote');
+ await A.evaluate(()=>{window.subBypassSends=[];const old=serverLink.send;serverLink.send=d=>{window.subBypassSends.push(d.type);return old(d);};
+   document.getElementById('subAppointCaptain').click();document.getElementById('subAssignBench').click();
+   document.getElementById('subPropose').click();});
+ assert.deepEqual(await A.evaluate(()=>window.subBypassSends),[],'hidden or keyboard substitution actions must not bypass human rematch vote');
+
  // Raw native host traffic must not skip a pending second-human rematch vote.
  await A.evaluate(()=>{window.rematchBypassErrors=[];serverLink.ws.addEventListener('message',e=>{try{const packet=JSON.parse(e.data);if(packet.type==='error')window.rematchBypassErrors.push(packet.message)}catch{}})});
  for(const packet of [{type:'start'},{type:'configure',started:true},{type:'newGame'},{type:'swap'},{type:'addBot',team:0}]){
@@ -74,6 +83,8 @@ try{
  await until(()=>r.rematch===null,5000,'explicit guest declines rematch');
  assert.equal(r.started,false,'decline does not silently restart');
  await until(()=>A.locator('#startButton').isEnabled(),5000,'host controls recover after guest declines');
+ assert.equal(await A.locator('#subAppointCaptain').isEnabled(),true,'captain management unlocked after human decline');
+
  assert.equal(await A.locator('#swapTeams').isEnabled(),true,'team controls resume after vote cancellation');
  const beforeNewGame=r.round;
  await until(()=>A.locator('#nextGame').isEnabled(),5000,'normal next-game action becomes available');
