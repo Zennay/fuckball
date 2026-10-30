@@ -263,6 +263,18 @@ async function joinHuman(url,room,sockets,index){
     'host sees genuine bounded pause deadline after independent human approval');
   assert(r.pendingSubs.get(1).expiresAt-Date.now()>50000,
     'actual native consent refreshes the room-authoritative pause deadline');
+  // Browser and match-host system clocks can disagree by minutes. The visible
+  // server deadline must still be correct for a consenting real player.
+  a.evalJS('globalThis.__nativeDateNow=Date.now;Date.now=()=>__nativeDateNow()+180000;renderSubPanel()');
+  try {
+   assert.match(a.elements.get('subPending').textContent,/accepted, pause to apply.*[5-6][0-9]s remaining/i,
+    'server clock, not a fast local clock, controls the displayed swap deadline');
+   a.evalJS('Date.now=()=>__nativeDateNow()-180000;renderSubPanel()');
+   assert.match(a.elements.get('subPending').textContent,/accepted, pause to apply.*[5-6][0-9]s remaining/i,
+    'server clock, not a slow local clock, controls the displayed swap deadline');
+  } finally {
+   a.evalJS('Date.now=__nativeDateNow;renderSubPanel()');
+  }
   assert.equal(r.hb.getPlayer(1).team,0,'accepted live swap remains benched');
   assert.equal(r.hb.getPlayer(9).team,1,'incumbent remains on field');
   a.evalJS('togglePause()');

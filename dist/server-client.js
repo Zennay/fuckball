@@ -1173,7 +1173,7 @@ function renderSubPanel(){
    rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
  const timeRemaining=p=>Number.isFinite(p.expiresAt)?
-  ' · '+Math.max(0,Math.ceil((p.expiresAt-Date.now())/1000))+'s remaining':'';
+  ' · '+Math.max(0,Math.ceil((p.expiresAt-(Number.isFinite(state.serverNow)?state.serverNow:Date.now()))/1000))+'s remaining':'';
  const teamRequests=requests.filter(p=>p.team===team);
  const recent=Array.isArray(state.recentSubs)?
   state.recentSubs.filter(p=>p.team===team).at(-1):null;
