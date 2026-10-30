@@ -42,6 +42,8 @@
   // a Custom Room until the server has both admitted this precise room and
   // delivered its first gameplay snapshot after the network state reset.
   return link?.ws?.readyState===1&&link.roomState?.room===link.room&&
+   Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0&&
+   link.roomState.round<=1000000000&&
    typeof net!=='undefined'&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0;
  }
  function snapshot(){
@@ -73,7 +75,7 @@
    Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0&&g.timeElapsed<=86400;
   const score=actual?{red:g.redScore,blue:g.blueScore,seconds:Math.floor(g.timeElapsed)}:null;
   return {roster,score,at:new Date(),session:live,roomId:live.room,
-   snapshotAt:net.lastSnapshot,state:typeof started!=='undefined'&&started?
+   serverRound:live.roomState.round,snapshotAt:net.lastSnapshot,state:typeof started!=='undefined'&&started?
    (typeof paused!=='undefined'&&paused?'PAUSED':'IN PROGRESS'):'LOBBY / INTERMISSION'};
  }
  function group(roster,team){return roster.filter(x=>x.team===team);}
@@ -184,8 +186,8 @@
   // export. Do not retain/share a prior room's participants after navigation.
   const current=snapshot();
   if(!current||current.session!==data.session||current.roomId!==data.roomId||
-     current.snapshotAt<data.snapshotAt){
-   status.textContent='Room changed or disconnected. Refresh the current server lineup before exporting.';
+     current.serverRound!==data.serverRound||current.snapshotAt<data.snapshotAt){
+   status.textContent='Room, round or connection changed. Refresh this server lineup and confirm sharing again.';
    render();
    return;
   }
