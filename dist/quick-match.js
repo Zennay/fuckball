@@ -529,6 +529,22 @@
  const selectedAddress=document.getElementById('serverAddress');
  selectedAddress?.addEventListener('input',onServerAddressChange);
  selectedAddress?.addEventListener('change',onServerAddressChange);
+ // Moving to My Games or the pitch hides Home without a browser tab
+ // visibilitychange. Revoke the old server snapshot at that transition,
+ // regardless of whether navigation came from a click or a keyboard route.
+ let homeWasVisible=!home.hidden;
+ new MutationObserver(()=>{
+  const visible=!home.hidden;
+  if(visible===homeWasVisible)return;
+  homeWasVisible=visible;
+  ++listingRequest;clearTimeout(addressTimer);clearPulse();genericLabels();
+  manualRefresh.disabled=false;
+  window.dispatchEvent(new Event('fuckball:queue-unavailable'));
+  if(visible){
+   availability.textContent='Refreshing real-player counts for this server…';
+   loadAvailability();
+  }else availability.textContent='Queue counts paused outside Play. Return to refresh.';
+ }).observe(home,{attributes:true,attributeFilter:['hidden']});
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
   // An observed human queue count is only evidence from the foreground

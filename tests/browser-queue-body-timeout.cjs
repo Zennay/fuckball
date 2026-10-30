@@ -89,7 +89,17 @@ const response=n=>({humanOnly:true,ranked:false,modes:{
   });
   await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
    'same-site server reselect loads real human counts again');
+  // In-app Games navigation hides the Play view without a browser-level
+  // visibilitychange. Returning must revoke stale occupancy until refreshed.
+  await page.evaluate(()=>document.getElementById('tabReplay').click());
+  await until(()=>page.evaluate(()=>document.getElementById('homeView').hidden),
+   'My Games hides Play view');
+  assert.doesNotMatch(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
+   'in-app navigation cannot retain stale human occupancy');
+  await page.evaluate(()=>document.getElementById('tabHome').click());
+  await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
+   'return to Play refreshes actual human queue');
   assert.deepEqual(errors,[],'no real browser runtime errors');
-  console.log('PASS Chromium: hung queue JSON deadline, manual retry, stale completion ignored, tab-hide invalidation, foreground recovery and server change event invalidation');
+  console.log('PASS Chromium: human-only JSON timeout, stale queue on browser tab/server change and in-app navigation');
  }finally{await browser.close();await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
