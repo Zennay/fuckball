@@ -22,11 +22,35 @@ try{
  await until(()=>!!r.rematch,5000,'real server rematch proposal');
  assert.equal(r.rematch.required.size,2,'two human players must approve');
  assert.equal(r.rematch.accepted.size,1,'host starts with own consent');
+ // Raw native host traffic must not skip a pending second-human rematch vote.
+ await A.evaluate(()=>{window.rematchBypassErrors=[];serverLink.ws.addEventListener('message',e=>{try{const packet=JSON.parse(e.data);if(packet.type==='error')window.rematchBypassErrors.push(packet.message)}catch{}})});
+ for(const packet of [{type:'start'},{type:'configure',started:true},{type:'newGame'},{type:'swap'},{type:'addBot',team:0}]){
+  const before=await A.evaluate(()=>window.rematchBypassErrors.length);
+  await A.evaluate(p=>serverLink.send(p),packet);
+  await until(()=>A.evaluate(n=>window.rematchBypassErrors.length>n,before),5000,'explicit server rejection for '+packet.type);
+  assert.equal(r.started,false,packet.type+' must not bypass rematch consent');
+  assert(r.rematch,'original rematch proposal stays pending');
+  assert.equal(r.rematch.accepted.size,1,'guest vote remains unaccepted');
+  assert(r.lastResult,'result receipt remains authoritative');
+ }
  await until(()=>B.evaluate(()=>!document.getElementById('rematchAccept').hidden),5000,'guest consent button');
  await B.evaluate(()=>document.getElementById('rematchAccept').click());
  await until(()=>r.started&&r.round>1,8000,'two-human server accepted rematch');
  await until(()=>A.evaluate(()=>serverLink?.roomState?.started&&!serverLink.roomState.lastResult),7000,'new native round on host');
  assert.equal(r.rematch,null,'server vote cleared');
+ // Explicit decline permits a normal new game; no forced rematch or stuck room.
+ r.hb.onTeamVictory();
+ await until(()=>!r.started&&!!r.lastResult,5000,'next full-time result');
+ await A.evaluate(()=>serverLink.send({type:'rematchRequest'}));
+ await until(()=>!!r.rematch,5000,'second consent proposal');
+ const secondVote=r.rematch.id;
+ await B.evaluate(id=>serverLink.send({type:'rematchVote',id,accept:false}),secondVote);
+ await until(()=>r.rematch===null,5000,'explicit guest declines rematch');
+ assert.equal(r.started,false,'decline does not silently restart');
+ const beforeNewGame=r.round;
+ await A.evaluate(()=>serverLink.send({type:'newGame'}));
+ await until(()=>r.started&&r.round>beforeNewGame,5000,'host chooses new game after decline');
+ assert.equal(r.rematch,null,'no obsolete vote crosses a fresh round');
  assert.deepEqual(errors,[],'no JS page errors');
  console.log('PASS native victory-callback driven real WebSocket 2-browser flow: admitted host/guest -> native onGameVictory -> postgame ribbon -> native rematch proposal -> second human consent -> authoritative new round');
 }finally{await br.close();await app.close();}})().catch(e=>{console.error(e);process.exit(1)});

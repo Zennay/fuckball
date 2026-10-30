@@ -428,6 +428,13 @@ function createRoomCore(opts){
    return;
   }
   if(r.owner!==id)throw Error('Only the host can change the match.');
+  // A consented rematch must not be overridden by another native host path:
+  // the UI hides these controls, but an authenticated raw socket is still able
+  // to send them. Preserve the current result, lineup and each human's vote.
+  if(r.rematch&&Date.now()>r.rematch.expiresAt){r.rematch=null;status();}
+  if(r.rematch&&['start','configure','newGame','team','swap','specAll',
+     'addBot','removeBot','difficulty'].includes(d.type))
+   throw Error('Rematch vote in progress. Wait for everyone or decline before changing the next round.');
   if(d.type==='rematchRequest'){
    if(r.started||!r.lastResult||r.lastResult.round!==r.round)throw Error('Finish the current game before requesting a rematch.');
    if(r.rematch&&Date.now()<=r.rematch.expiresAt)throw Error('Rematch already pending.');
