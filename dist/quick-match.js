@@ -83,7 +83,8 @@
  readyDockActions.append(dockAccept,dockDecline,dockReview);
  readyDock.append(readyDockCopy,readyDockActions);
  document.body.append(readyDock);
- const canRespond=()=>!!ready&&Date.now()<ready.expiresAt&&!readyDock.hidden;
+ function readyRemainingMs(){return ready?FuckballQuickReadyTime.remaining(ready.deadlineMono,performance.now()):0;}
+ const canRespond=()=>!!ready&&readyRemainingMs()>0&&!readyDock.hidden;
  dockAccept.addEventListener('click',()=>{
   if(!canRespond()||readyAccepted||acceptReady.disabled)return;
   // The one original server-owned ready response (including proposal ID,
@@ -243,7 +244,7 @@
    readyNotification.onclick=()=>{window.focus();clearReadyAlert();};
   }catch{readyNotification=null;}
   readyNotificationTimer=setTimeout(clearReadyAlert,
-   Math.max(500,Math.min(15000,expiresAt-Date.now())));
+   Math.max(500,Math.min(15000,readyRemainingMs())));
  }
  window.addEventListener('focus',clearReadyAlert);
  readyProgress.tabIndex=-1;
@@ -262,7 +263,7 @@
   // the sole sender of ready / decline messages to the server.
   readyDock.hidden=!ready||!home.hidden;
   if(ready){
-   const seconds=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
+   const seconds=Math.max(0,Math.ceil((readyRemainingMs())/1000));
    readyDockTitle.textContent=readyAccepted?'SERVER CONFIRMED · WAITING FOR HUMANS':
     readyConfirming?'SENDING READY · WAIT FOR SERVER':
     seconds===0?'READY CHECK EXPIRED':
@@ -285,7 +286,7 @@
    dockDecline.disabled=readyAccepted||seconds===0;
   }
   if(ready){
-   const remain=Math.max(0,Math.ceil((ready.expiresAt-Date.now())/1000));
+   const remain=Math.max(0,Math.ceil((readyRemainingMs())/1000));
    readyTitle.textContent=readyAccepted?'SERVER CONFIRMED · WAITING FOR PLAYERS':
     readyConfirming?'SENDING READY · WAIT FOR SERVER':
     remain===0?'READY CHECK EXPIRED':'MATCH FOUND.';
@@ -325,7 +326,7 @@
    window.dispatchEvent(new CustomEvent('fuckball:quick-match-state',{detail:{
     searching,mode:matchMode,ready:!!ready,accepted:readyAccepted,
     confirming:readyConfirming,
-    waiting,needed,expiresAt:ready?ready.expiresAt:null,
+    waiting,needed,expiresAt:ready?ready.expiresAt:null,remainingMs:readyRemainingMs(),
     recovery:!recovery.hidden&&lastAttempt&&
      [...standardModes,'club4v4'].includes(lastAttempt.mode)?{
       mode:lastAttempt.mode,party:lastAttempt.party===true,
@@ -522,7 +523,7 @@
    // opted-in browser notifications apply to the still-active proposal.
    // This never auto-accepts, requeues, renews or extends the server timer.
    if(ready&&!readyAccepted&&Number.isSafeInteger(ready.expiresAt)&&
-      Date.now()<ready.expiresAt)
+      readyRemainingMs()>0)
     alertReady(ready.mode,ready.expiresAt);
   }
  });
@@ -530,7 +531,7 @@
  window.addEventListener('offline',loadAvailability);
  loadAvailability();
  acceptReady.onclick=()=>{
-  if(!ready||readyAccepted||readyConfirming||Date.now()>=ready.expiresAt)return;
+  if(!ready||readyAccepted||readyConfirming||readyRemainingMs()<=0)return;
   // serverLink.send is deliberately a no-op on an unopened WebSocket.
   // Never treat a local click or that no-op as human consent acknowledged.
   if(!serverLink?.ws||serverLink.ws.readyState!==1){
@@ -552,7 +553,7 @@
   }
  };
  declineReady.onclick=()=>{
-  if(!ready||readyAccepted||Date.now()>=ready.expiresAt)return;
+  if(!ready||readyAccepted||readyRemainingMs()<=0)return;
   clearReadyReceipt();
   try{serverLink?.send({type:'queueReadyResponse',id:ready.id,accept:false});}catch{}
   disconnect();done('You declined the match. Search again when ready.');
@@ -572,7 +573,8 @@
    if(!searching||!Number.isSafeInteger(d.expiresAt)||typeof d.id!=='string'||
       d.mode!==matchMode||d.players!==needed||d.humanOnly!==true)return;
    clearReadyReceipt();
-   ready={id:d.id,mode:d.mode,players:d.players,expiresAt:d.expiresAt,ready:0};
+   ready={id:d.id,mode:d.mode,players:d.players,expiresAt:d.expiresAt,ready:0,
+    deadlineMono:FuckballQuickReadyTime.deadline(d.expiresAt,d.serverNow,performance.now(),Date.now())};
    readyAccepted=false;refresh();alertReady(d.mode,d.expiresAt);
   }else if(d.type==='queueReadyProgress'){
    if(!ready||ready.id!==d.id)return;

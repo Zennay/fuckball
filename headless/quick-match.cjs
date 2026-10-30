@@ -261,7 +261,7 @@ function createQuickMatch({send,start,clock=()=>Date.now(),validAccount=()=>true
    for(const p of all(chosen)){
     readyBySocket.set(p.ws,check);
     send(p.ws,{type:'queueReady',id,mode,players:needed,partySize:active.get(p.ws)?.players.length||1,
-     expiresAt:check.expiresAt,humanOnly:true,ranked:false});
+     expiresAt:check.expiresAt,serverNow:clock(),humanOnly:true,ranked:false});
    }
    proposed=true;
   }
