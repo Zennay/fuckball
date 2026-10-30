@@ -263,7 +263,10 @@ function createRoomCore(opts){
    expireSubs();const p=r.pendingSubs.get(d.team);
    if(!p||p.inId!==id||p.outId!==d.outId||p.requestId!==d.requestId)throw Error('No current substitution for this player.');
    if(!d.accept)r.pendingSubs.delete(d.team);
-   else{if(p.accepted)throw Error('Substitution already accepted.');p.accepted=true;completeSub(d.team);}
+   else{if(p.accepted)throw Error('Substitution already accepted.');
+    // Consent near the original 60s deadline must not evaporate before the
+    // referee/host can pause; give the approved swap its own bounded 60s gate.
+    p.accepted=true;p.expiresAt=Date.now()+60000;completeSub(d.team);}
    status();snapshot();return;
   }
   // Withdraw a mistaken human swap before consent. Only the original

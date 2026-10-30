@@ -14,8 +14,29 @@ function createEngine(){
   hb.setTimeLimit(0);
   return hb;
 }
-let original=null,restored=null,legacy=null,bounded=null;
+let original=null,restored=null,legacy=null,bounded=null,nearExpiry=null;
 try {
+  nearExpiry=RoomCore.createRoomCore({hb:createEngine(),id:'LATECONS1',AI,Netcode,v3:true,send:()=>{}});
+  for(let id=1;id<=9;id++)nearExpiry.join(id,{name:'Human '+id,netcode:3});
+  nearExpiry.message(1,{type:'bench',id:9,team:1});
+  nearExpiry.message(1,{type:'start'});
+  const actualNow=Date.now;let nativeNow=actualNow();
+  try{
+   Date.now=()=>nativeNow;
+   nearExpiry.message(1,{type:'subRequest',outId:1,inId:9});
+   const request=nearExpiry.pendingSubs.get(1);
+   assert.equal(request.expiresAt,nativeNow+60000,'original proposal has bounded 60s consent TTL');
+   nativeNow+=59900; // the incoming human accepts just 100ms before its original expiry
+   nearExpiry.message(9,{type:'subAccept',team:1,outId:1,requestId:request.requestId,accept:true});
+   assert.equal(nearExpiry.pendingSubs.get(1)?.accepted,true,'accepted pause-gated swap remains pending');
+   assert(nearExpiry.pendingSubs.get(1).expiresAt>=nativeNow+59000,
+    'fresh 60s pause window begins at human approval, not proposal time');
+   nativeNow+=500; // initial request deadline has now passed; approved pause grace remains
+   nearExpiry.message(1,{type:'pause',value:true});
+   assert.equal(nearExpiry.hb.getPlayer(9).team,1,'approved swap still applies on native pause');
+   assert.equal(nearExpiry.hb.getPlayer(1).team,0,'outgoing human benches on pause');
+   assert.equal(nearExpiry.pendingSubs.size,0,'executed swap never leaves stale consent');
+  }finally{Date.now=actualNow;}
   original=RoomCore.createRoomCore({
     hb:createEngine(),id:'HANDOVER1',AI,Netcode,v3:true,send:()=>{}
   });
@@ -200,5 +221,6 @@ try {
   restored?.destroy();
   bounded?.destroy();
   legacy?.destroy();
+  nearExpiry?.destroy();
   original?.destroy();
 }
