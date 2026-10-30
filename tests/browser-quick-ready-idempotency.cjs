@@ -169,6 +169,64 @@ const {createServer}=require('../headless/server.cjs');
   assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),true);
   assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),2,
    'dismissing a recovery never queues another match');
+  // A synchronous transport exception must never trap a human in
+  // "Searching" with no socket or usable Retry. Event data is synthetic.
+  await page.evaluate(()=>{
+   document.getElementById('tabHome').click();
+   connectServer=()=>{throw Error('synthetic transport constructor failure');};
+  });
+  await page.locator('.quick-queue-shortcut button.primary').click();
+  assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
+   'transport constructor exception exposes manual recovery rather than hanging');
+  assert.equal(await page.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
+   'no phantom searching state after a synchronous connect exception');
+  // A second explicitly requested retry can connect, but never autoaccept.
+  await page.evaluate(()=>{
+   window.__transportRetry=0;
+   connectServer=()=>{window.__transportRetry++;return true;};
+   document.getElementById('tabReplay').click();
+  });
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  await page.locator('.quick-ready-dock-actions .quick-dock-retry').click();
+  assert.equal(await page.evaluate(()=>window.__transportRetry),1,
+   'an explicit cross-view Retry can recover the transport exception');
+  // Browser offline while not admitted must release the old transport,
+  // show an honest recovery, and never queue without another click.
+  await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:null,ws:{readyState:1,onclose:null,
+    send:()=>{},close(){this.readyState=3}},send:()=>{}};
+   window.dispatchEvent(new Event('offline'));
+  });
+  assert.equal(await page.evaluate(()=>serverLink),null,
+   'offline during search releases the unadmitted WebSocket');
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false,
+   'offline human-search recovery remains visible in My Games');
+  assert.match(await page.locator('.quick-ready-dock-progress').innerText(),
+   /offline|network/i);
+  assert.equal(await page.evaluate(()=>window.__transportRetry),1,
+   'offline never automatically queues another match');
+  await page.evaluate(()=>Object.defineProperty(navigator,'onLine',
+   {configurable:true,value:false}));
+  await page.locator('.quick-ready-dock-actions .quick-dock-retry').click();
+  assert.equal(await page.evaluate(()=>window.__transportRetry),1,
+   'manual Retry while offline does not create a false new human search');
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false,
+   'offline retry keeps recovery instructions accessible');
+  await page.evaluate(()=>Object.defineProperty(navigator,'onLine',
+   {configurable:true,value:true}));
+  await page.locator('.quick-ready-dock-actions .quick-dock-retry').click();
+  assert.equal(await page.evaluate(()=>window.__transportRetry),2,
+   'restored connectivity supports a new deliberate human search');
+  // A joined room is still authoritative and must never be kicked by
+  // an unrelated offline event on another browser window.
+  const preserved=await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:'SYNTHETIC_JOINED',ws:{readyState:1,
+    close(){throw Error('joined socket must remain')}},send:()=>{}};
+   const before=serverLink;
+   window.dispatchEvent(new Event('offline'));
+   return before===serverLink;
+  });
+  assert.equal(preserved,true,'offline event cannot disconnect an already joined room');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}

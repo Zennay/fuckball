@@ -385,6 +385,12 @@
   const conflict=typeof onlineSessionConflict==='function'?onlineSessionConflict():null;
   if(conflict){notice.textContent=conflict;return;}
   if(serverLink?.room){notice.textContent='Leave your current room before starting another match.';return;}
+  if(navigator.onLine===false){
+   const offlineText='Your device is offline. Reconnect before trying another human search.';
+   notice.textContent=offlineText;
+   if(!recovery.hidden){recoveryReason.textContent=offlineText;refresh();}
+   return;
+  }
   if(!settings.account?.token){
    notice.textContent='Log in or create a free account, then select a playlist.';
    showJoinScreen('');return;
@@ -406,9 +412,16 @@
   clearReadyReceipt();
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=performance.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
-  if(connectServer(false,'','',null,mode,party)===false){
-   // Reject invalid server setup without leaving a fictitious active search
-   // on the landing page. No duplicate socket or ready consent is created.
+  // Native transport construction may fail by returning false *or* throwing.
+  // Neither outcome may strand a human in an unacknowledged searching state.
+  let connected=false;
+  try{connected=connectServer(false,'','',null,mode,party)!==false;}catch{}
+  if(!connected){
+   // An interrupted constructor may leave a partial Quick Match socket.
+   // Never tear down an already admitted room or unrelated peer session.
+   if(serverLink?.quickMatchMode&&!serverLink.room){
+    try{disconnect();}catch{}
+   }
    done('Could not connect to the game server. Check Online Rooms and retry.',true);
   }
  }
@@ -606,7 +619,16 @@
   }
  });
  window.addEventListener('online',loadAvailability);
- window.addEventListener('offline',loadAvailability);
+ window.addEventListener('offline',()=>{
+  loadAvailability();
+  // A real device-offline signal terminates only an unadmitted human search.
+  // Do not silently requeue, renew consent, or disconnect a joined room.
+  if(!searching||serverLink?.room||peerConnected)return;
+  if(serverLink?.quickMatchMode&&!serverLink.room){
+   try{disconnect();}catch{}
+  }
+  done('Network went offline. Reconnect and choose Retry to search again.',true);
+ });
  loadAvailability();
  acceptReady.onclick=()=>{
   if(!ready||readyAccepted||readyConfirming||readyRemainingMs()<=0)return;
