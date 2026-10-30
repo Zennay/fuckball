@@ -76,6 +76,20 @@ html.fb-access-motion-reduce :is(*,*::before,*::after){animation-duration:0.01ms
 .fb-access-dialog .fb-access-message{min-height:1.6em}
 @media(prefers-reduced-motion:reduce){.fb-access-dialog{scroll-behavior:auto}}
 
+/* Input-safe match settings: clear keyboard focus and touch targets even
+   when the underlying live multiplayer pitch must keep running. */
+.fb-access-dialog .fb-access-actions button{min-height:48px;padding:11px 16px}
+.fb-access-dialog :is(input,button):focus-visible{outline:3px solid #e4ffae;outline-offset:3px}
+.fb-access-dialog .fb-access-message{min-height:2.7em;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:480px){
+ .fb-access-dialog{box-sizing:border-box;width:calc(100vw - 20px);
+  max-width:none;max-height:calc(100dvh - 20px);padding:16px}
+ .fb-access-options{gap:10px}
+ .fb-access-option{min-height:48px;align-items:center}
+ .fb-access-actions{display:grid;grid-template-columns:1fr 1fr}
+ .fb-access-actions button{width:100%;margin:0}
+}
+
 /* Read-only, on-demand scoreboard for screen-reader users. No gameplay overlay. */
 .fb-access-score-review{display:grid;gap:7px;padding:12px 14px;
  border:1px solid #83aa98;border-radius:10px;background:#233e42}

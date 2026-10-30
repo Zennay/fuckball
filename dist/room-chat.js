@@ -41,7 +41,7 @@
  chatForm?.append(sendFeedback);
  // One unsent draft remains scoped to its original room and audience.
  // Data stays on this device in memory; only the native handler sends.
- let onlineDraftRoom=null,privateDraft=false,localDraft=false;
+ let onlineDraftRoom=null,onlineDraftLink=null,onlineDraftPlayer=null,privateDraft=false,privateDraftSide=0,localDraft=false;
  let submittingNativeChat=false,closingNativeChat=false;
  const draftControls=document.createElement('div');
  draftControls.className='native-chat-draft-actions';draftControls.hidden=true;
@@ -53,18 +53,34 @@
  discardDraft.setAttribute('aria-label','Discard unsent chat draft on this device');
  draftControls.append(draftInfo,discardDraft);
  chatForm?.append(draftControls);
- function clearDraftScope(){onlineDraftRoom=null;privateDraft=false;localDraft=false;}
+ function clearDraftScope(){onlineDraftRoom=null;onlineDraftLink=null;onlineDraftPlayer=null;privateDraft=false;privateDraftSide=0;localDraft=false;}
+ // TEAM drafts are tied to the original Red/Blue side as well as the socket.
+ function nativeSideForDraft(link){
+  if(!link?.room||link.roomState?.room!==link.room||
+     !Number.isSafeInteger(link.roomState.round)||link.roomState.round<0)return 0;
+  const player=room?.state?.players?.find?.(p=>p?.id===onlineDraftPlayer);
+  const side=typeof player?.team==='number'?player.team:player?.team?.id;
+  if(side===1||side===2)return side;
+  if(side!==0)return 0;
+  const benches=link.roomState.benches;
+  const bench=Array.isArray(benches)?benches.find(v=>
+   Array.isArray(v)&&v[0]===onlineDraftPlayer):null;
+  return bench?.[1]===1||bench?.[1]===2?bench[1]:0;
+ }
  function updateDraftControls(){
   const hasText=!!chatInput?.value.trim();
   draftControls.hidden=!hasText;
   if(!hasText){clearDraftScope();return;}
   const link=typeof serverLink!=='undefined'?serverLink:null;
   const differentRoom=!!onlineDraftRoom&&link?.room!==onlineDraftRoom;
-  const differentAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const differentSession=!!onlineDraftRoom&&(link!==onlineDraftLink||
+   networkPlayerId!==onlineDraftPlayer);
+  const differentAudience=privateDraft&&(window.FuckballTeamChat?.audience(link)!=='team'||
+   !privateDraftSide||nativeSideForDraft(link)!==privateDraftSide);
   const wrongOrigin=localDraft&&!!link?.room;
   const scope=privateDraft?'private TEAM draft':
    localDraft?'local-game draft':'online room draft';
-  draftInfo.textContent=differentRoom||differentAudience||wrongOrigin?
+  draftInfo.textContent=differentRoom||differentSession||differentAudience||wrongOrigin?
    'Unsent '+scope+' preserved. It cannot be sent to another room or audience. Discard it to start fresh.':
    'Unsent '+scope+' · preserved if you close chat. Not sent.';
  }
@@ -72,13 +88,15 @@
   if(!chatInput?.value.trim())return;
   const link=typeof serverLink!=='undefined'?serverLink:null;
   if(!onlineDraftRoom&&!localDraft){
-   if(link?.room)onlineDraftRoom=link.room;
+   if(link?.room){onlineDraftRoom=link.room;onlineDraftLink=link;
+    onlineDraftPlayer=networkPlayerId;}
    else localDraft=true;
   }
   // Never let a previously team-only draft silently turn public if the
   // native channel picker resets while a player reconnects or changes teams.
-  if(link?.room&&window.FuckballTeamChat?.audience(link)==='team')
-   privateDraft=true;
+  if(!privateDraft&&link?.room&&window.FuckballTeamChat?.audience(link)==='team'){
+   privateDraft=true;privateDraftSide=nativeSideForDraft(link);
+  }
  }
  chatInput?.addEventListener('focus',()=>{
   preserveDraftAudience();sendFeedback.hidden=true;updateDraftControls();
@@ -132,18 +150,21 @@
   // Any pending native connection or stale online chat draft is not a local
   // chat session. The sender must consciously reconnect or leave the form.
   const wrongRoom=!!onlineDraftRoom&&!!link?.room&&link.room!==onlineDraftRoom;
+  const wrongSession=!!onlineDraftRoom&&
+   (link!==onlineDraftLink||networkPlayerId!==onlineDraftPlayer);
   const blocked=link&&(!link.room||link.ws?.readyState!==1)||
     !!onlineDraftRoom&&!link?.room;
   const wrongOrigin=localDraft&&!!link?.room;
-  const wrongAudience=privateDraft&&window.FuckballTeamChat?.audience(link)!=='team';
+  const wrongAudience=privateDraft&&(window.FuckballTeamChat?.audience(link)!=='team'||
+   !privateDraftSide||nativeSideForDraft(link)!==privateDraftSide);
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!wrongSession&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
   event.preventDefault();event.stopImmediatePropagation();
-  sendFeedback.textContent=wrongRoom?
-   'This draft belongs to another room. Discard it explicitly before sending to these players.':
+  sendFeedback.textContent=wrongRoom||wrongSession?
+   'This draft belongs to an earlier room connection or player. Discard it explicitly before sending to these players.':
    wrongOrigin?'This local-game draft cannot be sent to an online room. Discard it to start fresh.':
    blocked?'Room connection unavailable. Your draft is kept here; reconnect to the same room first.':
-   wrongAudience?'This was a private team draft. Select a valid TEAM channel again before sending; it will not be posted publicly.':
+   wrongAudience?'This TEAM draft belongs to its original side. Your team changed; discard the draft before composing for another team.':
    'The room host muted your chat. Your unsent draft is still here.';
   sendFeedback.hidden=false;
   chatInput?.focus({preventScroll:true});
@@ -229,6 +250,11 @@
    '● '+unread+(unread===99?'+':'')+' unread room message'+(unread===1?'':'s')+
    ' · '+(expanded?'Hide':'Read'):
    '◌ Room chat · '+(expanded?'Hide':'Read recent');
+  const currentDraft=!!onlineDraftRoom&&!!chatInput?.value.trim()&&
+   onlineDraftLink===serverLink&&onlineDraftRoom===serverLink?.room&&
+   onlineDraftPlayer===networkPlayerId;
+  if(currentDraft)chatDockSummary.textContent+=' · unsent draft';
+  chatDockReply.textContent=currentDraft?'↩ Resume unsent draft':'↩ Reply in match';
   chatDockSummary.setAttribute('aria-expanded',String(!chatDockPanel.hidden));
  }
  chatDockSummary.addEventListener('click',()=>{

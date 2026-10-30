@@ -25,6 +25,8 @@
  spectatorToolbar.append(toggle);
  let enabled=false,lastRoom=null,lastChange=0,previousId=null;
  let previousClock=null,previousScore=null;
+ let lastNativeLink=null,lastNativeRound=null;
+ let frameBaseline=0,hasCurrentNativeFrame=false;
  try{const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');
   if(stored?.version===1&&['all','red','blue'].includes(stored.mode))mode.value=stored.mode;
  }catch{}
@@ -36,18 +38,35 @@
  function activeRoom(){
   return serverLink?.room||(!serverLink&&document.getElementById('mode')?.value==='watch'?'local-watch':null);
  }
+ // Even a *recent* shared renderer timestamp may belong to the previous
+ // WebSocket or previous round. Observe a new receipt for this exact native
+ // link before assigning a local camera target.
+ function syncNativeSession(){
+  const link=typeof serverLink!=='undefined'&&serverLink?.room?serverLink:null;
+  const round=link&&Number.isSafeInteger(link.roomState?.round)?link.roomState.round:null;
+  const at=typeof net!=='undefined'&&Number.isFinite(net?.lastSnapshot)?
+   net.lastSnapshot:0;
+  if(link!==lastNativeLink||round!==lastNativeRound){
+   lastNativeLink=link;lastNativeRound=round;
+   frameBaseline=at;hasCurrentNativeFrame=false;
+   previousId=null;lastChange=0;
+   if(enabled&&link)stop('Room or round changed. Enable Auto Cam again after a fresh server frame.');
+  }
+  if(link&&at>frameBaseline&&at>0&&at<=performance.now())
+   hasCurrentNativeFrame=true;
+ }
  // The last received snapshot can still be present in the shared game
  // renderer long after native transport stopped delivering new frames.
  // Local Watch Bots do not use native snapshot timing.
  function freshNativeFrame(){
-  // Local Watch Bots has no native snapshot clock. The local engine is the
-  // authority: a paused or stopped round is not new observed ball action.
-  // Pending native handshakes cannot borrow the old local player formation.
+// Keep local Watch Bots bound to genuine local play, while requiring a
+  // current server-session frame for native spectator auto-follow.
   if(!serverLink?.room)
    return !serverLink&&typeof started!=='undefined'&&started===true&&
     typeof paused!=='undefined'&&paused===false&&
     document.getElementById('mode')?.value==='watch';
-  if(serverLink.roomState?.started!==true||serverLink.roomState?.paused===true)return false;
+  if(!hasCurrentNativeFrame||serverLink.roomState?.started!==true||
+     serverLink.roomState?.paused===true)return false;
   const at=typeof net!=='undefined'?net?.lastSnapshot:0;
   const age=performance.now()-at;
   return Number.isFinite(at)&&at>0&&age>=0&&age<=3500;
@@ -68,6 +87,7 @@
   if(enabled){previousId=null;lastChange=0;}
  });
  toggle.addEventListener('click',()=>{
+  syncNativeSession();
   if(!available()){stop('Join the spectator bench or use Watch Bots to enable Auto Cam.');return;}
   enabled=!enabled;previousId=null;lastChange=0;
   updateUi(enabled?'Automatic spectator camera enabled. Only your local view changes.':'Auto camera disabled. Manual follow is available.');
@@ -96,6 +116,7 @@
   return scored;
  }
  function tick(){
+  syncNativeSession();
   const current=activeRoom();
   if(current!==lastRoom){
    lastRoom=current;previousClock=null;previousScore=null;

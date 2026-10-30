@@ -58,6 +58,9 @@
  const journeyTitle=document.createElement('h3');journeyTitle.textContent='YOUR RECENT DRILLS';
  const journeyNote=document.createElement('p');
  journeyNote.textContent='Only completed local practice attempts are recorded here. These are not verified match statistics or rankings.';
+ const progressSync=document.createElement('p');progressSync.className='goal-rush-sync';
+ progressSync.setAttribute('role','status');progressSync.setAttribute('aria-live','polite');
+ progressSync.textContent='Your attempts and personal bests stay only on this device.';
  const journeyRows=document.createElement('div');journeyRows.className='goal-rush-journey-rows';
  const journeyActions=document.createElement('div');journeyActions.className='goal-rush-journey-actions';
  const exportJourney=document.createElement('button');exportJourney.type='button';
@@ -65,7 +68,7 @@
  const clearJourney=document.createElement('button');clearJourney.type='button';
  clearJourney.textContent='Clear attempt history';
  journeyActions.append(exportJourney,clearJourney);
- journey.append(journeyTitle,journeyNote,journeyRows,journeyActions);
+ journey.append(journeyTitle,journeyNote,progressSync,journeyRows,journeyActions);
  const pausedDrill=document.createElement('aside');
  pausedDrill.className='goal-rush-return';pausedDrill.hidden=true;
  pausedDrill.setAttribute('role','region');
@@ -181,17 +184,20 @@
     // Minimal offline game runtimes may have a Map-like storage mock.
     localStorage.setItem(ATTEMPTS,JSON.stringify([attempt,...readAttempts()].slice(0,20)));
    }
-  }catch{journeyNote.textContent='The last drill could not be saved on this device. Browser storage may be full.';}
+   progressSync.textContent='Completed attempt saved privately. Other open tabs can see the latest history.';
+  }catch{journeyNote.textContent='The last drill could not be saved on this device. Browser storage may be full.';
+   progressSync.textContent='Attempt was not saved. Review your browser storage permissions.';}
   renderAttempts();
  }
  exportJourney.onclick=()=>{
-  const attempts=readAttempts();if(!attempts.length)return;
+  const attempts=readAttempts();if(!attempts.length){progressSync.textContent='No saved attempts to export.';return;}
   const output={format:'fuckball-local-goal-rush',version:1,
    source:'unverified-local-practice',exportedAt:new Date().toISOString(),attempts};
   const blob=new Blob([JSON.stringify(output,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),anchor=document.createElement('a');
   anchor.href=url;anchor.download='fuckball-goal-rush-'+new Date().toISOString().slice(0,10)+'.json';
   document.body.append(anchor);anchor.click();anchor.remove();
+  progressSync.textContent='Private Goal Rush JSON export requested for '+attempts.length+' completed attempts.';
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  };
  clearJourney.onclick=()=>{
@@ -209,7 +215,9 @@
    for(const {key,item} of storedAttemptEntries())
     if(item.at<=cutoff)localStorage.removeItem(key);
    journeyNote.textContent='Local attempts cleared. Personal bests are preserved.';
-  }catch{journeyNote.textContent='Could not clear all attempts on this device.';}
+   progressSync.textContent='History cleared on this device. Personal bests retained.';
+  }catch{journeyNote.textContent='Could not clear all attempts on this device.';
+   progressSync.textContent='History could not be cleared; browser storage refused the change.';}
   renderAttempts();
  };
  renderAttempts();
@@ -227,6 +235,9 @@
      event.key===CLEARED_AT||event.key?.startsWith(ATTEMPT_ENTRY)||
      event.key?.startsWith(BEST_ENTRY)){
    renderAttempts();updateBest();
+   progressSync.textContent=event.key===CLEARED_AT||event.key===null?
+    'Practice history changed in another tab; current saved records refreshed.':
+    'Goal Rush progress synchronized from another tab.';
   }
  });
  updateBest();

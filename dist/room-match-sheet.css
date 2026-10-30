@@ -30,3 +30,19 @@
  .native-match-sheet-team-0{grid-column:auto}
  .native-match-sheet-actions button{flex-basis:100%}}
 @media print{.native-match-sheet{display:none!important}}
+
+
+/* Keep room rosters hidden until a current authoritative snapshot exists. */
+.native-match-sheet[data-snapshot-state="waiting"]{
+ border-color:#b1c2a9;background:#1b3034;
+}
+.native-match-sheet[data-snapshot-state="waiting"] .native-match-sheet-status{
+ padding:12px;border:1px dashed #b6c7b5;border-radius:9px;
+ background:#253c3a;color:#f1ffe7;font-weight:700;line-height:1.55;
+}
+.native-match-sheet[data-snapshot-state="waiting"] .native-match-sheet-roster{
+ display:none;
+}
+.native-match-sheet[data-snapshot-state="waiting"] .native-match-sheet-actions button:not(:first-child){
+ opacity:.45;cursor:not-allowed;
+}

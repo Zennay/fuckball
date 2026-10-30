@@ -1,0 +1,23 @@
+/* A single factual Custom Room role at Home/My Games; only the native
+   match menu is allowed to change the player's team or availability. */
+.native-role-summary[hidden]{display:none!important}
+.native-role-summary{box-sizing:border-box;display:flex;align-items:center;
+ justify-content:space-between;gap:13px;flex-wrap:wrap;margin:12px 0 18px;
+ padding:15px 17px;border-radius:13px;border:1px solid #9aba9d;
+ background:linear-gradient(120deg,#163532,#203b36);color:#f2fff0}
+.native-role-summary strong{font-size:.78rem;letter-spacing:.08em;
+ color:#e1f7b5;font-weight:900}
+.native-role-summary-role{font-size:.91rem;font-weight:850;
+ line-height:1.4;color:#f3ffeb;margin:0;flex:1 1 300px;
+ font-variant-numeric:tabular-nums}
+.native-role-summary-hint{margin:0;font-size:.78rem;line-height:1.45;
+ color:#c3dfce;max-width:62ch;flex:1 1 320px}
+.native-role-summary-hint[hidden]{display:none}
+.native-role-summary-open{font:inherit;min-height:46px;min-width:178px;
+ border:1px solid #e2ffa5;border-radius:9px;background:#ddfaa5;
+ color:#173627;font-size:.83rem;font-weight:850;padding:10px 14px;cursor:pointer}
+.native-role-summary-open:focus-visible{outline:3px solid #f8ffc1;outline-offset:3px}
+@media(max-width:640px){.native-role-summary{align-items:stretch;
+ flex-direction:column;padding:13px;gap:8px}
+ .native-role-summary-role,.native-role-summary-hint{flex:0 1 auto}
+ .native-role-summary-open{width:100%}}

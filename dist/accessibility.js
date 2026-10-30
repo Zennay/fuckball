@@ -7,6 +7,23 @@
  const keys=['contrast','large','motion','opaque','teamMarks'];
  const defaults=()=>({contrast:systemContrast(),large:false,motion:systemMotion(),opaque:false,teamMarks:false});
  const root=document.documentElement;
+ // Native dialogs take focus away from the pitch. The global input gate
+ // prevents NEW input while they are open, but input from a held key, stick
+ // or gamepad can remain latched if no keyup/pointerup is delivered.
+ // A single read-only DOM observer neutralizes the original input seats
+ // at the transition to an open dialog; it never pauses a shared match.
+ function neutralizeGameControls(){
+  if(typeof releaseInputs==='function')releaseInputs();
+ }
+ let hadOpenDialog=!!document.querySelector('dialog[open]');
+ if(typeof MutationObserver!=='undefined'&&document.body){
+  const modalGuard=new MutationObserver(()=>{
+   const isOpen=!!document.querySelector('dialog[open]');
+   if(isOpen&&!hadOpenDialog)neutralizeGameControls();
+   hadOpenDialog=isOpen;
+  });
+  modalGuard.observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
+ }
  // Overrides are per setting. Changing button size must not unexpectedly
  // freeze the OS's reduced-motion or higher-contrast preference.
  let overrides={},preferences=defaults();
@@ -154,19 +171,36 @@
    'Using device defaults. Change any option to customize just that setting.';
  }
  function open(event){
+  if(dialog.open)return;
   opener=event.currentTarget;fill();
+  // Release held keyboard/touch/gamepad inputs BEFORE focus crosses into
+  // the modal. This also covers browsers where MutationObserver callbacks
+  // are delayed until after the next paint.
+  neutralizeGameControls();
   if(typeof dialog.showModal==='function')dialog.showModal();
   else dialog.setAttribute('open','');
+  message.textContent='Match controls are released while settings are open. The game continues normally for other players.';
   fields.contrast.focus();
  }
  function close(){
   if(typeof dialog.close==='function'&&dialog.open)dialog.close();
   else {dialog.removeAttribute('open');opener?.focus();opener=null;}
  }
+ // Native dialogs handle Escape themselves. Legacy/fallback browsers need
+ // a keyboard escape route that restores the original trigger focus.
+ dialog.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&typeof dialog.close!=='function'){
+   event.preventDefault();close();
+  }
+ });
  homeTrigger.addEventListener('click',open);
  matchTrigger.addEventListener('click',open);
  done.addEventListener('click',close);
- dialog.addEventListener('close',()=>{opener?.focus();opener=null;});
+ dialog.addEventListener('close',()=>{
+  // No modal should leave a held kick/movement active on return to the pitch.
+  neutralizeGameControls();
+  opener?.focus();opener=null;
+ });
  dialog.addEventListener('click',event=>{if(event.target===dialog)close();});
  reset.addEventListener('click',()=>{
   overrides={};apply();syncScoreDescription();fill();
@@ -183,7 +217,9 @@
  // A second tab changes preferences without reloading the running game.
  // Never sync a user's session, controls, match, chat or server data.
  window.addEventListener('storage',event=>{
-  if(event.key!==storageKey)return;
+// Reset to OS/device defaults when another tab calls localStorage.clear().
+  // Also keep main's accessible read-only score review synchronized.
+  if(event.key!==storageKey&&event.key!==null)return;
   restore();apply();syncScoreDescription();fill();
   scoreReviewStatus.textContent='Settings synchronized. Use Read displayed match score to review the visible score.';
   message.textContent='Accessibility preferences synchronized from another tab.';

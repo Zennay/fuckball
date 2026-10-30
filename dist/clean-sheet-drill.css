@@ -43,3 +43,8 @@
 .clean-sheet-return button:focus-visible{outline:3px solid #f4ffcc;outline-offset:3px}
 @media(max-width:600px){.clean-sheet-return{flex-direction:column;align-items:stretch}
  .clean-sheet-return button{width:100%}}
+
+/* Active native pause and completion controls remain accessible on touch. */
+.clean-sheet-actions button{min-height:48px}
+@media(max-width:500px){.clean-sheet-actions{display:grid;grid-template-columns:1fr 1fr}
+ .clean-sheet-actions button{min-width:0;white-space:normal}}

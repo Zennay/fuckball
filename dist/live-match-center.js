@@ -28,6 +28,7 @@ const panel=document.createElement('dialog');panel.className='match-center';
  close.setAttribute('aria-label','Close match scoreboard');
  header.append(heading,close);
  const badge=document.createElement('p');badge.className='match-center-badge';
+ badge.setAttribute('role','status');badge.setAttribute('aria-live','polite');
  const controlNotice=document.createElement('p');
  controlNotice.className='match-center-input-status';
  controlNotice.textContent='CONTROLS NEUTRAL · MATCH CLOCK CONTINUES';
@@ -70,8 +71,17 @@ const panel=document.createElement('dialog');panel.className='match-center';
  let timeline=[],snapshot=null,sessionId='',sessionRoom=null;
  let transportIdentity=null,serverRound=null,historyInterrupted=false,missingSince=0;
  const MAX_HISTORY=40;
+ // Never treat an old local renderer score/roster as current native status.
+ function verifiedNativeRound(){
+  if(!serverLink?.room)return null;
+  const st=serverLink.roomState;
+  return st?.room===serverLink.room&&Number.isSafeInteger(st.round)&&
+   st.round>=0&&st.round<=1000000000?st.round:null;
+ }
  function liveSnapshot(){
   if(typeof replay!=='undefined'&&replay)return null;
+  const isNative=!!serverLink?.room;
+  if(isNative&&verifiedNativeRound()===null)return null;
   const g=room?.gameState;
   if(!g||![g.redScore,g.blueScore,g.timeElapsed].every(Number.isFinite)||
     !Number.isSafeInteger(g.redScore)||!Number.isSafeInteger(g.blueScore)||
@@ -84,8 +94,7 @@ const panel=document.createElement('dialog');panel.className='match-center';
   // observations only for the same transport AND the same server-issued round.
   // Object identities are kept in memory only and never exported.
   const transport=serverLink?.room?serverLink:peerConnected?channel:room;
-  const round=serverLink?.room&&Number.isSafeInteger(serverLink.roomState?.round)&&
-    serverLink.roomState.round>=0?serverLink.roomState.round:null;
+  const round=isNative?verifiedNativeRound():null;
   return {key,kind,transport,round,red:g.redScore,blue:g.blueScore,
    elapsed:Math.floor(g.timeElapsed)};
  }
@@ -210,6 +219,7 @@ const panel=document.createElement('dialog');panel.className='match-center';
    (typeof room!=='undefined'&&!!room||typeof replay!=='undefined'&&!!replay);
  }
  function roster(){
+  if(serverLink?.room&&verifiedNativeRound()===null)return [];
   const state=(typeof replay!=='undefined'&&replay)?replay.state:room?.state;
   return Array.isArray(state?.players)?state.players.filter(p=>
    Number.isSafeInteger(p?.id)&&p.id>=0&&[0,1,2].includes(p.team?.id)).slice(0,128):[];
@@ -225,7 +235,7 @@ const panel=document.createElement('dialog');panel.className='match-center';
  function pingFor(p){
   if(!serverLink?.room||!(serverLink.serverPings instanceof Map))return null;
   const r=serverLink.serverPings.get(p.id);
-  return Number.isFinite(r)&&r>=1&&r<=10000?Math.round(r):null;
+  return Number.isFinite(r)&&r>=0&&r<=10000?Math.round(r):null;
  }
  function fill(container,list){
   const items=document.createElement('div');items.className='match-center-roster';
@@ -245,14 +255,15 @@ const panel=document.createElement('dialog');panel.className='match-center';
  }
  function render(force=false){
   if(!eligible())return;
-  const g=(typeof replay!=='undefined'&&replay?replay:room)?.gameState;
-  const users=roster();
+  const pendingRound=!!serverLink?.room&&verifiedNativeRound()===null;
+  const g=pendingRound?null:(typeof replay!=='undefined'&&replay?replay:room)?.gameState;
+  const users=pendingRound?[]:roster();
   const scores=[g?.redScore,g?.blueScore].map(n=>Number.isSafeInteger(n)&&n>=0?n:'—');
   const elapsed=Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0?Math.floor(g.timeElapsed):0;
   const time=String(Math.floor(elapsed/60)).padStart(2,'0')+':'+String(elapsed%60).padStart(2,'0');
   const inGame=!!g;
   const mode=typeof replay!=='undefined'&&replay?'LOCAL REPLAY · UNVERIFIED':serverLink?.room?
-   'NATIVE ONLINE ROOM · LIVE SNAPSHOT':peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
+   (pendingRound?'NATIVE ROOM · AWAITING SERVER STATUS':'NATIVE ONLINE ROOM · LIVE SNAPSHOT'):peerConnected?'DIRECT PEER ROOM':'LOCAL PRACTICE';
   const state=inGame?(paused?'PAUSED':'PLAYING'):'WAITING / INTERMISSION';
   const signature=JSON.stringify([scores,time,mode,state,
    Number.isSafeInteger(serverLink?.roomState?.round)?serverLink.roomState.round:null,

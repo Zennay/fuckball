@@ -173,8 +173,18 @@
   // Actual moderation, bans, server rate limits and transport identity
   // remain authoritative. The client does not claim the room delivered it.
   try{
-   state.link.send({type:'chat',text:messages[i]});sent.push(now);
-   status.textContent='Submitted to native room chat: "'+messages[i]+'". Actual delivery depends on server moderation.';
+   // The native sender can silently discard a packet if the WebSocket is
+   // no longer OPEN. Recheck the exact admitted room session at click time.
+   const link=state.link;
+   if(typeof serverLink==='undefined'||serverLink!==link||
+      openedSession!==link||link.ws?.readyState!==1){
+    status.textContent='Connection changed. No call was submitted; rejoin the room to retry.';
+    update();return;
+   }
+   link.send({type:'chat',text:messages[i]});
+   sent.push(now);
+   // OPEN transport is only a submission attempt, not server delivery.
+   status.textContent='Attempted via this room’s connected chat: "'+messages[i]+'". Delivery is not yet confirmed by the server.';
   }catch{status.textContent='The game server could not accept this call.';}
   update();
  }

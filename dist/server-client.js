@@ -396,7 +396,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   link.recoveryAttempt=false;window.FuckballRoomRecovery?.hide();if(link.quickMatchMode)showView('play');link.retries=0;link.identityChanged=!!(link.reconnect&&Number.isSafeInteger(link.previousId)&&link.previousId!==d.id);networkPlayerId=d.id;link.isOwner=d.owner===d.id&&!link.quickMatchMode;link.room=d.room;
   notifyNativeSessionView();peerRole='guest';net.receivedSequence=0;predictor.reset();enableV3(d.netcode===3);const shim={readyState:'open',get bufferedAmount(){return ws.bufferedAmount;},send:data=>{if(link.net&&typeof data==='string'){let m=null;try{m=JSON.parse(data);}catch{}if(m&&link.net.route(m))return;}ws.send(data);},close(){}};setupChannel(shim);shim.onopen();const invite=inviteUrl(d.room);link.invite=invite;$('inviteLink').value=invite;$('inviteBox').hidden=!!link.quickMatchMode;$('inviteButton').hidden=!!link.quickMatchMode;if(!link.quickMatchMode)setRoomParam(d.room);$('connectionText').textContent='Online room · headless server';$('serverRoomStatus').textContent=create?'Room ready. Send the link to your friends.':'Joined via room link.';if($('networkDialog').open)$('networkDialog').close();if(link.reconnect)notify(d.resumed?'Reconnected to your original player slot. Team and play time preserved.':link.identityChanged?'Connected with a new player slot.':'Reconnected');else if(!link.quickMatchMode)openMatchMenu();else if(menuOpen)closeMatchMenu();if(create)copyInvite(true);else if(!link.reconnect&&!link.quickMatchMode)notify(d.spectatorAdmission?
  'Joined as spectator. Ask the host for a team or bench slot.':'Joined room');setButtons();rosterKey='';updateRoster();refreshMenu();updateCamera();}
- else if(d.type==='room'){link.roomState=d;
+ else if(d.type==='room'){
+  // The authoritative room/round notification precedes its gameplay frame.
+  // Record the native receive boundary here, not when a lazy HUD panel first
+  // renders: a lobby may send exactly ONE subsequent snapshot and then pause.
+  if(link.roomState?.room!==d.room||link.roomState?.round!==d.round)
+   link.roomRosterFrameFloor=net.lastSnapshot;
+  link.roomState=d;
   if(link.roomControl?.spectatorLimitSupported===true&&
      Number.isSafeInteger(d.spectatorCount)&&d.spectatorCount>=0&&d.spectatorCount<=64)
    link.roomControl.spectatorCount=d.spectatorCount;
