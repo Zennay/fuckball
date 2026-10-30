@@ -559,6 +559,7 @@
   const receipt=verifiedResult();
   postMatch.hidden=!receipt||dismissedMatchKey===receipt.key;
   if(!receipt)return;
+  fitPostgameVisualViewport(postMatch);
   const {link,state,result}=receipt;
   const winner=result.winner===1?'RED WIN':result.winner===2?'BLUE WIN':'DRAW';
   const round=Number.isSafeInteger(result.round)&&result.round>0?'ROUND '+result.round+' · ':'';
