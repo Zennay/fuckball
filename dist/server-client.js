@@ -693,10 +693,19 @@ async function authRequest(route){const username=$('authUser').value.trim(),pass
  window.dispatchEvent(new Event('fuckball:account-changed'));
  notify('Logged in as '+d.username);if(joinRoomId)joinRoom(d.username);else hideJoinScreen();}catch(e){$('joinError').textContent=e.message;}}
 $('joinAuth').onsubmit=e=>{e.preventDefault();authRequest('/api/login');};$('authRegister').onclick=()=>authRequest('/api/register');
-$('accountButton').onclick=()=>{if(settings.account){const token=settings.account.token;settings.account=null;savePrefs();renderAccount();fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}).catch(()=>{});notify('Logged out');}else showJoinScreen('');};
+$('accountButton').onclick=()=>{if(settings.account){const token=settings.account.token;settings.account=null;savePrefs();renderAccount();fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}).catch(()=>{});window.dispatchEvent(new Event('fuckball:account-changed'));notify('Logged out');}else showJoinScreen('');};
 renderAccount();
 // Drop a stored session the server no longer knows.
-if(settings.account?.token&&defaultServer)fetch('/api/me',{headers:{Authorization:'Bearer '+settings.account.token}}).then(r=>{if(r.status===401){settings.account=null;savePrefs();renderAccount();}}).catch(()=>{});
+if(settings.account?.token&&defaultServer){
+ const checkedToken=settings.account.token;
+ fetch('/api/me',{headers:{Authorization:'Bearer '+checkedToken}}).then(r=>{
+  // A delayed 401 for the previous account must never sign out a newer login.
+  if(r.status===401&&settings.account?.token===checkedToken){
+   settings.account=null;savePrefs();renderAccount();
+   window.dispatchEvent(new Event('fuckball:account-changed'));
+  }
+ }).catch(()=>{});
+}
 
 
 // Player-facing online 4v4 substitutions. Every action is authorized again by
