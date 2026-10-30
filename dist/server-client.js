@@ -235,6 +235,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    $('joinSpectator').checked=true; // An explicit WATCH intent must never retry as a player.
   },4500);
  };ws.onerror=()=>{
+  // A previous connection may fail after the player opened another server.
+  // Only the active socket may update the current session's error state.
+  if(serverLink!==link)return;
   $('serverRoomStatus').textContent='Could not connect to server.';
   notifyNativeSessionView();
  };ws.onclose=event=>{
