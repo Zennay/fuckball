@@ -126,16 +126,20 @@
  border:1px solid #8fa59a;color:#eef9ec;background:#25433b}
 .quick-ready-dock-actions button.primary{background:#d3ff8b;color:#172b1c;
  border-color:#d3ff8b}
+/* Global interrupted-human-search actions remain reachable on mobile and
+   use the *existing* manual recovery flow; they are not ready-acceptance. */
+.quick-ready-dock-actions button.quick-dock-retry{background:#d3ff8b;color:#172b1c;
+ border-color:#d3ff8b}
 .quick-ready-dock-actions button:disabled{opacity:.56;cursor:not-allowed}
 .quick-ready-dock-actions button:focus-visible{outline:3px solid #f5ffa6;outline-offset:3px}
 @media(max-width:740px){
  .quick-ready-dock{flex-direction:column;align-items:stretch;padding:14px;gap:12px;
   bottom:max(10px,env(safe-area-inset-bottom))}
  .quick-ready-dock-actions{display:grid;grid-template-columns:1fr 1fr}
- .quick-ready-dock-actions button.primary{grid-column:1/-1}
+ .quick-ready-dock-actions button.primary,.quick-ready-dock-actions button.quick-dock-retry{grid-column:1/-1}
 }
 @media(max-width:370px){.quick-ready-dock-actions{grid-template-columns:1fr}
- .quick-ready-dock-actions button.primary{grid-column:auto}}
+ .quick-ready-dock-actions button.primary,.quick-ready-dock-actions button.quick-dock-retry{grid-column:auto}}
 
 /* A real server receipt changes the card from a consent request to a
    read-only waiting state: do not suggest players can revoke acceptance. */

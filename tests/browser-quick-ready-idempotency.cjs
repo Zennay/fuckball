@@ -93,7 +93,7 @@ const {createServer}=require('../headless/server.cjs');
    /room closed before receipt/i,'recovery shows actual server cancellation reason');
   assert.equal(await page.locator('.quick-ready-dock-actions button.primary').isVisible(),false,
    'recovery does not offer an unapproved automatic ready confirmation');
-  await page.locator('.quick-ready-dock-actions button').last().click();
+  await page.locator('.quick-ready-dock-actions .quick-dock-review').click();
   assert.equal(await page.evaluate(()=>document.getElementById('homeView').hidden),false,
    'recovery dock returns to Play instead of creating a new human search');
   assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
@@ -112,6 +112,63 @@ const {createServer}=require('../headless/server.cjs');
    'terminal queueStatus after match-found releases unadmitted transport');
   assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
    'terminal queueStatus after match-found offers explicit human Retry');
+  // When cancellation arrives while My Games is open, the player should
+  // recover from the visible dock with one *explicit* click. Synthetic
+  // localhost messages are not a user session or a real match.
+  await page.evaluate(()=>{
+   document.getElementById('tabReplay').click();
+   window.__recoveryQueueCalls=0;
+   window.__partyOpenCalls=0;
+   window.openFriendParty=()=>{window.__partyOpenCalls++;};
+   connectServer=()=>{window.__recoveryQueueCalls++;return true;};
+  });
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  const partyRecover=page.locator('.quick-ready-dock-actions .quick-dock-retry');
+  assert.match(await partyRecover.innerText(),/open friends party/i,
+   'expired party consent never becomes an automatic queue retry');
+  await partyRecover.click();
+  assert.equal(await page.evaluate(()=>window.__partyOpenCalls),1,
+   'party recovery navigates to friends party only after explicit action');
+  assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),0,
+   'party recovery never launches a search without teammate consent');
+  await page.evaluate(()=>document.getElementById('tabHome').click());
+  await page.locator('.quick-queue-shortcut button.primary').click();
+  assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),1,
+   'fresh regular 2v2 search requires a deliberate native action');
+  await page.evaluate(()=>window.onQuickMatchEvent({type:'queueStatus',status:'cancelled',
+   reason:'Regular human queue interrupted.'}));
+  await page.evaluate(()=>document.getElementById('tabReplay').click());
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false);
+  const globalRetry=page.locator('.quick-ready-dock-actions .quick-dock-retry');
+  assert.equal(await globalRetry.isVisible(),true,
+   'My Games recovery offers a real, explicit Retry action without navigating home');
+  assert.match(await globalRetry.innerText(),/retry.*human/i);
+  assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),1,
+   'navigation never launches a new human queue automatically');
+  const bounds=await globalRetry.boundingBox();
+  assert.ok(bounds&&bounds.x>=0&&bounds.x+bounds.width<=390&&bounds.y+bounds.height<=844,
+   'mobile dock Retry fits inside a 390px viewport and remains touchable');
+  await globalRetry.click();
+  assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),2,
+   'one deliberate dock click forwards to the original human queue action once');
+  assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),true,
+   'new human search clears stale terminal recovery');
+  assert.equal(await page.evaluate(()=>document.getElementById('homeView').hidden),true,
+   'recovery can be acted on directly from My Games');
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),true,
+   'dock closes after a new explicit search instead of suggesting autoacceptance');
+  assert.equal(await page.evaluate(()=>window.__sent.length),1,
+   'retry never fabricates a second ready consent');
+  await page.evaluate(()=>window.onQuickMatchEvent({type:'queueStatus',status:'cancelled',
+   reason:'Server cancelled next search.'}));
+  const dismiss=page.locator('.quick-ready-dock-actions .quick-dock-dismiss');
+  assert.equal(await dismiss.isVisible(),true,'terminal recovery can be dismissed on My Games');
+  await dismiss.click();
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),true);
+  assert.equal(await page.evaluate(()=>window.__recoveryQueueCalls),2,
+   'dismissing a recovery never queues another match');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}

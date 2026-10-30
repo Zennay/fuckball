@@ -79,8 +79,14 @@
  const dockDecline=document.createElement('button');
  dockDecline.type='button';dockDecline.textContent='Decline';
  const dockReview=document.createElement('button');
- dockReview.type='button';dockReview.textContent='View in Play';
- readyDockActions.append(dockAccept,dockDecline,dockReview);
+ dockReview.type='button';dockReview.className='quick-dock-review';
+ dockReview.textContent='View in Play';
+ const dockRetry=document.createElement('button');
+ dockRetry.type='button';dockRetry.className='quick-dock-retry';dockRetry.hidden=true;
+ const dockDismiss=document.createElement('button');
+ dockDismiss.type='button';dockDismiss.className='quick-dock-dismiss';dockDismiss.hidden=true;
+ dockDismiss.textContent='Dismiss';
+ readyDockActions.append(dockAccept,dockDecline,dockRetry,dockReview,dockDismiss);
  readyDock.append(readyDockCopy,readyDockActions);
  document.body.append(readyDock);
  function readyRemainingMs(){return ready?FuckballQuickReadyTime.remaining(ready.deadlineMono,performance.now()):0;}
@@ -94,6 +100,16 @@
  dockDecline.addEventListener('click',()=>{
   if(!canRespond()||declineReady.disabled)return;
   declineReady.click();
+ });
+ // These are deliberate user clicks forwarded to the same native recovery
+ // actions; never synthesize server acknowledgements or ready consent.
+ dockRetry.addEventListener('click',()=>{
+  if(ready||recovery.hidden||readyDock.hidden)return;
+  retry.click();refresh();
+ });
+ dockDismiss.addEventListener('click',()=>{
+  if(ready||recovery.hidden||readyDock.hidden)return;
+  dismissRecovery.click();
  });
  dockReview.addEventListener('click',()=>{
   const recover=!ready&&!recovery.hidden;
@@ -272,9 +288,12 @@
    readyDockTitle.textContent=recoveryHeading.textContent;
    readyDockProgress.textContent=recoveryReason.textContent;
    dockAccept.hidden=true;dockDecline.hidden=true;
+   dockRetry.hidden=false;dockDismiss.hidden=false;
+   dockRetry.textContent=retry.textContent;
    dockReview.textContent='Review recovery in Play';
   }else{
    dockAccept.hidden=false;dockDecline.hidden=readyAccepted;
+   dockRetry.hidden=true;dockDismiss.hidden=true;
    dockReview.textContent='View in Play';
   }
   if(ready){
