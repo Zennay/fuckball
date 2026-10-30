@@ -60,6 +60,17 @@ async function joinHuman(url,room,sockets,index){
   a.elements.get('subCaptainPlayer').value='3';
   a.elements.get('subAppointCaptain').click();
   await until(()=>r.captains.get(1)===3,'host appointed own-team captain');
+  // Synthetic transport loss on a real admitted host: do not expose controls
+  // that cannot reach the server, nor send from direct/keyboard handlers.
+  a.evalJS('window.offlineOldWs=serverLink.ws;window.offlineOldSend=serverLink.send;window.offlineSends=[];serverLink.ws={readyState:3};serverLink.send=d=>window.offlineSends.push(d);renderSubPanel()');
+  for(const id of ['subAssignBench','subClearBench','subAppointCaptain','subPropose'])
+    assert.equal(a.elements.get(id).disabled,true,id+' disabled on disconnected host');
+  assert.match(a.elements.get('subSummary').textContent,/Connection unavailable/i);
+  a.evalJS("document.getElementById('subAppointCaptain').onclick();document.getElementById('subAssignBench').onclick();document.getElementById('subPropose').onclick()");
+  assert.equal(a.evalJS('window.offlineSends.length'),0,'offline host sends no unconfirmed roster mutations');
+  a.evalJS('serverLink.ws=window.offlineOldWs;serverLink.send=window.offlineOldSend;renderSubPanel()');
+  assert.equal(a.elements.get('subAppointCaptain').disabled,false,'host controls recover with transport');
+
 
   a.elements.get('subOutPlayer').value='1';
   a.elements.get('subInPlayer').value='9';
@@ -67,6 +78,15 @@ async function joinHuman(url,room,sockets,index){
   await until(()=>r.pendingSubs.get(1)?.inId===9,'host proposed spectator swap');
   await until(()=>!b.elements.get('subConsent').hidden,'incoming guest sees consent prompt');
   assert.equal(b.elements.get('subConsentText').textContent.includes('Red'),true);
+  b.evalJS('window.offlineOldWs=serverLink.ws;window.offlineOldSend=serverLink.send;window.offlineSends=[];serverLink.ws={readyState:3};serverLink.send=d=>window.offlineSends.push(d);renderSubPanel();renderGlobalSubConsent()');
+  assert.equal(b.elements.get('subApprove').disabled,true,'offline incoming guest cannot accept');
+  assert.equal(b.elements.get('subDecline').disabled,true,'offline incoming guest cannot decline');
+  assert.match(b.elements.get('subConsentText').textContent,/Connection unavailable/i);
+  b.evalJS("document.getElementById('subApprove').onclick();document.getElementById('subDecline').onclick()");
+  assert.equal(b.evalJS('window.offlineSends.length'),0,'offline substitution consent sends zero votes');
+  b.evalJS('serverLink.ws=window.offlineOldWs;serverLink.send=window.offlineOldSend;renderSubPanel();renderGlobalSubConsent()');
+  assert.equal(b.elements.get('subApprove').disabled,false,'incoming guest can accept only after socket recovery');
+
   b.elements.get('subApprove').click();
   await until(()=>r.hb.getPlayer(9).team===1,'guest approved pregame substitution');
   assert.equal(r.hb.getPlayer(1).team,0);

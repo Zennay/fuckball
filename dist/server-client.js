@@ -1032,16 +1032,18 @@ function renderGlobalSubConsent(){
  const roster=Array.isArray(room?.state?.players)?room.state.players:[];
  const leaving=roster.find(player=>player.id===p.outId);
  const playerName=leaving?.name||'Player '+p.outId;
- const waiting=!!subConsentReceipt;
+ const waiting=!!subConsentReceipt,offline=request.link.ws?.readyState!==1;
  const team=p.team===1?'Red':'Blue';
- globalSubTitle.textContent=waiting?'DECISION SENT · WAITING FOR SERVER':
+ globalSubTitle.textContent=offline?'CONNECTION LOST · RECONNECT TO RESPOND':
+  waiting?'DECISION SENT · WAITING FOR SERVER':
   'YOUR '+team.toUpperCase()+' TEAM NEEDS YOU';
  const description='Enter '+team+' for '+playerName+
   '? The substitution happens only when the native room approves and applies it.'+
-  (waiting?' Your answer was sent; waiting for the server to update the room.':'');
+  (offline?' Connection unavailable. Reconnect before responding.':
+   waiting?' Your answer was sent; waiting for the server to update the room.':'');
  if(globalSubStatus.textContent!==description)globalSubStatus.textContent=description;
- globalSubAccept.disabled=waiting||request.link.ws?.readyState!==1;
- globalSubDecline.disabled=waiting||request.link.ws?.readyState!==1;
+ globalSubAccept.disabled=waiting||offline;
+ globalSubDecline.disabled=waiting||offline;
 }
 function sendGlobalSubConsent(accept){
  const request=currentSubConsent();
@@ -1096,19 +1098,21 @@ function renderSubPanel(){
  const mayPropose=isHost||roleCaptain===networkPlayerId;
  // The native server locks roster mutations during a pending human rematch
  // ballot. Keep captain/bench/substitution actions equally honest in the UI.
- const rematchLocked=humanRematchLocksRoom();
- $('subAssignBench').disabled=rematchLocked||!isHost||!inactive.length;
- $('subClearBench').disabled=rematchLocked||!isHost||!inactive.length;
- $('subAppointCaptain').disabled=rematchLocked||!isHost;
+ const rematchLocked=humanRematchLocksRoom(),socketOffline=link.ws?.readyState!==1;
+ const controlsLocked=rematchLocked||socketOffline;
+ $('subAssignBench').disabled=controlsLocked||!isHost||!inactive.length;
+ $('subClearBench').disabled=controlsLocked||!isHost||!inactive.length;
+ $('subAppointCaptain').disabled=controlsLocked||!isHost;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
- $('subPropose').disabled=rematchLocked||!mayPropose||!active.length||!bench.length||!!queued;
+ $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued;
  const timeFrames=new Map(state.activeFrames||[]);
  const total=(timeFrames.get(networkPlayerId)||0)/60;
  $('subSummary').textContent=(isHost?'Host':roleCaptain===networkPlayerId?'Team captain':'Player')+
   (offline.size?' · '+offline.size+' reconnecting':'')+
   ' · '+teamName+' captain: '+(roleCaptain?nameOf(roleCaptain):'not assigned')+
   ' · Your active time: '+total.toFixed(1)+'s'+
-  (rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
+  (socketOffline?' · Connection unavailable. Reconnect before changing the lineup.':
+   rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
  const recent=Array.isArray(state.recentSubs)?state.recentSubs.at(-1):null;
  $('subPending').textContent=requests.length?
@@ -1120,8 +1124,11 @@ function renderSubPanel(){
    'No substitution pending.';
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
+ $('subApprove').disabled=!yourRequest||socketOffline;
+ $('subDecline').disabled=!yourRequest||socketOffline;
  $('subConsentText').textContent=yourRequest?
-  'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?':'';
+  'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?'+
+  (socketOffline?' Connection unavailable. Reconnect before responding.':''):'';
  renderGlobalSubConsent();
 }
 const baseOnlineRefreshMenu=refreshMenu;
@@ -1152,23 +1159,23 @@ updateRoster=function(){
 };
 $('subTeam').onchange=renderSubPanel;
 $('subAssignBench').onclick=()=>{
- if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
 };
 $('subClearBench').onclick=()=>{
- if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
 };
 $('subAppointCaptain').onclick=()=>{
- if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
 };
 $('subPropose').onclick=()=>{
- if(!serverLink?.roomState||humanRematchLocksRoom())return;
+ if(!serverLink?.roomState||serverLink.ws?.readyState!==1||humanRematchLocksRoom())return;
  const team=Number($('subTeam').value);
  if(!serverLink.isOwner&&new Map(serverLink.roomState.captains||[]).get(team)!==networkPlayerId)return;
  serverLink.send({type:'subRequest',outId:Number($('subOutPlayer').value),inId:Number($('subInPlayer').value)});
 };
 for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick=()=>{
  const pending=serverLink?.roomState?.pendingSubs?.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
- if(!pending)return;
+ if(!pending||serverLink.ws?.readyState!==1)return;
  serverLink.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
 };
 renderSubPanel();
