@@ -6,7 +6,7 @@ class E{
 }
 const pane=new E('section'),body=new E('body'),listeners={},timers=[];
 let clipboard='',consents=0;
-const link={room:'ABC',quickMatchMode:null,ws:{readyState:1},roomState:{room:'ABC',round:4,owner:1,botIds:[]}};
+const link={room:'ABC',quickMatchMode:null,ws:{readyState:1},roomState:{room:'ABC',round:4,owner:1,botIds:[]},roomRosterFrameFloor:10};
 const net={lastSnapshot:10};
 const room={state:{players:[{id:1,name:'Alice',team:{id:1}},{id:2,name:'Bob',team:{id:2}}]},
  gameState:{redScore:0,blueScore:0,timeElapsed:0}};
@@ -24,11 +24,22 @@ const copy=findButton('Copy team list');assert(copy);
 assert.equal(panel.dataset.snapshotState,'waiting');assert.equal(copy.disabled,true);
 net.lastSnapshot=11;timers[0]();
 assert.equal(panel.dataset.snapshotState,'fresh');assert.equal(copy.disabled,false);
-link.roomState.round=5;listeners['fuckball:native-session-state']();
+link.roomState.round=5;link.roomRosterFrameFloor=net.lastSnapshot;listeners['fuckball:native-session-state']();
 assert.equal(panel.dataset.snapshotState,'waiting');assert.equal(copy.disabled,true);
 room.state.players[0].name='Carol';net.lastSnapshot=12;timers[0]();
 assert.equal(panel.dataset.snapshotState,'fresh');
 (async()=>{await copy.click();assert.equal(consents,1);assert(clipboard.includes('Carol'));
  assert(clipboard.includes('SERVER ROUND 5'));assert(!clipboard.includes('Alice'));
  link.ws.readyState=3;listeners['fuckball:native-session-state']();
- assert.equal(copy.disabled,true);console.log('PASS actual match-sheet UI: waiting -> fresh -> new round withheld -> new frame -> consented copy -> disconnect');})().catch(e=>{console.error(e);process.exitCode=1});
+ assert.equal(copy.disabled,true);
+ // This is the late-render lobby race: a single post-room snapshot has
+ // already arrived, and the paused lobby will not publish another frame.
+ const latePane=new E('section'),lateLink={
+  room:'ABC',quickMatchMode:null,ws:{readyState:1},
+  roomState:{room:'ABC',round:6,owner:1,botIds:[]},roomRosterFrameFloor:20};
+ const lateCtx={...ctx,serverLink:lateLink,net:{lastSnapshot:21},
+  document:{...doc,getElementById:id=>id==='menuMatchPane'?latePane:null}};
+ vm.runInNewContext(script,lateCtx,{filename:'room-match-sheet-late.js'});
+ assert.equal(latePane.children[0].dataset.snapshotState,'fresh',
+  'late-rendered paused lobby must show its single valid post-room frame');
+ console.log('PASS actual match-sheet UI: waiting -> fresh -> new round withheld -> new frame -> consented copy -> disconnect');})().catch(e=>{console.error(e);process.exitCode=1});
