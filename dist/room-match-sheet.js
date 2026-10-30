@@ -83,9 +83,9 @@
  function formatClock(seconds){return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
  function line(p){return p.name+(p.bot?' · BOT':'')+(p.host?' · HOST':'');}
  function summary(data){
-  return data.score?'Red '+data.score.red+' – '+data.score.blue+' Blue · '+
+  return (data.score?'Red '+data.score.red+' – '+data.score.blue+' Blue · '+
    formatClock(data.score.seconds)+' elapsed · '+data.state:
-   'No active match score available · '+data.state;
+   'No active match score available · '+data.state)+' · SERVER ROUND '+data.serverRound;
  }
  function render(){
   const data=snapshot(),connected=!!liveCustomRoom();
@@ -197,8 +197,8 @@
     await navigator.clipboard.writeText(textSummary(current));
     status.textContent='The current team list was copied locally. Names are shared only when you paste it.';
    }else if(type==='csv'){
-    const output=[['Observed UTC','Snapshot phase','Red score','Blue score','Elapsed seconds','Team','Player label','Type','Host'],
-     ...current.roster.map(p=>[current.at.toISOString(),current.state,current.score?.red??'',
+    const output=[['Observed UTC','Server round','Snapshot phase','Red score','Blue score','Elapsed seconds','Team','Player label','Type','Host'],
+     ...current.roster.map(p=>[current.at.toISOString(),current.serverRound,current.state,current.score?.red??'',
       current.score?.blue??'',current.score?.seconds??'',mode(p.team),p.name,p.bot?'Bot':'Human',
       p.host?'Yes':'No'])];
     const eol=String.fromCharCode(13,10);
