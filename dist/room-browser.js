@@ -102,6 +102,26 @@
  // Local directory snapshots expire by monotonic elapsed time, not a
  // changeable device wall clock. Server admission remains authoritative.
  const listingFresh=()=>lastLoadedMono!==null&&performance.now()-lastLoadedMono<=PUBLIC_LISTING_MAX_AGE;
+ // Repaint expired public rooms even if the next refresh is delayed.
+ // This timer only changes the visible availability UI, never polls or joins.
+ let listingExpiryTimer=null;
+ function clearListingExpiry(){
+  if(listingExpiryTimer!==null)clearTimeout(listingExpiryTimer);
+  listingExpiryTimer=null;
+ }
+ function scheduleListingExpiry(){
+  clearListingExpiry();
+  if(!directoryVisible()||lastLoadedMono===null)return;
+  const remaining=Math.max(1,Math.ceil(PUBLIC_LISTING_MAX_AGE-(performance.now()-lastLoadedMono))+1);
+  listingExpiryTimer=setTimeout(()=>{
+   listingExpiryTimer=null;
+   if(!directoryVisible()||lastLoadedMono===null)return;
+   if(listingFresh()){scheduleListingExpiry();return;}
+   renderRooms();
+   if(watching)watchText.textContent=
+    'Public room listing expired. Waiting for refreshed host-approved availability; joining remains server-controlled.';
+  },remaining);
+ }
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
  const validRoom=code=>typeof code==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(code);
  function readPinned(){
@@ -441,12 +461,13 @@
    lastLoadedMono=performance.now();
    watchFreshListing();
    renderRooms();
+   scheduleListingExpiry();
    return true;
   }catch(e){
    if(activeRequest===request&&current===sequence&&shown){
     // A disconnected, unresponsive or invalid listing must not leave the
     // previously public room selectable. Pinned local codes are retained.
-    roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();renderRooms();
+    clearListingExpiry();roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();renderRooms();
     if(watching)watchText.textContent='Public directory unavailable; no pinned room has verified open seats.';
     status.textContent=(request.timedOut?
      'Public room directory timed out. Try Refresh to check again.':
@@ -467,7 +488,7 @@
  }
  function close(){
   shown=false;cancelDirectoryRequest();
-  roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
+  clearListingExpiry();roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
   body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
@@ -524,7 +545,7 @@
    // directory request and invalidates server availability. Reopening makes
    // a new request rather than waiting on the old, possibly hung fetch.
    cancelDirectoryRequest();
-   roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
+   clearListingExpiry();roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
    // Invalidate already-rendered Join buttons immediately. Although the
    // admission guard would reject them, stale cards must not appear live
    // when the player returns before the fresh response.
