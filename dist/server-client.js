@@ -814,6 +814,35 @@ $('rematchRequest').onclick=()=>submitPostgameRequest('rematch');
 $('nextGame').onclick=()=>submitPostgameRequest('new');
 $('rematchAccept').onclick=()=>submitNativeRematchVote(true);
 $('rematchDecline').onclick=()=>submitNativeRematchVote(false);
+// Native postgame actions must stay in the actually visible screen, not
+// the often-wider mobile *layout* viewport when game panes overflow. The
+// viewport can also shrink after rotating or opening browser chrome.
+function fitPostgameVisualViewport(element){
+ if(!element)return;
+ const v=window.visualViewport;
+ const names=['left','top','bottom','width','transform','maxHeight','overflowY'];
+ if(!v||!Number.isFinite(v.width)||!Number.isFinite(v.height)||
+    v.width>=innerWidth-1&&v.height>=innerHeight-1){
+  for(const key of names)element.style[key]='';
+  return;
+ }
+ const dock=element.classList.contains('native-rematch-dock');
+ const pad=dock?12:15;
+ element.style.left=((v.offsetLeft||0)+v.width/2)+'px';
+ element.style.width=Math.max(0,Math.min(dock?950:920,v.width-2*pad))+'px';
+ element.style.top='calc('+((v.offsetTop||0)+v.height)+'px - max('+(dock?8:12)+'px, env(safe-area-inset-bottom)))';
+ element.style.bottom='auto';
+ element.style.transform='translate(-50%,-100%)';
+ element.style.maxHeight=Math.max(0,v.height-16)+'px';
+ element.style.overflowY='auto';
+}
+function refreshPostgameVisualViewport(){
+ fitPostgameVisualViewport(globalRematchDock);
+ fitPostgameVisualViewport(document.querySelector('.play-postmatch-ribbon'));
+}
+window.addEventListener('resize',refreshPostgameVisualViewport,{passive:true});
+window.visualViewport?.addEventListener('resize',refreshPostgameVisualViewport,{passive:true});
+window.visualViewport?.addEventListener('scroll',refreshPostgameVisualViewport,{passive:true});
 // A rematch can be proposed for only 45 seconds. If a human is reading My
 // Games or Home when the server vote arrives, the native menu is invisible.
 // Mirror the existing consent instead of constructing a second voting path.
@@ -857,6 +886,7 @@ function renderGlobalRematchDock(){
  const menuVisible=!$('matchView').hidden&&!$('pauseMenu').hidden&&!$('nextMatchPanel').hidden;
  globalRematchDock.hidden=!state||menuVisible;
  if(globalRematchDock.hidden)return;
+ fitPostgameVisualViewport(globalRematchDock);
  const vote=state.vote,remaining=state.expires===null?null:
   Math.max(0,Math.ceil((state.expires-Date.now())/1000));
  const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;

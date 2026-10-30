@@ -78,6 +78,42 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright'),{cre
   assert.deepEqual(mobileErrors,[],'no mobile browser errors');
   await mobile.evaluate(()=>{clearNativeRematchVote();serverLink=null});
   await mobile.close();
+  // Landscape mobile browsers can widen layout CSS pixels beyond the actual
+  // visual viewport when another game panel overflows horizontally.
+  const landscape=await browser.newPage({viewport:{width:740,height:360},isMobile:true,hasTouch:true});
+  await landscape.goto('http://127.0.0.1:'+port);
+  await landscape.evaluate(()=>{
+   networkPlayerId=2;window.landscapeRematchSends=[];
+   serverLink={room:'SYNTHETIC',isOwner:true,quickMatchMode:null,ws:{readyState:1},
+    send:d=>window.landscapeRematchSends.push(d),roomState:{room:'SYNTHETIC',round:7,
+    started:false,lastResult:{round:7,red:3,blue:1,winner:1,finalPlayers:[]},rematch:null}};
+   document.getElementById('homeView').hidden=true;
+   document.getElementById('matchView').hidden=false;
+   window.dispatchEvent(new Event('fuckball:native-session-state'));
+  });
+  const fitsVisual=async selector=>landscape.evaluate(s=>{
+   const e=document.querySelector(s),r=e?.getBoundingClientRect(),v=visualViewport;
+   return !e?.hidden&&!!r&&r.left>=v.offsetLeft&&r.top>=v.offsetTop&&
+    r.right<=v.offsetLeft+v.width+.5&&r.bottom<=v.offsetTop+v.height+.5;
+  },selector);
+  assert(await fitsVisual('.play-postmatch-request'),'landscape rematch CTA must fit visual viewport');
+  await landscape.setViewportSize({width:800,height:340});
+  assert(await fitsVisual('.play-postmatch-request'),'rotated landscape request remains inside visible screen');
+  await landscape.locator('.play-postmatch-request').tap({timeout:8000});
+  assert.deepEqual(await landscape.evaluate(()=>window.landscapeRematchSends.map(x=>x.type)),['rematchRequest']);
+  await landscape.evaluate(()=>{
+   clearPostgameRequest();serverLink.roomState.rematch={id:20,required:[1,2],accepted:[1],expiresAt:Date.now()+45000};
+   document.getElementById('matchView').hidden=true;renderGlobalRematchDock();
+  });
+  assert(await fitsVisual('.native-rematch-dock-actions button.primary'),'landscape consent CTA must fit visual viewport');
+  assert(await fitsVisual('.native-rematch-dock-actions button:not(.primary)'),'landscape decline CTA must fit visual viewport');
+  await landscape.setViewportSize({width:390,height:844});
+  for(let wait=0;wait<30&&!await fitsVisual('.native-rematch-dock-actions button.primary');wait++)await new Promise(r=>setTimeout(r,100));
+  assert(await fitsVisual('.native-rematch-dock-actions button.primary'),'consent remains visible when returning to portrait');
+  await landscape.locator('.native-rematch-dock-actions button.primary').tap({timeout:8000});
+  assert.deepEqual(await landscape.evaluate(()=>window.landscapeRematchSends.map(x=>x.type)),['rematchRequest','rematchVote']);
+  await landscape.evaluate(()=>{clearNativeRematchVote();serverLink=null});
+  await landscape.close();
   console.log('PASS Chromium postgame rematch ribbon: real native request once, no guest override, quick-match native path, no duplicate proposal, mobile touch request + consent (all fixtures synthetic)');
  }finally{await browser.close();await app.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
