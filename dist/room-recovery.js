@@ -123,12 +123,12 @@
    'The connection dropped. We will retry this room automatically unless you cancel.';
   const current=Number.isSafeInteger(info.attempt)?info.attempt:0;
   const max=Number.isSafeInteger(info.max)?info.max:3;
-  deadline=Number.isFinite(info.delay)&&info.delay>0?Date.now()+info.delay:0;
+  deadline=Number.isFinite(info.delay)&&info.delay>0?performance.now()+info.delay:0;
   function update(){
    const base=info.phase==='failed'?'Automatic reconnect stopped':
     info.phase==='offline'?'Waiting for the device to come online':
     info.phase==='connecting'?'Attempt '+current+' of '+max+' · contacting server':
-    'Attempt '+current+' of '+max+' · retry in '+Math.max(0,Math.ceil((deadline-Date.now())/1000))+'s';
+    'Attempt '+current+' of '+max+' · retry in '+Math.max(0,Math.ceil((deadline-performance.now())/1000))+'s';
    progress.textContent=base;
   }
   update();
