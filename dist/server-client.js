@@ -772,16 +772,21 @@ function renderNextMatchPanel(){
  const requestPending=postgameRequestPending?.link===link;
  const socketOffline=link.ws?.readyState!==1;
  const requestFeedback=requestPending?
+  socketOffline?'Request confirmation unavailable while disconnected. Reconnect and check the room before retrying. ':
   'Request sent · waiting for the server to start '+(postgameRequestPending.action==='new'?'a new game':'a rematch vote')+'. ':
   postgameRequestNotice?.link===link?postgameRequestNotice.message+' ':'';
- const infoText=requestFeedback+(socketOffline&&request?'Connection unavailable. Reconnect before voting; the server deadline continues. ':'')+(request?
+ const offlineInfo=socketOffline?(request?
+  'Connection unavailable. Reconnect before voting; the server deadline continues. ':
+  'Connection unavailable. Reconnect before requesting or starting another round. '):'';
+ const infoText=requestFeedback+offlineInfo+(request?
    (pending?'Your '+(nativeRematchVotePending.accept?'accept':'decline')+' vote was sent · awaiting server receipt. ':
     notice?notice+' ':'')+
    (voteExpired?'Voting deadline passed · waiting for server confirmation. No further votes can be sent.':
    'Rematch awaiting '+Math.max(0,voters.size-approved.size)+' of '+voters.size+' players'+
    ''):
-   result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
-   'Everyone remains connected to this room.');
+   result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+
+    (socketOffline?' · last server result remains visible; room actions are unavailable.':' · keep playing with the same room link'):
+   socketOffline?'Room status cannot be updated until reconnection.':'Everyone remains connected to this room.');
  if($('nextMatchInfo').textContent!==infoText)$('nextMatchInfo').textContent=infoText;
  const list=$('nextMatchPlayers');
  // Native server result receipts are immutable. Preserve the real player list

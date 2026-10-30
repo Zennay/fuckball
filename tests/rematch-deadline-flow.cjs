@@ -49,5 +49,18 @@ a.evalJS('serverLink.roomState.rematch.accepted=[1,2];refreshNativeRematchCountd
 assert.equal(el('rematchAccept').hidden,true,'native receipt removes consent');
 a.evalJS('serverLink.roomState.started=true;serverLink.roomState.rematch=null;refreshNativeRematchCountdown()');
 assert.equal(el('nextMatchPanel').hidden,true,'new game hides postgame vote');
+// A lost room connection must never describe the postgame room as playable.
+a.evalJS('serverLink.roomState.started=false;serverLink.roomState.rematch=null;serverLink.isOwner=true;serverLink.ws.readyState=3;renderNextMatchPanel()');
+assert.match(el('nextMatchInfo').textContent,/Connection unavailable/i,'offline result explains unavailable actions');
+assert.doesNotMatch(el('nextMatchInfo').textContent,/keep playing with the same room link/i);
+assert.equal(el('nextGame').disabled,true,'offline host cannot start another round');
+a.evalJS('serverLink.roomState.lastResult=null;renderNextMatchPanel()');
+assert.match(el('nextMatchInfo').textContent,/Connection unavailable/i,'offline lobby explains inability to start');
+assert.doesNotMatch(el('nextMatchInfo').textContent,/Everyone remains connected/i);
+a.evalJS("serverLink.roomState.lastResult={round:4,red:2,blue:1,winner:1,finalPlayers:[]};serverLink.ws.readyState=1;renderNextMatchPanel()");
+el('rematchRequest').click();
+a.evalJS('serverLink.ws.readyState=3;renderNextMatchPanel()');
+assert.match(el('nextMatchInfo').textContent,/Request confirmation unavailable/i,'offline pending request has no server receipt');
+assert.doesNotMatch(el('nextMatchInfo').textContent,/Request sent · waiting/i);
 a.evalJS('room.destroy()');
 console.log('PASS native rematch expiry, foreground refresh, single consent send, receipt and new-round transition');
