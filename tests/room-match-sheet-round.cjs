@@ -30,6 +30,15 @@ room.state.players[0].name='Carol';net.lastSnapshot=12;timers[0]();
 assert.equal(panel.dataset.snapshotState,'fresh');
 (async()=>{await copy.click();assert.equal(consents,1);assert(clipboard.includes('Carol'));
  assert(clipboard.includes('SERVER ROUND 5'));assert(!clipboard.includes('Alice'));
+ // Stale local AI flags from a previous match must never reclassify a live
+ // human as BOT. Only server-issued current roomState.botIds is authoritative.
+ room.state.players[1].aiControlled=true;
+ net.lastSnapshot=13;
+ await copy.click();
+ assert(!clipboard.includes('Bob · BOT'),'local stale aiControlled must not mark server human as bot');
+ link.roomState.botIds=[2];net.lastSnapshot=14;
+ await copy.click();
+ assert(clipboard.includes('Bob · BOT'),'authoritative native bot ID must mark actual bot');
  link.ws.readyState=3;listeners['fuckball:native-session-state']();
  assert.equal(copy.disabled,true);
  // This is the late-render lobby race: a single post-room snapshot has

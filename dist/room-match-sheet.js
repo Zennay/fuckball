@@ -70,7 +70,9 @@
    seen.add(p.id);
    const raw=typeof p.name==='string'?p.name.trim():'Player';
    const name=raw.slice(0,32).replace(/[\u0000-\u001f\u007f-\u009f]/g,'').trim()||'Player';
-   const bot=actualBots.has(p.id)||p.aiControlled===true;
+   // Only the current native server room roster may classify bots.
+  // Local AI flags can survive a prior match or a same-code reconnect.
+  const bot=actualBots.has(p.id);
    roster.push({name,team:p.team.id,bot,host:actualOwner!==null&&p.id===actualOwner});
   }
   const g=room.gameState;
