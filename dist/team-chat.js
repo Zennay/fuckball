@@ -86,7 +86,7 @@
    }
    if(!eligible(l)||!side(l)){status.textContent='Join a Red or Blue team first.';sync();return;}
    if(input.value.trim()){status.textContent='Finish your current chat draft first.';return;}
-   if(Math.max(l.roomControl?.chatMuteUntil||0,l.chatMutedUntil||0)>Date.now()){
+   if(Math.max(l.roomControl?.chatMuteUntil||0,l.chatMutedUntil||0)>FuckballRoomServerTime.now(l)){
     status.textContent='Your chat is muted by the host.';return;
    }
    const now=performance.now();

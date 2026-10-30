@@ -84,7 +84,7 @@
     flash.textContent='Waiting for the room server to confirm your previous cheer.';
     return;
    }
-   if((link.chatMutedUntil||link.roomControl?.chatMuteUntil||0)>Date.now()){
+   if((link.chatMutedUntil||link.roomControl?.chatMuteUntil||0)>FuckballRoomServerTime.now(link)){
     flash.textContent='Cheering is muted by the host.';return;
    }
    const now=performance.now();

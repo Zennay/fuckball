@@ -360,14 +360,15 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   disconnect();showView('home');notify(reason);return;
  }
  if(d.type==='roomControl'){
+  FuckballRoomServerTime.observe(link,d.serverNow);
   if(typeof d.locked==='boolean')link.roomControl={locked:d.locked,listed:d.listed===true,clubOnly:d.clubOnly===true,canClubLock:d.canClubLock===true,owner:d.owner,accountsOnly:d.accountsOnly===true,
     maxHumans:[8,12,16,24,64].includes(d.maxHumans)?d.maxHumans:64,
     connectedHumans:Number.isSafeInteger(d.connectedHumans)?d.connectedHumans:0,
     spectatorLimitSupported:d.spectatorLimitSupported===true&&!link.quickMatchMode,
     spectatorLimit:[0,4,8,16,64].includes(d.spectatorLimit)?d.spectatorLimit:64,
     spectatorCount:Number.isSafeInteger(d.spectatorCount)&&d.spectatorCount>=0&&d.spectatorCount<=64?d.spectatorCount:0,
-    chatMuteUntil:Number.isSafeInteger(d.chatMuteUntil)&&d.chatMuteUntil>Date.now()?d.chatMuteUntil:null,
-    chatMutes:Array.isArray(d.chatMutes)&&d.chatMutes.length<=128?d.chatMutes.filter(m=>Array.isArray(m)&&m.length===2&&Number.isSafeInteger(m[0])&&m[0]>0&&Number.isSafeInteger(m[1])&&m[1]>Date.now()):[],
+    chatMuteUntil:Number.isSafeInteger(d.chatMuteUntil)&&d.chatMuteUntil>FuckballRoomServerTime.now(link)?d.chatMuteUntil:null,
+    chatMutes:Array.isArray(d.chatMutes)&&d.chatMutes.length<=128?d.chatMutes.filter(m=>Array.isArray(m)&&m.length===2&&Number.isSafeInteger(m[0])&&m[0]>0&&Number.isSafeInteger(m[1])&&m[1]>FuckballRoomServerTime.now(link)):[],
     teamChatSupported:d.teamChatSupported===true&&!link.quickMatchMode,
     spectatorCheerSupported:d.spectatorCheerSupported===true&&!link.quickMatchMode,
     accessKeySupported:d.accessKeySupported===true&&!link.quickMatchMode,accessKeyRequired:d.accessKeyRequired===true,
@@ -379,7 +380,8 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   window.renderCustomRoomAdmin?.();window.renderNativeChatMute?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();return;
  }
  if(d.type==='chatModeration'){
-   const until=Number.isSafeInteger(d.until)&&d.until>Date.now()?d.until:null;
+   FuckballRoomServerTime.observe(link,d.serverNow);
+   const until=Number.isSafeInteger(d.until)&&d.until>FuckballRoomServerTime.now(link)?d.until:null;
    link.chatMutedUntil=d.muted===true?until:null;
    notify(until?'The room host muted your chat for up to 10 minutes.':'Your room chat is available again.');
    window.renderNativeChatMute?.();

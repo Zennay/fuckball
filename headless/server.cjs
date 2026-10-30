@@ -464,7 +464,7 @@ function createServer(options={}){
    const ownerAccount=client.playerId===r.owner&&client.account&&
     accounts.user(client.accountToken)?.toLowerCase()===client.account.toLowerCase()?
     clubs?.membership(client.account):null;
-   send(client,{type:'roomControl',locked:r.locked,listed:r.listed===true,
+   send(client,{type:'roomControl',serverNow:now,locked:r.locked,listed:r.listed===true,
     clubOnly:!!r.clubId,canClubLock:!!ownerAccount,
     owner:r.owner,banMinutes:10,accountsOnly:r.accountsOnly===true,maxHumans:r.maxHumans,connectedHumans:r.clients.size,
     spectatorLimitSupported:!r.quickMatch,spectatorLimit:r.spectatorLimit,spectatorCount,
@@ -569,7 +569,7 @@ function createServer(options={}){
     if(r.chatMutes.size>=128&&!r.chatMutes.has(d.id))throw Error('Room chat mute list is full.');
     r.chatMutes.set(d.id,Date.now()+10*60000);
    }else r.chatMutes.delete(d.id);
-   send(target,{type:'chatModeration',muted:d.action==='muteChat',until:r.chatMutes.get(d.id)||null});
+   send(target,{type:'chatModeration',muted:d.action==='muteChat',until:r.chatMutes.get(d.id)||null,serverNow:Date.now()});
    roomControl(r);return;
   }
   if(d.action==='ban'){

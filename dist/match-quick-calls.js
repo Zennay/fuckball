@@ -155,17 +155,17 @@
    closePanel(false);
   if(!opened)return;
   const state=usable(),until=state?.until||0;
-  const now=Date.now();
+  const now=performance.now();
   sent=sent.filter(t=>now-t<10000);
   const wait=sent.length>=3||sent.length>0&&now-sent[sent.length-1]<3000;
-  options.querySelectorAll('button').forEach(b=>{b.disabled=!state||until>now||wait;});
+  options.querySelectorAll('button').forEach(b=>{b.disabled=!state||until>FuckballRoomServerTime.now(state?.link)||wait;});
   if(!state)status.textContent='Join a real online room before sending calls.';
-  else if(until>now)status.textContent='Your chat is currently muted by the server. Quick Calls cannot bypass it.';
+  else if(until>FuckballRoomServerTime.now(state.link))status.textContent='Your chat is currently muted by the server. Quick Calls cannot bypass it.';
  }
  function send(i){
   const state=usable();if(!state||!valid(messages[i])){status.textContent='No active native room chat is available.';return;}
-  const now=Date.now();
-  if(state.until>now){status.textContent='Room host muted your chat. No call sent.';update();return;}
+  const now=performance.now();
+  if(state.until>FuckballRoomServerTime.now(state.link)){status.textContent='Room host muted your chat. No call sent.';update();return;}
   sent=sent.filter(t=>now-t<10000);
   if(sent.length>=3||sent.length&&now-sent[sent.length-1]<3000){
    status.textContent='Quick Calls cooldown. Wait before sending another message.';update();return;
