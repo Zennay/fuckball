@@ -69,6 +69,19 @@ const {createServer}=require('../headless/server.cjs');
    window.onQuickMatchEvent({type:'quickMatchCancelled',reason:'A player left the room.'});
    return serverLink===before;
   }),true,'cancelled in-room game is not silently disconnected');
+  // The server may already have announced a match before its room receipt.
+  // A subsequent cancellation must still offer an explicit Retry, even
+  // though quickMatchFound already cleared the local 'searching' flag.
+  await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:null,ws:{readyState:1,onclose:null,
+    send:()=>{},close(){this.readyState=3}},send:()=>{}};
+   window.onQuickMatchEvent({type:'quickMatchFound',mode:'2v2',players:4});
+   window.onQuickMatchEvent({type:'quickMatchCancelled',reason:'Room closed before receipt.'});
+  });
+  assert.equal(await page.evaluate(()=>serverLink),null,
+   'pre-room cancel after match-found releases orphan transport');
+  assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
+   'server cancellation after match found still offers explicit human retry');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}
