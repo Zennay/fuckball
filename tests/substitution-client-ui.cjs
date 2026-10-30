@@ -67,6 +67,38 @@ async function joinHuman(url,room,sockets,index){
   a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
   a.elements.get('subBenchPlayer').value='10';a.elements.get('subAssignBench').click();
   await until(()=>r.benches.get(10)===2,'blue team has own real bench player');
+  // Send a genuine Blue request before an unrelated delayed Red proposal.
+  // The Red panel must not claim it is waiting for Blue's consent.
+  a.elements.get('subOutPlayer').value='2';
+  a.elements.get('subInPlayer').value='10';
+  a.elements.get('subPropose').click();
+  await until(()=>r.pendingSubs.get(2)?.inId===10,'real Blue pending on server');
+  await until(()=>a.evalJS('serverLink.roomState?.pendingSubs?.some(p=>p.team===2)'),
+    'Blue pending delivered to host');
+  a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
+  assert.match(a.elements.get('subPending').textContent,/No substitution pending/i,
+    'Red panel does not display Blue pending request as its own status');
+  a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
+  assert.match(a.elements.get('subPending').textContent,/Blue:.*awaiting player consent/i,
+    'Blue panel still shows its own authoritative pending request');
+  a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
+  a.elements.get('subOutPlayer').value='1';a.elements.get('subInPlayer').value='9';
+  // The native Blue server queue remains live while Red awaits its own send.
+  // Only the Red outgoing transport is delayed here, not any room state.
+  a.evalJS('window.firstSubSend=serverLink.send;window.firstSubDelayed=[];serverLink.send=d=>window.firstSubDelayed.push(d)');
+  a.elements.get('subPropose').click();
+  assert.equal(a.evalJS('window.firstSubDelayed.length'),1);
+  assert.match(a.elements.get('subPending').textContent,/waiting for server/i,
+    'pending Red local receipt remains visible alongside genuine Blue queue');
+  assert.doesNotMatch(a.elements.get('subPending').textContent,/Blue:/,
+    'Red status never impersonates other teams');
+  a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
+  assert.match(a.elements.get('subPending').textContent,/Blue:.*awaiting player consent/i,
+    'Blue server request remains visible while Red is awaiting acknowledgement');
+  a.evalJS('serverLink.send=window.firstSubSend;subProposalReceipts.get(1).sentAt=Date.now()-2500;renderSubPanel()');
+  blueGuest.send(JSON.stringify({type:'subAccept',team:2,outId:2,
+    requestId:r.pendingSubs.get(2).requestId,accept:false}));
+  await until(()=>!r.pendingSubs.has(2),'Blue human declines temporary request');
   a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
 
   // Synthetic transport loss on a real admitted host: do not expose controls
@@ -90,10 +122,12 @@ async function joinHuman(url,room,sockets,index){
   assert.equal(a.evalJS('window.delayedProposal.length'),1,'only one pending substitution proposal on fast double-tap');
   assert.equal(a.elements.get('subPropose').disabled,true,'proposal action shows waiting state before receipt');
   assert.match(a.elements.get('subPending').textContent,/waiting for server/i,'pending proposal explicitly awaits authoritative server status');
+  assert.doesNotMatch(a.elements.get('subPending').textContent,/Blue:/,
+    'Red pending message must not be hidden by an unrelated Blue server queue');
   // An unanswered blue proposal must not overwrite the still-pending red
   // proposal. Both use a real native roster; only transmissions are delayed.
   a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
-  a.elements.get('subOutPlayer').value='5';a.elements.get('subInPlayer').value='10';
+  a.elements.get('subOutPlayer').value='2';a.elements.get('subInPlayer').value='10';
   a.elements.get('subPropose').click();
   assert.equal(a.evalJS('window.delayedProposal.length'),2,'independent blue proposal is sent once');
   a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();

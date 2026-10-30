@@ -1144,15 +1144,21 @@ function renderSubPanel(){
   (socketOffline?' · Connection unavailable. Reconnect before changing the lineup.':
    rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
- const recent=Array.isArray(state.recentSubs)?state.recentSubs.at(-1):null;
- $('subPending').textContent=requests.length?
-  requests.map(p=>(p.team===1?'Red':'Blue')+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
+ const teamRequests=requests.filter(p=>p.team===team);
+ const recent=Array.isArray(state.recentSubs)?
+  state.recentSubs.filter(p=>p.team===team).at(-1):null;
+ // This panel edits one side at a time. An unrelated Blue receipt must not
+ // hide Red's own pending confirmation, retry notice or last completed swap.
+ $('subPending').textContent=teamRequests.length?
+  teamRequests.map(p=>teamName+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
    (p.accepted?' · accepted, waiting for pause':' · awaiting player consent')).join(' | '):
-  recent&&[1,2].includes(recent.team)&&Number.isSafeInteger(recent.frame)?
-   'Last completed swap · '+(recent.team===1?'Red':'Blue')+': '+
-   nameOf(recent.outId)+' → '+nameOf(recent.inId)+' · frame '+recent.frame:
-   proposalPending?'Substitution proposal waiting for server confirmation.':
-   subProposalNotices.get(team)?.link===link?subProposalNotices.get(team).message:'No substitution pending.';
+  proposalPending?'Substitution proposal waiting for server confirmation.':
+  subProposalNotices.get(team)?.link===link?subProposalNotices.get(team).message:
+  recent&&Number.isSafeInteger(recent.frame)?
+   'Last completed swap · '+teamName+': '+nameOf(recent.outId)+' → '+
+   nameOf(recent.inId)+' · frame '+recent.frame:
+   'No substitution pending for '+teamName+'.'+
+   (requests.some(p=>p.team!==team)?' The other team has a separate pending request.':'');
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
  const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
