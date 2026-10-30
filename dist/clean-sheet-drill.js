@@ -245,12 +245,19 @@
   }catch(error){quit();status.textContent=error?.message||'Local defensive challenge unavailable.';}
  };
  pauseButton.onclick=()=>{
-  const s=active;if(!s||parked||document.hidden||match.hidden)return;
-  if(room!==s.room||!matchReady()||team()!==s.side){finish('CLEAN SHEET · GAME CHANGED');return;}
+  const s=active;if(!s||document.hidden||match.hidden)return;
+  if(room!==s.room||!matchReady()||team()!==s.side||room.currentFrameNo<s.frame){
+   finish('CLEAN SHEET · GAME CHANGED');return;
+  }
   const wasPaused=paused;
-  // Delegate to original native pause and neutral-input authority.
+  // The parked Home/My Games return is intentionally still native-paused.
+  // Its own visible Resume button must be allowed to unpark this exact match.
   togglePause();
   if(paused===wasPaused){status.textContent='Native pause control unavailable.';return;}
+  if(parked&&!paused){
+   // Do not count any frames spent outside the visible gameplay view.
+   s.frame=room.currentFrameNo;parked=false;updateReturn();
+  }
   status.textContent=paused?'Native match paused; no defensive time is counted.':
    'Native match resumed; defensive full-clock challenge continues.';
   progress(s);
