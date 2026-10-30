@@ -62,5 +62,23 @@ el('rematchRequest').click();
 a.evalJS('serverLink.ws.readyState=3;renderNextMatchPanel()');
 assert.match(el('nextMatchInfo').textContent,/Request confirmation unavailable/i,'offline pending request has no server receipt');
 assert.doesNotMatch(el('nextMatchInfo').textContent,/Request sent · waiting/i);
+// Quick Match has a separate host status packet and deadline. A clock-skewed
+// guest must still see one correct vote and send no duplicate consent.
+a.evalJS(`clearPostgameRequest();serverLink.ws.readyState=1;networkPlayerId=2;
+ serverLink.quickMatchMode='1v1';serverLink.roomState.serverNow=Date.now()-400000;
+ serverLink.quickRematch={id:87,required:[1,2],accepted:[1],expiresAt:Date.now()+45000};
+ serverLink.quickRematchServerNow=Date.now();
+ serverLink.quickRematchReceivedAt=performance.now();
+ globalThis.__rematchOriginalNow=Date.now;
+ Date.now=()=>__rematchOriginalNow()+180000;renderNextMatchPanel()`);
+assert.equal(el('rematchAccept').hidden,false,'fast clock does not invalidate a server-owned quick-match vote');
+assert.match(el('nextMatchTitle').textContent,/4[0-5]s to vote/);
+a.evalJS('Date.now=()=>__rematchOriginalNow()-180000;renderNextMatchPanel();renderGlobalRematchDock()');
+assert.match(el('nextMatchTitle').textContent,/4[0-5]s to vote/,'slow clock keeps valid vote bounded');
+assert.equal(dock.hidden,false,'quick-match consent is visible outside the match');
+assert.match(dockTitle.textContent,/4[0-5]s left/,'global dock shows the correct server-clock deadline');
+el('rematchAccept').click();
+assert.equal(a.evalJS('window.sentRematchVotes.at(-1).type'),'quickRematchVote','quick-match vote reaches the existing authorized transport');
+a.evalJS('Date.now=__rematchOriginalNow;serverLink.quickRematch=null;serverLink.quickMatchMode=null');
 a.evalJS('room.destroy()');
 console.log('PASS native rematch expiry, foreground refresh, single consent send, receipt and new-round transition');
