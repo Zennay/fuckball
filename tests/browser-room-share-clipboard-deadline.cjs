@@ -101,6 +101,11 @@ async function until(fn,msg){for(let i=0;i<90;i++){if(await fn())return;await wa
   await page.evaluate(()=>window.__qrExportDeadline());
   await until(async()=>!await save.isDisabled(),'PNG export timeout permits retry');
   assert.match(await menuStatus.textContent(),/PNG.*timed out|export.*timed out/i,'helpful PNG timeout receipt');
+  // An unchanged admitted room can receive an ordinary periodic render
+  // immediately after the WebView timeout. Keep the retry guidance visible.
+  await wait(1150);
+  assert.match(await menuStatus.textContent(),/PNG.*timed out|export.*timed out/i,
+   'background room refresh cannot erase failed PNG export recovery guidance');
   let downloads=0;page.on('download',()=>downloads++);
   const downloadPromise=page.waitForEvent('download',{timeout:9000});
   await save.click();

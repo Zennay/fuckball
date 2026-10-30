@@ -445,9 +445,16 @@
   if(!visible){section.hidden=true;if(renderedQrUrl)hideQr();return;}
   const next=snapshot();
   if(!next){latestRoom='';refresh();return;}
-  if(!sameSession(current,next)||next.room!==latestRoom||next.url!==link.value||
-    eligibility(next)!==state.textContent||warning(next)!==caution.textContent){
-   latestRoom=next.room;status.textContent='';refresh();
+  const changedSession=!sameSession(current,next);
+  const changedAccess=eligibility(next)!==state.textContent||warning(next)!==caution.textContent;
+  if(changedSession||next.room!==latestRoom||next.url!==link.value||changedAccess){
+   latestRoom=next.room;
+   // First periodic synchronization of an already current room is not a
+   // new share attempt. Do not erase an export timeout/retry receipt just
+   // because the private timer has not recorded this room code yet.
+   // An actual socket or access-policy change still invalidates the receipt.
+   if(changedSession||changedAccess)status.textContent='';
+   refresh();
   }else section.hidden=false;
  },1000);
  refresh();
