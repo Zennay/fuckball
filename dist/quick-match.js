@@ -684,17 +684,18 @@
     notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
    }else if(d.status==='waiting'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     waiting=d.waiting;needed=d.needed;refresh();
-   }else if(['cancelled','error','disconnected'].includes(d.status)&&searching){
-    // A terminal queue status does not necessarily close the original
-    // WebSocket. Release this specific unadmitted search before exposing a
-    // recovery action; otherwise every future native join is blocked by
-    // the orphaned session-admission guard. Never leave an active match.
+   }else if(['cancelled','error','disconnected'].includes(d.status)&&
+    (searching||(!ready&&serverLink?.quickMatchMode&&!serverLink.room))){
+    // Match-found may clear searching before room admission. Terminal
+    // status is still authoritative for that unadmitted Quick Match socket.
+    // Never disconnect a successfully joined room or auto-queue again.
     const reason=d.reason||(d.status==='cancelled'?'Human search cancelled.':
      'Human match search ended on the server.');
-    if(serverLink?.quickMatchMode&&!serverLink.room){
+    const unadmitted=!!serverLink?.quickMatchMode&&!serverLink.room;
+    if(unadmitted){
      try{disconnect();}catch{}
     }
-    done(reason,true);
+    done(reason,true,unadmitted);
    }
   }
  };
