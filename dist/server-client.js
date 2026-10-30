@@ -1024,7 +1024,7 @@ function currentSubConsent(){
  if(!link?.room||!state||!Array.isArray(state.pendingSubs))return null;
  const pending=state.pendingSubs.find(p=>p&&p.inId===networkPlayerId&&
    p.accepted!==true&&Number.isSafeInteger(p.requestId)&&
-   [1,2].includes(p.team)&&Number.isSafeInteger(p.outId));
+   [1,2].includes(p.team)&&Number.isSafeInteger(p.outId)&&!nativeSubExpired(p,link));
  return pending?{link,pending}:null;
 }
 function renderGlobalSubConsent(){
@@ -1137,6 +1137,9 @@ function nativeSubSeconds(p,link){
   (Number.isFinite(received)?Math.max(0,performance.now()-received):0):Date.now();
  return Math.max(0,Math.ceil((p.expiresAt-now)/1000));
 }
+function nativeSubExpired(p,link){
+ return !Number.isFinite(p?.expiresAt)||nativeSubSeconds(p,link)===0;
+}
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
@@ -1167,11 +1170,12 @@ function renderSubPanel(){
  $('subClearBench').disabled=controlsLocked||!isHost||!inactive.length;
  $('subAppointCaptain').disabled=controlsLocked||!isHost;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
+ const expiredQueued=!!queued&&nativeSubExpired(queued,link);
  const cancelPending=!!queued&&subCancelReceipts.get(team)?.link===link&&
   subCancelReceipts.get(team).id===queued.requestId;
- $('subCancel').disabled=controlsLocked||!queued||queued.accepted||
+ $('subCancel').disabled=controlsLocked||!queued||queued.accepted||expiredQueued||
   !(isHost||queued.requestedBy===networkPlayerId)||cancelPending;
- $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued||proposalPending;
+ $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued&&!expiredQueued||proposalPending;
  const timeFrames=new Map(state.activeFrames||[]);
  const total=(timeFrames.get(networkPlayerId)||0)/60;
  $('subSummary').textContent=(isHost?'Host':roleCaptain===networkPlayerId?'Team captain':'Player')+
@@ -1190,7 +1194,8 @@ function renderSubPanel(){
  // hide Red's own pending confirmation, retry notice or last completed swap.
  $('subPending').textContent=teamRequests.length?
   teamRequests.map(p=>teamName+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
-   (p.accepted?' · accepted, pause to apply'+timeRemaining(p):
+   (nativeSubExpired(p,link)?' · expired; choose a new proposal':
+    p.accepted?' · accepted, pause to apply'+timeRemaining(p):
     cancelPending?' · withdrawal sent, waiting for server':
     subCancelNotices.get(team)?.link===link?' · '+subCancelNotices.get(team).message:
     ' · awaiting player consent'+timeRemaining(p))).join(' | '):
@@ -1201,7 +1206,7 @@ function renderSubPanel(){
    nameOf(recent.inId)+' · frame '+recent.frame:
    'No substitution pending for '+teamName+'.'+
    (requests.some(p=>p.team!==team)?' The other team has a separate pending request.':'');
- const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
+ const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId)&&!nativeSubExpired(p,link));
  $('subConsent').hidden=!yourRequest;
  const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
   subConsentReceipt.id===yourRequest.requestId&&Date.now()-subConsentReceipt.sentAt<2400;
@@ -1223,7 +1228,11 @@ const subDeadlineTick=setInterval(()=>{
  const team=Number($('subTeam').value)===2?2:1;
  const pending=requests.find(p=>p.team===team&&Number.isFinite(p.expiresAt));
  const label=$('subPending');
- if(pending&&label?.textContent?.includes('s remaining'))
+ if(!pending||!label)return;
+ if(nativeSubExpired(pending,link)){
+  // A server packet can be late; remove stale consent/controls immediately.
+  if(!label.textContent.includes('expired;'))renderSubPanel();
+ }else if(label.textContent?.includes('s remaining'))
   label.textContent=label.textContent.replace(/\d+s remaining/,nativeSubSeconds(pending,link)+'s remaining');
 },1000);
 subDeadlineTick?.unref?.();
@@ -1274,7 +1283,7 @@ $('subPropose').onclick=()=>{
  const team=Number($('subTeam').value);
  syncSubProposal(link,state);
  if(subProposalReceipts.get(team)?.link===link||
-    (state.pendingSubs||[]).some(p=>p.team===team))return;
+    (state.pendingSubs||[]).some(p=>p.team===team&&!nativeSubExpired(p,link)))return;
  if(!link.isOwner&&new Map(state.captains||[]).get(team)!==networkPlayerId)return;
  const outId=Number($('subOutPlayer').value),inId=Number($('subInPlayer').value);
  // Check the current native roster again at click-time, not only render-time.
@@ -1297,7 +1306,7 @@ $('subCancel').onclick=()=>{
  const link=serverLink,state=link?.roomState,team=Number($('subTeam').value);
  if(!link||link.ws?.readyState!==1||!state||humanRematchLocksRoom())return;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
- if(!queued||queued.accepted||!Number.isSafeInteger(queued.requestId)||
+ if(!queued||queued.accepted||nativeSubExpired(queued,link)||!Number.isSafeInteger(queued.requestId)||
     (!link.isOwner&&queued.requestedBy!==networkPlayerId))return;
  syncSubCancel(link,state);
  if(subCancelReceipts.get(team)?.link===link&&
