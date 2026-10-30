@@ -76,6 +76,10 @@
  let activeClipboardRead=null;
  function cancelClipboardRead(){activeClipboardRead?.();}
  paste.onclick=async()=>{
+  // Switching to clipboard gives the person control immediately, even when
+  // clipboard access is unsupported or the permission prompt hangs.
+  if(stream||!scanner.hidden)stopScan();
+  imageEpoch++;activeImageRead?.abort();
   if(typeof navigator.clipboard?.readText!=='function'){
    status.textContent='Clipboard reading is unavailable. Paste a link into the field manually.';
    input.focus();return;
@@ -321,6 +325,9 @@
   const file=imageFile.files?.[0];imageFile.value='';
   if(!file)return;
   invitationEpoch++;cancelClipboardRead();
+  // Choosing a local file replaces live scanning; release the actual camera
+  // before any decoder work, even for invalid or unopenable images.
+  if(stream||!scanner.hidden)stopScan();
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
