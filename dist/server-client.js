@@ -79,7 +79,8 @@ function notifyNativeSessionView(){
 }
 function clearNativeAdmissionDeadline(link){
  if(link?.admissionTimer!=null)clearTimeout(link.admissionTimer);
- if(link)link.admissionTimer=null;
+ if(link?.admissionCloseWatchdog!=null)clearTimeout(link.admissionCloseWatchdog);
+ if(link){link.admissionTimer=null;link.admissionCloseWatchdog=null;}
 }
 // The transport opening and authoritative server admission are distinct
 // bounded phases. An open WebSocket alone does not prove a player was joined.
@@ -95,14 +96,19 @@ function armNativeAdmissionDeadline(link,stage){
    'Could not open a connection to the game server within 20 seconds.':
    'The game server did not admit this room connection within 20 seconds.';
   notifyNativeSessionView();
-  try{link.ws.close();}catch{
-   notify('Connection timed out. Cancel this connection to retry explicitly.');
-  }
+  // A stalled WebSocket close must not strand an unadmitted player.
+  const finish=()=>{
+   if(serverLink===link&&!link.room&&link.admissionTimedOut)
+    link.ws.onclose?.({code:1006});
+  };
+  try{link.ws.close();}catch{finish();return;}
+  link.admissionCloseWatchdog=setTimeout(finish,1500);
+  link.admissionCloseWatchdog?.unref?.();
  },20000);
  link.admissionTimer?.unref?.();
 }
 
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();clearPostgameRequest();const link=serverLink;clearQuickRematchAlert(link);clearNativeAdmissionDeadline(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});link.ws.close();setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();clearPostgameRequest();const link=serverLink;clearQuickRematchAlert(link);clearNativeAdmissionDeadline(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1)link.send({type:'leave'});try{link.ws.close();}catch{/* Invalidate session even when close throws. */}setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
 const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
 const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
@@ -275,7 +281,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     $('serverRoomStatus').textContent=reason;notify(reason);
    }else if(!link.quickMatchMode)notify('Disconnected.');
   };
- ws.onmessage=event=>{if(serverLink!==link)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
+ ws.onmessage=event=>{if(serverLink!==link||link.admissionTimedOut&&!link.room)return;if(event.data instanceof ArrayBuffer){try{if(link.net)link.net.serverBinary(event.data);else receiveSnapshot(event.data);}catch{notify('Invalid server snapshot.');}return;}let d;try{d=JSON.parse(event.data);}catch{return;}
  if(link.spectatorJoinAwaiting){
   if(d.type==='spectatorAdmissionInfo'&&d.supported===true){
    link.spectatorJoinAwaiting=false;

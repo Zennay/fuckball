@@ -32,4 +32,36 @@ async function check(behavior){
   assert.equal(app.evalJS('serverLink'),null,behavior+' leaves no orphaned socket');
  }finally{app.evalJS('disconnect();room.destroy()');}
 }
-(async()=>{await check('refused');await check('error');await check('timeout');console.log('PASS spectator intent and native denial reason preserved after capability refusal, error, timeout; never joins as player');})().catch(e=>{console.error(e);process.exitCode=1;});
+async function checkTransportCloseFailure(throws){
+ let joins=0, closes=0;
+ class StalledSocket{
+  constructor(){this.readyState=0;setImmediate(()=>{this.readyState=1;this.onopen?.();});}
+  send(payload){if(JSON.parse(payload).type==='join')joins++;}
+  close(){closes++;if(throws)throw Error('synthetic close failure');}
+ }
+ const app=createApp({location:{hostname:'127.0.0.1',host:'127.0.0.1:8080',protocol:'http:'},globals:{WebSocket:StalledSocket}});
+ try{
+  app.elements.get('serverAddress').value='ws://127.0.0.1:8080/ws';
+  app.evalJS("showJoinScreen('ABCDEFGH')");
+  app.elements.get('joinSpectator').checked=true;
+  app.elements.get('joinName').value='Watcher';
+  app.elements.get('joinWithName').click();
+  await sleep(30);
+  const old=app.evalJS('serverLink.ws');
+  assert(old,'pending spectator preflight');
+  app.evalJS('serverLink.admissionTimer._onTimeout()');
+  old.onmessage?.({data:JSON.stringify({type:'spectatorAdmissionInfo',supported:true})});
+  assert.equal(joins,0,'late capability acknowledgement must not send join');
+  if(!throws)await sleep(1650);
+  assert(closes>0,'timeout requested transport close');
+  assert.equal(app.evalJS('serverLink'),null,'timed-out connection released');
+  assert.equal(app.elements.get('joinScreen').hidden,false,'manual retry remains available');
+  assert.equal(app.elements.get('joinSpectator').checked,true,'WATCH intent retained');
+  assert.match(app.elements.get('joinError').textContent,/20 seconds/,'timeout explained');
+ }finally{app.evalJS('disconnect();room.destroy()');}
+}
+(async()=>{
+ await check('refused');await check('error');await check('timeout');
+ await checkTransportCloseFailure(true);await checkTransportCloseFailure(false);
+ console.log('PASS spectator denial, timeout, stalled/throwing close and late replies');
+})().catch(e=>{console.error(e);process.exitCode=1;});
