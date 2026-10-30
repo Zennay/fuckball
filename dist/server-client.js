@@ -455,7 +455,10 @@ else if(d.type==='error'&&link.quickMatchMode&&!link.room&&!link.reconnect){
  const reason=typeof d.message==='string'&&d.message.trim()?
   d.message.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,160):
   'The server rejected this human search.';
- window.onQuickMatchEvent?.({type:'queueStatus',status:'error',reason});
+ window.onQuickMatchEvent?.({type:'queueStatus',status:'error',reason,
+  // Only the native server's explicit authentication rejection can route
+  // the next deliberate action to the account form. No automatic rejoin.
+  requiresSignIn:reason==='Log in to search for real human players.'});
  if(serverLink===link){link.failed=true;disconnect();}
 }
 else if(d.type==='error'&&postgameRequestPending?.link===link){
@@ -677,7 +680,10 @@ $('joinName').addEventListener('keydown',e=>{if(e.key==='Enter'||e.code==='Enter
 $('joinGuest').onclick=()=>joinRoom('Guest '+String(Math.floor(1000+Math.random()*9000)));
 $('joinShowLogin').onclick=()=>{$('joinPlay').hidden=true;$('joinAuth').hidden=false;$('joinError').textContent='';$('authUser').focus();};
 $('authBack').onclick=()=>{if(joinRoomId){$('joinAuth').hidden=true;$('joinPlay').hidden=false;$('joinError').textContent='';}else hideJoinScreen();};
-async function authRequest(route){const username=$('authUser').value.trim(),password=$('authPass').value;try{const res=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await res.json();if(!res.ok)throw Error(d.error||'Request failed.');settings.account={username:d.username,token:d.token};setName(d.username);$('authPass').value='';renderAccount();notify('Logged in as '+d.username);if(joinRoomId)joinRoom(d.username);else hideJoinScreen();}catch(e){$('joinError').textContent=e.message;}}
+async function authRequest(route){const username=$('authUser').value.trim(),password=$('authPass').value;try{const res=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const d=await res.json();if(!res.ok)throw Error(d.error||'Request failed.');settings.account={username:d.username,token:d.token};setName(d.username);$('authPass').value='';renderAccount();
+ // New credentials were issued. Human search stays exclusively opt-in.
+ window.dispatchEvent(new Event('fuckball:account-changed'));
+ notify('Logged in as '+d.username);if(joinRoomId)joinRoom(d.username);else hideJoinScreen();}catch(e){$('joinError').textContent=e.message;}}
 $('joinAuth').onsubmit=e=>{e.preventDefault();authRequest('/api/login');};$('authRegister').onclick=()=>authRequest('/api/register');
 $('accountButton').onclick=()=>{if(settings.account){const token=settings.account.token;settings.account=null;savePrefs();renderAccount();fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}).catch(()=>{});notify('Logged out');}else showJoinScreen('');};
 renderAccount();
