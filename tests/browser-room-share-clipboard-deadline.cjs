@@ -74,6 +74,42 @@ async function until(fn,msg){for(let i=0;i<90;i++){if(await fn())return;await wa
   assert.equal(await page.evaluate(()=>window.__writes[5].value),'BCDFGHKM','share latest socket code');
   await page.evaluate(()=>window.__writes[5].resolve());
   await until(async()=>/code copied/i.test(await menuStatus.textContent()),'new room copy receipt survives synchronous refresh');
+  // Real Chromium: a WebView may never invoke canvas.toBlob for the local
+  // scannable poster, permanently disabling Save unless export is bounded.
+  await page.evaluate(()=>{
+   window.__qrExports=[];window.__qrExportDeadline=null;
+   const original=HTMLCanvasElement.prototype.toBlob;
+   HTMLCanvasElement.prototype.toBlob=function(callback,type){
+    if(this.width===1200&&this.height===900){
+     window.__qrExports.push(callback);
+     if(window.__qrExports.length===1)return;
+    }
+    return original.call(this,callback,type);
+   };
+   const timer=window.setTimeout.bind(window);
+   window.setTimeout=(callback,ms,...args)=>{
+    if(ms===8000)window.__qrExportDeadline=callback;
+    return timer(callback,ms,...args);
+   };
+  });
+  await menuActions.nth(3).click();
+  const save=menu.locator('.room-invite-qr-download');
+  await until(()=>save.isVisible(),'native QR generated in current room');
+  await save.click();
+  await until(()=>page.evaluate(()=>window.__qrExports.length===1),'local PNG exporter pending');
+  await until(()=>page.evaluate(()=>typeof window.__qrExportDeadline==='function'),'bounded poster export deadline');
+  await page.evaluate(()=>window.__qrExportDeadline());
+  await until(async()=>!await save.isDisabled(),'PNG export timeout permits retry');
+  assert.match(await menuStatus.textContent(),/PNG.*timed out|export.*timed out/i,'helpful PNG timeout receipt');
+  let downloads=0;page.on('download',()=>downloads++);
+  const downloadPromise=page.waitForEvent('download',{timeout:9000});
+  await save.click();
+  const download=await downloadPromise;
+  assert.equal(download.suggestedFilename(),'fuckball-room-BCDFGHKM-qr.png','retry exports current synthetic room card');
+  await page.evaluate(()=>window.__qrExports[0](new Blob(['late'],{type:'image/png'})));
+  await wait(120);
+  assert.equal(downloads,1,'late PNG completion cannot trigger a second stale download');
+  assert([null,'BCDFGHKM'].includes(await page.evaluate(()=>serverLink?.room??null)),'PNG cannot autojoin another room');
   assert.deepEqual(errors,[],'no browser exceptions');
   assert.equal(await page.evaluate(()=>serverLink.room),'BCDFGHKM','synthetic room change remained UI-only, never autojoined');
   console.log('PASS real Chromium: room share clipboard timeout, manual fallback, retry, stale session ignored');

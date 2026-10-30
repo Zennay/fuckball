@@ -241,8 +241,19 @@
    ctx.fillStyle='#afc8bf';ctx.font='500 19px system-ui,sans-serif';
    ctx.fillText('A live Custom Room may be locked, full, restricted or closed after sharing.',70,818,1070);
    ctx.fillText('Open via Fuckball. Joining requires a separate deliberate action.',70,851,1070);
-   const blob=await new Promise((resolve,reject)=>
-    canvas.toBlob(value=>value?resolve(value):reject(Error('Cannot export this QR image.')),'image/png'));
+   // Some WebViews never call toBlob. Release Save and keep the original
+   // room check below even when an abandoned callback arrives much later.
+   const blob=await new Promise((resolve,reject)=>{
+    let settled=false;
+    const finish=(value,error)=>{
+     if(settled)return;
+     settled=true;clearTimeout(deadline);
+     if(error)reject(error);else resolve(value);
+    };
+    const deadline=setTimeout(()=>finish(null,Error('PNG export timed out. Retry saving this room QR card.')),8000);
+    try{canvas.toBlob(value=>finish(value,value?null:Error('Cannot export this QR image.')),'image/png');}
+    catch(error){finish(null,error);}
+   });
    const latest=snapshot();
    if(!sameSession(currentRoomData,latest))
     throw Error('Room disconnected or changed during QR export. Open its live room QR and try again.');
