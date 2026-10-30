@@ -74,6 +74,15 @@ async function joinHuman(url,room,sockets,index){
 
   a.elements.get('subOutPlayer').value='1';
   a.elements.get('subInPlayer').value='9';
+  // Two rapid taps while awaiting a native server receipt must be one
+  // explicit proposal, never two writes and a confusing duplicate rejection.
+  a.evalJS('window.originalProposalSend=serverLink.send;window.delayedProposal=[];serverLink.send=d=>window.delayedProposal.push(d)');
+  a.elements.get('subPropose').click();a.elements.get('subPropose').click();
+  assert.equal(a.evalJS('window.delayedProposal.length'),1,'only one pending substitution proposal on fast double-tap');
+  assert.equal(a.elements.get('subPropose').disabled,true,'proposal action shows waiting state before receipt');
+  assert.match(a.elements.get('subPending').textContent,/waiting for server/i,'pending proposal explicitly awaits authoritative server status');
+  a.evalJS('serverLink.send=window.originalProposalSend;subProposalReceipt.sentAt=Date.now()-2500;renderSubPanel()');
+  assert.equal(a.elements.get('subPropose').disabled,false,'no receipt allows an explicit human retry');
   a.elements.get('subPropose').click();
   await until(()=>r.pendingSubs.get(1)?.inId===9,'host proposed spectator swap');
   await until(()=>!b.elements.get('subConsent').hidden,'incoming guest sees consent prompt');
