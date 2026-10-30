@@ -58,12 +58,13 @@ function intercept(b,p,ph,max=90){if(!p?.disc)return null;let x=b.pos.x,y=b.pos.
 // A kick adds kickStrength*invMass along the player->ball contact normal to
 // the ball's velocity, so aiming means choosing the contact normal.
 function kickNormal(vx,vy,dx,dy,K){const dv=dx*vx+dy*vy,disc=dv*dv-(vx*vx+vy*vy)+K*K,s=disc>0?dv+Math.sqrt(disc):K,nx=s*dx-vx,ny=s*dy-vy,l=Math.hypot(nx,ny)||1;return{nx:nx/l,ny:ny/l,speed:s};}
+const flightCurves=new Map();function flightCurve(d){let G=flightCurves.get(d);if(G)return G;G=[0];for(let k=1;k<=260;k++)G[k]=(G[k-1]+1)*d;if(flightCurves.size>=16)flightCurves.clear();flightCurves.set(d,G);return G;}
 function fieldOf(state,teamId){
  const g=state.gameState,s=g.stadium,b=g.physicsState.discs[0],sign=teamId===1?1:-1,pp=s.playerPhysics||{};
  const goal=s.goals.find(x=>x.team.id!==teamId),own=s.goals.find(x=>x.team.id===teamId);
  const gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,width=Math.abs(gx);
- const ph=playerPhysics(s),G=[0];for(let k=1;k<=260;k++)G[k]=(G[k-1]+1)*ph.d;
- const players=state.players.filter(p=>p.disc&&(p.team.id===1||p.team.id===2)).map(p=>({id:p.id,mine:p.team.id===teamId,x:p.disc.pos.x,y:p.disc.pos.y,vx:p.disc.speed.x,vy:p.disc.speed.y,r:p.disc.radius}));
+ const ph=playerPhysics(s),G=flightCurve(ph.d);
+ const players=state.players.filter(p=>p.disc&&(p.team.id===1||p.team.id===2)).map(p=>({id:p.id,mine:p.team.id===teamId,x:p.disc.pos.x,y:p.disc.pos.y,vx:p.disc.speed.x,vy:p.disc.speed.y,speed:Math.hypot(p.disc.speed.x,p.disc.speed.y),r:p.disc.radius}));
  // Their keeper: the opponent closest to their goal; it reacts to shots a little later than outfield players chase.
  const foes=players.filter(p=>!p.mine).sort((a,c)=>Math.hypot(a.x-gx,a.y)-Math.hypot(c.x-gx,c.y));
  return{theirKeeper:foes[0]&&Math.hypot(foes[0].x-gx,foes[0].y)<width*.5?foes[0].id:null,keeperDelay:4,sign,gx,ox,width,wallX:Math.min(width,s.bgWidth||width),height:s.bgHeight||s.height-30,gy:goal?Math.abs(goal.p0.y-goal.p1.y)/2:85,
@@ -86,7 +87,7 @@ function rollout(F,x,y,vx,vy,skip,t0=0){
   if(t&1||ours&&theirs)continue;
   for(const p of F.players){
    if(p.mine?ours||p.id===F.keeper:theirs)continue;if(p.id===skip&&t<14)continue;
-   const k=Math.min(260,t+t0+(p.mine?F.myDelay:p.id===F.theirKeeper?F.keeperDelay:F.delay)),dx=x-p.x,dy=y-p.y,l=Math.hypot(dx,dy)||1,v0=(p.vx*dx+p.vy*dy)/l;
+   const k=Math.min(260,t+t0+(p.mine?F.myDelay:p.id===F.theirKeeper?F.keeperDelay:F.delay)),dx=x-p.x,dy=y-p.y,dist2=dx*dx+dy*dy,reach=F.ph.vmax*(k-F.G[k]),cap=reach+p.speed*F.G[k]+p.r+F.rb+3;if(cap<0||dist2>cap*cap)continue;const l=Math.sqrt(dist2)||1,v0=(p.vx*dx+p.vy*dy)/l;
    if(l-p.r-F.rb-3<=F.ph.vmax*(k-F.G[k])+v0*F.G[k]){const hit={t,id:p.id,x,y};if(p.mine)ours=hit;else theirs=hit;}
   }
  }
@@ -104,8 +105,9 @@ function outcome(F,o){
 }
 // Best kick from (x,y) with ball velocity (vx,vy): passes to feet, passes
 // into space, shots at several goal points. Returns direction and value.
+const staticKickDirs=Array.from({length:24},(_,i)=>{const a=i*Math.PI/12;return[Math.cos(a),Math.sin(a),'space'];});
 function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
- const dirs=[];if(keep)dirs.push([keep[0],keep[1],'keep']);for(let i=0;i<24;i++){const a=i*Math.PI/12;dirs.push([Math.cos(a),Math.sin(a),'space']);}
+ const dirs=[];if(keep)dirs.push([keep[0],keep[1],'keep']);dirs.push(...staticKickDirs);
  const add=(tx,ty,kind)=>{const dx=tx-x,dy=ty-y,l=Math.hypot(dx,dy);if(l>20)dirs.push([dx/l,dy/l,kind]);};
  for(const p of F.players)if(p.mine&&p.id!==kicker){add(p.x+p.vx*14,p.y+p.vy*14,'pass');add(p.x+F.sign*45,p.y,'pass');}
  for(const f of [-.8,-.5,-.2,.2,.5,.8])add(F.gx,f*F.gy,'shot');
@@ -117,7 +119,7 @@ function bestKick(F,x,y,vx,vy,kicker,t0=0,keep=null){
  // Players steer in eight directions, so prefer kicks that still work a
  // few degrees off target: rate the best few by their worst neighbour.
  scored.sort((a,c)=>c.raw-a.raw);let best=null;
- for(const c of scored.slice(0,6)){let v=c.raw;for(const a of [-F.spread,F.spread]){const cs=Math.cos(a),sn=Math.sin(a);v=Math.min(v,score(c.dx*cs-c.dy*sn,c.dx*sn+c.dy*cs).v);}
+ const cs=Math.cos(F.spread),sine=Math.sin(F.spread);for(const c of scored.slice(0,6)){let v=c.raw;for(let sign=-1;sign<=1;sign+=2){const sn=sign*sine;v=Math.min(v,score(c.dx*cs-c.dy*sn,c.dx*sn+c.dy*cs).v);}
   v=(v*2+c.raw)/3;if(keep)v-=F.turn*(1-c.dx*keep[0]-c.dy*keep[1]);if(!best||v>best.value)best={...c,value:v};}
  return best;
 }

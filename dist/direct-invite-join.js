@@ -154,7 +154,20 @@
  const localFrame=document.createElement('canvas');
  const localContext=localFrame.getContext('2d',{willReadFrequently:true});
  async function decodeQR(source){
-  if(detector)return detector.detect(source);
+  if(detector){
+   // Some native BarcodeDetector implementations never settle on a live
+   // stream frame; fail closed rather than leave an apparently active scan
+   // silently frozen with camera tracks still running indefinitely.
+   let timer=null;
+   try{
+    return await Promise.race([
+     detector.detect(source),
+     new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(Error('Native QR detection timed out.')),6000);
+     })
+    ]);
+   }finally{clearTimeout(timer);}
+  }
   await readyDecoder();
   if(!localContext)throw Error('Cannot decode QR on this device. Paste the invite instead.');
   const width=source.videoWidth||source.width, height=source.videoHeight||source.height;
@@ -181,7 +194,7 @@
  const scannerHint=document.createElement('p');
  scannerHint.textContent='Point at a QR with a Fuckball invite from this website. Scanning only fills the invitation field; joining requires your own confirmation.';
  scanner.append(video,scannerHint,close);qrActions.insertAdjacentElement('afterend',scanner);
- let stream=null,scanTimer=null,detecting=false,lastInvalid='';
+ let stream=null,scanTimer=null,lastInvalid='';
  // Every request captures an epoch. A slow permission or decoder promise
  // must never reactivate an abandoned camera after navigating away.
  let scanEpoch=0,imageEpoch=0;
@@ -246,15 +259,22 @@
    if(attempt!==scanEpoch||home.hidden||document.hidden){stopScan();return;}
    scannerHint.textContent='Point at a QR from this site. A scan only fills the invite field; you must explicitly choose Join room.';
    status.textContent='Camera active on your device. No footage is uploaded or retained.';
+   // A stale, pending detector belongs solely to its previous camera epoch.
+   // New scans must not inherit the earlier frame's busy flag after Stop.
+   let detecting=false;
    scanTimer=setInterval(async()=>{
-    if(detecting||!stream||home.hidden||document.hidden||scanner.hidden||video.readyState<2)return;
+    if(detecting||attempt!==scanEpoch||!stream||home.hidden||document.hidden||scanner.hidden||video.readyState<2)return;
     const currentStream=stream;detecting=true;
     try{
      const found=await decodeQR(video);
      if(stream!==currentStream||home.hidden||document.hidden)return;
      for(const item of found||[]){if(typeof item.rawValue==='string'&&acceptScanned(item.rawValue))break;}
-    }catch{status.textContent='QR detection unavailable. Stop camera and paste the invitation instead.';stopScan();}
-    finally{detecting=false;}
+    }catch{
+     // Stop or navigation takes precedence over any late decoder failure.
+     if(stream!==currentStream||attempt!==scanEpoch||home.hidden||document.hidden||scanner.hidden)return;
+     status.textContent='QR detection unavailable. Camera stopped; paste the invitation or retry.';
+     stopScan();
+    }finally{detecting=false;}
    },400);
   }catch(error){
    // Do not overwrite a deliberate Stop/navigate message with a late error.
