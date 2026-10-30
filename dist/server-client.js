@@ -1082,22 +1082,27 @@ globalSubTicker?.unref?.();
 for(const id of ['tabHome','tabPlay','tabReplay'])
  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalSubConsent));
 
-let subProposalReceipt=null,subProposalNotice=null;
-function clearSubProposalReceipt(){
- if(subProposalReceipt?.timer)clearTimeout(subProposalReceipt.timer);
- subProposalReceipt=null;
+// Two teams can propose in parallel. A single receipt let Blue overwrite Red's
+// pending send, enabling duplicate Red requests before the server replied.
+const subProposalReceipts=new Map(),subProposalNotices=new Map();
+function clearSubProposalReceipt(team){
+ const receipt=subProposalReceipts.get(team);
+ if(receipt?.timer)clearTimeout(receipt.timer);
+ subProposalReceipts.delete(team);
 }
 function syncSubProposal(link,state){
- const receipt=subProposalReceipt;
- if(!receipt)return;
- if(receipt.link!==link){clearSubProposalReceipt();subProposalNotice=null;return;}
- if((state?.pendingSubs||[]).some(p=>p.team===receipt.team&&
-  p.outId===receipt.outId&&p.inId===receipt.inId)){
-  clearSubProposalReceipt();subProposalNotice=null;return;
- }
- if(Date.now()-receipt.sentAt>=2400){
-  clearSubProposalReceipt();
-  subProposalNotice={link,message:'No server confirmation yet. Review the request and retry explicitly.'};
+ for(const [team,receipt] of subProposalReceipts){
+  if(receipt.link!==link){
+   clearSubProposalReceipt(team);subProposalNotices.delete(team);continue;
+  }
+  if((state?.pendingSubs||[]).some(p=>p.team===team&&
+   p.outId===receipt.outId&&p.inId===receipt.inId)){
+   clearSubProposalReceipt(team);subProposalNotices.delete(team);continue;
+  }
+  if(Date.now()-receipt.sentAt>=2400){
+   clearSubProposalReceipt(team);
+   subProposalNotices.set(team,{link,message:'No server confirmation yet. Review the request and retry explicitly.'});
+  }
  }
 }
 function renderSubPanel(){
@@ -1120,7 +1125,7 @@ function renderSubPanel(){
  const roleCaptain=captains.get(team),isHost=!!link.isOwner;
  const mayPropose=isHost||roleCaptain===networkPlayerId;
  syncSubProposal(link,state);
- const proposalPending=subProposalReceipt?.link===link&&subProposalReceipt.team===team;
+ const proposalPending=subProposalReceipts.get(team)?.link===link;
  // The native server locks roster mutations during a pending human rematch
  // ballot. Keep captain/bench/substitution actions equally honest in the UI.
  const rematchLocked=humanRematchLocksRoom(),socketOffline=link.ws?.readyState!==1;
@@ -1147,7 +1152,7 @@ function renderSubPanel(){
    'Last completed swap · '+(recent.team===1?'Red':'Blue')+': '+
    nameOf(recent.outId)+' → '+nameOf(recent.inId)+' · frame '+recent.frame:
    proposalPending?'Substitution proposal waiting for server confirmation.':
-   subProposalNotice?.link===link?subProposalNotice.message:'No substitution pending.';
+   subProposalNotices.get(team)?.link===link?subProposalNotices.get(team).message:'No substitution pending.';
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
  const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
@@ -1201,17 +1206,17 @@ $('subPropose').onclick=()=>{
  if(!state||link.ws?.readyState!==1||humanRematchLocksRoom())return;
  const team=Number($('subTeam').value);
  syncSubProposal(link,state);
- if(subProposalReceipt?.link===link&&subProposalReceipt.team===team||
+ if(subProposalReceipts.get(team)?.link===link||
     (state.pendingSubs||[]).some(p=>p.team===team))return;
  if(!link.isOwner&&new Map(state.captains||[]).get(team)!==networkPlayerId)return;
  const outId=Number($('subOutPlayer').value),inId=Number($('subInPlayer').value);
  const receipt={link,team,outId,inId,sentAt:Date.now(),timer:null};
- subProposalReceipt=receipt;subProposalNotice=null;
+ subProposalReceipts.set(team,receipt);subProposalNotices.delete(team);
  try{link.send({type:'subRequest',outId,inId});}
- catch{clearSubProposalReceipt();subProposalNotice={link,message:'Proposal could not be sent. Retry explicitly.'};}
- if(subProposalReceipt===receipt){
+ catch{clearSubProposalReceipt(team);subProposalNotices.set(team,{link,message:'Proposal could not be sent. Retry explicitly.'});}
+ if(subProposalReceipts.get(team)===receipt){
   receipt.timer=setTimeout(()=>{
-   if(subProposalReceipt!==receipt)return;
+   if(subProposalReceipts.get(team)!==receipt)return;
    syncSubProposal(link,link.roomState);renderSubPanel();
   },2400);
   receipt.timer?.unref?.();

@@ -60,6 +60,15 @@ async function joinHuman(url,room,sockets,index){
   a.elements.get('subCaptainPlayer').value='3';
   a.elements.get('subAppointCaptain').click();
   await until(()=>r.captains.get(1)===3,'host appointed own-team captain');
+  // Admit a temporary second bench player to verify simultaneous red/blue
+  // pending proposal state; unlike a fake roster these are real native peers.
+  const blueGuest=await joinHuman(url,id,sockets,10);
+  await until(()=>a.elements.get('subBenchPlayer').children.some(x=>x.value==='10'),'tenth peer in bench selector');
+  a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
+  a.elements.get('subBenchPlayer').value='10';a.elements.get('subAssignBench').click();
+  await until(()=>r.benches.get(10)===2,'blue team has own real bench player');
+  a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
+
   // Synthetic transport loss on a real admitted host: do not expose controls
   // that cannot reach the server, nor send from direct/keyboard handlers.
   a.evalJS('window.offlineOldWs=serverLink.ws;window.offlineOldSend=serverLink.send;window.offlineSends=[];serverLink.ws={readyState:3};serverLink.send=d=>window.offlineSends.push(d);renderSubPanel()');
@@ -81,7 +90,22 @@ async function joinHuman(url,room,sockets,index){
   assert.equal(a.evalJS('window.delayedProposal.length'),1,'only one pending substitution proposal on fast double-tap');
   assert.equal(a.elements.get('subPropose').disabled,true,'proposal action shows waiting state before receipt');
   assert.match(a.elements.get('subPending').textContent,/waiting for server/i,'pending proposal explicitly awaits authoritative server status');
-  a.evalJS('serverLink.send=window.originalProposalSend;subProposalReceipt.sentAt=Date.now()-2500;renderSubPanel()');
+  // An unanswered blue proposal must not overwrite the still-pending red
+  // proposal. Both use a real native roster; only transmissions are delayed.
+  a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
+  a.elements.get('subOutPlayer').value='5';a.elements.get('subInPlayer').value='10';
+  a.elements.get('subPropose').click();
+  assert.equal(a.evalJS('window.delayedProposal.length'),2,'independent blue proposal is sent once');
+  a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
+  assert.equal(a.elements.get('subPropose').disabled,true,'red proposal remains pending after proposing for blue');
+  a.elements.get('subPropose').onclick();
+  assert.equal(a.evalJS('window.delayedProposal.length'),2,'switching teams must not duplicate pending red proposal');
+  blueGuest.close();
+  await until(()=>r.clients.size===9,'temporary tenth blue spectator leaves');
+
+  a.evalJS('serverLink.send=window.originalProposalSend;subProposalReceipts.get(1).sentAt=Date.now()-2500;renderSubPanel()');
+  assert.equal(a.evalJS('subProposalReceipts.has(2)'),true,
+    'expiring red receipt must not erase the still-pending blue proposal');
   assert.equal(a.elements.get('subPropose').disabled,false,'no receipt allows an explicit human retry');
   a.elements.get('subPropose').click();
   await until(()=>r.pendingSubs.get(1)?.inId===9,'host proposed spectator swap');
