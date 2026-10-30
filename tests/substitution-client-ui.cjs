@@ -126,6 +126,13 @@ async function joinHuman(url,room,sockets,index){
   a.evalJS('window.firstSubSend=serverLink.send;window.firstSubDelayed=[];serverLink.send=d=>window.firstSubDelayed.push(d)');
   a.elements.get('subPropose').click();
   assert.equal(a.evalJS('window.firstSubDelayed.length'),1);
+  // The machine's wall clock may jump while the server receipt is pending.
+  // This must never bypass the one-flight guard before monotonic 2.4s elapse.
+  a.evalJS('globalThis.__savedWallClock=Date.now;Date.now=()=>__savedWallClock()+360000;renderSubPanel()');
+  a.elements.get('subPropose').onclick();
+  assert.equal(a.evalJS('window.firstSubDelayed.length'),1,
+    'forward wall clock jump must not submit duplicate human proposal');
+  a.evalJS('Date.now=__savedWallClock;renderSubPanel()');
   assert.match(a.elements.get('subPending').textContent,/waiting for server/i,
     'pending Red local receipt remains visible alongside genuine Blue queue');
   assert.doesNotMatch(a.elements.get('subPending').textContent,/Blue:/,
@@ -133,7 +140,7 @@ async function joinHuman(url,room,sockets,index){
   a.elements.get('subTeam').value='2';a.elements.get('subTeam').onchange();
   assert.match(a.elements.get('subPending').textContent,/Blue:.*awaiting player consent/i,
     'Blue server request remains visible while Red is awaiting acknowledgement');
-  a.evalJS('serverLink.send=window.firstSubSend;subProposalReceipts.get(1).sentAt=Date.now()-2500;renderSubPanel()');
+  a.evalJS('serverLink.send=window.firstSubSend;subProposalReceipts.get(1).sentAt=performance.now()-2500;renderSubPanel()');
   // A non-proposer may not withdraw another human's native request.
   const blueRequestId=r.pendingSubs.get(2).requestId;
   blueGuest.send(JSON.stringify({type:'subCancel',team:2,requestId:blueRequestId}));
@@ -145,6 +152,11 @@ async function joinHuman(url,room,sockets,index){
   a.evalJS('window.realCancelSend=serverLink.send;window.heldCancels=[];serverLink.send=d=>window.heldCancels.push(d)');
   a.elements.get('subCancel').click();a.elements.get('subCancel').click();
   assert.equal(a.evalJS('window.heldCancels.length'),1,'fast double-click sends only one withdrawal');
+  a.evalJS('Date.now=()=>__savedWallClock()+360000;renderSubPanel()');
+  a.elements.get('subCancel').onclick();
+  assert.equal(a.evalJS('window.heldCancels.length'),1,
+    'forward wall clock jump must not send duplicate cancellation');
+  a.evalJS('Date.now=__savedWallClock;renderSubPanel()');
   assert.equal(a.elements.get('subCancel').disabled,true,
     'withdraw button waits for native server confirmation');
   assert.match(a.elements.get('subPending').textContent,/withdrawal sent, waiting for server/i);
@@ -195,7 +207,7 @@ async function joinHuman(url,room,sockets,index){
   blueGuest.close();
   await until(()=>r.clients.size===9,'temporary tenth blue spectator leaves');
 
-  a.evalJS('serverLink.send=window.originalProposalSend;subProposalReceipts.get(1).sentAt=Date.now()-2500;renderSubPanel()');
+  a.evalJS('serverLink.send=window.originalProposalSend;subProposalReceipts.get(1).sentAt=performance.now()-2500;renderSubPanel()');
   assert.equal(a.evalJS('subProposalReceipts.has(2)'),true,
     'expiring red receipt must not erase the still-pending blue proposal');
   assert.equal(a.elements.get('subPropose').disabled,false,'no receipt allows an explicit human retry');
@@ -240,8 +252,13 @@ async function joinHuman(url,room,sockets,index){
   b.evalJS('window.heldSubSend=serverLink.send;window.heldSubVotes=[];serverLink.send=d=>window.heldSubVotes.push(d)');
   b.elements.get('subApprove').click();b.elements.get('subApprove').click();
   assert.equal(b.evalJS('window.heldSubVotes.length'),1,'one deliberate human click is sent only once before receipt');
+  b.evalJS('globalThis.__savedConsentWallClock=Date.now;Date.now=()=>__savedConsentWallClock()+360000;renderGlobalSubConsent()');
+  b.elements.get('subApprove').onclick();
+  assert.equal(b.evalJS('window.heldSubVotes.length'),1,
+    'forward wall clock jump must not duplicate own-socket consent');
+  b.evalJS('Date.now=__savedConsentWallClock;renderGlobalSubConsent()');
   assert.equal(b.elements.get('subApprove').disabled,true,'do not advertise duplicate acceptance while waiting');
-  b.evalJS('serverLink.send=window.heldSubSend;subConsentReceipt.sentAt=Date.now()-2500;renderGlobalSubConsent()');
+  b.evalJS('serverLink.send=window.heldSubSend;subConsentReceipt.sentAt=performance.now()-2500;renderGlobalSubConsent()');
   assert.equal(b.elements.get('subApprove').disabled,false,'user can retry explicitly after missing receipt');
   b.elements.get('subApprove').click();
   await until(()=>r.hb.getPlayer(9).team===1,'guest approved pregame substitution');
