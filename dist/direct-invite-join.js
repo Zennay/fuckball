@@ -105,18 +105,34 @@
  // Firefox and browsers without BarcodeDetector can decode on-device using a
  // bundled, lazy-loaded jsQR fallback. Only the explicit scan action loads it.
  let fallbackLoad=null;
- async function readyDecoder(){
+ async function readyDecoder(signal){
   if(detector||typeof window.jsQR==='function')return;
   if(!fallbackLoad){
    fallbackLoad=new Promise((resolve,reject)=>{
     const script=document.createElement('script');
     script.src='vendor/jsQR.js';script.async=true;
-    script.onload=()=>typeof window.jsQR==='function'?resolve():reject(Error('Local QR decoder unavailable.'));
-    script.onerror=()=>reject(Error('Could not load local QR decoder. Paste the room link instead.'));
+    let settled=false;
+    const timer=setTimeout(()=>finish(Error('Local QR decoder took too long to load. Try again or paste the invitation.')),8000);
+    function finish(error){
+     if(settled)return;
+     settled=true;clearTimeout(timer);
+     script.onload=null;script.onerror=null;
+     if(error){script.remove();reject(error);}else resolve();
+    }
+    script.onload=()=>typeof window.jsQR==='function'?finish():finish(Error('Local QR decoder unavailable.'));
+    script.onerror=()=>finish(Error('Could not load local QR decoder. Paste the room link instead.'));
     document.head.append(script);
    }).catch(error=>{fallbackLoad=null;throw error;});
   }
-  await fallbackLoad;
+  if(!signal)return fallbackLoad;
+  if(signal.aborted)throw Error('Image read canceled.');
+  let onAbort;
+  const canceled=new Promise((_,reject)=>{
+   onAbort=()=>reject(Error('Image read canceled.'));
+   signal.addEventListener('abort',onAbort,{once:true});
+  });
+  try{return await Promise.race([fallbackLoad,canceled]);}
+  finally{signal.removeEventListener('abort',onAbort);}
  }
  const localFrame=document.createElement('canvas');
  const localContext=localFrame.getContext('2d',{willReadFrequently:true});
@@ -301,7 +317,7 @@
   invitationEpoch++;
   imageFile.disabled=true;
   try{
-   await readyDecoder();
+   await readyDecoder(controller?.signal);
    if(request!==imageEpoch||home.hidden||document.hidden)return;
    const bitmap=await loadQRImage(file,controller?.signal);
    try{
