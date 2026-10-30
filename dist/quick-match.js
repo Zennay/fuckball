@@ -335,11 +335,11 @@
    }}));
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
- function done(message,offerRetry=false){
+ function done(message,offerRetry=false,forceRecovery=false){
   const wasSearching=searching;
   clearReadyAlert();clearReadyReceipt();searching=false;matchMode=null;ready=null;readyAccepted=false;
   stopClock();notice.textContent=String(message||'Search ended.').slice(0,240);
-  if(offerRetry&&wasSearching)showRecovery(message);else hideRecovery();
+  if(offerRetry&&(wasSearching||forceRecovery))showRecovery(message);else hideRecovery();
   // Publish the *final* state after the native recovery choice exists.
   // Previously the landing page saw only an idle queue and could not offer retry.
   refresh();
@@ -657,10 +657,13 @@
    // In that case the original queue socket is still admission-owned;
    // release it or the next explicit human search hits a stale-session guard.
    // Preserve an already joined room so the player can inspect its result.
-   if(serverLink?.quickMatchMode&&!serverLink.room){
+   const unadmitted=!!serverLink?.quickMatchMode&&!serverLink.room;
+   if(unadmitted){
     try{disconnect();}catch{}
    }
-   done(d.reason||'Your match was cancelled.',true);
+   // A quickMatchFound receipt can precede room admission and already clear
+   // searching. Still offer a human-initiated retry if this room never joined.
+   done(d.reason||'Your match was cancelled.',true,unadmitted);
   }else if(d.type==='queueStatus'){
    if(d.status==='partyGathering'&&searching&&d.mode===matchMode&&d.humanOnly===true){
     notice.textContent='Gathering your party · '+d.waiting+' of '+d.needed+' teammates connected.';
