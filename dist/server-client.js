@@ -195,7 +195,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  // admission/queue. A connected WebSocket alone does not prove room entry.
  // After the bounded wait the normal native onclose path owns recovery.
  armNativeAdmissionDeadline(link,'opening');
- $('inviteBox').hidden=true;const sendJoin=()=>{link.send(quickMode?{type:'queueJoin',mode:quickMode,
+ $('inviteBox').hidden=true;const sendJoin=()=>{if(serverLink!==link||link.admissionTimedOut)return;link.send(quickMode?{type:'queueJoin',mode:quickMode,
  token:settings.account?.token||undefined,party:link.partyQueue,netcode:settings.netcode==='classic'?2:3}:
  {type:'join',create,clubPractice:clubPractice===true,room:roomId,name:joinName||settings.name,
  spectate:link.requestedSpectate||undefined,accessKey:link.temporaryRoomKey||undefined,token:settings.account?.token||undefined,
@@ -206,7 +206,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  if(keyInput)keyInput.value='';
  };
  ws.onopen=()=>{
-  if(serverLink!==link)return;
+  if(serverLink!==link||link.admissionTimedOut)return;
   armNativeAdmissionDeadline(link,'admission');
   notifyNativeSessionView();
   if(!link.requestedSpectate){sendJoin();return;}

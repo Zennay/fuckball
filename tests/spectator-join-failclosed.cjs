@@ -60,9 +60,35 @@ async function checkTransportCloseFailure(throws,throwsLeave=false){
   assert.match(app.elements.get('joinError').textContent,/20 seconds/,'timeout explained');
  }finally{app.evalJS('disconnect();room.destroy()');}
 }
+async function checkLateSocketOpen(watch){
+ let joins=0,probes=0;
+ class LateSocket{
+  constructor(){this.readyState=0;}
+  send(payload){const kind=JSON.parse(payload).type;
+   if(kind==='join')joins++;
+   if(kind==='spectatorAdmissionInfo')probes++;
+  }
+  close(){} // Native transport is still closing after its admission deadline.
+ }
+ const app=createApp({location:{hostname:'127.0.0.1',host:'127.0.0.1:8080',protocol:'http:'},globals:{WebSocket:LateSocket}});
+ try{
+  app.elements.get('serverAddress').value='ws://127.0.0.1:8080/ws';
+  app.evalJS("showJoinScreen('ABCDEFGH')");
+  app.elements.get('joinSpectator').checked=watch;
+  app.elements.get('joinName').value='Late Opener';
+  app.elements.get('joinWithName').click();
+  const ws=app.evalJS('serverLink.ws');
+  app.evalJS('serverLink.admissionTimer._onTimeout()'); // Hard 20s limit.
+  ws.readyState=1;ws.onopen?.(); // Late browser transport success must be ignored.
+  assert.equal(joins,0,'expired admission cannot send native join');
+  assert.equal(probes,0,'expired spectator admission cannot probe server');
+  assert.equal(app.evalJS('serverLink.admissionTimedOut'),true);
+ }finally{app.evalJS('disconnect();room.destroy()');}
+}
 (async()=>{
  await check('refused');await check('error');await check('timeout');
  await checkTransportCloseFailure(true);await checkTransportCloseFailure(false);
  await checkTransportCloseFailure(true,true);await checkTransportCloseFailure(false,true);
+ await checkLateSocketOpen(false);await checkLateSocketOpen(true);
  console.log('PASS spectator denial, timeout, stalled/throwing close and late replies');
 })().catch(e=>{console.error(e);process.exitCode=1;});
