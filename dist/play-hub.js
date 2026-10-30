@@ -431,11 +431,15 @@
   connectionCard.hidden=!state.pending;
   if(state.pending){
    const detail=document.getElementById('serverRoomStatus')?.textContent?.trim();
+   const link=typeof serverLink!=='undefined'?serverLink:null;
+   const timed=link?.admissionTimer!=null&&Number.isFinite(link.admissionStartedAt)&&
+    Date.now()<link.admissionStartedAt+20000;
+   const left=timed?Math.max(1,Math.ceil((link.admissionStartedAt+20000-Date.now())/1000)):null;
    const copy=(detail||'Waiting for the existing server handshake.').slice(0,180)+
-    (typeof serverLink!=='undefined'&&serverLink?.quickQueueAcknowledged?
-     ' The server accepted the human-only queue; no bots will be added.':
-     ' A server response is required within 20 seconds.')+
-    ' You can review connection settings or cancel explicitly.';
+    (link?.quickQueueAcknowledged?' Human-only queue acknowledged; no bots added.':
+     left===null?' The connection outcome appears here.':
+      ' '+left+'s until '+(link.admissionStage==='opening'?'transport-open':'server-admission')+' timeout.')+
+    ' View connection settings or cancel explicitly.';
    if(connectionDetail.textContent!==copy)connectionDetail.textContent=copy;
   }
   const canCancel=nativeQueue.searching&&!nativeQueue.ready;
@@ -706,6 +710,9 @@
  if(q)observer.observe(q,{subtree:true,attributes:true,attributeFilter:['hidden']});
  window.addEventListener('online',refresh);window.addEventListener('offline',refresh);
  window.addEventListener('fuckball:native-session-state',refresh);
+ // View-only 1-second countdown, never sends or retries any packet.
+ const deadlineTicker=setInterval(()=>{if(!connectionCard.hidden&&!home.hidden)refresh();},1000);
+ deadlineTicker?.unref?.();
  document.getElementById('tabHome')?.addEventListener('click',refresh);
  document.getElementById('tabPlay')?.addEventListener('click',refresh);
  window.addEventListener('focus',refresh);
