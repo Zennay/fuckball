@@ -65,6 +65,10 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright'),{cre
   const inside=rect=>rect&&rect.x>=0&&rect.y>=0&&rect.x+rect.width<=390&&rect.y+rect.height<=844;
   const mobileRequest=mobile.locator('.play-postmatch-request');
   assert(inside(await mobileRequest.boundingBox()),'mobile rematch CTA fits visual viewport');
+  await mobile.evaluate(()=>{serverLink.ws.readyState=3;renderNextMatchPanel()});
+  assert.equal(await mobile.locator('#rematchRequest').isDisabled(),true,'offline host cannot request through native menu');
+  assert.equal(await mobile.locator('#nextGame').isDisabled(),true,'offline host cannot directly start next game');
+  await mobile.evaluate(()=>{serverLink.ws.readyState=1;renderNextMatchPanel()});
   await mobileRequest.tap({timeout:8000});
   assert.deepEqual(await mobile.evaluate(()=>window.mobileRematchSends.map(x=>x.type)),['rematchRequest']);
   await mobile.evaluate(()=>{
@@ -72,6 +76,17 @@ const assert=require('node:assert/strict'),{chromium}=require('playwright'),{cre
    document.getElementById('matchView').hidden=true;renderGlobalRematchDock();
   });
   const mobileVote=mobile.locator('.native-rematch-dock-actions button.primary');
+  // Both the full native menu and the global cross-view dock must show a
+  // truthful connection state and refuse actions until the socket is open.
+  await mobile.evaluate(()=>{serverLink.ws.readyState=3;renderNextMatchPanel();renderGlobalRematchDock()});
+  assert.equal(await mobileVote.isDisabled(),true,'global rematch consent must not advertise an offline vote');
+  assert.equal(await mobile.locator('.native-rematch-dock-actions button').nth(1).isDisabled(),true,'global decline must also stop while offline');
+  assert.equal(await mobile.locator('#rematchAccept').isDisabled(),true,'native rematch consent must not advertise an offline vote');
+  assert.match(await mobile.locator('.native-rematch-dock-copy').innerText(),/connection unavailable|reconnect/i);
+  assert.deepEqual(await mobile.evaluate(()=>window.mobileRematchSends.map(x=>x.type)),['rematchRequest'],'offline vote is not sent');
+  await mobile.evaluate(()=>{serverLink.ws.readyState=1;renderNextMatchPanel();renderGlobalRematchDock()});
+  assert.equal(await mobileVote.isDisabled(),false,'reconnected voter can decide again');
+  assert.equal(await mobile.locator('.native-rematch-dock-actions button').nth(1).isDisabled(),false,'reconnected voter can decline again');
   assert(inside(await mobileVote.boundingBox()),'mobile consent CTA fits visual viewport');
   await mobileVote.tap({timeout:8000});
   assert.deepEqual(await mobile.evaluate(()=>window.mobileRematchSends.map(x=>x.type)),['rematchRequest','rematchVote']);

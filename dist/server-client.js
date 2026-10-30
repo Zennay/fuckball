@@ -770,10 +770,11 @@ function renderNextMatchPanel(){
  const notice=nativeRematchVoteNotice?.link===link&&nativeRematchVoteNotice.id===request?.id?
   nativeRematchVoteNotice.message:'';
  const requestPending=postgameRequestPending?.link===link;
+ const socketOffline=link.ws?.readyState!==1;
  const requestFeedback=requestPending?
   'Request sent · waiting for the server to start '+(postgameRequestPending.action==='new'?'a new game':'a rematch vote')+'. ':
   postgameRequestNotice?.link===link?postgameRequestNotice.message+' ':'';
- const infoText=requestFeedback+(request?
+ const infoText=requestFeedback+(socketOffline&&request?'Connection unavailable. Reconnect before voting; the server deadline continues. ':'')+(request?
    (pending?'Your '+(nativeRematchVotePending.accept?'accept':'decline')+' vote was sent · awaiting server receipt. ':
     notice?notice+' ':'')+
    (voteExpired?'Voting deadline passed · waiting for server confirmation. No further votes can be sent.':
@@ -799,15 +800,15 @@ function renderNextMatchPanel(){
  const host=!!link.isOwner,canRequest=quick?!!result&&!!state&&!state.started:host;
  $('rematchRequest').hidden=!result||!!request||!canRequest;
  $('rematchRequest').textContent=quick?'Request human rematch':'Request rematch';
- $('rematchRequest').disabled=!result||!!request||!canRequest||!!requestPending;
+ $('rematchRequest').disabled=!result||!!request||!canRequest||!!requestPending||socketOffline;
  $('nextGame').hidden=!host;
- $('nextGame').disabled=!host||!!requestPending||!!request;
+ $('nextGame').disabled=!host||!!requestPending||!!request||socketOffline;
  const canVote=!!request&&voters.has(networkPlayerId)&&!approved.has(networkPlayerId)&&
   (seconds===null||seconds>0);
  $('rematchAccept').hidden=!canVote;
  $('rematchDecline').hidden=!canVote;
- $('rematchAccept').disabled=!!pending;
- $('rematchDecline').disabled=!!pending;
+ $('rematchAccept').disabled=!!pending||socketOffline;
+ $('rematchDecline').disabled=!!pending||socketOffline;
  renderGlobalRematchDock();
 }
 $('rematchRequest').onclick=()=>submitPostgameRequest('rematch');
@@ -890,11 +891,13 @@ function renderGlobalRematchDock(){
  const vote=state.vote,remaining=state.expires===null?null:
   Math.max(0,Math.ceil((state.expires-Date.now())/1000));
  const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
+ const socketOffline=state.link.ws?.readyState!==1;
  const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
   nativeRematchVoteNotice.message:'';
  // The visual clock belongs in the heading, not the live status text.
  // Announce only server/proposal changes, never each second on a screen reader.
  const title=state.approved?'YOUR REMATCH VOTE IS CONFIRMED':
+  socketOffline?'CONNECTION LOST · RECONNECT TO VOTE':
   pending?'VOTE SENT · AWAITING SERVER RECEIPT':
   notice?'SERVER RECEIPT MISSING · YOU MAY RETRY':
   'HUMAN REMATCH · YOUR DECISION NEEDED';
@@ -904,14 +907,15 @@ function renderGlobalRematchDock(){
   ' · '+approved+' / '+vote.required.length+' human players confirmed'+
   (state.approved?' · Waiting for remaining players.':
    ' · Accept or decline before the server deadline.');
- const feedback=pending?'Vote sent · waiting for server receipt. ':
+ const feedback=socketOffline?'Connection unavailable. Reconnect before voting; the server deadline continues. ':
+  pending?'Vote sent · waiting for server receipt. ':
   notice?notice+' ':'';
  if(globalRematchStatus.textContent!==feedback+text)
   globalRematchStatus.textContent=feedback+text;
  globalRematchAccept.hidden=state.approved;
  globalRematchDecline.hidden=state.approved;
- globalRematchAccept.disabled=!!pending;
- globalRematchDecline.disabled=!!pending;
+ globalRematchAccept.disabled=!!pending||socketOffline;
+ globalRematchDecline.disabled=!!pending||socketOffline;
 }
 function sendGlobalRematchVote(accept){
  const state=currentRematchVote();
