@@ -108,7 +108,7 @@ function armNativeAdmissionDeadline(link,stage){
  link.admissionTimer?.unref?.();
 }
 
-const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();clearPostgameRequest();const link=serverLink;clearQuickRematchAlert(link);clearNativeAdmissionDeadline(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1){try{link.send({type:'leave'});}catch{
+const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearNativeRematchVote();clearPostgameRequest();clearSubProposalReceipt();const link=serverLink;clearQuickRematchAlert(link);clearNativeAdmissionDeadline(link);const oldLimits=offlineRoomLimits;offlineRoomLimits=null;serverLink=null;if(link?.spectatorProbeTimer)clearTimeout(link.spectatorProbeTimer);if(link?.net){link.net.close();clearInterval(link.netTimer);link.net=null;}hostLabel='';$('inviteButton').hidden=true;if(link){link.ws.onclose=null;if(link.ws.readyState===1){try{link.send({type:'leave'});}catch{
  // A dead transport must not interrupt local teardown or explicit retry.
  }}try{link.ws.close();}catch{/* Invalidate session even when close throws. */}setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
@@ -1082,6 +1082,24 @@ globalSubTicker?.unref?.();
 for(const id of ['tabHome','tabPlay','tabReplay'])
  document.getElementById(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalSubConsent));
 
+let subProposalReceipt=null,subProposalNotice=null;
+function clearSubProposalReceipt(){
+ if(subProposalReceipt?.timer)clearTimeout(subProposalReceipt.timer);
+ subProposalReceipt=null;
+}
+function syncSubProposal(link,state){
+ const receipt=subProposalReceipt;
+ if(!receipt)return;
+ if(receipt.link!==link){clearSubProposalReceipt();subProposalNotice=null;return;}
+ if((state?.pendingSubs||[]).some(p=>p.team===receipt.team&&
+  p.outId===receipt.outId&&p.inId===receipt.inId)){
+  clearSubProposalReceipt();subProposalNotice=null;return;
+ }
+ if(Date.now()-receipt.sentAt>=2400){
+  clearSubProposalReceipt();
+  subProposalNotice={link,message:'No server confirmation yet. Review the request and retry explicitly.'};
+ }
+}
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
@@ -1101,6 +1119,8 @@ function renderSubPanel(){
  populateSubSelect('subCaptainPlayer',[{id:0,name:'No captain'},...active.map(asOption)],'No active players');
  const roleCaptain=captains.get(team),isHost=!!link.isOwner;
  const mayPropose=isHost||roleCaptain===networkPlayerId;
+ syncSubProposal(link,state);
+ const proposalPending=subProposalReceipt?.link===link&&subProposalReceipt.team===team;
  // The native server locks roster mutations during a pending human rematch
  // ballot. Keep captain/bench/substitution actions equally honest in the UI.
  const rematchLocked=humanRematchLocksRoom(),socketOffline=link.ws?.readyState!==1;
@@ -1109,7 +1129,7 @@ function renderSubPanel(){
  $('subClearBench').disabled=controlsLocked||!isHost||!inactive.length;
  $('subAppointCaptain').disabled=controlsLocked||!isHost;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
- $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued;
+ $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued||proposalPending;
  const timeFrames=new Map(state.activeFrames||[]);
  const total=(timeFrames.get(networkPlayerId)||0)/60;
  $('subSummary').textContent=(isHost?'Host':roleCaptain===networkPlayerId?'Team captain':'Player')+
@@ -1126,7 +1146,8 @@ function renderSubPanel(){
   recent&&[1,2].includes(recent.team)&&Number.isSafeInteger(recent.frame)?
    'Last completed swap · '+(recent.team===1?'Red':'Blue')+': '+
    nameOf(recent.outId)+' → '+nameOf(recent.inId)+' · frame '+recent.frame:
-   'No substitution pending.';
+   proposalPending?'Substitution proposal waiting for server confirmation.':
+   subProposalNotice?.link===link?subProposalNotice.message:'No substitution pending.';
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
  const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
@@ -1176,10 +1197,26 @@ $('subAppointCaptain').onclick=()=>{
  if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
 };
 $('subPropose').onclick=()=>{
- if(!serverLink?.roomState||serverLink.ws?.readyState!==1||humanRematchLocksRoom())return;
+ const link=serverLink,state=link?.roomState;
+ if(!state||link.ws?.readyState!==1||humanRematchLocksRoom())return;
  const team=Number($('subTeam').value);
- if(!serverLink.isOwner&&new Map(serverLink.roomState.captains||[]).get(team)!==networkPlayerId)return;
- serverLink.send({type:'subRequest',outId:Number($('subOutPlayer').value),inId:Number($('subInPlayer').value)});
+ syncSubProposal(link,state);
+ if(subProposalReceipt?.link===link&&subProposalReceipt.team===team||
+    (state.pendingSubs||[]).some(p=>p.team===team))return;
+ if(!link.isOwner&&new Map(state.captains||[]).get(team)!==networkPlayerId)return;
+ const outId=Number($('subOutPlayer').value),inId=Number($('subInPlayer').value);
+ const receipt={link,team,outId,inId,sentAt:Date.now(),timer:null};
+ subProposalReceipt=receipt;subProposalNotice=null;
+ try{link.send({type:'subRequest',outId,inId});}
+ catch{clearSubProposalReceipt();subProposalNotice={link,message:'Proposal could not be sent. Retry explicitly.'};}
+ if(subProposalReceipt===receipt){
+  receipt.timer=setTimeout(()=>{
+   if(subProposalReceipt!==receipt)return;
+   syncSubProposal(link,link.roomState);renderSubPanel();
+  },2400);
+  receipt.timer?.unref?.();
+ }
+ renderSubPanel();
 };
 for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick=()=>{
  const request=currentSubConsent();
