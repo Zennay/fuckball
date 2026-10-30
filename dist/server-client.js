@@ -762,6 +762,7 @@ function renderNextMatchPanel(){
  const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
  const seconds=Number.isSafeInteger(request?.expiresAt)?
   Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000)):null;
+ const voteExpired=!!request&&seconds===0;
  const pending=nativeRematchVotePending?.link===link&&nativeRematchVotePending.id===request?.id;
  const notice=nativeRematchVoteNotice?.link===link&&nativeRematchVoteNotice.id===request?.id?
   nativeRematchVoteNotice.message:'';
@@ -772,8 +773,9 @@ function renderNextMatchPanel(){
  $('nextMatchInfo').textContent=requestFeedback+(request?
    (pending?'Your '+(nativeRematchVotePending.accept?'accept':'decline')+' vote was sent · awaiting server receipt. ':
     notice?notice+' ':'')+
-   'Rematch awaiting '+(voters.size-approved.size)+' of '+voters.size+' players'+
-   (seconds===null?'':' · '+seconds+'s left'):
+   (voteExpired?'Voting deadline passed · waiting for server confirmation. No further votes can be sent.':
+   'Rematch awaiting '+Math.max(0,voters.size-approved.size)+' of '+voters.size+' players'+
+   (seconds===null?'':' · '+seconds+'s left')):
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
    'Everyone remains connected to this room.');
  const list=$('nextMatchPlayers');list.replaceChildren();
@@ -892,12 +894,25 @@ globalRematchView.addEventListener('click',()=>{
  choice.focus?.({preventScroll:true});
  renderGlobalRematchDock();
 });
-const globalRematchTicker=setInterval(renderGlobalRematchDock,1000);
+// A visible match menu otherwise freezes its countdown at the last server
+// packet, leaving stale Accept/Decline controls on screen after expiry.
+// The server alone expires votes; this ticker only refreshes the native view.
+function refreshNativeRematchCountdown(){
+ const panel=$('nextMatchPanel');
+ if(panel&&!panel.hidden)renderNextMatchPanel();
+ else renderGlobalRematchDock();
+}
+const globalRematchTicker=setInterval(refreshNativeRematchCountdown,1000);
 globalRematchTicker?.unref?.();
 // Home and Play exist in both the full app and minimal original runtime.
 // My Games is still covered by the one-second view-state refresh tick.
 for(const id of ['tabHome','tabPlay'])
- $(id)?.addEventListener('click',()=>queueMicrotask(renderGlobalRematchDock));
+ $(id)?.addEventListener('click',()=>queueMicrotask(refreshNativeRematchCountdown));
+
+// Browser tabs can throttle intervals: redraw immediately on return,
+// without creating votes or substituting locally for server receipts.
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNativeRematchCountdown();});
+window.addEventListener('focus',refreshNativeRematchCountdown);
 
 // A bench player may be browsing Home / My Games when the native host
 // proposes a substitution. The only consent source is still the server
