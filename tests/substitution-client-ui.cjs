@@ -201,6 +201,29 @@ async function joinHuman(url,room,sockets,index){
   assert.equal(a.elements.get('subPropose').disabled,false,'no receipt allows an explicit human retry');
   a.elements.get('subPropose').click();
   await until(()=>r.pendingSubs.get(1)?.inId===9,'host proposed spectator swap');
+  // Synthetic wall-clock expiration of an actual native human request: the
+  // server is authoritative and may still hold this request until its next
+  // maintenance tick. A cached client must not offer stale consent, and the
+  // host should be able to replace it with a newly numbered proposal.
+  const expiredNativeId=r.pendingSubs.get(1).requestId;
+  r.pendingSubs.get(1).expiresAt=Date.now()-1000;
+  for(const app of [a,b])app.evalJS("serverLink.roomState.pendingSubs.find(p=>p.team===1).expiresAt=serverLink.roomState.serverNow-1000;renderSubPanel()");
+  assert.match(a.elements.get('subPending').textContent,/expired.*new proposal/i,
+    'expired native consent must tell the host how to recover');
+  assert.equal(a.elements.get('subPropose').disabled,false,
+    'host can issue a replacement without waiting for a stale room packet');
+  assert.equal(b.elements.get('subConsent').hidden,true,
+    'incoming human never sees an expired local consent request');
+  assert.equal(b.evalJS('globalSubConsent.hidden'),true,
+    'expired request must disappear from the global consent dock too');
+  b.evalJS('globalThis.__expiredSends=[];globalThis.__expiredSend=serverLink.send;serverLink.send=d=>__expiredSends.push(d)');
+  b.elements.get('subApprove').onclick();b.evalJS('globalSubAccept.events.click()');
+  assert.equal(b.evalJS('__expiredSends.length'),0,'expired consent emits zero votes');
+  b.evalJS('serverLink.send=__expiredSend');
+  a.elements.get('subPropose').click();
+  await until(()=>r.pendingSubs.get(1)?.requestId>expiredNativeId,
+    'native server admitted a new human request after expiring the old one');
+
   await until(()=>!b.elements.get('subConsent').hidden,'incoming guest sees consent prompt');
   assert.equal(b.elements.get('subConsentText').textContent.includes('Red'),true);
   b.evalJS('window.offlineOldWs=serverLink.ws;window.offlineOldSend=serverLink.send;window.offlineSends=[];serverLink.ws={readyState:3};serverLink.send=d=>window.offlineSends.push(d);renderSubPanel();renderGlobalSubConsent()');
