@@ -258,6 +258,11 @@ async function joinHuman(url,room,sockets,index){
     'global substitution consent is visible outside the match menu');
   a.evalJS('globalSubAccept.events.click()');
   await until(()=>r.pendingSubs.get(1)?.accepted===true,'entrant accepted live swap from global dock');
+  await until(()=>/accepted, pause to apply.*[0-9]+s remaining/i.test(
+    a.elements.get('subPending').textContent),
+    'host sees genuine bounded pause deadline after independent human approval');
+  assert(r.pendingSubs.get(1).expiresAt-Date.now()>50000,
+    'actual native consent refreshes the room-authoritative pause deadline');
   assert.equal(r.hb.getPlayer(1).team,0,'accepted live swap remains benched');
   assert.equal(r.hb.getPlayer(9).team,1,'incumbent remains on field');
   a.evalJS('togglePause()');

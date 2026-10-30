@@ -1172,6 +1172,8 @@ function renderSubPanel(){
   (socketOffline?' · Connection unavailable. Reconnect before changing the lineup.':
    rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
+ const timeRemaining=p=>Number.isFinite(p.expiresAt)?
+  ' · '+Math.max(0,Math.ceil((p.expiresAt-Date.now())/1000))+'s remaining':'';
  const teamRequests=requests.filter(p=>p.team===team);
  const recent=Array.isArray(state.recentSubs)?
   state.recentSubs.filter(p=>p.team===team).at(-1):null;
@@ -1179,10 +1181,10 @@ function renderSubPanel(){
  // hide Red's own pending confirmation, retry notice or last completed swap.
  $('subPending').textContent=teamRequests.length?
   teamRequests.map(p=>teamName+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
-   (p.accepted?' · accepted, waiting for pause':
+   (p.accepted?' · accepted, pause to apply'+timeRemaining(p):
     cancelPending?' · withdrawal sent, waiting for server':
     subCancelNotices.get(team)?.link===link?' · '+subCancelNotices.get(team).message:
-    ' · awaiting player consent')).join(' | '):
+    ' · awaiting player consent'+timeRemaining(p))).join(' | '):
   proposalPending?'Substitution proposal waiting for server confirmation.':
   subProposalNotices.get(team)?.link===link?subProposalNotices.get(team).message:
   recent&&Number.isSafeInteger(recent.frame)?
