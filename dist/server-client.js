@@ -1043,7 +1043,7 @@ function renderGlobalSubConsent(){
  else if(subConsentReceipt&&(
   subConsentReceipt.link!==request.link||
   subConsentReceipt.id!==request.pending.requestId||
-  Date.now()-subConsentReceipt.sentAt>=2400))subConsentReceipt=null;
+  performance.now()-subConsentReceipt.sentAt>=2400))subConsentReceipt=null;
  // The native buttons share the same pending receipt as the global dock.
  if(request){
   const unavailable=!!subConsentReceipt||request.link.ws?.readyState!==1;
@@ -1112,7 +1112,7 @@ function syncSubCancel(link,state){
   if(receipt.link!==link||!req||req.requestId!==receipt.id){
    subCancelReceipts.delete(team);subCancelNotices.delete(team);continue;
   }
-  if(Date.now()-receipt.sentAt>=2400){
+  if(performance.now()-receipt.sentAt>=2400){
    subCancelReceipts.delete(team);
    subCancelNotices.set(team,{link,message:'No server cancellation receipt yet. Review and retry explicitly.'});
   }
@@ -1133,7 +1133,7 @@ function syncSubProposal(link,state){
    p.outId===receipt.outId&&p.inId===receipt.inId)){
    clearSubProposalReceipt(team);subProposalNotices.delete(team);continue;
   }
-  if(Date.now()-receipt.sentAt>=2400){
+  if(performance.now()-receipt.sentAt>=2400){
    clearSubProposalReceipt(team);
    subProposalNotices.set(team,{link,message:'No server confirmation yet. Review the request and retry explicitly.'});
   }
@@ -1219,7 +1219,7 @@ function renderSubPanel(){
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId)&&!nativeSubExpired(p,link));
  $('subConsent').hidden=!yourRequest;
  const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
-  subConsentReceipt.id===yourRequest.requestId&&Date.now()-subConsentReceipt.sentAt<2400;
+  subConsentReceipt.id===yourRequest.requestId&&performance.now()-subConsentReceipt.sentAt<2400;
  $('subApprove').disabled=!yourRequest||socketOffline||receiptPending;
  $('subDecline').disabled=!yourRequest||socketOffline||receiptPending;
  $('subConsentText').textContent=yourRequest?
@@ -1299,7 +1299,7 @@ $('subPropose').onclick=()=>{
  // Check the current native roster again at click-time, not only render-time.
  if(!eligibleNativeRosterHuman(outId,team)||!eligibleNativeRosterHuman(inId,0)||
     new Map(state.benches||[]).get(inId)!==team)return;
- const receipt={link,team,outId,inId,sentAt:Date.now(),timer:null};
+ const receipt={link,team,outId,inId,sentAt:performance.now(),timer:null};
  subProposalReceipts.set(team,receipt);subProposalNotices.delete(team);
  try{link.send({type:'subRequest',outId,inId});}
  catch{clearSubProposalReceipt(team);subProposalNotices.set(team,{link,message:'Proposal could not be sent. Retry explicitly.'});}
@@ -1321,7 +1321,7 @@ $('subCancel').onclick=()=>{
  syncSubCancel(link,state);
  if(subCancelReceipts.get(team)?.link===link&&
     subCancelReceipts.get(team).id===queued.requestId)return;
- const receipt={link,id:queued.requestId,sentAt:Date.now()};
+ const receipt={link,id:queued.requestId,sentAt:performance.now()};
  subCancelReceipts.set(team,receipt);subCancelNotices.delete(team);
  try{link.send({type:'subCancel',team,requestId:queued.requestId});}
  catch{subCancelReceipts.delete(team);
@@ -1337,8 +1337,8 @@ for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick
  if(!request||request.link.ws?.readyState!==1)return;
  const pending=request.pending;
  if(subConsentReceipt?.link===request.link&&subConsentReceipt.id===pending.requestId&&
-    Date.now()-subConsentReceipt.sentAt<2400)return;
- const receipt={link:request.link,id:pending.requestId,sentAt:Date.now()};
+    performance.now()-subConsentReceipt.sentAt<2400)return;
+ const receipt={link:request.link,id:pending.requestId,sentAt:performance.now()};
  subConsentReceipt=receipt;
  try{
   request.link.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
