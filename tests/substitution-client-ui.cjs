@@ -275,6 +275,25 @@ async function joinHuman(url,room,sockets,index){
   } finally {
    a.evalJS('Date.now=__nativeDateNow;renderSubPanel()');
   }
+  // A server expiry must keep visibly counting down after its status receipt,
+  // including on a match host with a wildly incorrect system clock.
+  a.evalJS('globalThis.__nativeLastRoomReceive=serverLink.roomStatusReceivedAt;serverLink.roomStatusReceivedAt=performance.now()-25000;renderSubPanel()');
+  try {
+   assert.match(a.elements.get('subPending').textContent,/accepted, pause to apply.*3[4-6]s remaining/i,
+    'displayed server-authoritative countdown reflects elapsed monotonic time');
+  } finally {
+   a.evalJS('serverLink.roomStatusReceivedAt=__nativeLastRoomReceive;renderSubPanel()');
+  }
+  const selectedOutgoing=a.elements.get('subOutPlayer').value;
+  a.evalJS('globalThis.__nativeMenuWasOpen=menuOpen;menuOpen=true;serverLink.roomStatusReceivedAt=performance.now()-25000');
+  try {
+   await until(()=>/accepted, pause to apply.*3[4-6]s remaining/i.test(
+     a.elements.get('subPending').textContent),'live countdown ticker refreshes without new server status');
+   assert.equal(a.elements.get('subOutPlayer').value,selectedOutgoing,
+     'countdown-only refresh must not interrupt the human roster selection');
+  } finally {
+   a.evalJS('menuOpen=__nativeMenuWasOpen;serverLink.roomStatusReceivedAt=__nativeLastRoomReceive;renderSubPanel()');
+  }
   assert.equal(r.hb.getPlayer(1).team,0,'accepted live swap remains benched');
   assert.equal(r.hb.getPlayer(9).team,1,'incumbent remains on field');
   a.evalJS('togglePause()');

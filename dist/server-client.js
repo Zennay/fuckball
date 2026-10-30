@@ -416,6 +416,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   // renders: a lobby may send exactly ONE subsequent snapshot and then pause.
   if(link.roomState?.room!==d.room||link.roomState?.round!==d.round)
    link.roomRosterFrameFloor=net.lastSnapshot;
+  link.roomStatusReceivedAt=performance.now();
   link.roomState=d;
   if(link.roomControl?.spectatorLimitSupported===true&&
      Number.isSafeInteger(d.spectatorCount)&&d.spectatorCount>=0&&d.spectatorCount<=64)
@@ -1128,6 +1129,14 @@ function syncSubProposal(link,state){
   }
  }
 }
+// Use the native room host's clock, advanced by this tab's monotonic elapsed
+// time. A device's incorrect wall clock cannot freeze or invent deadlines.
+function nativeSubSeconds(p,link){
+ const received=link?.roomStatusReceivedAt,serverNow=link?.roomState?.serverNow;
+ const now=Number.isFinite(serverNow)?serverNow+
+  (Number.isFinite(received)?Math.max(0,performance.now()-received):0):Date.now();
+ return Math.max(0,Math.ceil((p.expiresAt-now)/1000));
+}
 function renderSubPanel(){
  const panel=$('subPanel'),link=serverLink,state=link?.roomState;
  panel.hidden=!(link?.room&&state);
@@ -1173,7 +1182,7 @@ function renderSubPanel(){
    rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
  const timeRemaining=p=>Number.isFinite(p.expiresAt)?
-  ' · '+Math.max(0,Math.ceil((p.expiresAt-(Number.isFinite(state.serverNow)?state.serverNow:Date.now()))/1000))+'s remaining':'';
+  ' · '+nativeSubSeconds(p,link)+'s remaining':'';
  const teamRequests=requests.filter(p=>p.team===team);
  const recent=Array.isArray(state.recentSubs)?
   state.recentSubs.filter(p=>p.team===team).at(-1):null;
@@ -1206,6 +1215,18 @@ function renderSubPanel(){
 }
 const baseOnlineRefreshMenu=refreshMenu;
 refreshMenu=function(){baseOnlineRefreshMenu();renderSubPanel();};
+// Only patch the visible countdown; do not rebuild team selectors each second
+// while a human is choosing players in the match menu.
+const subDeadlineTick=setInterval(()=>{
+ const link=serverLink,requests=link?.roomState?.pendingSubs;
+ if(!menuOpen||!Array.isArray(requests)||!requests.length)return;
+ const team=Number($('subTeam').value)===2?2:1;
+ const pending=requests.find(p=>p.team===team&&Number.isFinite(p.expiresAt));
+ const label=$('subPending');
+ if(pending&&label?.textContent?.includes('s remaining'))
+  label.textContent=label.textContent.replace(/\d+s remaining/,nativeSubSeconds(pending,link)+'s remaining');
+},1000);
+subDeadlineTick?.unref?.();
 // Room-status can arrive before the subsequent native player snapshot. Refresh
 // selectors only when the real roster signature changes, not on every 30Hz
 // snapshot (which would disrupt the player's in-progress selection).
