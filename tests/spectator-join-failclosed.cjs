@@ -32,11 +32,11 @@ async function check(behavior){
   assert.equal(app.evalJS('serverLink'),null,behavior+' leaves no orphaned socket');
  }finally{app.evalJS('disconnect();room.destroy()');}
 }
-async function checkTransportCloseFailure(throws){
+async function checkTransportCloseFailure(throws,throwsLeave=false){
  let joins=0, closes=0;
  class StalledSocket{
   constructor(){this.readyState=0;setImmediate(()=>{this.readyState=1;this.onopen?.();});}
-  send(payload){if(JSON.parse(payload).type==='join')joins++;}
+  send(payload){const type=JSON.parse(payload).type;if(type==='join')joins++;if(type==='leave'&&throwsLeave)throw Error('synthetic outbound leave failure');}
   close(){closes++;if(throws)throw Error('synthetic close failure');}
  }
  const app=createApp({location:{hostname:'127.0.0.1',host:'127.0.0.1:8080',protocol:'http:'},globals:{WebSocket:StalledSocket}});
@@ -63,5 +63,6 @@ async function checkTransportCloseFailure(throws){
 (async()=>{
  await check('refused');await check('error');await check('timeout');
  await checkTransportCloseFailure(true);await checkTransportCloseFailure(false);
+ await checkTransportCloseFailure(true,true);await checkTransportCloseFailure(false,true);
  console.log('PASS spectator denial, timeout, stalled/throwing close and late replies');
 })().catch(e=>{console.error(e);process.exitCode=1;});
