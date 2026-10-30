@@ -525,10 +525,17 @@
  });
  setInterval(()=>{if(!document.hidden&&!home.hidden)loadAvailability();},15000);
  document.addEventListener('visibilitychange',()=>{
+  // An observed human queue count is only evidence from the foreground
+  // session. Invalidate any in-flight body as soon as the player leaves;
+  // otherwise stale tiles keep claiming real opponents on return.
+  ++listingRequest;
+  clearPulse();genericLabels();manualRefresh.disabled=false;
+  window.dispatchEvent(new Event('fuckball:queue-unavailable'));
   if(document.visibilityState==='visible'){
+   availability.textContent='Refreshing real-player counts for this server…';
    clearReadyAlert();loadAvailability();
   }else{
-   clearPulse();
+   availability.textContent='Queue counts paused while this tab is hidden. Return to refresh.';
    // A player may background the browser AFTER the server sent the 15s
    // proposal. The original alert only ran at proposal-arrival time, so this
    // path would silently hide the only confirmation controls. Existing
