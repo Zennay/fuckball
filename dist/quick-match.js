@@ -164,11 +164,13 @@
  quickStart.onclick=()=>start(preferred);
  setPreferred(preferred,false);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
- let lastAttempt=null,recoveryNeedsSignIn=false;
- function hideRecovery(){recovery.hidden=true;recoveryNeedsSignIn=false;}
+ let lastAttempt=null,recoveryNeedsSignIn=false,rejectedAccountToken=null;
+ function hideRecovery(){recovery.hidden=true;recoveryNeedsSignIn=false;rejectedAccountToken=null;}
  function showRecovery(reason,requiresSignIn=false){
   if(!lastAttempt){hideRecovery();return;}
   recoveryNeedsSignIn=requiresSignIn===true;
+  // Keep the rejected credential in memory only; never leak it in UI state.
+  rejectedAccountToken=recoveryNeedsSignIn?(settings.account?.token||null):null;
   const reasonText=String(reason||'Search interrupted.').slice(0,160);
   if(recoveryNeedsSignIn){
    // An unrecognized/expired account token will be rejected again. Invite
@@ -222,6 +224,14 @@
   }else recoveryReason.textContent='Open Online Rooms to configure the server.';
  };
  dismissRecovery.onclick=()=>{hideRecovery();refresh();};
+ window.addEventListener('fuckball:account-changed',()=>{
+  if(!recoveryNeedsSignIn||recovery.hidden||!lastAttempt)return;
+  const newToken=settings.account?.token;
+  if(!newToken||newToken===rejectedAccountToken)return;
+  // Restore only a manual Retry or party navigation after real sign-in.
+  showRecovery('You are signed in. Choose when to start searching again.');
+  refresh();
+ });
  let ready=null,readyAccepted=false,readyConfirming=false,readyNoReceipt=false,readyReceiptTimer=null;
  function clearReadyReceipt(){
   if(readyReceiptTimer!==null){clearTimeout(readyReceiptTimer);readyReceiptTimer=null;}
