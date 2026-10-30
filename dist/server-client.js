@@ -1024,6 +1024,12 @@ function renderGlobalSubConsent(){
   subConsentReceipt.link!==request.link||
   subConsentReceipt.id!==request.pending.requestId||
   Date.now()-subConsentReceipt.sentAt>=2400))subConsentReceipt=null;
+ // The native buttons share the same pending receipt as the global dock.
+ if(request){
+  const unavailable=!!subConsentReceipt||request.link.ws?.readyState!==1;
+  $('subApprove').disabled=unavailable;
+  $('subDecline').disabled=unavailable;
+ }
  const menuVisible=!$('matchView').hidden&&!$('pauseMenu').hidden&&
   !$('subPanel').hidden&&!$('subConsent').hidden;
  globalSubConsent.hidden=!request||menuVisible;
@@ -1054,7 +1060,6 @@ function sendGlobalSubConsent(accept){
  renderSubPanel();
  const original=$(accept?'subApprove':'subDecline');
  if(original.hidden||original.disabled)return;
- subConsentReceipt={link:request.link,id:request.pending.requestId,sentAt:Date.now()};
  original.click();
  renderGlobalSubConsent();
 }
@@ -1124,11 +1129,14 @@ function renderSubPanel(){
    'No substitution pending.';
  const yourRequest=requests.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
  $('subConsent').hidden=!yourRequest;
- $('subApprove').disabled=!yourRequest||socketOffline;
- $('subDecline').disabled=!yourRequest||socketOffline;
+ const receiptPending=!!yourRequest&&subConsentReceipt?.link===link&&
+  subConsentReceipt.id===yourRequest.requestId&&Date.now()-subConsentReceipt.sentAt<2400;
+ $('subApprove').disabled=!yourRequest||socketOffline||receiptPending;
+ $('subDecline').disabled=!yourRequest||socketOffline||receiptPending;
  $('subConsentText').textContent=yourRequest?
   'Enter '+(yourRequest.team===1?'Red':'Blue')+' for '+nameOf(yourRequest.outId)+'?'+
-  (socketOffline?' Connection unavailable. Reconnect before responding.':''):'';
+  (socketOffline?' Connection unavailable. Reconnect before responding.':
+   receiptPending?' Decision sent · awaiting server receipt.':''):'';
  renderGlobalSubConsent();
 }
 const baseOnlineRefreshMenu=refreshMenu;
@@ -1174,9 +1182,19 @@ $('subPropose').onclick=()=>{
  serverLink.send({type:'subRequest',outId:Number($('subOutPlayer').value),inId:Number($('subInPlayer').value)});
 };
 for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick=()=>{
- const pending=serverLink?.roomState?.pendingSubs?.find(p=>p.inId===networkPlayerId&&!p.accepted&&Number.isSafeInteger(p.requestId));
- if(!pending||serverLink.ws?.readyState!==1)return;
- serverLink.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
+ const request=currentSubConsent();
+ if(!request||request.link.ws?.readyState!==1)return;
+ const pending=request.pending;
+ if(subConsentReceipt?.link===request.link&&subConsentReceipt.id===pending.requestId&&
+    Date.now()-subConsentReceipt.sentAt<2400)return;
+ const receipt={link:request.link,id:pending.requestId,sentAt:Date.now()};
+ subConsentReceipt=receipt;
+ try{
+  request.link.send({type:'subAccept',team:pending.team,outId:pending.outId,requestId:pending.requestId,accept});
+ }catch{
+  if(subConsentReceipt===receipt)subConsentReceipt=null;
+ }
+ renderSubPanel();
 };
 renderSubPanel();
 

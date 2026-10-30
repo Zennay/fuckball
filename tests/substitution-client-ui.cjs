@@ -87,6 +87,14 @@ async function joinHuman(url,room,sockets,index){
   b.evalJS('serverLink.ws=window.offlineOldWs;serverLink.send=window.offlineOldSend;renderSubPanel();renderGlobalSubConsent()');
   assert.equal(b.elements.get('subApprove').disabled,false,'incoming guest can accept only after socket recovery');
 
+  // A slow/no server receipt must never duplicate an explicit human choice.
+  // Delay only the test client's outgoing send; real native room stays pending.
+  b.evalJS('window.heldSubSend=serverLink.send;window.heldSubVotes=[];serverLink.send=d=>window.heldSubVotes.push(d)');
+  b.elements.get('subApprove').click();b.elements.get('subApprove').click();
+  assert.equal(b.evalJS('window.heldSubVotes.length'),1,'one deliberate human click is sent only once before receipt');
+  assert.equal(b.elements.get('subApprove').disabled,true,'do not advertise duplicate acceptance while waiting');
+  b.evalJS('serverLink.send=window.heldSubSend;subConsentReceipt.sentAt=Date.now()-2500;renderGlobalSubConsent()');
+  assert.equal(b.elements.get('subApprove').disabled,false,'user can retry explicitly after missing receipt');
   b.elements.get('subApprove').click();
   await until(()=>r.hb.getPlayer(9).team===1,'guest approved pregame substitution');
   assert.equal(r.hb.getPlayer(1).team,0);
@@ -118,8 +126,13 @@ async function joinHuman(url,room,sockets,index){
   a.elements.get('subPropose').click();
   await until(()=>r.pendingSubs.get(1)?.inId===1,'second swap requested from menu');
   await until(()=>!a.elements.get('subConsent').hidden,'host on bench sees own consent prompt');
-  a.elements.get('subApprove').click();
-  await until(()=>r.pendingSubs.get(1)?.accepted===true,'entrant accepted live swap');
+  // The second real substitution is accepted from the global Home/My Games
+  // consent dock, through the same native single-receipt guard.
+  a.evalJS("document.getElementById('matchView').hidden=true;renderGlobalSubConsent()");
+  assert.equal(a.evalJS('globalSubConsent.hidden'),false,
+    'global substitution consent is visible outside the match menu');
+  a.evalJS('globalSubAccept.events.click()');
+  await until(()=>r.pendingSubs.get(1)?.accepted===true,'entrant accepted live swap from global dock');
   assert.equal(r.hb.getPlayer(1).team,0,'accepted live swap remains benched');
   assert.equal(r.hb.getPlayer(9).team,1,'incumbent remains on field');
   a.evalJS('togglePause()');
