@@ -79,6 +79,17 @@
   a.socket===b.socket&&a.url===b.url;
  const sameSharePolicy=(a,b)=>sameSession(a,b)&&
   a.accessLabel===b.accessLabel&&a.accessNotice===b.accessNotice;
+ // Browser clipboard permission can hang. Always recover to a manual share.
+ function writeInviteClipboard(value){
+  return new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(err)=>{if(settled)return;settled=true;clearTimeout(deadline);if(err)reject(err);else resolve();};
+   const deadline=setTimeout(()=>finish(Error('Clipboard timed out. Select the current invite manually, or retry.')),7000);
+   try{Promise.resolve(navigator.clipboard.writeText(value)).then(()=>finish(),finish);}
+   catch(err){finish(err);}
+  });
+ }
+
  function shareReceipt(previous,success){
   const current=snapshot();
   if(!sameSession(previous,current))
@@ -94,12 +105,13 @@
  function refresh(){
   const next=snapshot();section.hidden=!next;
   if(!next){
+   if(current)menuShareEpoch++;
    hideQr();current=null;link.value='';code.textContent='';
    state.textContent='';caution.textContent='';status.textContent='';
    return;
   }
   if(current&&!sameSession(current,next)){
-   hideQr();status.textContent='';
+   menuShareEpoch++;hideQr();status.textContent='Room connection changed. Review the current invite.';
   }
   if(renderedQrUrl&&renderedQrUrl!==next.url)hideQr();
   // Keep copy/share actions bound to the *currently* active room.
@@ -115,23 +127,23 @@
  async function copy(room,value,message,epoch){
   if(typeof navigator.clipboard?.writeText!=='function')
    throw Error('Clipboard access is unavailable. Select and copy the displayed link instead.');
-  await navigator.clipboard.writeText(value);
+  await writeInviteClipboard(value);
   showShareResult(epoch,shareReceipt(room,message));
  }
  button('Copy invite link',async()=>{
-  const epoch=++menuShareEpoch;
-  try{const room=currentRoom();await copy(room,room.url,'Room invite link copied. Only the server can admit recipients.',epoch);}
-  catch(e){showShareResult(epoch,e.message||'Could not copy invitation.');}
+  let epoch=menuShareEpoch;
+  try{const room=currentRoom();epoch=++menuShareEpoch;showShareResult(epoch,'Copying current room link…');await copy(room,room.url,'Room invite link copied. Only the server can admit recipients.',epoch);}
+  catch(e){if(epoch===menuShareEpoch){link.select?.();showShareResult(epoch,e.message||'Could not copy invitation. Select the current link manually.');}}
  });
  button('Copy room code',async()=>{
-  const epoch=++menuShareEpoch;
-  try{const room=currentRoom();await copy(room,room.room,'Eight-character room code copied. No join attempt was made.',epoch);}
-  catch(e){showShareResult(epoch,e.message||'Could not copy code.');}
+  let epoch=menuShareEpoch;
+  try{const room=currentRoom();epoch=++menuShareEpoch;showShareResult(epoch,'Copying current room code…');await copy(room,room.room,'Eight-character room code copied. No join attempt was made.',epoch);}
+  catch(e){showShareResult(epoch,(e.message||'Could not copy code.')+' Use the visible code for manual copying.');}
  });
  button('Share via device',async()=>{
-  const epoch=++menuShareEpoch;
+  let epoch=menuShareEpoch;
   try{
-   const room=currentRoom();
+   const room=currentRoom();epoch=++menuShareEpoch;
    if(typeof navigator.share!=='function')throw Error('Device sharing is unavailable. Use Copy invite link instead.');
    const details=eligibility(room);
    await navigator.share({title:'Fuckball Custom Room '+room.room,
@@ -229,8 +241,19 @@
    ctx.fillStyle='#afc8bf';ctx.font='500 19px system-ui,sans-serif';
    ctx.fillText('A live Custom Room may be locked, full, restricted or closed after sharing.',70,818,1070);
    ctx.fillText('Open via Fuckball. Joining requires a separate deliberate action.',70,851,1070);
-   const blob=await new Promise((resolve,reject)=>
-    canvas.toBlob(value=>value?resolve(value):reject(Error('Cannot export this QR image.')),'image/png'));
+   // Some WebViews never call toBlob. Release Save and keep the original
+   // room check below even when an abandoned callback arrives much later.
+   const blob=await new Promise((resolve,reject)=>{
+    let settled=false;
+    const finish=(value,error)=>{
+     if(settled)return;
+     settled=true;clearTimeout(deadline);
+     if(error)reject(error);else resolve(value);
+    };
+    const deadline=setTimeout(()=>finish(null,Error('PNG export timed out. Retry saving this room QR card.')),8000);
+    try{canvas.toBlob(value=>finish(value,value?null:Error('Cannot export this QR image.')),'image/png');}
+    catch(error){finish(null,error);}
+   });
    const latest=snapshot();
    if(!sameSession(currentRoomData,latest))
     throw Error('Room disconnected or changed during QR export. Open its live room QR and try again.');
@@ -310,7 +333,7 @@
    const b=document.createElement('button');b.type='button';b.textContent=label;
    b.addEventListener('click',run);actionsView.append(b);return b;
   }
-  let viewShareEpoch=0;
+  let viewShareEpoch=0,pendingClipboardEpoch=null;
   const reportChanged=origin=>{
    const now=snapshot();
    if(!sameSession(origin,now))
@@ -331,16 +354,22 @@
     return;
    }
    try{
-    await navigator.clipboard.writeText(value);
+    message.textContent=kind==='code'?'Copying room code…':'Copying current room link…';
+    pendingClipboardEpoch=epoch;
+    await writeInviteClipboard(value);
     if(epoch!==viewShareEpoch)return;
     message.textContent=kind==='code'?'Current room code copied.':'Current room invite copied.';
     reportChanged(room);
-   }catch{
+   }catch(error){
     if(epoch!==viewShareEpoch)return;
     const latest=snapshot();
-    field.value=latest?.url||'';field.select?.();
-    message.textContent='Clipboard blocked. Select and copy the current displayed link instead.';
-   }
+    field.value=latest?.url||'';
+    if(kind!=='code'&&latest)field.select?.();
+    message.textContent=kind==='code'?
+     'Clipboard unavailable or timed out. Copy the visible room code manually, or retry.':
+     (error?.message?.includes('timed out')?'Clipboard timed out. ':'Clipboard unavailable. ')+
+     'The current invite link is selected for manual copying; you can retry.';
+   }finally{if(pendingClipboardEpoch===epoch)pendingClipboardEpoch=null;}
   }
   control('Copy invite',()=>copyChoice('link'));
   control('Copy code',()=>copyChoice('code'));
@@ -380,7 +409,7 @@
   });
   card.append(heading,admission,field,actionsView,message);
   host.prepend(card);shareViews.push({place,host,card,roomTag,admission,field,message,
-   last:'',lastSession:null,lastSocket:null});
+   invalidate:()=>{const pending=pendingClipboardEpoch!==null;viewShareEpoch++;pendingClipboardEpoch=null;return pending;},last:'',lastSession:null,lastSocket:null});
  }
  makeShareView(document.getElementById('homeView'),'home');
  makeShareView(document.getElementById('gamesView'),'games');
@@ -390,15 +419,17 @@
    const {host,card,roomTag,admission,field,message}=view;
    const visible=!!active&&!host.hidden;
    card.hidden=!visible;
-   if(!visible){view.lastSession=null;view.lastSocket=null;continue;}
+   if(!visible){if(view.lastSession||view.lastSocket)view.invalidate();view.lastSession=null;view.lastSocket=null;continue;}
    const identity=active.room+'|'+active.url;
    if(view.last!==identity||view.lastSession!==active.session||
       view.lastSocket!==active.socket){
+    const pending=(view.lastSession||view.lastSocket)&&view.invalidate();
     view.last=identity;view.lastSession=active.session;
-    view.lastSocket=active.socket;message.textContent='';
+    view.lastSocket=active.socket;message.textContent=pending?
+     'Room session changed during copying. The clipboard may contain the previous invite; copy the new link again.':'';
    }
    roomTag.textContent=active.room;
-   field.value=active.url;
+   if(field.value!==active.url)field.value=active.url;
    admission.textContent=eligibility(active)+' · '+warning(active);
   }
  }
