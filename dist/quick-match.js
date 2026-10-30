@@ -473,13 +473,24 @@
    manualRefresh.disabled=false;return;
   }
   manualRefresh.disabled=true;
-  const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),5000);
+  const abort=new AbortController();
+  let timer=null;
+  // AbortSignal normally cancels both HTTP and response.json(), but some
+  // WebViews/service-worker handlers can stall body decoding indefinitely.
+  // Race the entire response pipeline so manual Retry always recovers.
+  const deadline=new Promise((_,reject)=>{
+   timer=setTimeout(()=>{
+    abort.abort();reject(Error('Live queue response timed out.'));
+   },5000);
+  });
   try{
-   const response=await fetch('/api/quick-match/availability',{
-    cache:'no-store',signal:abort.signal
-   });
-   if(!response.ok)throw Error('Live queue endpoint unavailable.');
-   const data=await response.json();
+   const data=await Promise.race([(async()=>{
+    const response=await fetch('/api/quick-match/availability',{
+     cache:'no-store',signal:abort.signal
+    });
+    if(!response.ok)throw Error('Live queue endpoint unavailable.');
+    return response.json();
+   })(),deadline]);
    if(requestId!==listingRequest||document.hidden||home.hidden)return;
    if(data?.humanOnly!==true||data.ranked!==false||!data.modes)
     throw Error('Queue response does not represent real players.');
