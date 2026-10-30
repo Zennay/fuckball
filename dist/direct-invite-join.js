@@ -182,7 +182,8 @@
   }
  }
  scan.disabled=typeof navigator.mediaDevices?.getUserMedia!=='function';
- imageFile.disabled=typeof createImageBitmap!=='function';
+ imageFile.disabled=typeof createImageBitmap!=='function'&&
+  !(typeof Image==='function'&&typeof URL==='function'&&typeof URL.createObjectURL==='function');
  if(scan.disabled){
   status.textContent='QR camera scanning is unavailable in this browser. Pasting the same-site invitation URL or room code still works.';
  }
@@ -232,9 +233,29 @@
   stopScan();scan.focus();
   status.textContent='Camera stopped. Paste a link or try another image.';
  };
+ // A local file can still be decoded on browsers without ImageBitmap.
+ // The object URL is revoked as soon as the image loads; the decoded pixels
+ // never leave this browser and the usual strict room admission remains.
+ async function loadQRImage(file){
+  if(typeof createImageBitmap==='function'){
+   try{return await createImageBitmap(file);}
+   catch(error){if(typeof Image!=='function'||typeof URL?.createObjectURL!=='function')throw error;}
+  }
+  if(typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')
+   throw Error('Local image decoding is unavailable. Paste the invitation instead.');
+  const objectURL=URL.createObjectURL(file);
+  try{
+   return await new Promise((resolve,reject)=>{
+    const image=new Image();
+    image.onload=()=>resolve(image);
+    image.onerror=()=>reject(Error('Could not decode the selected image.'));
+    image.src=objectURL;
+   });
+  }finally{URL.revokeObjectURL(objectURL);}
+ }
  imageFile.onchange=async()=>{
   const file=imageFile.files?.[0];imageFile.value='';
-  if(!file||typeof createImageBitmap!=='function')return;
+  if(!file)return;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
@@ -244,7 +265,7 @@
   try{
    await readyDecoder();
    if(request!==imageEpoch||home.hidden||document.hidden)return;
-   const bitmap=await createImageBitmap(file);
+   const bitmap=await loadQRImage(file);
    try{
     if(bitmap.width>4096||bitmap.height>4096)throw Error('Image dimensions exceed 4096 pixels.');
     if(request!==imageEpoch||home.hidden||document.hidden)return;
@@ -252,7 +273,7 @@
     if(request!==imageEpoch||home.hidden||document.hidden)return;
     if(!found?.some(item=>typeof item.rawValue==='string'&&acceptScanned(item.rawValue)))
      status.textContent='No valid same-site room QR found. Paste a link or use another image.';
-   }finally{bitmap.close();}
+   }finally{bitmap.close?.();}
   }catch(error){
    if(request===imageEpoch&&!home.hidden&&!document.hidden)
     status.textContent=error?.message||'Could not read QR from this image.';
