@@ -48,6 +48,27 @@ const {createServer}=require('../headless/server.cjs');
   await page.evaluate(()=>window.onQuickMatchEvent({type:'queueReady',...window.__proposal,id:'test-proposal-B'}));
   result=await page.evaluate(()=>({disabled:document.querySelector('.quick-ready .primary').disabled,text:document.querySelector('.quick-ready-progress').textContent}));
   assert.equal(result.disabled,false,'a genuinely different proposal gets independent explicit consent');
+  // The server can cancel a newly formed match before a client has the room
+  // receipt. The resulting unadmitted quick-queue WebSocket must be released
+  // so a deliberate new search is not blocked by orphan session guards.
+  await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:null,ws:{readyState:1,onclose:null,
+    send:()=>{},close(){this.readyState=3}},send:()=>{}};
+   window.onQuickMatchEvent({type:'quickMatchCancelled',reason:'A team left before room receipt.'});
+  });
+  assert.equal(await page.evaluate(()=>serverLink),null,
+   'server cancellation before room receipt tears down orphan queue transport');
+  assert.equal(await page.evaluate(()=>window.startPartyQuickMatch('2v2')),true,
+   'human can explicitly start a fresh search after terminal cancellation');
+  // Server cancellation *after* a room receipt is not a leave request.
+  // Keep the joined room for a player to inspect and explicitly exit.
+  assert.equal(await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:'SYNTHETICROOM',ws:{readyState:1,
+    send:()=>{},close(){this.readyState=3}},send:()=>{}};
+   const before=serverLink;
+   window.onQuickMatchEvent({type:'quickMatchCancelled',reason:'A player left the room.'});
+   return serverLink===before;
+  }),true,'cancelled in-room game is not silently disconnected');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}
