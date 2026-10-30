@@ -758,10 +758,13 @@ function renderNextMatchPanel(){
  panel.hidden=!(link?.room&&state&&!state.started);
  if(panel.hidden){renderGlobalRematchDock();return;}
  const result=state.lastResult,quick=!!link.quickMatchMode;
- $('nextMatchTitle').textContent=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
  const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
  const seconds=Number.isSafeInteger(request?.expiresAt)?
   Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000)):null;
+ const heading=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
+ // Keep the second-by-second countdown out of the polite live status, so
+ // screen readers do not announce the same vote on every 1s refresh.
+ $('nextMatchTitle').textContent=heading+(request&&seconds>0?' · '+seconds+'s to vote':'');
  const voteExpired=!!request&&seconds===0;
  const pending=nativeRematchVotePending?.link===link&&nativeRematchVotePending.id===request?.id;
  const notice=nativeRematchVoteNotice?.link===link&&nativeRematchVoteNotice.id===request?.id?
@@ -770,21 +773,28 @@ function renderNextMatchPanel(){
  const requestFeedback=requestPending?
   'Request sent · waiting for the server to start '+(postgameRequestPending.action==='new'?'a new game':'a rematch vote')+'. ':
   postgameRequestNotice?.link===link?postgameRequestNotice.message+' ':'';
- $('nextMatchInfo').textContent=requestFeedback+(request?
+ const infoText=requestFeedback+(request?
    (pending?'Your '+(nativeRematchVotePending.accept?'accept':'decline')+' vote was sent · awaiting server receipt. ':
     notice?notice+' ':'')+
    (voteExpired?'Voting deadline passed · waiting for server confirmation. No further votes can be sent.':
    'Rematch awaiting '+Math.max(0,voters.size-approved.size)+' of '+voters.size+' players'+
-   (seconds===null?'':' · '+seconds+'s left')):
+   ''):
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+' · keep playing with the same room link':
    'Everyone remains connected to this room.');
- const list=$('nextMatchPlayers');list.replaceChildren();
+ if($('nextMatchInfo').textContent!==infoText)$('nextMatchInfo').textContent=infoText;
+ const list=$('nextMatchPlayers');
+ // Native server result receipts are immutable. Preserve the real player list
+ // and keyboard/reader navigation while only the vote clock is ticking.
+ if(list._nativeResult!==result||list._nativeRoom!==link.room){
+  list.replaceChildren();
  for(const p of Array.isArray(result?.finalPlayers)?result.finalPlayers:[]){
   if(!p||typeof p.name!=='string'||!Number.isFinite(p.playedFrames))continue;
   const line=document.createElement('li'),name=document.createElement('span'),time=document.createElement('small');
   name.textContent=(p.finalTeam===1?'🔴 ':p.finalTeam===2?'🔵 ':'⚪ ')+p.name;
   time.textContent=(Math.max(0,p.playedFrames)/60).toFixed(1)+'s active · final side';
   line.append(name,time);list.append(line);
+ }
+  list._nativeResult=result;list._nativeRoom=link.room;
  }
  const host=!!link.isOwner,canRequest=quick?!!result&&!!state&&!state.started:host;
  $('rematchRequest').hidden=!result||!!request||!canRequest;
