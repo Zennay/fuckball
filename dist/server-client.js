@@ -1094,17 +1094,21 @@ function renderSubPanel(){
  populateSubSelect('subCaptainPlayer',[{id:0,name:'No captain'},...active.map(asOption)],'No active players');
  const roleCaptain=captains.get(team),isHost=!!link.isOwner;
  const mayPropose=isHost||roleCaptain===networkPlayerId;
- $('subAssignBench').disabled=!isHost||!inactive.length;
- $('subClearBench').disabled=!isHost||!inactive.length;
- $('subAppointCaptain').disabled=!isHost;
+ // The native server locks roster mutations during a pending human rematch
+ // ballot. Keep captain/bench/substitution actions equally honest in the UI.
+ const rematchLocked=humanRematchLocksRoom();
+ $('subAssignBench').disabled=rematchLocked||!isHost||!inactive.length;
+ $('subClearBench').disabled=rematchLocked||!isHost||!inactive.length;
+ $('subAppointCaptain').disabled=rematchLocked||!isHost;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
- $('subPropose').disabled=!mayPropose||!active.length||!bench.length||!!queued;
+ $('subPropose').disabled=rematchLocked||!mayPropose||!active.length||!bench.length||!!queued;
  const timeFrames=new Map(state.activeFrames||[]);
  const total=(timeFrames.get(networkPlayerId)||0)/60;
  $('subSummary').textContent=(isHost?'Host':roleCaptain===networkPlayerId?'Team captain':'Player')+
   (offline.size?' · '+offline.size+' reconnecting':'')+
   ' · '+teamName+' captain: '+(roleCaptain?nameOf(roleCaptain):'not assigned')+
-  ' · Your active time: '+total.toFixed(1)+'s';
+  ' · Your active time: '+total.toFixed(1)+'s'+
+  (rematchLocked?' · Roster changes locked until the human rematch vote ends.':'');
  const requests=state.pendingSubs||[];
  const recent=Array.isArray(state.recentSubs)?state.recentSubs.at(-1):null;
  $('subPending').textContent=requests.length?
@@ -1148,16 +1152,16 @@ updateRoster=function(){
 };
 $('subTeam').onchange=renderSubPanel;
 $('subAssignBench').onclick=()=>{
- if(serverLink?.isOwner)serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
+ if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
 };
 $('subClearBench').onclick=()=>{
- if(serverLink?.isOwner)serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
+ if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
 };
 $('subAppointCaptain').onclick=()=>{
- if(serverLink?.isOwner)serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
+ if(serverLink?.isOwner&&!humanRematchLocksRoom())serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
 };
 $('subPropose').onclick=()=>{
- if(!serverLink?.roomState)return;
+ if(!serverLink?.roomState||humanRematchLocksRoom())return;
  const team=Number($('subTeam').value);
  if(!serverLink.isOwner&&new Map(serverLink.roomState.captains||[]).get(team)!==networkPlayerId)return;
  serverLink.send({type:'subRequest',outId:Number($('subOutPlayer').value),inId:Number($('subInPlayer').value)});
