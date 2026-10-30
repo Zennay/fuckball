@@ -446,6 +446,18 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   updateRoster();link.roomText=(link.quickMatchMode?'Casual human Quick Match '+link.quickMatchMode:'Room '+d.room)+' · '+d.players+' online'+(link.isOwner?' · Host':'');$('connectionText').textContent=link.roomText+hostLabel+(link.identityChanged?' · New player ID':'');setButtons();rosterKey='';updateRoster();renderSubPanel();window.renderCustomRoomAdmin?.();window.renderPlayerReportPanel?.();window.FuckballTeamChat?.sync();window.FuckballSpectatorCheer?.sync();window.FuckballRoomNotice?.sync();window.renderRoomAccessKey?.();
   // Update the contextual room strip from actual native room status.
   notifyNativeSessionView();}
+else if(d.type==='error'&&link.quickMatchMode&&!link.room&&!link.reconnect){
+ // The server can reject a human queue before it ever acknowledges it
+ // (expired account, rejected party launch, unsupported playlist). A generic
+ // room-join dialog obscures the correct manual human recovery. Hand the
+ // actual bounded server reason to the existing queue terminal-state path.
+ // Ticket-based reconnecting and genuinely admitted rooms never use it.
+ const reason=typeof d.message==='string'&&d.message.trim()?
+  d.message.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,160):
+  'The server rejected this human search.';
+ window.onQuickMatchEvent?.({type:'queueStatus',status:'error',reason});
+ if(serverLink===link){link.failed=true;disconnect();}
+}
 else if(d.type==='error'&&postgameRequestPending?.link===link){
  const action=postgameRequestPending.action;
  clearPostgameRequest();
