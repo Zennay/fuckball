@@ -862,14 +862,16 @@ function renderGlobalRematchDock(){
  const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
  const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
   nativeRematchVoteNotice.message:'';
- globalRematchTitle.textContent=state.approved?'YOUR REMATCH VOTE IS CONFIRMED':
+ // The visual clock belongs in the heading, not the live status text.
+ // Announce only server/proposal changes, never each second on a screen reader.
+ const title=state.approved?'YOUR REMATCH VOTE IS CONFIRMED':
   pending?'VOTE SENT · AWAITING SERVER RECEIPT':
   notice?'SERVER RECEIPT MISSING · YOU MAY RETRY':
   'HUMAN REMATCH · YOUR DECISION NEEDED';
+ globalRematchTitle.textContent=title+(remaining===null?'':' · '+remaining+'s left');
  const approved=vote.accepted.filter(id=>vote.required.includes(id)).length;
  const text=(state.link.quickMatchMode?'Casual human rematch':'Room rematch')+
   ' · '+approved+' / '+vote.required.length+' human players confirmed'+
-  (remaining===null?'':' · '+remaining+'s left')+
   (state.approved?' · Waiting for remaining players.':
    ' · Accept or decline before the server deadline.');
  const feedback=pending?'Vote sent · waiting for server receipt. ':
