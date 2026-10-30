@@ -17,6 +17,17 @@ a.evalJS('serverLink.roomState.rematch.expiresAt=Date.now()+39000;refreshNativeR
 assert.strictEqual(el('nextMatchPlayers').children[0],rosterNode,'countdown keeps roster DOM stable');
 assert.equal(el('nextMatchInfo').textContent,statusText,'polite live status does not repeat countdown');
 assert.match(el('nextMatchTitle').textContent,/39s to vote/);
+// The global Home/My Games consent dock is a second native view of the same
+// server vote: its polite status must not announce every ticking second.
+a.evalJS("document.getElementById('matchView').hidden=true;renderGlobalRematchDock()");
+const dock=a.win.document.body.children.find(x=>x.className==='native-rematch-dock');
+assert(dock&&!dock.hidden,'global dock visible outside match');
+const dockTitle=dock.children[0].children[0],dockStatus=dock.children[0].children[1];
+const dockAnnouncement=dockStatus.textContent;
+a.evalJS('serverLink.roomState.rematch.expiresAt=Date.now()+35000;renderGlobalRematchDock()');
+assert.equal(dockStatus.textContent,dockAnnouncement,'global live status stable while seconds tick');
+assert.match(dockTitle.textContent,/35s left/,'global visual countdown remains accurate');
+
 // Server may not send a packet exactly at the deadline; the visible UI must
 // refresh and withdraw controls, not continue to advertise a stale vote.
 a.evalJS('serverLink.roomState.rematch.expiresAt=Date.now()-1;refreshNativeRematchCountdown()');
