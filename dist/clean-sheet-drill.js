@@ -186,7 +186,7 @@
   // A hidden drill still belongs to one immutable native match. If the
   // player launched a different local game or online room, do not show a
   // misleading Resume prompt or preserve old defensive counters.
-  if(room!==s.room||serverLink||peerConnected||replay||!started||
+  if(room!==s.room||room?.gameState!==s.nativeGameState||serverLink||peerConnected||replay||!started||
      team()!==s.side||room.currentFrameNo<s.frame){
    finish('CLEAN SHEET · GAME CHANGED');return;
   }
@@ -201,7 +201,8 @@
  function tick(){
   const s=active;if(!s)return;
   if(document.hidden||match.hidden){park();return;}
-  if(!matchReady()||room!==s.room||team()!==s.side||room.currentFrameNo<s.frame){
+  if(!matchReady()||room!==s.room||room.gameState!==s.nativeGameState||
+     team()!==s.side||room.currentFrameNo<s.frame){
    finish('CLEAN SHEET · GAME CHANGED');return;
   }
   const frame=room.currentFrameNo;
@@ -234,7 +235,7 @@
    if(!quickPlay('bot',true,true))throw Error('Native offline 1v1 could not start. Existing session was kept.');
    if(!matchReady())throw Error('Offline native 1v1 is unavailable. Leave any existing online game.');
    const side=team(),g=room.gameState;
-   active={room,side,duration:seconds,allowance:allowed,
+   active={room,nativeGameState:room.gameState,side,duration:seconds,allowance:allowed,
     initialFor:side===1?g.redScore:g.blueScore,initialAgainst:side===1?g.blueScore:g.redScore,
     frame:room.currentFrameNo,frames:0,conceded:0,scored:0};
    parked=false;updateReturn();
@@ -246,7 +247,8 @@
  };
  pauseButton.onclick=()=>{
   const s=active;if(!s||document.hidden||match.hidden)return;
-  if(room!==s.room||!matchReady()||team()!==s.side||room.currentFrameNo<s.frame){
+  if(room!==s.room||room.gameState!==s.nativeGameState||
+     !matchReady()||team()!==s.side||room.currentFrameNo<s.frame){
    finish('CLEAN SHEET · GAME CHANGED');return;
   }
   const wasPaused=paused;
