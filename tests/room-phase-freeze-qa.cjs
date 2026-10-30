@@ -59,8 +59,8 @@ async function main(){
 
     host.ws.send(JSON.stringify({type:'start'}));
     await until(()=>room.started===true,'host starts room');
-    assert(status(host,s=>s.started&&!s.paused));
-    assert(status(guest,s=>s.started&&!s.paused));
+    await until(()=>status(host,s=>s.started&&!s.paused),'host receives start status');
+    await until(()=>status(guest,s=>s.started&&!s.paused),'guest receives start status');
     await until(()=>host.ws.packets>=4,'real advancing snapshots');
     const beforePause=capture(room,host.id),frameBeforePause=room.frame;
 
