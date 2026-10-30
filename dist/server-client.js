@@ -243,6 +243,16 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
  };ws.onclose=event=>{
   if(serverLink!==link)return;
   clearNativeAdmissionDeadline(link);
+  // A revocation is authoritative and must take precedence over ordinary
+  // disconnect recovery. Never show an unusable Retry with a revoked token.
+  if(event?.code===4004){
+    if(link.quickMatchMode&&!link.room&&!link.reconnect)
+     window.onQuickMatchEvent?.({type:'queueStatus',status:'error',
+      reason:'Your account session was revoked. Sign in again.',requiresSignIn:true});
+    link.failed=true;
+    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
+    disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
+   }
   // Do not discard the original human queue while ticket-based recovery is
   // reconnecting. The admission deadline concerns only a fresh queue join.
   if(link.quickMatchMode&&!link.room&&!link.reconnect)window.onQuickMatchEvent?.({
@@ -251,11 +261,6 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
     'Server did not acknowledge the human queue within 20 seconds. Retry explicitly.':
     'Human match connection ended. You can retry.'
   });
-  if(event?.code===4004){
-    link.failed=true;
-    if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
-    disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
-   }
    if(event?.code===4003){link.failed=true;disconnect();showView('home');notify('Removed from this room by the host.');return;}
    // A requested invite code is not proof of admission. Only a native
    // welcome-assigned room (or an already-authorized recovery attempt) may
@@ -353,6 +358,9 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    renderNextMatchPanel();return;
   }
   if(d.type==='sessionRevoked'){
+    if(link.quickMatchMode&&!link.room&&!link.reconnect)
+     window.onQuickMatchEvent?.({type:'queueStatus',status:'error',
+      reason:'Your account session was revoked. Sign in again.',requiresSignIn:true});
     link.failed=true;
     if(settings.account?.token===link.authToken){settings.account=null;savePrefs();renderAccount();}
     disconnect();showView('home');notify('Your account session was revoked. Please sign in again.');return;
