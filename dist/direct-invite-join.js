@@ -152,8 +152,9 @@
  // Every request captures an epoch. A slow permission or decoder promise
  // must never reactivate an abandoned camera after navigating away.
  let scanEpoch=0,imageEpoch=0;
+ let activeImageRead=null;
  input.addEventListener('input',()=>{
-  invitationEpoch++;imageEpoch++;
+  invitationEpoch++;imageEpoch++;activeImageRead?.abort();
   // A person typing a room code takes ownership of the input immediately:
   // late camera permissions and in-flight image scans cannot overwrite it.
   if(stream||!scanner.hidden)stopScan();
@@ -190,7 +191,7 @@
  scan.onclick=async()=>{
   if(stream||scan.disabled||home.hidden||document.hidden)return;
   const attempt=++scanEpoch;
-  invitationEpoch++;imageEpoch++;
+  invitationEpoch++;imageEpoch++;activeImageRead?.abort();
   scan.disabled=true;lastInvalid='';
   // Show Stop even while a permission prompt or lazy decoder is outstanding.
   scanner.hidden=false;
@@ -236,10 +237,31 @@
  // A local file can still be decoded on browsers without ImageBitmap.
  // The object URL is revoked as soon as the image loads; the decoded pixels
  // never leave this browser and the usual strict room admission remains.
- async function loadQRImage(file){
+ async function loadQRImage(file,signal){
   if(typeof createImageBitmap==='function'){
-   try{return await createImageBitmap(file);}
-   catch(error){if(typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')throw error;}
+   try{
+    // A native decoder can also stall. Cancel its wait promptly and close
+    // a late bitmap rather than retaining pixels after the player left.
+    const work=Promise.resolve().then(()=>createImageBitmap(file));
+    return await new Promise((resolve,reject)=>{
+     let settled=false,timer=null;
+     function finish(error,bitmap){
+      if(settled){bitmap?.close?.();return;}
+      settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);
+      if(error)reject(error);else resolve(bitmap);
+     }
+     function abort(){finish(Error('Image read canceled.'));}
+     if(signal?.aborted){abort();return;}
+     signal?.addEventListener('abort',abort,{once:true});
+     timer=setTimeout(()=>finish(Error('Image decoding timed out. Try another image.')),12000);
+     work.then(bitmap=>finish(null,bitmap),error=>finish(error));
+    });
+   }catch(error){
+    // A native decoder error may use the local Image fallback; cancellation
+    // and timeout are final, so never begin a second decoder after either.
+    if(signal?.aborted||error?.message?.startsWith('Image decoding timed out.')||
+       typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')throw error;
+   }
   }
   if(typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')
    throw Error('Local image decoding is unavailable. Paste the invitation instead.');
@@ -247,8 +269,21 @@
   try{
    return await new Promise((resolve,reject)=>{
     const image=new Image();
-    image.onload=()=>resolve(image);
-    image.onerror=()=>reject(Error('Could not decode the selected image.'));
+    let settled=false,timer=null;
+    function abort(){finish(Error('Image read canceled.'));}
+    function finish(error){
+     if(settled)return;
+     settled=true;clearTimeout(timer);
+     signal?.removeEventListener('abort',abort);
+     image.onload=null;image.onerror=null;
+     if(error){image.removeAttribute?.('src');reject(error);}
+     else resolve(image);
+    }
+    if(signal?.aborted){abort();return;}
+    signal?.addEventListener('abort',abort,{once:true});
+    timer=setTimeout(()=>finish(Error('Image decoding timed out. Try another image.')),12000);
+    image.onload=()=>finish(null);
+    image.onerror=()=>finish(Error('Could not decode the selected image.'));
     image.src=objectURL;
    });
   }finally{URL.revokeObjectURL(objectURL);}
@@ -259,13 +294,16 @@
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>6*1024*1024){
    status.textContent='Choose a PNG, JPEG or WebP image under 6 MB.';return;
   }
+  activeImageRead?.abort();
   const request=++imageEpoch;
+  const controller=typeof AbortController==='function'?new AbortController():null;
+  activeImageRead=controller;
   invitationEpoch++;
   imageFile.disabled=true;
   try{
    await readyDecoder();
    if(request!==imageEpoch||home.hidden||document.hidden)return;
-   const bitmap=await loadQRImage(file);
+   const bitmap=await loadQRImage(file,controller?.signal);
    try{
     if(bitmap.width>4096||bitmap.height>4096)throw Error('Image dimensions exceed 4096 pixels.');
     if(request!==imageEpoch||home.hidden||document.hidden)return;
@@ -277,18 +315,18 @@
   }catch(error){
    if(request===imageEpoch&&!home.hidden&&!document.hidden)
     status.textContent=error?.message||'Could not read QR from this image.';
-  }finally{imageFile.disabled=false;}
+  }finally{if(activeImageRead===controller)activeImageRead=null;imageFile.disabled=false;}
  };
  function leaveInviteView(){
   if(!home.hidden&&!document.hidden)return;
-  invitationEpoch++;imageEpoch++; // Discard all late clipboard/QR work from the previous view.
+  invitationEpoch++;imageEpoch++;activeImageRead?.abort(); // Abandoned local image cannot retain its Blob URL.
   if(stream||!scanner.hidden){
    stopScan();
    status.textContent='Camera stopped when you left the invite screen. Open Home to scan again.';
   }
  }
  document.addEventListener('visibilitychange',leaveInviteView);
- window.addEventListener('pagehide',()=>{invitationEpoch++;imageEpoch++;stopScan();});
+ window.addEventListener('pagehide',()=>{invitationEpoch++;imageEpoch++;activeImageRead?.abort();stopScan();});
  // The game navigates between in-page views without hiding the browser tab.
  // A page-visibility event alone would leave the physical camera capturing.
  for(const id of ['tabPlay','tabReplay'])
