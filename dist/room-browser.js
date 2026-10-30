@@ -20,7 +20,10 @@
  const refresh=document.createElement('button');refresh.type='button';refresh.textContent='↻ Refresh';refresh.hidden=true;
  const find=document.createElement('button');find.type='button';find.textContent='⚽ Find an open room';find.hidden=true;
  find.className='room-browser-find';find.title='Find a fresh, public room using your visible filters';
- toolbar.append(toggle,refresh,find);
+ const resetInvalidPins=document.createElement('button');
+ resetInvalidPins.type='button';resetInvalidPins.className='room-browser-reset-corrupt';
+ resetInvalidPins.textContent='Repair unreadable saved pins';resetInvalidPins.hidden=true;
+ toolbar.append(toggle,refresh,find,resetInvalidPins);
  const filters=document.createElement('div');filters.className='room-browser-filters';filters.hidden=true;
  const search=document.createElement('input');search.type='search';search.maxLength=60;
  search.placeholder='Room code or stadium';search.setAttribute('aria-label','Find a public room');
@@ -102,6 +105,17 @@
  // Local directory snapshots expire by monotonic elapsed time, not a
  // changeable device wall clock. Server admission remains authoritative.
  const listingFresh=()=>lastLoadedMono!==null&&performance.now()-lastLoadedMono<=PUBLIC_LISTING_MAX_AGE;
+ // This HTTP directory describes only this site's exact unqualified /ws.
+ // The same host with a different tenant/query may have different rooms.
+ function directoryServer(){
+  const address=document.getElementById('serverAddress')?.value?.trim()||'';
+  try{
+   const url=new URL(address),protocol=location.protocol==='https:'?'wss:':'ws:';
+   if(url.protocol===protocol&&url.host===location.host&&url.pathname==='/ws'&&
+      !url.search&&!url.hash&&!url.username&&!url.password)return{valid:true};
+  }catch{}
+  return{valid:false,message:'Public rooms belong to this website game server only. Select its exact /ws server in Online Rooms. Other game servers can still be joined manually.'};
+ }
  // Repaint expired public rooms even if the next refresh is delayed.
  // This timer only changes the visible availability UI, never polls or joins.
  let listingExpiryTimer=null;
@@ -141,6 +155,15 @@
   catch{throw Error('Could not save room pins to this device.');}
   catchupWatchBaseline();
  }
+ resetInvalidPins.onclick=()=>{
+  if(!confirm('Saved public-room pins are unreadable. Clear only those local bookmarks? This does not join rooms.'))return;
+  try{
+   localStorage.removeItem(SAVED_KEY);catchupWatchBaseline();renderRooms();
+   status.textContent='Unreadable local pins cleared. Public-room browsing remains available; pin current rooms to rebuild your bookmarks.';
+  }catch{
+   status.textContent='Could not clear saved pins. Browser storage may be unavailable; public rooms remain browseable.';
+  }
+ };
  function downloadPins(){
   let pins;
   try{pins=readPinned();}catch(error){status.textContent=error.message;return;}
@@ -261,7 +284,8 @@
   const seats=freeSeats(room);
   // A once-public room might have been unpublished, ended or moved private.
   // Old directory results are only historical display data, not admission hints.
-  return listingFresh()&&roomsCache.some(x=>x.room===room.room)&&seats!==null&&seats>0;
+  return directoryServer().valid&&listingFresh()&&
+   roomsCache.some(x=>x.room===room.room)&&seats!==null&&seats>0;
  }
  function availablePins(){
   let pins=[];try{pins=readPinned();}catch{return new Set();}
@@ -366,8 +390,11 @@
  }
  function renderRooms(){
   if(!shown)return;
-  let pins=[];
-  try{pins=readPinned();}catch(e){status.textContent=e.message;return;}
+  let pins=[],invalidPins=false;
+  try{pins=readPinned();}catch{invalidPins=true;}
+  // A broken optional local bookmark must not hide verified public rooms.
+  // Preserve the original value until explicit user-confirmed repair.
+  resetInvalidPins.hidden=!invalidPins;
   renderPinned(pins);
   watchBar.hidden=!pins.length;
   const needle=search.value.trim().toLocaleLowerCase();
@@ -417,6 +444,8 @@
    'No public rooms right now. You can create a private invite room instead.';
   if(roomsCache.length&&!visible.length)
    status.textContent='No public rooms match these filters. Change the search or refresh.';
+  if(invalidPins)status.textContent=
+   'Saved room pins are unreadable; choose Repair unreadable saved pins to reset local bookmarks. '+status.textContent;
  }
  for(const control of [search,statusFilter,modeFilter,order,accessFilter]){
   control.addEventListener(control===search?'input':'change',renderRooms);
@@ -426,7 +455,14 @@
   order.value='default';accessFilter.value='all';renderRooms();
  };
  async function load(){
-  if(!directoryVisible()||busy)return false;
+  if(!directoryVisible())return false;
+  const selected=directoryServer();
+  if(!selected.valid){
+   cancelDirectoryRequest();clearListingExpiry();
+   roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
+   renderRooms();status.textContent=selected.message;return false;
+  }
+  if(busy)return false;
   busy=true;const current=++sequence;refresh.disabled=true;
   const controller=typeof AbortController==='function'?new AbortController():null;
   const request={current,controller,timer:null,timedOut:false};
@@ -501,6 +537,16 @@
   interval=setInterval(()=>{if(directoryVisible())load();},20000);
  };
  refresh.onclick=load;
+ document.getElementById('serverAddress')?.addEventListener('input',()=>{
+  if(!shown)return;
+  // Invalidate stale HTTP results synchronously on every server switch.
+  cancelDirectoryRequest();clearListingExpiry();
+  roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();renderRooms();
+  const selected=directoryServer();
+  status.textContent=selected.valid?
+   'Checking public rooms on the selected website server…':selected.message;
+  if(directoryVisible()&&selected.valid)load();
+ });
  find.onclick=async()=>{
   if(!directoryVisible()||busy)return;
   const blocked=sessionBlock();
