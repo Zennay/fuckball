@@ -98,6 +98,20 @@ const {createServer}=require('../headless/server.cjs');
    'recovery dock returns to Play instead of creating a new human search');
   assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
    'native explicit Retry remains available after navigation');
+  // A server may publish a terminal queueStatus rather than a separate
+  // quickMatchCancelled. Match-found already cleared searching but a room
+  // receipt has not arrived; this still needs explicit human recovery.
+  await page.evaluate(()=>{
+   serverLink={quickMatchMode:'2v2',room:null,ws:{readyState:1,onclose:null,
+    send:()=>{},close(){this.readyState=3}},send:()=>{}};
+   window.onQuickMatchEvent({type:'quickMatchFound',mode:'2v2',players:4});
+   window.onQuickMatchEvent({type:'queueStatus',status:'cancelled',
+    reason:'Server ended before room admission.'});
+  });
+  assert.equal(await page.evaluate(()=>serverLink),null,
+   'terminal queueStatus after match-found releases unadmitted transport');
+  assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
+   'terminal queueStatus after match-found offers explicit human Retry');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}
