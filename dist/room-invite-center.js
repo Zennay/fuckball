@@ -131,19 +131,19 @@
   showShareResult(epoch,shareReceipt(room,message));
  }
  button('Copy invite link',async()=>{
-  const epoch=++menuShareEpoch;
-  try{const room=currentRoom();showShareResult(epoch,'Copying current room link…');await copy(room,room.url,'Room invite link copied. Only the server can admit recipients.',epoch);}
+  let epoch=menuShareEpoch;
+  try{const room=currentRoom();epoch=++menuShareEpoch;showShareResult(epoch,'Copying current room link…');await copy(room,room.url,'Room invite link copied. Only the server can admit recipients.',epoch);}
   catch(e){if(epoch===menuShareEpoch){link.select?.();showShareResult(epoch,e.message||'Could not copy invitation. Select the current link manually.');}}
  });
  button('Copy room code',async()=>{
-  const epoch=++menuShareEpoch;
-  try{const room=currentRoom();showShareResult(epoch,'Copying current room code…');await copy(room,room.room,'Eight-character room code copied. No join attempt was made.',epoch);}
+  let epoch=menuShareEpoch;
+  try{const room=currentRoom();epoch=++menuShareEpoch;showShareResult(epoch,'Copying current room code…');await copy(room,room.room,'Eight-character room code copied. No join attempt was made.',epoch);}
   catch(e){showShareResult(epoch,(e.message||'Could not copy code.')+' Use the visible code for manual copying.');}
  });
  button('Share via device',async()=>{
-  const epoch=++menuShareEpoch;
+  let epoch=menuShareEpoch;
   try{
-   const room=currentRoom();
+   const room=currentRoom();epoch=++menuShareEpoch;
    if(typeof navigator.share!=='function')throw Error('Device sharing is unavailable. Use Copy invite link instead.');
    const details=eligibility(room);
    await navigator.share({title:'Fuckball Custom Room '+room.room,

@@ -66,8 +66,16 @@ async function until(fn,msg){for(let i=0;i<90;i++){if(await fn())return;await wa
   await until(()=>page.evaluate(()=>window.__writes.length===5),'menu code retry pending');
   await page.evaluate(()=>window.__writes[4].resolve());
   await until(async()=>/code copied/i.test(await menuStatus.textContent()),'menu room code copy succeeds');
+  // Real race: the socket changes just before clicking Copy, before the
+  // one-second menu refresh. The new-room attempt must still show its result.
+  await page.evaluate(()=>{serverLink={room:'BCDFGHKM',ws:{readyState:1},roomControl:{listed:false}};});
+  await menuActions.nth(1).click();
+  await until(()=>page.evaluate(()=>window.__writes.length===6),'immediately copy from switched session');
+  assert.equal(await page.evaluate(()=>window.__writes[5].value),'BCDFGHKM','share latest socket code');
+  await page.evaluate(()=>window.__writes[5].resolve());
+  await until(async()=>/code copied/i.test(await menuStatus.textContent()),'new room copy receipt survives synchronous refresh');
   assert.deepEqual(errors,[],'no browser exceptions');
-  assert.equal(await page.evaluate(()=>serverLink.room),'BCDFGHJK','synthetic room was never joined or changed');
+  assert.equal(await page.evaluate(()=>serverLink.room),'BCDFGHKM','synthetic room change remained UI-only, never autojoined');
   console.log('PASS real Chromium: room share clipboard timeout, manual fallback, retry, stale session ignored');
  }finally{await browser.close();await server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
