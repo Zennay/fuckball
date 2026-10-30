@@ -27,6 +27,8 @@
  if(after)after.insertAdjacentElement('afterend',section);else pane.append(section);
  let signature='',selected=2;
  let ballotLink=null,ballotRoom='',ballotRound=null,ballotPlayer=null;
+ // Only local pending receipts are timed here; actual votes, rules and limits
+ // remain authoritative server state. Monotonic elapsed time survives a device clock edit.
  let pendingVote=null,pendingApply=null;
  function source(){
   const link=typeof serverLink!=='undefined'?serverLink:null,state=link?.roomState;
@@ -67,7 +69,7 @@
    if(pendingVote.choice===mine){
     status.textContent='Native server confirmed your '+(mine===undefined?'vote removal.':'format vote.');
     pendingVote=null;
-   }else if(Date.now()-pendingVote.sentAt>3500){
+   }else if(performance.now()-pendingVote.sentAt>3500){
     status.textContent='No server vote update received. Check your connection and retry manually.';
     pendingVote=null;
    }else status.textContent='Vote sent · waiting for server-confirmed ballot update.';
@@ -80,7 +82,7 @@
    if(confirmed){
     status.textContent='Native server confirmed the new match format.';
     pendingApply=null;
-   }else if(Date.now()-pendingApply.sentAt>3500){
+   }else if(performance.now()-pendingApply.sentAt>3500){
     status.textContent='No host action receipt received. Review room settings and retry manually.';
     pendingApply=null;
    }else status.textContent='Host request sent · waiting for server-confirmed rules.';
@@ -165,7 +167,7 @@
    return;
   }
   d.link.send({type:'matchFormatVote',choice:selected});
-  pendingVote={choice:selected,sentAt:Date.now()};
+  pendingVote={choice:selected,sentAt:performance.now()};
   render();
  };
  remove.onclick=()=>{
@@ -175,7 +177,7 @@
    v[0]===networkPlayerId);
   if(!mine)return;
   d.link.send({type:'matchFormatVote',choice:null});
-  pendingVote={choice:undefined,sentAt:Date.now()};
+  pendingVote={choice:undefined,sentAt:performance.now()};
   render();
  };
  apply.onclick=()=>{
@@ -191,7 +193,7 @@
   now.link.send({type:'matchFormatApply'});
   pendingApply={minutes:chosen.minutes,goals:chosen.goals,
    originalState:d.state,round:d.state.round,link:d.link,room:d.link.room,
-   player:networkPlayerId,sentAt:Date.now()};
+   player:networkPlayerId,sentAt:performance.now()};
   render();
  };
  // A format ballot is a server-owned Custom Room choice. Players who are

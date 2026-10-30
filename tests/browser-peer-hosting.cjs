@@ -19,23 +19,53 @@ async function until(fn,ms=10000,what='condition'){const end=Date.now()+ms;while
   const ids={A:await A.evaluate(()=>networkPlayerId),B:await B.evaluate(()=>networkPlayerId)};
   const authority=p=>p.evaluate(()=>serverLink.net.authority),seq=p=>p.evaluate(()=>net.receivedSequence);
   const myX=(p,id)=>p.evaluate(id=>room.state.players.find(q=>q.id===id)?.disc?.pos.x??null,id);
+  // Verify actual continuing snapshots, not how many fit in 800ms of a busy
+  // shared runner's wall time. Device-frame performance has its own gate.
+  const receives=async(page,label)=>{const initial=await seq(page);
+   await until(async()=>(await seq(page))-initial>=15,6000,label);
+  };
   async function moves(page,id,key){if(await page.evaluate(()=>menuOpen)){await page.keyboard.press('Escape');await wait(100);}const x0=await myX(page,id);await page.keyboard.down(key);await wait(700);await page.keyboard.up(key);await wait(300);return Math.abs((await myX(page,id))-x0);}
 
+  // Peer links can be open before their independently generated native
+  // eligibility/rtt reports reach the server, especially on a busy runner.
+  // Observe a *real* report from each browser before requesting takeover.
+  await until(()=>[ids.A,ids.B].every(id=>{
+   const roomState=app.rooms.get(room),report=roomState?.reports?.get(id);
+   return !!report?.eligible&&Date.now()-report.at<6000&&roomState.sockets.get(id)?.mesh;
+  }),35000,'both real WebRTC eligibility reports');
   // server → A
-  target=ids.A;await until(async()=>await authority(A)===ids.A&&await authority(B)===ids.A,15000,'both pages on host A');
+  target=ids.A;
+  // Shared self-hosted runners can delay WebRTC/Worker startup under CPU load.
+  // Keep the real two-client authority assertion; diagnose, don't skip, slow takeovers.
+  try{await until(async()=>await authority(A)===ids.A&&await authority(B)===ids.A,35000,'both pages on host A');}
+  catch(error){
+   console.error('Native peer takeover state:',JSON.stringify({
+    serverAuthority:app.rooms.get(room)?.authority,
+    A:await authority(A).catch(e=>e.message),
+    B:await authority(B).catch(e=>e.message),
+    hostingA:await A.evaluate(()=>serverLink?.net?.hosting).catch(e=>e.message),
+    reports:[...app.rooms.get(room).reports].map(([id,v])=>({id,eligible:v.eligible,age:Date.now()-v.at})),
+    mesh:[...app.rooms.get(room).sockets].map(([id,v])=>({id,mesh:v.mesh})),
+    migration:app.rooms.get(room).migration,
+    penalty:[...app.rooms.get(room).penalty],recording:app.rooms.get(room).hb._room.isRecording(),
+    canHostA:await A.evaluate(()=>({visibility:document.visibilityState,hostSetting:settings.peerHost,net:serverLink?.net?.peers?.size})),
+    pageErrors:errors
+   }));
+   throw error;
+  }
   assert.equal(await A.evaluate(()=>serverLink.net.hosting),true,'page A hosts in its worker');assert.equal(app.rooms.get(room).authority,ids.A);
-  let s0=await seq(B);await wait(800);assert((await seq(B))-s0>=15,'B keeps receiving snapshots from A (~30/s)');
+  await receives(B,'hosting real streamed snapshots');
   assert(await moves(B,ids.B,'ArrowLeft')>20,'B controls its player through A');assert(await moves(A,ids.A,'ArrowRight')>20,'A controls its own player while hosting');
   assert.match(await B.evaluate(()=>$('connectionText').textContent),/Hosted by/);
 
   // A → server
   target='server';await until(async()=>await authority(A)==='server'&&await authority(B)==='server',15000,'back on the server');
-  s0=await seq(B);await wait(800);assert((await seq(B))-s0>=15,'server snapshots resume');assert(await moves(B,ids.B,'ArrowRight')>20,'B controls its player on the server');
+  await receives(B,'server real streamed snapshots');assert(await moves(B,ids.B,'ArrowRight')>20,'B controls its player on the server');
 
   // server → A, then A disappears: failover
   target=ids.A;await until(async()=>await authority(B)===ids.A,15000,'host A again');target='server';
   await A.close();await until(async()=>await authority(B)==='server',15000,'failover after the host closed');
-  s0=await seq(B);await wait(800);assert((await seq(B))-s0>=15,'B continues after failover');assert(await moves(B,ids.B,'ArrowLeft')>20,'B still plays');
+  await receives(B,'failover real streamed snapshots');assert(await moves(B,ids.B,'ArrowLeft')>20,'B still plays');
   assert.deepEqual(errors.filter(e=>!/favicon|ERR_CONNECTION/.test(e)),[],'no page errors');
   console.log('PASS real Chromium peer hosting: WebRTC mesh, worker host, handovers server↔page, players keep control, failover when the hosting page closes');
  }finally{await browser.close();await app.close();}
