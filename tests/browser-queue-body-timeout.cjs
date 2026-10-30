@@ -73,7 +73,23 @@ const response=n=>({humanOnly:true,ranked:false,modes:{
   });
   await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
    'foreground refresh restores real verified occupancy');
+  // Some browsers/credential managers commit a selected server with only a
+  // change event. Never leave counts from the previous endpoint visible.
+  await page.evaluate(()=>{
+   const selected=document.getElementById('serverAddress');
+   selected.value='ws://another-server.invalid/ws';
+   selected.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  assert.doesNotMatch(await page.locator('.quick-queue-modes').innerText(),/2 waiting/,
+   'server selection change must immediately invalidate old human counts');
+  await page.evaluate(()=>{
+   const selected=document.getElementById('serverAddress');
+   selected.value=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+   selected.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
+   'same-site server reselect loads real human counts again');
   assert.deepEqual(errors,[],'no real browser runtime errors');
-  console.log('PASS Chromium: hung queue JSON deadline, manual retry, stale completion ignored, tab-hide invalidation and foreground recovery');
+  console.log('PASS Chromium: hung queue JSON deadline, manual retry, stale completion ignored, tab-hide invalidation, foreground recovery and server change event invalidation');
  }finally{await browser.close();await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
