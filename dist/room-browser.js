@@ -79,7 +79,7 @@
  watchBar.append(watchButton,watchText);
  body.append(bookmarkBar,watchBar,savedSection,status,list);section.append(heading,intro,toolbar,filters,body);
  anchor.insertAdjacentElement('afterend',section);
- let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedAt=0;
+ let sequence=0,busy=false,interval=null,shown=false,roomsCache=[],lastLoadedMono=null;
  // A closed/hidden directory cannot own a live request. The cancel token
  // also prevents an old request's finally block from changing a new one's UI.
  let activeRequest=null;
@@ -99,7 +99,9 @@
  const directoryVisible=()=>shown&&!home.hidden&&document.visibilityState!=='hidden';
  let watching=false,sawSnapshot=false,previousAvailable=new Set();
  const PUBLIC_LISTING_MAX_AGE=45000;
- const listingFresh=()=>lastLoadedAt>0&&Date.now()-lastLoadedAt<=PUBLIC_LISTING_MAX_AGE;
+ // Local directory snapshots expire by monotonic elapsed time, not a
+ // changeable device wall clock. Server admission remains authoritative.
+ const listingFresh=()=>lastLoadedMono!==null&&performance.now()-lastLoadedMono<=PUBLIC_LISTING_MAX_AGE;
  const SAVED_KEY='fuckball.pinned-public-rooms.v1',SAVED_LIMIT=12;
  const validRoom=code=>typeof code==='string'&&/^[A-HJ-NP-Z2-9]{8}$/.test(code);
  function readPinned(){
@@ -194,7 +196,7 @@
    const info=document.createElement('div');info.className='room-browser-info';
    const label=document.createElement('strong');label.textContent='★ '+code;
    const hint=document.createElement('small');
-   const age=lastLoadedAt?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
+   const age=lastLoadedMono!==null?Math.max(0,Math.floor((performance.now()-lastLoadedMono)/1000)):null;
    hint.textContent=published?
     (age!==null&&age<=45?'Recently advertised public':'Previously advertised public')+
     ' · last seen '+(age??'?')+'s ago · '+published.players+' players · '+published.map:
@@ -388,7 +390,7 @@
     break;
    }
   }
-  const age=lastLoadedAt>0?Math.max(0,Math.floor((Date.now()-lastLoadedAt)/1000)):null;
+  const age=lastLoadedMono!==null?Math.max(0,Math.floor((performance.now()-lastLoadedMono)/1000)):null;
   const freshness=age===null?'No current server snapshot':age<45?'Updated '+age+'s ago':'Old snapshot ('+age+'s); refresh before joining';
   status.textContent=roomsCache.length?
    visible.length+' of '+roomsCache.length+' public rooms shown · '+freshness+' · refresh every 20s.':
@@ -436,7 +438,7 @@
     Number.isSafeInteger(room.occupied)&&room.occupied>=room.players&&room.occupied<=128&&
     typeof room.started==='boolean'&&typeof room.map==='string'&&
     room.map.length<=60&&typeof room.mode==='string');
-   lastLoadedAt=Date.now();
+   lastLoadedMono=performance.now();
    watchFreshListing();
    renderRooms();
    return true;
@@ -444,7 +446,7 @@
    if(activeRequest===request&&current===sequence&&shown){
     // A disconnected, unresponsive or invalid listing must not leave the
     // previously public room selectable. Pinned local codes are retained.
-    roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();renderRooms();
+    roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();renderRooms();
     if(watching)watchText.textContent='Public directory unavailable; no pinned room has verified open seats.';
     status.textContent=(request.timedOut?
      'Public room directory timed out. Try Refresh to check again.':
@@ -465,7 +467,7 @@
  }
  function close(){
   shown=false;cancelDirectoryRequest();
-  roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+  roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
   body.hidden=true;refresh.hidden=true;find.hidden=true;filters.hidden=true;
   toggle.textContent='Browse rooms';toggle.setAttribute('aria-expanded','false');
   if(interval){clearInterval(interval);interval=null;}
@@ -522,7 +524,7 @@
    // directory request and invalidates server availability. Reopening makes
    // a new request rather than waiting on the old, possibly hung fetch.
    cancelDirectoryRequest();
-   roomsCache=[];lastLoadedAt=0;catchupWatchBaseline();
+   roomsCache=[];lastLoadedMono=null;catchupWatchBaseline();
    // Invalidate already-rendered Join buttons immediately. Although the
    // admission guard would reject them, stale cards must not appear live
    // when the player returns before the fresh response.
