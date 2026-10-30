@@ -64,7 +64,7 @@ function fieldOf(state,teamId){
  const goal=s.goals.find(x=>x.team.id!==teamId),own=s.goals.find(x=>x.team.id===teamId);
  const gx=goal?(goal.p0.x+goal.p1.x)/2:sign*(s.bgWidth||s.width-50),ox=own?(own.p0.x+own.p1.x)/2:-gx,width=Math.abs(gx);
  const ph=playerPhysics(s),G=flightCurve(ph.d);
- const players=state.players.filter(p=>p.disc&&(p.team.id===1||p.team.id===2)).map(p=>({id:p.id,mine:p.team.id===teamId,x:p.disc.pos.x,y:p.disc.pos.y,vx:p.disc.speed.x,vy:p.disc.speed.y,r:p.disc.radius}));
+ const players=state.players.filter(p=>p.disc&&(p.team.id===1||p.team.id===2)).map(p=>({id:p.id,mine:p.team.id===teamId,x:p.disc.pos.x,y:p.disc.pos.y,vx:p.disc.speed.x,vy:p.disc.speed.y,speed:Math.hypot(p.disc.speed.x,p.disc.speed.y),r:p.disc.radius}));
  // Their keeper: the opponent closest to their goal; it reacts to shots a little later than outfield players chase.
  const foes=players.filter(p=>!p.mine).sort((a,c)=>Math.hypot(a.x-gx,a.y)-Math.hypot(c.x-gx,c.y));
  return{theirKeeper:foes[0]&&Math.hypot(foes[0].x-gx,foes[0].y)<width*.5?foes[0].id:null,keeperDelay:4,sign,gx,ox,width,wallX:Math.min(width,s.bgWidth||width),height:s.bgHeight||s.height-30,gy:goal?Math.abs(goal.p0.y-goal.p1.y)/2:85,
@@ -87,7 +87,7 @@ function rollout(F,x,y,vx,vy,skip,t0=0){
   if(t&1||ours&&theirs)continue;
   for(const p of F.players){
    if(p.mine?ours||p.id===F.keeper:theirs)continue;if(p.id===skip&&t<14)continue;
-   const k=Math.min(260,t+t0+(p.mine?F.myDelay:p.id===F.theirKeeper?F.keeperDelay:F.delay)),dx=x-p.x,dy=y-p.y,l=Math.sqrt(dx*dx+dy*dy)||1,v0=(p.vx*dx+p.vy*dy)/l;
+   const k=Math.min(260,t+t0+(p.mine?F.myDelay:p.id===F.theirKeeper?F.keeperDelay:F.delay)),dx=x-p.x,dy=y-p.y,dist2=dx*dx+dy*dy,reach=F.ph.vmax*(k-F.G[k]),cap=reach+p.speed*F.G[k]+p.r+F.rb+3;if(cap<0||dist2>cap*cap)continue;const l=Math.sqrt(dist2)||1,v0=(p.vx*dx+p.vy*dy)/l;
    if(l-p.r-F.rb-3<=F.ph.vmax*(k-F.G[k])+v0*F.G[k]){const hit={t,id:p.id,x,y};if(p.mine)ours=hit;else theirs=hit;}
   }
  }
