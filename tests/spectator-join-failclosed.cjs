@@ -11,6 +11,7 @@ async function check(behavior){
    if(request.type==='spectatorAdmissionInfo'){
     probes++;
     if(behavior==='refused')setImmediate(()=>this.onmessage?.({data:JSON.stringify({type:'spectatorAdmissionInfo',supported:false})}));
+    if(behavior==='error')setImmediate(()=>this.onmessage?.({data:JSON.stringify({type:'error',message:'Spectator access requires sign in'})}));
    }
   }
   close(){this.readyState=3;this.onclose?.({code:1000});}
@@ -27,7 +28,8 @@ async function check(behavior){
   assert.equal(joins,0,behavior+' must never send a native player join');
   assert.equal(app.elements.get('joinScreen').hidden,false,behavior+' returns to original join form');
   assert.equal(app.elements.get('joinSpectator').checked,true,behavior+' must retain explicit spectator intent');
+  if(behavior==='error')assert.match(app.elements.get('joinError').textContent,/Spectator access requires sign in/,'native spectator rejection reason remains actionable');
   assert.equal(app.evalJS('serverLink'),null,behavior+' leaves no orphaned socket');
  }finally{app.evalJS('disconnect();room.destroy()');}
 }
-(async()=>{await check('refused');await check('timeout');console.log('PASS spectator intent preserved after capability denial and timeout; never silently joins as player');})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{await check('refused');await check('error');await check('timeout');console.log('PASS spectator intent and native denial reason preserved after capability refusal, error, timeout; never joins as player');})().catch(e=>{console.error(e);process.exitCode=1;});

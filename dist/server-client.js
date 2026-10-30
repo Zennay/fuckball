@@ -283,9 +283,13 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    sendJoin();return;
   }
   if(d.type==='error'||d.type==='spectatorAdmissionInfo'){
+   // Preserve a bounded, visible native rejection reason. A refused WATCH
+   // capability must not turn the next explicit retry into a player join.
+   const reason=d.type==='error'&&typeof d.message==='string'?
+    d.message.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,130):'';
    link.failed=true;disconnect();showJoinScreen(roomId,
-    'This server cannot guarantee spectator-only entry; no room was joined.');
-   $('joinSpectator').checked=true; // The rejected server never authorized a player join.
+    'Spectator-only entry was refused'+(reason?': '+reason:'.')+' No room was joined.');
+   $('joinSpectator').checked=true; // Never silently downgrade an explicit WATCH intent.
    return;
   }
  }
