@@ -36,15 +36,29 @@
   const link=typeof serverLink!=='undefined'?serverLink:null;
   return link?.room&&!link.quickMatchMode?link:null;
  }
+ // A new native round can arrive before its first gameplay snapshot.
+ // Previously rendered local players belong to the older round until the
+ // new server snapshot actually advances after this room/round transition.
+ let snapshotLink=null,snapshotRound=null,snapshotFloor=0;
  function hasFreshRoomSnapshot(link){
   // A previous offline match and a new online room reuse the same renderer.
   // Do not mislabel old local players, bot names or scores as live people in
   // a Custom Room until the server has both admitted this precise room and
   // delivered its first gameplay snapshot after the network state reset.
-  return link?.ws?.readyState===1&&link.roomState?.room===link.room&&
+  const valid=link?.ws?.readyState===1&&link.roomState?.room===link.room&&
    Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0&&
-   link.roomState.round<=1000000000&&
-   typeof net!=='undefined'&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0;
+   link.roomState.round<=1000000000&&typeof net!=='undefined'&&
+   Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>=0;
+  if(!valid){
+   snapshotLink=null;snapshotRound=null;snapshotFloor=0;
+   return false;
+  }
+  if(snapshotLink!==link||snapshotRound!==link.roomState.round){
+   snapshotLink=link;snapshotRound=link.roomState.round;
+   snapshotFloor=net.lastSnapshot;
+   return false;
+  }
+  return net.lastSnapshot>snapshotFloor;
  }
  function snapshot(){
   const live=liveCustomRoom();
