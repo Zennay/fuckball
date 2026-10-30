@@ -22,6 +22,17 @@ try{
  await until(()=>!!r.rematch,5000,'real server rematch proposal');
  assert.equal(r.rematch.required.size,2,'two human players must approve');
  assert.equal(r.rematch.accepted.size,1,'host starts with own consent');
+ // A spectator is not a voter. Their connection loss must not erase a
+ // consent-critical proposal between two real connected human players.
+ const C=await page();await C.goto(base+'?room='+room);await C.click('#joinGuest');
+ await until(()=>C.evaluate(()=>!!serverLink?.room),10000,'spectator joins after full-time');
+ const spectatorId=await C.evaluate(()=>networkPlayerId);
+ assert.equal(r.hb.getPlayer(spectatorId)?.team,0,'late joiner is a true spectator');
+ assert.equal(r.rematch.required.size,2,'spectator never becomes a rematch voter');
+ await C.close();
+ await until(()=>r.disconnected.has(spectatorId)||!r.clients.has(spectatorId),7000,'spectator connection dropped');
+ assert(r.rematch,'spectator disconnect must preserve the active rematch ballot');
+ assert.equal(r.rematch.accepted.size,1,'no added or forged consent after spectator leaves');
  // Raw native host traffic must not skip a pending second-human rematch vote.
  await A.evaluate(()=>{window.rematchBypassErrors=[];serverLink.ws.addEventListener('message',e=>{try{const packet=JSON.parse(e.data);if(packet.type==='error')window.rematchBypassErrors.push(packet.message)}catch{}})});
  for(const packet of [{type:'start'},{type:'configure',started:true},{type:'newGame'},{type:'swap'},{type:'addBot',team:0}]){
@@ -51,6 +62,17 @@ try{
  await A.evaluate(()=>serverLink.send({type:'newGame'}));
  await until(()=>r.started&&r.round>beforeNewGame,5000,'host chooses new game after decline');
  assert.equal(r.rematch,null,'no obsolete vote crosses a fresh round');
+ // Actual voter disconnect still invalidates the vote: a former decision
+ // never silently covers a player who needs to reconnect and decide again.
+ r.hb.onTeamVictory();
+ await until(()=>!r.started&&!!r.lastResult,5000,'third completed round');
+ await A.evaluate(()=>serverLink.send({type:'rematchRequest'}));
+ await until(()=>r.rematch?.required.size===2,5000,'third full human vote');
+ const votingGuestId=await B.evaluate(()=>networkPlayerId);
+ await B.close();
+ await until(()=>r.disconnected.has(votingGuestId)||!r.clients.has(votingGuestId),7000,'voting guest disconnected');
+ assert.equal(r.rematch,null,'actual voting player leaving invalidates vote');
+ assert.equal(r.started,false,'no restart without genuine second human');
  assert.deepEqual(errors,[],'no JS page errors');
  console.log('PASS native victory-callback driven real WebSocket 2-browser flow: admitted host/guest -> native onGameVictory -> postgame ribbon -> native rematch proposal -> second human consent -> authoritative new round');
 }finally{await br.close();await app.close();}})().catch(e=>{console.error(e);process.exit(1)});
