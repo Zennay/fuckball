@@ -301,6 +301,53 @@ const {createServer}=require('../headless/server.cjs');
     'rejected queue never appears to be actively searching');
    assert.deepEqual(rejectErrors,[],'no runtime exception on real rejected WebSocket');
   }finally{await rejectPage.close();}
+  // Native sessionRevoked receipts and WebSocket close code 4004 are
+  // separate genuine client paths; synthetic server transport only.
+  // Both must remove a ghost human queue and require new authentication.
+  for(const revokeVia of ['message','close']){
+   const revokedPage=await browser.newPage();
+   try{
+    const revokedErrors=[];
+    revokedPage.on('pageerror',e=>revokedErrors.push(e.message));
+    await revokedPage.goto('http://127.0.0.1:'+port+'/');
+    await revokedPage.evaluate(port=>{
+     settings.account={token:'synthetic-revoked-local-token'};
+     document.getElementById('serverAddress').value='ws://127.0.0.1:'+port+'/ws';
+     window.__fakeAuthSockets=0;
+     window.WebSocket=class{
+      constructor(){
+       window.__fakeAuthSockets++;
+       this.readyState=1;
+       queueMicrotask(()=>this.onopen?.());
+      }
+      send(){}
+      close(){this.readyState=3;}
+     };
+    },port);
+    await revokedPage.locator('.quick-queue-shortcut button.primary').click();
+    assert.equal(await revokedPage.evaluate(()=>window.__fakeAuthSockets),1);
+    await revokedPage.evaluate(kind=>{
+     const ws=serverLink.ws;
+     if(kind==='message')ws.onmessage({data:JSON.stringify({
+      type:'sessionRevoked',reason:'Account session revoked.'})});
+     else ws.onclose({code:4004});
+    },revokeVia);
+    assert.equal(await revokedPage.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
+     'revocation via '+revokeVia+' restores visible human recovery');
+    assert.match(await revokedPage.locator('.quick-queue-recovery button.primary').innerText(),
+     /sign in/i,'revoked token cannot be offered futile immediate Retry');
+    assert.equal(await revokedPage.evaluate(()=>serverLink),null,
+     'revoked queue socket released instead of claiming a live room');
+    assert.equal(await revokedPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
+     'revocation ends phantom searching state');
+    assert.equal(await revokedPage.evaluate(()=>window.__fakeAuthSockets),1,
+     'revocation must never reconnect the rejected queue');
+    await revokedPage.locator('.quick-queue-recovery button.primary').click();
+    assert.equal(await revokedPage.locator('#joinAuth').evaluate(e=>e.hidden),false,
+     'manual sign-in opens native login form');
+    assert.deepEqual(revokedErrors,[]);
+   }finally{await revokedPage.close();}
+  }
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}
