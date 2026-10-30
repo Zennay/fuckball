@@ -36,13 +36,19 @@
   const link=typeof serverLink!=='undefined'?serverLink:null;
   return link?.room&&!link.quickMatchMode?link:null;
  }
+ // Native server-client records a snapshot boundary as it receives the
+ // authoritative room/round event. Never create the boundary at UI render
+ // time: a paused lobby may have only one valid post-admission frame.
  function hasFreshRoomSnapshot(link){
   // A previous offline match and a new online room reuse the same renderer.
   // Do not mislabel old local players, bot names or scores as live people in
   // a Custom Room until the server has both admitted this precise room and
   // delivered its first gameplay snapshot after the network state reset.
   return link?.ws?.readyState===1&&link.roomState?.room===link.room&&
-   typeof net!=='undefined'&&Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>0;
+   Number.isSafeInteger(link.roomState.round)&&link.roomState.round>=0&&
+   link.roomState.round<=1000000000&&typeof net!=='undefined'&&
+   Number.isFinite(link.roomRosterFrameFloor)&&link.roomRosterFrameFloor>=0&&
+   Number.isFinite(net.lastSnapshot)&&net.lastSnapshot>link.roomRosterFrameFloor;
  }
  function snapshot(){
   const live=liveCustomRoom();
@@ -64,7 +70,9 @@
    seen.add(p.id);
    const raw=typeof p.name==='string'?p.name.trim():'Player';
    const name=raw.slice(0,32).replace(/[\u0000-\u001f\u007f-\u009f]/g,'').trim()||'Player';
-   const bot=actualBots.has(p.id)||p.aiControlled===true;
+   // Only the current native server room roster may classify bots.
+  // Local AI flags can survive a prior match or a same-code reconnect.
+  const bot=actualBots.has(p.id);
    roster.push({name,team:p.team.id,bot,host:actualOwner!==null&&p.id===actualOwner});
   }
   const g=room.gameState;
@@ -73,7 +81,7 @@
    Number.isFinite(g?.timeElapsed)&&g.timeElapsed>=0&&g.timeElapsed<=86400;
   const score=actual?{red:g.redScore,blue:g.blueScore,seconds:Math.floor(g.timeElapsed)}:null;
   return {roster,score,at:new Date(),session:live,roomId:live.room,
-   snapshotAt:net.lastSnapshot,state:typeof started!=='undefined'&&started?
+   serverRound:live.roomState.round,snapshotAt:net.lastSnapshot,state:typeof started!=='undefined'&&started?
    (typeof paused!=='undefined'&&paused?'PAUSED':'IN PROGRESS'):'LOBBY / INTERMISSION'};
  }
  function group(roster,team){return roster.filter(x=>x.team===team);}
@@ -81,9 +89,9 @@
  function formatClock(seconds){return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
  function line(p){return p.name+(p.bot?' · BOT':'')+(p.host?' · HOST':'');}
  function summary(data){
-  return data.score?'Red '+data.score.red+' – '+data.score.blue+' Blue · '+
+  return (data.score?'Red '+data.score.red+' – '+data.score.blue+' Blue · '+
    formatClock(data.score.seconds)+' elapsed · '+data.state:
-   'No active match score available · '+data.state;
+   'No active match score available · '+data.state)+' · SERVER ROUND '+data.serverRound;
  }
  function render(){
   const data=snapshot(),connected=!!liveCustomRoom();
@@ -91,10 +99,12 @@
   if(!data){
    rows.replaceChildren();score.textContent='';counters.textContent='';
    copy.disabled=true;csv.disabled=true;svg.disabled=true;
+   panel.dataset.snapshotState=connected?'waiting':'unavailable';
    if(connected)status.textContent=
     'Waiting for this room’s first server snapshot. Previous local match players and scores are hidden; exports are disabled.';
    return false;
   }
+  panel.dataset.snapshotState='fresh';
   score.textContent=summary(data);
   counters.textContent='Red '+group(data.roster,1).length+' · Blue '+group(data.roster,2).length+
    ' · inactive '+group(data.roster,0).length+' · '+data.roster.length+' visible players';
@@ -182,32 +192,38 @@
   // export. Do not retain/share a prior room's participants after navigation.
   const current=snapshot();
   if(!current||current.session!==data.session||current.roomId!==data.roomId||
-     current.snapshotAt<data.snapshotAt){
-   status.textContent='Room changed or disconnected. Refresh the current server lineup before exporting.';
+     current.serverRound!==data.serverRound||current.snapshotAt<data.snapshotAt){
+   status.textContent='Room, round or connection changed. Refresh this server lineup and confirm sharing again.';
    render();
    return;
   }
   try{
    if(type==='copy'){
     if(typeof navigator.clipboard?.writeText!=='function')throw Error('Clipboard unavailable. Use CSV instead.');
-    await navigator.clipboard.writeText(textSummary(data));
+    await navigator.clipboard.writeText(textSummary(current));
     status.textContent='The current team list was copied locally. Names are shared only when you paste it.';
    }else if(type==='csv'){
-    const output=[['Observed UTC','Snapshot phase','Red score','Blue score','Elapsed seconds','Team','Player label','Type','Host'],
-     ...data.roster.map(p=>[data.at.toISOString(),data.state,data.score?.red??'',
-      data.score?.blue??'',data.score?.seconds??'',mode(p.team),p.name,p.bot?'Bot':'Human',
+    const output=[['Observed UTC','Server round','Snapshot phase','Red score','Blue score','Elapsed seconds','Team','Player label','Type','Host'],
+     ...current.roster.map(p=>[current.at.toISOString(),current.serverRound,current.state,current.score?.red??'',
+      current.score?.blue??'',current.score?.seconds??'',mode(p.team),p.name,p.bot?'Bot':'Human',
       p.host?'Yes':'No'])];
     const eol=String.fromCharCode(13,10);
     download('fuckball-current-room-sheet.csv',String.fromCharCode(0xFEFF)+
       output.map(row=>row.map(csvValue).join(',')).join(eol)+eol,'text/csv;charset=utf-8');
     status.textContent='Current team sheet CSV exported locally. Do not share names without consent.';
    }else if(type==='svg'){
-    download('fuckball-current-room-sheet.svg',svgCard(data),'image/svg+xml;charset=utf-8');
+    download('fuckball-current-room-sheet.svg',svgCard(current),'image/svg+xml;charset=utf-8');
     status.textContent='Shareable snapshot card exported locally. Changes after capture are not tracked.';
    }
   }catch(e){status.textContent='Export failed: '+(e.message||'Browser access unavailable');}
  }
  const shown=()=>typeof menuOpen!=='undefined'&&menuOpen&&!pane.hidden;
  setInterval(()=>{if(shown())render();else panel.hidden=true;},1500);
+ // Native disconnect, room change and same-code reconnect must clear names
+ // synchronously rather than leave the previous room visible for 1.5 seconds.
+ window.addEventListener('fuckball:native-session-state',()=>render());
+ document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&shown())render();
+ });
  render();
 })();

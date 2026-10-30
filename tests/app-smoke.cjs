@@ -24,6 +24,8 @@ elements.get('mode').value='local';elements.get('mode').onchange();advance(3);co
 evalJS('room.startRecording()');advance(180);evalJS("globalThis.testReplay=room.stopRecording();loadReplay(testReplay,'test.hbr2')");advance(120);assert.equal(elements.get('replayControls').hidden,false);assert(evalJS('replay.getTime()')>1000);elements.get('replayClose').click();advance(3);assert.equal(elements.get('replayControls').hidden,true);assert.equal(evalJS('replay'),null);console.log('PASS app replay playback and return to lobby');
 // Render each engine stadium through the actual Canvas renderer, including hockey and curves.
 for(let i=0;i<11;i++){elements.get('stadium').value=String(i);elements.get('stadium').onchange();advance(2);}console.log('PASS Canvas render of BFF plus all 10 built-in stadiums');
-elements.get('stadium').value='0';elements.get('stadium').onchange();evalJS('resetMatch(true)');advance(30);fs.writeFileSync(require('node:os').tmpdir()+'/fuckball-pitch-check.png',elements.get('gameCanvas').toBuffer('image/png'));evalJS('room.destroy()');
+elements.get('stadium').value='0';elements.get('stadium').onchange();evalJS('resetMatch(true)');advance(30);{const temp=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'fuckball-pitch-'));
+try{fs.writeFileSync(path.join(temp,'pitch-check.png'),elements.get('gameCanvas').toBuffer('image/png'));}
+finally{fs.rmSync(temp,{recursive:true,force:true});}}evalJS('room.destroy()');
 
 }
