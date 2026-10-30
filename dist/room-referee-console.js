@@ -86,7 +86,7 @@
   const req=state.pauseRequest&&validId(state.pauseRequest.by)&&
    [1,2].includes(state.pauseRequest.team)&&
    Number.isSafeInteger(state.pauseRequest.expiresAt)&&
-   state.pauseRequest.expiresAt>Date.now()?state.pauseRequest:null;
+   state.pauseRequest.expiresAt>FuckballRoomServerTime.now(link)?state.pauseRequest:null;
   return{link,people,referee,refereeName:person?.name||null,
    isReferee:!!person&&referee===networkPlayerId,
    isHost:link.isOwner===true,request:req,
@@ -130,12 +130,12 @@
    else if(d.referee===pending.id){
     appointmentPending=null;
     notice.textContent='Referee assignment confirmed by the current room server.';
-   }else if(Date.now()-pending.at>=3000){
+   }else if(performance.now()-pending.at>=3000){
     appointmentPending=null;
     notice.textContent='No server referee receipt yet. Review the current roster and explicitly retry if needed.';
    }
   }
-  if(pausePending&&Date.now()-pausePending.at>3000){
+  if(pausePending&&performance.now()-pausePending.at>3000){
    pausePending=null;
    notice.textContent='No server pause confirmation yet. You may explicitly retry.';
   }
@@ -147,7 +147,7 @@
   dock.hidden=!liveRequest||d.isHost||!pitch.hidden||document.hidden;
   if(!dock.hidden){
    const actor=d.people.find(p=>p.id===d.request.by);
-   const seconds=Math.max(0,Math.ceil((d.request.expiresAt-Date.now())/1000));
+   const seconds=Math.max(0,Math.ceil((d.request.expiresAt-FuckballRoomServerTime.now(d.link))/1000));
    dockStatus.textContent=(actor?.name||'An active human')+
     ' asked to pause the current server match · '+seconds+
     's left. Only your explicit vote can request a pause.'+
@@ -207,7 +207,7 @@
   const fresh=snapshot();
   if(!fresh?.isHost||fresh.link!==d.link||fresh.link.room!==d.link.room||
    (id!==0&&!fresh.people.some(p=>p.id===id)))return;
-  appointmentPending={link:fresh.link,room:fresh.link.room,id,at:Date.now()};
+  appointmentPending={link:fresh.link,room:fresh.link.room,id,at:performance.now()};
   fresh.link.send({type:'appointReferee',id});
   notice.textContent='Assignment requested once. Waiting for the original room server to confirm.';
   lastKey='';render();
@@ -217,7 +217,7 @@
   if(!d?.isReferee||!d.running||d.paused===value||!d.online||
      value&&pausePending)return;
   d.link.send({type:'refereePause',value});
-  if(value)pausePending={link:d.link,at:Date.now()};
+  if(value)pausePending={link:d.link,at:performance.now()};
   notice.textContent=(value?'Pause':'Resume')+' requested by the appointed referee. Waiting for the native room update.';
  }
  pause.onclick=()=>changePause(true);

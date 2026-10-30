@@ -119,7 +119,8 @@
     typeof d.name!=='string'||d.name.length<1||d.name.length>25||
     typeof d.kind!=='string'||!Object.hasOwn(KINDS,d.kind)||
     !Number.isSafeInteger(d.at)||d.at<=0)return;
-  if(Date.now()-d.at>20000||d.at>Date.now()+10000)return;
+  const serverNow=FuckballRoomServerTime.now(link);
+  if(serverNow-d.at>20000||d.at>serverNow+10000)return;
   // The server broadcasts accepted cheers back to their sender. Treat
   // only that same original link/room/player/kind as an authoritative receipt.
   if(awaitingReceipt(link)&&d.from===networkPlayerId&&d.kind===pending.kind){

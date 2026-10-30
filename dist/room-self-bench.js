@@ -71,7 +71,7 @@
   const disconnected=Array.isArray(data.disconnectedIds)&&data.disconnectedIds.includes(networkPlayerId);
   const requested=data.pauseRequest&&typeof data.pauseRequest==='object'&&
    Number.isSafeInteger(data.pauseRequest.by)&&[1,2].includes(data.pauseRequest.team)&&
-   Number.isSafeInteger(data.pauseRequest.expiresAt)&&data.pauseRequest.expiresAt>Date.now()?
+   Number.isSafeInteger(data.pauseRequest.expiresAt)&&data.pauseRequest.expiresAt>FuckballRoomServerTime.now(link)?
    data.pauseRequest:null;
   const involved=Array.isArray(data.pendingSubs)&&data.pendingSubs.some(x=>
    x&&(x.inId===networkPlayerId||x.outId===networkPlayerId||x.requestedBy===networkPlayerId));
@@ -117,7 +117,7 @@
      if(typeof notify==='function')notify('Room server confirmed the pause.');
     }
     hostPauseAwaiting=null;
-   }else if(Date.now()-hostPauseAwaiting.at>6500){
+   }else if(performance.now()-hostPauseAwaiting.at>6500){
     feedback.textContent='The room has not confirmed this pause. Check the original room controls before retrying.';
     if(typeof notify==='function')notify('No server confirmation for pause. Check room controls.');
     hostPauseAwaiting=null;
@@ -125,10 +125,10 @@
   }
   if(pauseAwaiting){
    if(data.requested?.by===networkPlayerId){
-    nextPauseAsk=Date.now()+45000;
+    nextPauseAsk=performance.now()+45000;
     feedback.textContent='Native room confirmed your pause request. Only the host can pause.';
     pauseAwaiting=null;
-   }else if(!data.online||Date.now()-pauseAwaiting.at>=6500){
+   }else if(!data.online||performance.now()-pauseAwaiting.at>=6500){
     feedback.textContent=data.online?
      'No server receipt for the pause request. Check room status before trying again.':
      'The connection closed before the pause request was confirmed. Reconnect first.';
@@ -145,7 +145,7 @@
   sit.hidden=data.side===0;
   askPause.hidden=!(data.side>0&&data.started&&!data.paused&&!data.link.isOwner);
   askPause.disabled=!data.online||data.disconnected||!!data.requested||
-   !!pauseAwaiting||Date.now()<nextPauseAsk;
+   !!pauseAwaiting||performance.now()<nextPauseAsk;
   requestBanner.hidden=!(data.link.isOwner&&data.requested&&data.started&&!data.paused);
   // A menu over the hidden pitch is not a visible response to the host.
   const pitchVisible=document.getElementById('matchView')?.hidden===false;
@@ -193,7 +193,7 @@
      (data.ready?'you are marked available to be invited. Consent is still required.':'availability switched off.'):
      'your spectator bench choice is updated.');
     pending=null;
-   }else if(Date.now()-pending.at>8000){
+   }else if(performance.now()-pending.at>8000){
     feedback.textContent='The room did not confirm the requested change. Check your connection and the native room status.';
     pending=null;
    }
@@ -214,7 +214,7 @@
    !window.confirm('Leave your active '+(data.side===1?'Red':'Blue')+
     ' slot and sit on your team bench? The host must authorize a future substitution to bring you back.'))return;
   pending={room:data.link.room,type,team:type==='sit'?data.side:team,
-   ready:type==='ready'?!data.ready:null,at:Date.now()};
+   ready:type==='ready'?!data.ready:null,at:performance.now()};
   feedback.textContent='Sent your own bench request. Waiting for the native server to confirm.';
   try{data.link.send(type==='sit'?{type:'selfSitOut'}:
    type==='ready'?{type:'selfBenchReady',ready:!data.ready}:{type:'selfBench',team});}
@@ -226,13 +226,13 @@
  askPause.onclick=()=>{
   const data=native();
   if(!data||!data.online||!data.started||data.paused||data.link.isOwner||data.side===0||
-   data.disconnected||data.requested||pauseAwaiting||Date.now()<nextPauseAsk){
+   data.disconnected||data.requested||pauseAwaiting||performance.now()<nextPauseAsk){
    if(data&&!data.online)feedback.textContent='Room connection unavailable; no pause request was sent.';
    return;
   }
   // Native send does nothing if the socket is closed. A sent request is
   // not a confirmed request; the room's pauseRequest.by is authoritative.
-  pauseAwaiting={at:Date.now()};
+  pauseAwaiting={at:performance.now()};
   feedback.textContent='Pause request sent; awaiting confirmation from the native room.';
   try{data.link.send({type:'selfPauseRequest'});}
   catch{pauseAwaiting=null;feedback.textContent='Could not contact the room host.';}
@@ -249,7 +249,7 @@
    feedback.textContent='Local pause status differs from the server. Wait for room synchronization before sending another pause.';
    return;
   }
-  hostPauseAwaiting={link:data.link,at:Date.now()};
+  hostPauseAwaiting={link:data.link,at:performance.now()};
   // The existing authoritative room handler is still the only sender.
   nativeButton.click();
   feedback.textContent='Pause submitted using native host controls; awaiting the room server.';
