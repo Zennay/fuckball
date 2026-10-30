@@ -181,12 +181,18 @@ function createRoomCore(opts){
   }
   if(!hb._room.gameState)reset(r.started);else{status();snapshot();}return id;}
  /* Returns true when the room is now empty. */
- function leave(id){if(!r.clients.delete(id))return !r.clients.size;r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.benchReady.delete(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);r.pauseCooldowns.delete(id);
+ function leave(id){if(!r.clients.delete(id))return !r.clients.size;
+  // A neutral observer is not part of the full-time human vote. Losing
+  // that observer must not discard the active players' accepted ballot.
+  if(r.rematch&&(r.rematch.required.has(id)||r.owner===id))r.rematch=null;r.disconnected.delete(id);r.benches.delete(id);r.benchReady.delete(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);r.pauseCooldowns.delete(id);
   if(r.pauseRequest?.by===id)r.pauseRequest=null;r.sideFrames.delete(id);for(const [team,captain]of r.captains)if(captain===id)r.captains.delete(team);
   if(r.refereeId===id)r.refereeId=0;for(const [team,p]of r.pendingSubs)if(p.inId===id||p.outId===id||p.requestedBy===id)r.pendingSubs.delete(team);hb._room.playerLeave(id);if(!r.clients.size)return true;if(r.owner===id){r.owner=r.clients.keys().next().value;r.refereeId=0;}bots(false);status();snapshot();return false;}
  // A disconnected participant retains their reserved team slot during a short reconnection window.
  // No buffered/previous input or disconnected time may affect the live match.
- function setConnected(id,connected){if(!r.clients.has(id))return false;r.rematch=null;
+ function setConnected(id,connected){if(!r.clients.has(id))return false;
+  // Guest/host reconnects revoke a vote, but unrelated spectators do not
+  // gain a veto over the genuine participants' next-match consent.
+  if(r.rematch&&r.rematch.required.has(id))r.rematch=null;
   if(connected)r.disconnected.delete(id);else{r.disconnected.add(id);r.lobbyReady.delete(id);r.readyClickAt.delete(id);r.kickoff=null;r.stadiumBallot.delete(id);r.stadiumVoteAt.delete(id);r.formatVotes.delete(id);r.formatVoteAt.delete(id);if(r.refereeId===id)r.refereeId=0;r.benchReady.delete(id);if(r.pauseRequest?.by===id)r.pauseRequest=null;hb.setPlayerInput(id,0);for(const [team,p]of r.pendingSubs)if([p.inId,p.outId,p.requestedBy].includes(id))r.pendingSubs.delete(team);}
   status();snapshot();return true;
  }
