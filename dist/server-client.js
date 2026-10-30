@@ -112,9 +112,23 @@ const baseDisconnect=disconnect;disconnect=function(){clearRoomRecovery();clearN
  // A dead transport must not interrupt local teardown or explicit retry.
  }}try{link.ws.close();}catch{/* Invalidate session even when close throws. */}setRoomParam(null);}baseDisconnect();if(oldLimits){$('scoreLimit').querySelectorAll?.('option[data-online-limit]')?.forEach(option=>option.remove());$('timeLimit').value=oldLimits.time;$('scoreLimit').value=oldLimits.score;}networkPlayerId=2;rosterKey='';updateRoster();if(typeof refreshMenu==='function')refreshMenu();
  notifyNativeSessionView();};
-const baseSetButtons=setButtons;setButtons=function(){baseSetButtons();if(serverLink?.isOwner){for(const id of ['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'])$(id).disabled=!!replay;$('pauseButton').disabled=!started||!!replay;$('recordButton').disabled=!started||!!replay;}else if(serverLink){for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;}};
-const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner)return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
-const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:started?'stop':'start'});return;}baseStartStop();};$('startButton').onclick=startStop;
+// Client controls must reflect the existing server-side human rematch gate.
+// Do not block the independently authorized rematch accept/decline buttons.
+function humanRematchLocksRoom(){return !!serverLink?.room&&!!rematchVoteRequest(serverLink);}
+const roomMutationControls=['startButton','resetButton','mode','stadium','scoreLimit','timeLimit','importStadium','editorButton','botDifficulty','joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','swapTeams','allSpec'];
+const baseSetButtons=setButtons;setButtons=function(){
+ baseSetButtons();
+ if(serverLink?.isOwner){
+  const locked=humanRematchLocksRoom();
+  for(const id of roomMutationControls)$(id).disabled=!!replay||locked;
+  $('pauseButton').disabled=!started||!!replay;
+  $('recordButton').disabled=!started||!!replay;
+ }else if(serverLink){
+  for(const id of ['joinRed','joinBlue','joinSpec','addBotRed','addBotBlue','watchBots','swapTeams','allSpec','scoreLimit','timeLimit','stadium'])$(id).disabled=true;
+ }
+};
+const baseReset=resetMatch;resetMatch=function(play=true){if(!serverLink)return baseReset(play);if(!serverLink.isOwner||humanRematchLocksRoom())return;serverLink.send({type:'configure',mode:['bot','2v2','4v4'].includes($('mode').value)?$('mode').value:'bot',stadium:Utils.exportStadium(stadium),difficulty:settings.difficulty,botLevels:settings.botLevels,teamProfile:settings.teamProfile,scoreLimit:+$('scoreLimit').value,timeLimit:+$('timeLimit').value,started:play,paused:false});};
+const baseStartStop=startStop;startStop=function(){if(serverLink){if(serverLink.isOwner&&!humanRematchLocksRoom())serverLink.send({type:started?'stop':'start'});return;}baseStartStop();};$('startButton').onclick=startStop;
 const baseTogglePause=togglePause;togglePause=function(){if(serverLink){if(!serverLink.isOwner||!started)return;paused=!paused;releaseInputs();serverLink.send({type:'pause',value:paused});setButtons();return;}baseTogglePause();};
 const baseRecord=record;record=function(){if(serverLink){if(serverLink.isOwner)serverLink.send({type:'record'});return;}baseRecord();};$('recordButton').onclick=record;
 const baseModeChange=$('mode').onchange;$('mode').onchange=()=>{if(serverLink)resetMatch(started);else baseModeChange();};
@@ -787,7 +801,8 @@ function renderNextMatchPanel(){
    result?(result.winner===1?'Red wins':result.winner===2?'Blue wins':'Draw')+
     (socketOffline?' · last server result remains visible; room actions are unavailable.':' · keep playing with the same room link'):
    socketOffline?'Room status cannot be updated until reconnection.':'Everyone remains connected to this room.');
- if($('nextMatchInfo').textContent!==infoText)$('nextMatchInfo').textContent=infoText;
+ const ownerMessage=request&&link.isOwner?' · Room controls locked until the human rematch vote ends.':'';
+ if($('nextMatchInfo').textContent!==infoText+ownerMessage)$('nextMatchInfo').textContent=infoText+ownerMessage;
  const list=$('nextMatchPlayers');
  // Native server result receipts are immutable. Preserve the real player list
  // and keyboard/reader navigation while only the vote clock is ticking.

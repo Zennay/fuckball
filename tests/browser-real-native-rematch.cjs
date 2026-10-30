@@ -22,6 +22,18 @@ try{
  await until(()=>!!r.rematch,5000,'real server rematch proposal');
  assert.equal(r.rematch.required.size,2,'two human players must approve');
  assert.equal(r.rematch.accepted.size,1,'host starts with own consent');
+ // While actual server consent is open, old host room management controls
+ // must be visibly locked; the authoritative backend already rejects them.
+ await until(()=>A.evaluate(()=>!!serverLink?.roomState?.rematch?.id),5000,'native rematch state delivered');
+ for(const control of ['startButton','swapTeams','allSpec','addBotRed','addBotBlue','joinRed','joinBlue']){
+  assert.equal(await A.locator('#'+control).isDisabled(),true,control+' locked during two-human vote');
+ }
+ await A.evaluate(()=>{window.hostControlSends=[];const base=serverLink.send;serverLink.send=d=>{
+  window.hostControlSends.push(d.type);return base(d);
+ };startStop();resetMatch(true);});
+ assert.deepEqual(await A.evaluate(()=>window.hostControlSends),[],'hotkey and reset entry points cannot bypass pending human consent');
+ assert.match(await A.locator('#nextMatchInfo').innerText(),/room controls locked/i,'owner sees reason for disabled room controls');
+
  // A spectator is not a voter. Their connection loss must not erase a
  // consent-critical proposal between two real connected human players.
  const C=await page();await C.goto(base+'?room='+room);await C.click('#joinGuest');
@@ -49,6 +61,9 @@ try{
  await until(()=>r.started&&r.round>1,8000,'two-human server accepted rematch');
  await until(()=>A.evaluate(()=>serverLink?.roomState?.started&&!serverLink.roomState.lastResult),7000,'new native round on host');
  assert.equal(r.rematch,null,'server vote cleared');
+ await until(()=>A.locator('#swapTeams').isEnabled(),5000,'room controls resume after server starts round');
+ assert.equal(await A.locator('#addBotRed').isEnabled(),true,'bot controls resume only after authoritative round transition');
+
  // Explicit decline permits a normal new game; no forced rematch or stuck room.
  r.hb.onTeamVictory();
  await until(()=>!r.started&&!!r.lastResult,5000,'next full-time result');
@@ -58,9 +73,12 @@ try{
  await B.evaluate(id=>serverLink.send({type:'rematchVote',id,accept:false}),secondVote);
  await until(()=>r.rematch===null,5000,'explicit guest declines rematch');
  assert.equal(r.started,false,'decline does not silently restart');
+ await until(()=>A.locator('#startButton').isEnabled(),5000,'host controls recover after guest declines');
+ assert.equal(await A.locator('#swapTeams').isEnabled(),true,'team controls resume after vote cancellation');
  const beforeNewGame=r.round;
- await A.evaluate(()=>serverLink.send({type:'newGame'}));
- await until(()=>r.started&&r.round>beforeNewGame,5000,'host chooses new game after decline');
+ await until(()=>A.locator('#nextGame').isEnabled(),5000,'normal next-game action becomes available');
+ await A.locator('#nextGame').evaluate(e=>e.click());
+ await until(()=>r.started&&r.round>beforeNewGame,5000,'host chooses next game with real native UI after decline');
  assert.equal(r.rematch,null,'no obsolete vote crosses a fresh round');
  // Actual voter disconnect still invalidates the vote: a former decision
  // never silently covers a player who needs to reconnect and decide again.
