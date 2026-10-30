@@ -5,11 +5,18 @@ const a=createApp(),el=id=>a.elements.get(id);
 a.evalJS(`networkPlayerId=2;window.sentRematchVotes=[];
  serverLink={room:'NATIVE',quickMatchMode:null,isOwner:false,ws:{readyState:1},
  send:d=>window.sentRematchVotes.push(d),roomState:{room:'NATIVE',round:4,
- started:false,lastResult:{round:4,red:2,blue:1,winner:1,finalPlayers:[]},
+ started:false,lastResult:{round:4,red:2,blue:1,winner:1,finalPlayers:[{id:2,name:'Human guest',finalTeam:2,playedFrames:600}]},
  rematch:{id:41,required:[1,2],accepted:[1],expiresAt:Date.now()+45000}}};
  renderNextMatchPanel();`);
 assert.equal(el('rematchAccept').hidden,false,'native player can vote before deadline');
 assert.match(el('nextMatchInfo').textContent,/Rematch awaiting 1 of 2 players/);
+const rosterNode=el('nextMatchPlayers').children[0];
+const statusText=el('nextMatchInfo').textContent;
+assert(rosterNode,'actual final native roster rendered');
+a.evalJS('serverLink.roomState.rematch.expiresAt=Date.now()+39000;refreshNativeRematchCountdown()');
+assert.strictEqual(el('nextMatchPlayers').children[0],rosterNode,'countdown keeps roster DOM stable');
+assert.equal(el('nextMatchInfo').textContent,statusText,'polite live status does not repeat countdown');
+assert.match(el('nextMatchTitle').textContent,/39s to vote/);
 // Server may not send a packet exactly at the deadline; the visible UI must
 // refresh and withdraw controls, not continue to advertise a stale vote.
 a.evalJS('serverLink.roomState.rematch.expiresAt=Date.now()-1;refreshNativeRematchCountdown()');
