@@ -455,7 +455,8 @@
   if(!['ws:','wss:'].includes(selected.protocol))
    return{valid:false,label:'Queue status requires a websocket game server address.'};
   const scheme=location.protocol==='https:'?'wss:':'ws:';
-  if(selected.host!==location.host||selected.protocol!==scheme||selected.pathname!=='/ws')
+  if(selected.host!==location.host||selected.protocol!==scheme||selected.pathname!=='/ws'||
+     selected.username||selected.password||selected.search||selected.hash)
    return{valid:false,label:'Selected server: '+selected.host+'. Queue counts from this website may refer to another server, so they are hidden. You can still connect and search normally.'};
   return{valid:true};
  }
