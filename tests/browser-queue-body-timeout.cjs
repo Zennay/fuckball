@@ -99,7 +99,30 @@ const response=n=>({humanOnly:true,ranked:false,modes:{
   await page.evaluate(()=>document.getElementById('tabHome').click());
   await until(async()=>/2 waiting/.test(await page.locator('.quick-queue-modes').innerText()),
    'return to Play refreshes actual human queue');
+  // A real 15-second human ready check must remain actionable when the
+  // player immediately enters My Games; the dock must not wait for the
+  // one-second queue refresh interval to notice that Home was hidden.
+  await page.evaluate(()=>{
+   settings.account={token:'synthetic-ready-fixture'};
+   connectServer=()=>true;
+   if(!window.startPartyQuickMatch('2v2'))throw Error('could not start synthetic search');
+   const now=Date.now();
+   window.onQuickMatchEvent({type:'queueReady',id:'local-ready',mode:'2v2',
+     players:4,humanOnly:true,expiresAt:now+15000,serverNow:now});
+   document.getElementById('tabReplay').click();
+  });
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false,
+   '15s human ready confirmation is immediately visible inside My Games');
+  assert.equal(await page.locator('.quick-ready-dock button.primary').isEnabled(),true,
+   'human accept action is visible and still requires explicit consent');
+  await page.evaluate(()=>document.getElementById('tabHome').click());
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),true,
+   'returning to Play hides redundant ready dock');
+  assert.equal(await page.locator('.quick-ready').evaluate(e=>e.hidden),false,
+   'original server-owned ready card remains available');
   assert.deepEqual(errors,[],'no real browser runtime errors');
-  console.log('PASS Chromium: human-only JSON timeout, stale queue on browser tab/server change and in-app navigation');
+  console.log('PASS Chromium: human queue truthfulness and 15s ready visibility across My Games navigation');
  }finally{await browser.close();await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

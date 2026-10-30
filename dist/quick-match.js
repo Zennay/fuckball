@@ -540,6 +540,9 @@
   ++listingRequest;clearTimeout(addressTimer);clearPulse();genericLabels();
   manualRefresh.disabled=false;
   window.dispatchEvent(new Event('fuckball:queue-unavailable'));
+  // The same transition can hide a 15-second human ready check. Render the
+  // real server-owned accept/decline mirror immediately on My Games/Play.
+  refresh();
   if(visible){
    availability.textContent='Refreshing real-player counts for this server…';
    loadAvailability();
