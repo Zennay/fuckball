@@ -22,7 +22,8 @@
   }catch{return false;}
  }
  function render(){
-  const live=observed&&Date.now()-observed.at<=FRESH_MS&&
+  const age=observed?performance.now()-observed.observedMono:Infinity;
+  const live=observed&&age>=0&&age<=FRESH_MS&&
    observed.server===location.host&&selectedServer()&&navigator.onLine!==false;
   if(live){
    const total=observed.waiting;
@@ -47,8 +48,10 @@
   const data=event.detail;
   if(!data||data.humanOnly!==true||data.ranked!==false||
    data.server!==location.host||!selectedServer()||
-   !Number.isSafeInteger(data.at)||data.at>Date.now()+2000||
-   Date.now()-data.at>FRESH_MS||!data.modes)return;
+   !Number.isSafeInteger(data.at)||!data.modes||
+   !(Number.isFinite(data.observedMono)?
+     performance.now()-data.observedMono>=0&&performance.now()-data.observedMono<=5000:
+     data.at<=Date.now()+2000&&Date.now()-data.at<=FRESH_MS))return;
   let waiting=0;
   for(const mode of MODES){
    const row=data.modes[mode];
@@ -56,7 +59,8 @@
     ![row.waiting,row.confirming].every(n=>Number.isSafeInteger(n)&&n>=0&&n<=128))return;
    waiting+=row.waiting;
   }
-  observed={at:data.at,server:data.server,waiting};
+  observed={at:data.at,observedMono:Number.isFinite(data.observedMono)?
+   data.observedMono:performance.now(),server:data.server,waiting};
   render();
  });
  window.addEventListener('fuckball:queue-unavailable',()=>{observed=null;render();});

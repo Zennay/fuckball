@@ -29,7 +29,7 @@
  warning.textContent='Only your selected website server. Counts are snapshots, not a ready check or ETA. You must personally sign in, join and confirm. Nothing is tracked while this tab is hidden.';
  panel.append(heading,explain,controls,status,join,warning);
  anchor.insertAdjacentElement('afterend',panel);
- let watching=false,last=null,lastObservedAt=0,eligible=false;
+ let watching=false,last=null,lastObservedAt=0,lastObservedMono=NaN,eligible=false;
  let previousForeground=!document.hidden&&!home.hidden&&navigator.onLine!==false;
  const FRESH_MS=25000;
  const refreshNative=()=>{
@@ -61,8 +61,8 @@
   toggle.textContent=watching?'Stop watching':'Start watching';
   toggle.setAttribute('aria-pressed',String(watching));
   mode.disabled=count.disabled=watching;
-  const fresh=!!(last&&Number.isSafeInteger(lastObservedAt)&&
-    Date.now()-lastObservedAt>=0&&Date.now()-lastObservedAt<=FRESH_MS);
+  const age=performance.now()-lastObservedMono;
+  const fresh=!!(last&&Number.isFinite(age)&&age>=0&&age<=FRESH_MS);
   eligible=!!(watching&&foreground()&&serverValid()&&fresh&&
    last.mode===mode.value&&last.waiting>=Number(count.value));
   join.hidden=!eligible;join.disabled=!eligible;
@@ -78,11 +78,10 @@
     ' · previous count expired. Refresh real counts or wait for the native 15s update.':
     ' · awaiting a verified server snapshot.');
   else status.textContent='Watching '+mode.value+' · '+last.waiting+' humans waiting at '+
-   new Date(lastObservedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})+
-   '. '+(eligible?'Threshold reached! You can choose to start a human search.':
+   Math.max(0,Math.floor(age/1000))+'s ago. '+(eligible?'Threshold reached! You can choose to start a human search.':
    'Waiting for '+count.value+' humans. No match is guaranteed.');
  }
- function clear(){last=null;lastObservedAt=0;render();}
+ function clear(){last=null;lastObservedAt=0;lastObservedMono=NaN;render();}
  toggle.onclick=()=>{
   if(watching){watching=false;clear();return;}
   watching=true;clear();
@@ -105,12 +104,15 @@
   const snapshot=event.detail;
   if(!snapshot||snapshot.humanOnly!==true||snapshot.ranked!==false||
     snapshot.server!==location.host||!Number.isSafeInteger(snapshot.at)||
-    Math.abs(Date.now()-snapshot.at)>5000)return;
+    !(Number.isFinite(snapshot.observedMono)?
+      performance.now()-snapshot.observedMono>=0&&performance.now()-snapshot.observedMono<=5000:
+      Math.abs(Date.now()-snapshot.at)<=5000))return;
   const row=snapshot.modes?.[mode.value];
   if(!row||row.needed!==Number(mode.value[0])*2||
     !Number.isSafeInteger(row.waiting)||row.waiting<0||row.waiting>128||
     !Number.isSafeInteger(row.confirming)||row.confirming<0||row.confirming>128)return;
-  last={mode:mode.value,waiting:row.waiting};lastObservedAt=snapshot.at;render();
+  last={mode:mode.value,waiting:row.waiting};lastObservedAt=snapshot.at;
+  lastObservedMono=Number.isFinite(snapshot.observedMono)?snapshot.observedMono:performance.now();render();
  });
  window.addEventListener('fuckball:queue-unavailable',clear);
  // A queue snapshot may expire without any new server event. Update only

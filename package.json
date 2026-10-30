@@ -8,7 +8,7 @@
     "test": "node scripts/test-core.cjs",
     "test:ui": "node tests/app-smoke.cjs && node tests/match-menu.cjs && node tests/peer.cjs && node tests/server-client.cjs && node tests/spectator-join-failclosed.cjs && node tests/team-ai.cjs && node tests/high-refresh.cjs && node tests/substitution-client-ui.cjs && node tests/room-match-sheet-round.cjs && node tests/rematch-deadline-flow.cjs",
     "build:solo": "python3 scripts/build-sdk.py",
-    "test:browser": "node tests/browser-peer-hosting.cjs && node tests/browser-postgame-rematch.cjs && node tests/browser-real-native-rematch.cjs",
+    "test:browser": "node tests/browser-peer-hosting.cjs && node tests/browser-postgame-rematch.cjs && node tests/browser-real-native-rematch.cjs && node tests/browser-queue-lifecycle-clock.cjs",
     "test:roster-acceptance": "node tests/room-roster-acceptance.cjs",
     "test:input-replay-acceptance": "node tests/input-replay-acceptance.cjs",
     "netsim": "node scripts/netsim.cjs"
