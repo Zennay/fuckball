@@ -210,6 +210,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
    if(serverLink!==link||!link.spectatorJoinAwaiting)return;
    link.failed=true;disconnect();showJoinScreen(roomId,
     'This server cannot guarantee spectator entry; no room was joined.');
+   $('joinSpectator').checked=true; // An explicit WATCH intent must never retry as a player.
   },4500);
  };ws.onerror=()=>{
   $('serverRoomStatus').textContent='Could not connect to server.';
@@ -284,6 +285,7 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   if(d.type==='error'||d.type==='spectatorAdmissionInfo'){
    link.failed=true;disconnect();showJoinScreen(roomId,
     'This server cannot guarantee spectator-only entry; no room was joined.');
+   $('joinSpectator').checked=true; // The rejected server never authorized a player join.
    return;
   }
  }
