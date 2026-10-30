@@ -25,6 +25,11 @@
  };
  let playlist=chooseFromStorage();
  let nativeQueue={searching:false,ready:false,accepted:false,confirming:false,mode:null,waiting:0,needed:0,expiresAt:null,recovery:null};
+ function nativeReadyRemainingMs(){
+  return nativeQueue.ready&&Number.isFinite(nativeQueue.remainingMs)&&Number.isFinite(nativeQueue.receivedAt)?
+   Math.max(0,nativeQueue.remainingMs-Math.max(0,performance.now()-nativeQueue.receivedAt)):0;
+ }
+
  let postMatch=null,postMatchScore=null,postMatchInfo=null,postMatchOpen=null,postMatchRequest=null;
  let dismissedMatchKey=null;
  function verifiedResult(){
@@ -342,7 +347,7 @@
    const box=home.querySelector('.quick-ready:not([hidden])');
    const accept=box?.querySelector('.quick-ready-actions button.primary');
    if(!nativeQueue.accepted&&accept&&!accept.disabled&&
-      Number.isSafeInteger(nativeQueue.expiresAt)&&Date.now()<nativeQueue.expiresAt){
+      nativeReadyRemainingMs()>0){
     accept.click();reveal(box);
     announce('Ready confirmation sent for '+nativeQueue.mode+'. Waiting for the server receipt; no acceptance is assumed.');
    }else if(box){
@@ -460,7 +465,7 @@
   if(state.pending){
    queueNow.textContent='↗ View online connection';queueNow.disabled=false;
   }else if(nativeQueue.ready){
-   const remaining=Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000));
+   const remaining=Math.max(0,Math.ceil((nativeReadyRemainingMs())/1000));
    queueNow.textContent=nativeQueue.accepted?'✓ Ready · waiting for players':
     nativeQueue.confirming?'… Waiting for server receipt · '+remaining+'s':
     '✓ Accept '+nativeQueue.mode+' match · '+remaining+'s';
@@ -479,7 +484,7 @@
    const label=state.pending?'VIEW ROOM CONNECTION':
     nativeQueue.ready?(nativeQueue.accepted?'SERVER CONFIRMED · WAITING FOR PLAYERS':
      nativeQueue.confirming?'SENDING READY CONFIRMATION':
-     'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeQueue.expiresAt-Date.now())/1000))+'s'):
+     'ACCEPT MATCH · '+Math.max(0,Math.ceil((nativeReadyRemainingMs())/1000))+'s'):
     nativeQueue.searching||state.inQueue?'VIEW CURRENT SEARCH':
     state.server||state.peer||state.local||state.playingReplay?'RETURN TO GAME':
     recovery?(recovery.party?'VIEW FRIENDS PARTY':'RETRY HUMAN MATCH'):
@@ -541,9 +546,9 @@
    typeof data.recovery.reason==='string'?
    {mode:data.recovery.mode,party:data.recovery.party===true,
     reason:data.recovery.reason.slice(0,180)}:null;
-  nativeQueue={...data,recovery:safeRecovery};
+  nativeQueue={...data,receivedAt:performance.now(),recovery:safeRecovery};
   if(newlyReady){
-   announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm before '+new Date(data.expiresAt).toLocaleTimeString()+'.');
+   announce('MATCH FOUND · '+data.mode+'. All real players must explicitly confirm within '+Math.ceil(nativeReadyRemainingMs()/1000)+' seconds.');
    if(!document.hidden&&!home.hidden){
     const box=home.querySelector('.quick-ready:not([hidden])');
     if(box){
