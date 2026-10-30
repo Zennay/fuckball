@@ -227,6 +227,32 @@ const {createServer}=require('../headless/server.cjs');
    return before===serverLink;
   });
   assert.equal(preserved,true,'offline event cannot disconnect an already joined room');
+  // The real headless WebSocket server rejects an invalid account token on
+  // queueJoin. That error must become honest human-search recovery rather
+  // than opening an unrelated generic network-dialog modal. Synthetic
+  // invalid token: never treated as real human matchmaking.
+  const rejectPage=await browser.newPage();
+  try{
+   const rejectErrors=[];
+   rejectPage.on('pageerror',e=>rejectErrors.push(e.message));
+   await rejectPage.goto('http://127.0.0.1:'+port+'/');
+   await rejectPage.evaluate(port=>{
+    settings.account={token:'synthetic-invalid-quick-token'};
+    document.getElementById('serverAddress').value='ws://127.0.0.1:'+port+'/ws';
+   },port);
+   await rejectPage.locator('.quick-queue-shortcut button.primary').click();
+   await rejectPage.locator('.quick-queue-recovery').waitFor({state:'visible',timeout:7000});
+   assert.match(await rejectPage.locator('.quick-queue-recovery p').innerText(),
+    /log in to search for real human players/i,
+    'native queue rejection explains the actual server-authenticated reason');
+   assert.equal(await rejectPage.locator('#networkDialog').evaluate(e=>e.open),false,
+    'human queue rejection does not leave a generic network dialog blocking Retry');
+   assert.equal(await rejectPage.evaluate(()=>serverLink),null,
+    'rejected real WebSocket queue transport is released');
+   assert.equal(await rejectPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
+    'rejected queue never appears to be actively searching');
+   assert.deepEqual(rejectErrors,[],'no runtime exception on real rejected WebSocket');
+  }finally{await rejectPage.close();}
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}
