@@ -674,6 +674,15 @@ function populateSubSelect(id,items,empty){
  for(const item of items){const option=document.createElement('option');option.value=String(item.id);option.textContent=item.name;control.append(option);}
  control.value=items.some(item=>String(item.id)===previous)?previous:String(items[0].id);
 }
+// Native reconnect-reserved slots remain in room snapshots but cannot be
+// benched, captained or substituted until server connection returns.
+function eligibleNativeRosterHuman(id,team){
+ const state=serverLink?.roomState;
+ if(!Number.isSafeInteger(id)||id<1||!state||
+    (state.disconnectedIds||[]).includes(id)||botIds.has(id))return false;
+ const p=(room?.state?.players||[]).find(p=>p.id===id);
+ return !!p&&(p.team?.id??p.team)===team;
+}
 // A native vote is not a confirmed human decision until the SERVER echoes
 // this player in the accepted roster (or closes a declined proposal).
 // Keep pending sends scoped to the admitted room + immutable proposal ID.
@@ -1114,10 +1123,10 @@ function renderSubPanel(){
  const nameOf=id=>players.find(p=>p.id===id)?.name||'Player '+id;
  const team=Number($('subTeam').value)===2?2:1;
  const teamName=team===1?'Red':'Blue',benches=new Map(state.benches||[]),captains=new Map(state.captains||[]),offline=new Set(state.disconnectedIds||[]);
- const active=players.filter(p=>p.team?.id===team||p.team===team);
- const inactive=players.filter(p=>p.team?.id===0||p.team===0);
- const bench=inactive.filter(p=>benches.get(p.id)===team&&!offline.has(p.id));
- const asOption=p=>({id:p.id,name:(p.name||'Player '+p.id)+(offline.has(p.id)?' · reconnecting':'')});
+ const active=players.filter(p=>(p.team?.id===team||p.team===team)&&!offline.has(p.id));
+ const inactive=players.filter(p=>(p.team?.id===0||p.team===0)&&!offline.has(p.id));
+ const bench=inactive.filter(p=>benches.get(p.id)===team);
+ const asOption=p=>({id:p.id,name:p.name||'Player '+p.id});
  populateSubSelect('subBenchPlayer',inactive.map(asOption),'No inactive players');
  populateSubSelect('subOutPlayer',active.map(asOption),'No active players');
  populateSubSelect('subInPlayer',bench.map(asOption),'No available team bench players');
@@ -1199,13 +1208,20 @@ updateRoster=function(){
 };
 $('subTeam').onchange=renderSubPanel;
 $('subAssignBench').onclick=()=>{
- if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:Number($('subTeam').value)});
+ const id=Number($('subBenchPlayer').value),team=Number($('subTeam').value);
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom()&&
+    [1,2].includes(team)&&eligibleNativeRosterHuman(id,0))serverLink.send({type:'bench',id,team});
 };
 $('subClearBench').onclick=()=>{
- if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'bench',id:Number($('subBenchPlayer').value),team:0});
+ const id=Number($('subBenchPlayer').value);
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom()&&
+    eligibleNativeRosterHuman(id,0))serverLink.send({type:'bench',id,team:0});
 };
 $('subAppointCaptain').onclick=()=>{
- if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom())serverLink.send({type:'appointCaptain',team:Number($('subTeam').value),id:Number($('subCaptainPlayer').value)});
+ const team=Number($('subTeam').value),id=Number($('subCaptainPlayer').value);
+ if(serverLink?.isOwner&&serverLink.ws?.readyState===1&&!humanRematchLocksRoom()&&
+    [1,2].includes(team)&&(id===0||eligibleNativeRosterHuman(id,team)))
+  serverLink.send({type:'appointCaptain',team,id});
 };
 $('subPropose').onclick=()=>{
  const link=serverLink,state=link?.roomState;
@@ -1216,6 +1232,9 @@ $('subPropose').onclick=()=>{
     (state.pendingSubs||[]).some(p=>p.team===team))return;
  if(!link.isOwner&&new Map(state.captains||[]).get(team)!==networkPlayerId)return;
  const outId=Number($('subOutPlayer').value),inId=Number($('subInPlayer').value);
+ // Check the current native roster again at click-time, not only render-time.
+ if(!eligibleNativeRosterHuman(outId,team)||!eligibleNativeRosterHuman(inId,0)||
+    new Map(state.benches||[]).get(inId)!==team)return;
  const receipt={link,team,outId,inId,sentAt:Date.now(),timer:null};
  subProposalReceipts.set(team,receipt);subProposalNotices.delete(team);
  try{link.send({type:'subRequest',outId,inId});}

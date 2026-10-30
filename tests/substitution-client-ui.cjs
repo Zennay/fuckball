@@ -53,10 +53,48 @@ async function joinHuman(url,room,sockets,index){
 
   a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
   await until(()=>a.elements.get('subBenchPlayer').children.some(x=>x.value==='9'),'spectator in host bench selector');
+  // Simulate a reserved native room seat temporarily disconnected while the
+  // server and remaining human sockets stay real. The native server rejects
+  // bench mutations for that player; the host must not advertise/send them.
+  r.setConnected(9,false);
+  await until(()=>a.evalJS('serverLink.roomState?.disconnectedIds?.includes(9)'),
+    'native disconnected reserved seat delivered to host');
+  assert.equal(a.elements.get('subBenchPlayer').children.some(x=>x.value==='9'),false,
+    'reconnecting spectator is excluded from assignable bench choices');
+  a.evalJS('window.origRosterSend=serverLink.send;window.heldRosterSends=[];serverLink.send=d=>window.heldRosterSends.push(d)');
+  a.elements.get('subBenchPlayer').value='9';
+  a.elements.get('subAssignBench').onclick();
+  a.elements.get('subClearBench').onclick();
+  assert.equal(a.evalJS('window.heldRosterSends.length'),0,
+    'stale direct host bench actions must never send for reserved disconnected seat');
+  a.evalJS('serverLink.send=window.origRosterSend');
+  r.setConnected(9,true);
+  await until(()=>a.evalJS('!serverLink.roomState?.disconnectedIds?.includes(9)'),
+    'native reserved seat reconnected');
+  await until(()=>a.elements.get('subBenchPlayer').children.some(x=>x.value==='9'),
+    'reconnected player becomes bench eligible again');
   a.elements.get('subBenchPlayer').value='9';
   a.elements.get('subAssignBench').click();
   await until(()=>r.benches.get(9)===1,'host assigned guest to red bench');
   await until(()=>a.elements.get('subInPlayer').children.some(x=>x.value==='9'),'bench appears as valid incoming');
+  // Genuine room status with a synthetic reconnect-reserved human slot.
+  r.setConnected(3,false);
+  await until(()=>a.evalJS('serverLink.roomState?.disconnectedIds?.includes(3)'),
+    'active reserved seat disconnected on native server');
+  assert.equal(a.elements.get('subOutPlayer').children.some(x=>x.value==='3'),false,
+    'reconnecting active member is not a valid outgoing substitution choice');
+  assert.equal(a.elements.get('subCaptainPlayer').children.some(x=>x.value==='3'),false,
+    'reconnecting player is not a captain choice');
+  a.evalJS('window.reservedOriginalSend=serverLink.send;window.reservedSends=[];serverLink.send=d=>window.reservedSends.push(d)');
+  a.elements.get('subCaptainPlayer').value='3';a.elements.get('subAppointCaptain').onclick();
+  a.elements.get('subOutPlayer').value='3';a.elements.get('subInPlayer').value='9';
+  a.elements.get('subPropose').onclick();
+  assert.equal(a.evalJS('window.reservedSends.length'),0,
+    'stale captain and substitution clicks cannot send for disconnected ID');
+  a.evalJS('serverLink.send=window.reservedOriginalSend');
+  r.setConnected(3,true);
+  await until(()=>a.elements.get('subCaptainPlayer').children.some(x=>x.value==='3'),
+    'reconnected active player eligible again');
   a.elements.get('subCaptainPlayer').value='3';
   a.elements.get('subAppointCaptain').click();
   await until(()=>r.captains.get(1)===3,'host appointed own-team captain');
