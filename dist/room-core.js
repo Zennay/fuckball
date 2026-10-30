@@ -266,6 +266,19 @@ function createRoomCore(opts){
    else{if(p.accepted)throw Error('Substitution already accepted.');p.accepted=true;completeSub(d.team);}
    status();snapshot();return;
   }
+  // Withdraw a mistaken human swap before consent. Only the original
+  // proposer or current room host may cancel the exact native request ID;
+  // a late/stale cancellation cannot touch another proposal or accepted swap.
+  if(d.type==='subCancel'){
+   if(![1,2].includes(d.team)||!Number.isSafeInteger(d.requestId)||d.requestId<1)
+    throw Error('Invalid substitution cancellation.');
+   expireSubs();const p=r.pendingSubs.get(d.team);
+   if(!p||p.requestId!==d.requestId||p.accepted)
+    throw Error('No unaccepted substitution request with this ID.');
+   if(id!==p.requestedBy&&id!==r.owner)
+    throw Error('Only the proposer or host may cancel this substitution.');
+   r.pendingSubs.delete(d.team);status();return;
+  }
   if(d.type==='subRequest'){
    if(!Number.isSafeInteger(d.outId)||!Number.isSafeInteger(d.inId)||d.outId===d.inId||!r.clients.has(d.outId)||!r.clients.has(d.inId)||r.disconnected.has(d.outId)||r.disconnected.has(d.inId))throw Error('Invalid substitution participants.');
    const team=hb.getPlayer(d.outId)?.team;

@@ -39,8 +39,21 @@ try {
   original.message(1,{type:'bench',id:9,team:1});
   original.message(1,{type:'appointCaptain',team:1,id:3});
   original.message(3,{type:'subRequest',outId:1,inId:9});
+  const initialRequest=original.pendingSubs.get(1).requestId;
+  assert.throws(()=>original.message(9,{type:'subCancel',team:1,requestId:initialRequest}),
+    /Only the proposer or host/,'incoming human cannot cancel somebody else’s proposal');
+  assert.throws(()=>original.message(3,{type:'subCancel',team:1,requestId:initialRequest+1}),
+    /No unaccepted substitution/,'stale ID cannot cancel current server proposal');
+  original.message(3,{type:'subCancel',team:1,requestId:initialRequest});
+  assert.equal(original.pendingSubs.size,0,'captain can withdraw their own mistake');
+  assert.throws(()=>original.message(3,{type:'subCancel',team:1,requestId:initialRequest}),
+    /No unaccepted substitution/,'replayed withdrawal cannot cancel next proposal');
+  original.message(3,{type:'subRequest',outId:1,inId:9});
   const first=original.pendingSubs.get(1).requestId;
+  assert(first>initialRequest,'new human request gets a fresh server-only sequence');
   original.message(9,{type:'subAccept',team:1,outId:1,requestId:first,accept:true});
+  assert.throws(()=>original.message(1,{type:'subCancel',team:1,requestId:first}),
+    /No unaccepted substitution/,'host cannot retract already executed consent');
   assert.equal(original.hb.getPlayer(9).team,1);
   assert.equal(original.hb.getPlayer(1).team,0);
   assert.deepEqual(original.subEvents,[{team:1,outId:1,inId:9,requestedBy:3,requestId:first,frame:original.frame}],

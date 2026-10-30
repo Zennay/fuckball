@@ -1094,6 +1094,20 @@ for(const id of ['tabHome','tabPlay','tabReplay'])
 // Two teams can propose in parallel. A single receipt let Blue overwrite Red's
 // pending send, enabling duplicate Red requests before the server replied.
 const subProposalReceipts=new Map(),subProposalNotices=new Map();
+const subCancelReceipts=new Map(),subCancelNotices=new Map();
+function syncSubCancel(link,state){
+ for(const [team,receipt] of subCancelReceipts){
+  const req=(state?.pendingSubs||[]).find(p=>p.team===team);
+  if(receipt.link!==link||!req||req.requestId!==receipt.id){
+   subCancelReceipts.delete(team);subCancelNotices.delete(team);continue;
+  }
+  if(Date.now()-receipt.sentAt>=2400){
+   subCancelReceipts.delete(team);
+   subCancelNotices.set(team,{link,message:'No server cancellation receipt yet. Review and retry explicitly.'});
+  }
+ }
+}
+
 function clearSubProposalReceipt(team){
  const receipt=subProposalReceipts.get(team);
  if(receipt?.timer)clearTimeout(receipt.timer);
@@ -1134,6 +1148,7 @@ function renderSubPanel(){
  const roleCaptain=captains.get(team),isHost=!!link.isOwner;
  const mayPropose=isHost||roleCaptain===networkPlayerId;
  syncSubProposal(link,state);
+ syncSubCancel(link,state);
  const proposalPending=subProposalReceipts.get(team)?.link===link;
  // The native server locks roster mutations during a pending human rematch
  // ballot. Keep captain/bench/substitution actions equally honest in the UI.
@@ -1143,6 +1158,10 @@ function renderSubPanel(){
  $('subClearBench').disabled=controlsLocked||!isHost||!inactive.length;
  $('subAppointCaptain').disabled=controlsLocked||!isHost;
  const queued=(state.pendingSubs||[]).find(p=>p.team===team);
+ const cancelPending=!!queued&&subCancelReceipts.get(team)?.link===link&&
+  subCancelReceipts.get(team).id===queued.requestId;
+ $('subCancel').disabled=controlsLocked||!queued||queued.accepted||
+  !(isHost||queued.requestedBy===networkPlayerId)||cancelPending;
  $('subPropose').disabled=controlsLocked||!mayPropose||!active.length||!bench.length||!!queued||proposalPending;
  const timeFrames=new Map(state.activeFrames||[]);
  const total=(timeFrames.get(networkPlayerId)||0)/60;
@@ -1160,7 +1179,10 @@ function renderSubPanel(){
  // hide Red's own pending confirmation, retry notice or last completed swap.
  $('subPending').textContent=teamRequests.length?
   teamRequests.map(p=>teamName+': '+nameOf(p.outId)+' → '+nameOf(p.inId)+
-   (p.accepted?' · accepted, waiting for pause':' · awaiting player consent')).join(' | '):
+   (p.accepted?' · accepted, waiting for pause':
+    cancelPending?' · withdrawal sent, waiting for server':
+    subCancelNotices.get(team)?.link===link?' · '+subCancelNotices.get(team).message:
+    ' · awaiting player consent')).join(' | '):
   proposalPending?'Substitution proposal waiting for server confirmation.':
   subProposalNotices.get(team)?.link===link?subProposalNotices.get(team).message:
   recent&&Number.isSafeInteger(recent.frame)?
@@ -1246,6 +1268,26 @@ $('subPropose').onclick=()=>{
   },2400);
   receipt.timer?.unref?.();
  }
+ renderSubPanel();
+};
+$('subCancel').onclick=()=>{
+ const link=serverLink,state=link?.roomState,team=Number($('subTeam').value);
+ if(!link||link.ws?.readyState!==1||!state||humanRematchLocksRoom())return;
+ const queued=(state.pendingSubs||[]).find(p=>p.team===team);
+ if(!queued||queued.accepted||!Number.isSafeInteger(queued.requestId)||
+    (!link.isOwner&&queued.requestedBy!==networkPlayerId))return;
+ syncSubCancel(link,state);
+ if(subCancelReceipts.get(team)?.link===link&&
+    subCancelReceipts.get(team).id===queued.requestId)return;
+ const receipt={link,id:queued.requestId,sentAt:Date.now()};
+ subCancelReceipts.set(team,receipt);subCancelNotices.delete(team);
+ try{link.send({type:'subCancel',team,requestId:queued.requestId});}
+ catch{subCancelReceipts.delete(team);
+  subCancelNotices.set(team,{link,message:'Withdraw could not be sent. Retry explicitly.'});}
+ setTimeout(()=>{
+  if(subCancelReceipts.get(team)!==receipt)return;
+  syncSubCancel(link,link.roomState);renderSubPanel();
+ },2400)?.unref?.();
  renderSubPanel();
 };
 for(const [id,accept]of [['subApprove',true],['subDecline',false]])$(id).onclick=()=>{

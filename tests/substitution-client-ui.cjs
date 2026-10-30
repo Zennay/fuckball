@@ -134,9 +134,29 @@ async function joinHuman(url,room,sockets,index){
   assert.match(a.elements.get('subPending').textContent,/Blue:.*awaiting player consent/i,
     'Blue server request remains visible while Red is awaiting acknowledgement');
   a.evalJS('serverLink.send=window.firstSubSend;subProposalReceipts.get(1).sentAt=Date.now()-2500;renderSubPanel()');
-  blueGuest.send(JSON.stringify({type:'subAccept',team:2,outId:2,
-    requestId:r.pendingSubs.get(2).requestId,accept:false}));
-  await until(()=>!r.pendingSubs.has(2),'Blue human declines temporary request');
+  // A non-proposer may not withdraw another human's native request.
+  const blueRequestId=r.pendingSubs.get(2).requestId;
+  blueGuest.send(JSON.stringify({type:'subCancel',team:2,requestId:blueRequestId}));
+  await wait(60);
+  assert.equal(r.pendingSubs.get(2)?.requestId,blueRequestId,
+    'server rejects cancellation by a different non-host player');
+  // Host explicitly withdraws a mistaken Blue proposal. Synthetic delay of
+  // the outgoing click is the only fake transport; server and roster are real.
+  a.evalJS('window.realCancelSend=serverLink.send;window.heldCancels=[];serverLink.send=d=>window.heldCancels.push(d)');
+  a.elements.get('subCancel').click();a.elements.get('subCancel').click();
+  assert.equal(a.evalJS('window.heldCancels.length'),1,'fast double-click sends only one withdrawal');
+  assert.equal(a.elements.get('subCancel').disabled,true,
+    'withdraw button waits for native server confirmation');
+  assert.match(a.elements.get('subPending').textContent,/withdrawal sent, waiting for server/i);
+  a.evalJS('serverLink.send=window.realCancelSend;window.realCancelSend(window.heldCancels[0])');
+  await until(()=>!r.pendingSubs.has(2),'host successfully withdrew native Blue request');
+  await until(()=>a.elements.get('subPropose').disabled===false,
+    'host can propose a corrected swap without 60-second lock');
+  assert.equal(a.elements.get('subCancel').disabled,true,
+    'no nonexistent proposal may be cancelled');
+  // A delayed obsolete cancellation cannot remove a newer Blue request.
+  blueGuest.send(JSON.stringify({type:'subCancel',team:2,requestId:blueRequestId}));
+  await wait(50);
   a.elements.get('subTeam').value='1';a.elements.get('subTeam').onchange();
 
   // Synthetic transport loss on a real admitted host: do not expose controls
