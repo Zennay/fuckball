@@ -39,3 +39,8 @@
 .goal-rush-return button:focus-visible{outline:3px solid #fff2a7;outline-offset:3px}
 @media(max-width:700px){.goal-rush-return{flex-direction:column;align-items:stretch;
  padding:13px}.goal-rush-return button{width:100%}}
+
+/* User-visible private receipts without changing multi-tab event storage. */
+.goal-rush-sync{margin:12px 0 0;padding:11px 14px;border:1px solid #638c79;background:#193a35;border-radius:9px;color:#e4f6e7;font-size:.8rem;line-height:1.5;overflow-wrap:anywhere}
+.goal-rush-journey-actions button{min-height:44px;cursor:pointer}
+@media(max-width:500px){.goal-rush-journey-actions{display:grid;grid-template-columns:1fr}.goal-rush-journey-actions button{width:100%;min-height:48px}}
