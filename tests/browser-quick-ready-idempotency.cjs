@@ -82,6 +82,22 @@ const {createServer}=require('../headless/server.cjs');
    'pre-room cancel after match-found releases orphan transport');
   assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
    'server cancellation after match found still offers explicit human retry');
+  // A player in My Games cannot see the Home-only recovery card. The
+  // existing global human dock should explicitly link to the recovery,
+  // without initiating a new search or accepting another ready check.
+  await page.evaluate(()=>document.getElementById('tabReplay').click());
+  await page.evaluate(()=>new Promise(resolve=>queueMicrotask(resolve)));
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false,
+   'cancelled pre-room match is visible from My Games immediately');
+  assert.match(await page.locator('.quick-ready-dock-progress').innerText(),
+   /room closed before receipt/i,'recovery shows actual server cancellation reason');
+  assert.equal(await page.locator('.quick-ready-dock-actions button.primary').isVisible(),false,
+   'recovery does not offer an unapproved automatic ready confirmation');
+  await page.locator('.quick-ready-dock-actions button').last().click();
+  assert.equal(await page.evaluate(()=>document.getElementById('homeView').hidden),false,
+   'recovery dock returns to Play instead of creating a new human search');
+  assert.equal(await page.locator('.quick-queue-recovery').evaluate(e=>e.hidden),false,
+   'native explicit Retry remains available after navigation');
   assert.deepEqual(errors,[],'no Chromium runtime errors');
   console.log('PASS Chromium duplicate ready receipts preserve pending and server-confirmed consent; new proposal remains actionable');
  }finally{await browser.close();await app.close();}

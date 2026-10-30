@@ -96,10 +96,11 @@
   declineReady.click();
  });
  dockReview.addEventListener('click',()=>{
-  if(!ready)return;
+  const recover=!ready&&!recovery.hidden;
+  if(!ready&&!recover)return;
   document.getElementById('tabHome')?.click();
-  readyBox.scrollIntoView({behavior:'auto',block:'center'});
-  (readyAccepted?readyProgress:acceptReady).focus?.({preventScroll:true});
+  (recover?recovery:readyBox).scrollIntoView({behavior:'auto',block:'center'});
+  (recover?retry:readyAccepted?readyProgress:acceptReady).focus?.({preventScroll:true});
  });
  const cards=home.querySelector('.mode-cards')||home;
  cards.insertAdjacentElement('afterend',panel);
@@ -261,7 +262,21 @@
   // A floating read-only mirror is only needed when Home's native
   // controls are hidden behind another app view. The native buttons remain
   // the sole sender of ready / decline messages to the server.
-  readyDock.hidden=!ready||!home.hidden;
+  const recoveryOutsideHome=!ready&&!recovery.hidden&&home.hidden;
+  readyDock.hidden=!(ready&&home.hidden)&&!recoveryOutsideHome;
+  readyDock.classList.toggle('is-recovery',recoveryOutsideHome);
+  readyDock.setAttribute('aria-label',recoveryOutsideHome?
+   'Interrupted human match recovery':'Human match ready confirmation');
+  if(recoveryOutsideHome){
+   readyDock.classList.remove('is-confirmed');
+   readyDockTitle.textContent=recoveryHeading.textContent;
+   readyDockProgress.textContent=recoveryReason.textContent;
+   dockAccept.hidden=true;dockDecline.hidden=true;
+   dockReview.textContent='Review recovery in Play';
+  }else{
+   dockAccept.hidden=false;dockDecline.hidden=readyAccepted;
+   dockReview.textContent='View in Play';
+  }
   if(ready){
    const seconds=Math.max(0,Math.ceil((readyRemainingMs())/1000));
    readyDockTitle.textContent=readyAccepted?'SERVER CONFIRMED · WAITING FOR HUMANS':

@@ -114,6 +114,8 @@
  gap:18px;width:min(940px,calc(100vw - 24px));padding:16px 19px;
  border-radius:16px;border:2px solid #c8fa9a;background:#17302d;
  box-shadow:0 15px 45px #000d;color:#f1ffed}
+.quick-ready-dock.is-recovery{border-color:#e8c78d}
+.quick-ready-dock.is-recovery .quick-ready-dock-copy strong{color:#ffe4ac}
 .quick-ready-dock-copy{min-width:0}
 .quick-ready-dock-copy strong{font-size:.95rem;letter-spacing:.055em;color:#deffac}
 .quick-ready-dock-progress{margin:6px 0 0;color:#d1e3db;font-size:.83rem;
