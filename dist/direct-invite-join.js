@@ -239,7 +239,7 @@
  async function loadQRImage(file){
   if(typeof createImageBitmap==='function'){
    try{return await createImageBitmap(file);}
-   catch(error){if(typeof Image!=='function'||typeof URL?.createObjectURL!=='function')throw error;}
+   catch(error){if(typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')throw error;}
   }
   if(typeof Image!=='function'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')
    throw Error('Local image decoding is unavailable. Paste the invitation instead.');
