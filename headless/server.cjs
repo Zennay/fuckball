@@ -720,7 +720,7 @@ function createServer(options={}){
  }
  function broadcastQuickRematch(r,status,reason){
   const vote=r.quickMatch?.vote;
-  const payload={type:'quickRematchStatus',status,id:vote?.id||null,
+  const payload={type:'quickRematchStatus',status,serverNow:Date.now(),id:vote?.id||null,
    expiresAt:vote?.expiresAt||null,required:vote?[...vote.required]:[],
    accepted:vote?[...vote.accepted]:[],
    ...(reason?{reason:String(reason).slice(0,140)}:{})};

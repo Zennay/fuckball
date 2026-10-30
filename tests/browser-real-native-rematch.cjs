@@ -66,7 +66,18 @@ try{
   assert(r.lastResult,'result receipt remains authoritative');
  }
  await until(()=>B.evaluate(()=>!document.getElementById('rematchAccept').hidden),5000,'guest consent button');
+ // A real guest with a device clock 3 minutes ahead must not lose the
+ // native host's genuine 45s vote or see an expired Home dock.
+ await B.evaluate(()=>{window.__realRematchDateNow=Date.now;Date.now=()=>__realRematchDateNow()+180000;renderNextMatchPanel()});
+ assert.equal(await B.locator('#rematchAccept').evaluate(e=>e.hidden),false,
+  'fast browser clock must not hide an unexpired server-owned vote');
+ assert.match(await B.locator('#nextMatchTitle').textContent(),/4[0-5]s to vote/,
+  'human-facing vote countdown uses the server deadline even with clock skew');
+ await B.evaluate(()=>{Date.now=()=>__realRematchDateNow()-180000;renderNextMatchPanel()});
+ assert.match(await B.locator('#nextMatchTitle').textContent(),/4[0-5]s to vote/,
+  'slow browser clock must not make the same human vote seem six minutes long');
  await B.evaluate(()=>document.getElementById('rematchAccept').click());
+ await B.evaluate(()=>{Date.now=__realRematchDateNow});
  await until(()=>r.started&&r.round>1,8000,'two-human server accepted rematch');
  await until(()=>A.evaluate(()=>serverLink?.roomState?.started&&!serverLink.roomState.lastResult),7000,'new native round on host');
  assert.equal(r.rematch,null,'server vote cleared');

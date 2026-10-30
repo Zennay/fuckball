@@ -328,13 +328,15 @@ function connectServer(create,roomId='',joinName='',resumeContext=null,quickMode
   return;
  }
  if(d.type==='quickRematchStatus'){
+   link.quickRematchReceivedAt=performance.now();
+   link.quickRematchServerNow=Number.isSafeInteger(d.serverNow)?d.serverNow:null;
    // Room-local server policy, no client-chosen match result or permissions.
    const required=Array.isArray(d.required)&&d.required.length<=8?
     d.required.filter(id=>Number.isSafeInteger(id)&&id>0):[];
    const accepted=Array.isArray(d.accepted)&&d.accepted.length<=8?
     d.accepted.filter(id=>required.includes(id)):[];
    link.quickRematch=d.status==='pending'&&Number.isSafeInteger(d.id)&&
-    Number.isSafeInteger(d.expiresAt)&&d.expiresAt>Date.now()?
+    Number.isSafeInteger(d.expiresAt)&&d.expiresAt>(Number.isSafeInteger(link.quickRematchServerNow)?link.quickRematchServerNow:Date.now())?
     {id:d.id,required,accepted,expiresAt:d.expiresAt}:null;
    if(d.status!=='pending')clearQuickRematchAlert(link);
    if(d.status==='cancelled')notify(d.reason||'Quick Match rematch cancelled.');
@@ -692,6 +694,16 @@ function clearNativeRematchVote(){
  if(nativeRematchVotePending?.timer)clearTimeout(nativeRematchVotePending.timer);
  nativeRematchVotePending=null;nativeRematchVoteNotice=null;
 }
+// Advance the server's vote deadline with monotonic time, never device time.
+function nativeRematchSeconds(request,link=serverLink){
+ if(!Number.isSafeInteger(request?.expiresAt))return null;
+ const quick=!!link?.quickMatchMode;
+ const hostNow=quick?link?.quickRematchServerNow:link?.roomState?.serverNow;
+ const received=quick?link?.quickRematchReceivedAt:link?.roomStatusReceivedAt;
+ const now=Number.isSafeInteger(hostNow)?
+  hostNow+(Number.isFinite(received)?Math.max(0,performance.now()-received):0):Date.now();
+ return Math.max(0,Math.ceil((request.expiresAt-now)/1000));
+}
 function rematchVoteRequest(link=serverLink){
  if(!link?.room||!link.roomState||link.roomState.started)return null;
  return link.quickMatchMode?link.quickRematch:link.roomState.rematch;
@@ -710,7 +722,7 @@ function submitNativeRematchVote(accept){
  if(!request||!Number.isSafeInteger(request.id)||
     !Array.isArray(request.required)||!request.required.includes(networkPlayerId)||
     !Array.isArray(request.accepted)||request.accepted.includes(networkPlayerId)||
-    Number.isSafeInteger(request.expiresAt)&&Date.now()>=request.expiresAt)return;
+    nativeRematchSeconds(request,link)===0)return;
  if(nativeRematchVotePending?.link===link&&nativeRematchVotePending.id===request.id)return;
  const id=request.id;
  if(link.ws?.readyState!==1){
@@ -783,8 +795,7 @@ function renderNextMatchPanel(){
  if(panel.hidden){renderGlobalRematchDock();return;}
  const result=state.lastResult,quick=!!link.quickMatchMode;
  const voters=new Set(request?.required||[]),approved=new Set(request?.accepted||[]);
- const seconds=Number.isSafeInteger(request?.expiresAt)?
-  Math.max(0,Math.ceil((request.expiresAt-Date.now())/1000)):null;
+ const seconds=nativeRematchSeconds(request,link);
  const heading=result?'Round '+result.round+' · '+result.red+' : '+result.blue:'Ready for another game';
  // Keep the second-by-second countdown out of the polite live status, so
  // screen readers do not announce the same vote on every 1s refresh.
@@ -908,7 +919,7 @@ function currentRematchVote(){
  if(!vote||!Number.isSafeInteger(vote.id)||!Array.isArray(vote.required)||
     !Array.isArray(vote.accepted)||!vote.required.includes(networkPlayerId))return null;
  const expires=Number.isSafeInteger(vote.expiresAt)?vote.expiresAt:null;
- if(expires!==null&&expires<=Date.now())return null;
+ if(expires!==null&&nativeRematchSeconds(vote,link)===0)return null;
  const approved=vote.accepted.includes(networkPlayerId);
  return{link,vote,approved,expires};
 }
@@ -918,8 +929,7 @@ function renderGlobalRematchDock(){
  globalRematchDock.hidden=!state||menuVisible;
  if(globalRematchDock.hidden)return;
  fitPostgameVisualViewport(globalRematchDock);
- const vote=state.vote,remaining=state.expires===null?null:
-  Math.max(0,Math.ceil((state.expires-Date.now())/1000));
+ const vote=state.vote,remaining=nativeRematchSeconds(vote,state.link);
  const pending=nativeRematchVotePending?.link===state.link&&nativeRematchVotePending.id===vote.id;
  const socketOffline=state.link.ws?.readyState!==1;
  const notice=nativeRematchVoteNotice?.link===state.link&&nativeRematchVoteNotice.id===vote.id?
