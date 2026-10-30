@@ -158,7 +158,7 @@
   const wrongAudience=privateDraft&&(window.FuckballTeamChat?.audience(link)!=='team'||
    !privateDraftSide||nativeSideForDraft(link)!==privateDraftSide);
   const until=Math.max(link?.chatMutedUntil||0,link?.roomControl?.chatMuteUntil||0);
-  if(!wrongRoom&&!wrongSession&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>Date.now()))return;
+  if(!wrongRoom&&!wrongSession&&!blocked&&!wrongOrigin&&!wrongAudience&&!(link?.room&&until>FuckballRoomServerTime.now(link)))return;
   event.preventDefault();event.stopImmediatePropagation();
   sendFeedback.textContent=wrongRoom||wrongSession?
    'This draft belongs to an earlier room connection or player. Discard it explicitly before sending to these players.':
@@ -358,7 +358,7 @@
    Number.isSafeInteger(p?.id)&&p.id>0&&p.id!==networkPlayerId&&
    p.aiControlled!==true&&!botIds.has(p.id)).slice(0,64):[];
   const until=serverLink?.roomControl?.chatMuteUntil||serverLink?.chatMutedUntil||0;
-  status.textContent=until>Date.now()?
+  status.textContent=until>FuckballRoomServerTime.now(serverLink)?
    'Your chat is muted by this room’s host until '+new Date(until).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+'. You can still play and read chat.':
    candidates.length?muted.size+' player(s) muted in this room · showing: '+FOCUS_MODES[focus]+'.':
    'Incoming filter: '+FOCUS_MODES[focus]+'. Other players appear after joining.';
@@ -493,7 +493,7 @@
     return;
    }
    const mutedUntil=Math.max(serverLink?.roomControl?.chatMuteUntil||0,serverLink?.chatMutedUntil||0);
-   if(mutedUntil>Date.now()){
+   if(mutedUntil>FuckballRoomServerTime.now(serverLink)){
     notice.textContent='Room chat is muted by the host right now.';return;
    }
    const audience=window.FuckballTeamChat?.audience(serverLink);

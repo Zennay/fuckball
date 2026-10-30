@@ -97,7 +97,7 @@
   const available=eligible.length>0;
   kick.disabled=ban.disabled=muteChat.disabled=!available;
   const selectedId=Number(target.value);
-  const muted=(link.roomControl?.chatMutes||[]).some(m=>m[0]===selectedId&&m[1]>Date.now());
+  const muted=(link.roomControl?.chatMutes||[]).some(m=>m[0]===selectedId&&m[1]>FuckballRoomServerTime.now(link));
   muteChat.textContent=muted?'Unmute chat':'Mute chat 10 min';
   muteChat.setAttribute('aria-pressed',String(muted));
   if(!available)notice.textContent='Nobody else is connected to this room.';
@@ -152,7 +152,7 @@
  target.addEventListener('change',render);
  muteChat.onclick=()=>{
   const id=selectPlayer();if(id===null||!serverLink?.isOwner)return;
-  const muted=(serverLink.roomControl?.chatMutes||[]).some(m=>m[0]===id&&m[1]>Date.now());
+  const muted=(serverLink.roomControl?.chatMutes||[]).some(m=>m[0]===id&&m[1]>FuckballRoomServerTime.now(serverLink));
   send(muted?'unmuteChat':'muteChat',id);
   notice.textContent=muted?'Restoring player chat…':'Muting player chat for 10 minutes…';
   muteChat.disabled=true;
