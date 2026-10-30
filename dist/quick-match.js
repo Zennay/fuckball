@@ -164,12 +164,21 @@
  quickStart.onclick=()=>start(preferred);
  setPreferred(preferred,false);
  let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
- let lastAttempt=null;
- function hideRecovery(){recovery.hidden=true;}
- function showRecovery(reason){
+ let lastAttempt=null,recoveryNeedsSignIn=false;
+ function hideRecovery(){recovery.hidden=true;recoveryNeedsSignIn=false;}
+ function showRecovery(reason,requiresSignIn=false){
   if(!lastAttempt){hideRecovery();return;}
+  recoveryNeedsSignIn=requiresSignIn===true;
   const reasonText=String(reason||'Search interrupted.').slice(0,160);
-  if(lastAttempt.party){
+  if(recoveryNeedsSignIn){
+   // An unrecognized/expired account token will be rejected again. Invite
+   // the player to sign in, never resend that token as a silent queue retry.
+   // This precedes party recovery: even party launches require fresh auth.
+   recoveryHeading.textContent='SIGN IN REQUIRED';
+   recoveryReason.textContent=reasonText+
+    ' Sign in with a valid account before starting another human search.';
+   retry.textContent='↗ Sign in to search';
+  }else if(lastAttempt.party){
    // A party launch is server-issued and expires. Reusing it or silently
    // requeueing could misrepresent other teammates' readiness.
    recoveryHeading.textContent='FRIENDS PARTY SEARCH ENDED';
@@ -189,6 +198,10 @@
    recoveryReason.textContent='Finish your current match, connection or ready check first.';return;
   }
   if(!lastAttempt){hideRecovery();return;}
+  if(recoveryNeedsSignIn){
+   // Native login form, no new WebSocket or automatic ready consent.
+   showJoinScreen('');return;
+  }
   if(lastAttempt.party){
    // This is navigation, not a party launch, server request or automatic
    // restoration of an expired teammate consent.
@@ -369,11 +382,11 @@
    }}));
  }
  function stopClock(){if(clock){clearInterval(clock);clock=null;}}
- function done(message,offerRetry=false,forceRecovery=false){
+ function done(message,offerRetry=false,forceRecovery=false,requiresSignIn=false){
   const wasSearching=searching;
   clearReadyAlert();clearReadyReceipt();searching=false;matchMode=null;ready=null;readyAccepted=false;
   stopClock();notice.textContent=String(message||'Search ended.').slice(0,240);
-  if(offerRetry&&(wasSearching||forceRecovery))showRecovery(message);else hideRecovery();
+  if(offerRetry&&(wasSearching||forceRecovery))showRecovery(message,requiresSignIn);else hideRecovery();
   // Publish the *final* state after the native recovery choice exists.
   // Previously the landing page saw only an idle queue and could not offer retry.
   refresh();
@@ -736,7 +749,7 @@
     if(unadmitted){
      try{disconnect();}catch{}
     }
-    done(reason,true,unadmitted);
+    done(reason,true,unadmitted,d.requiresSignIn===true&&d.status==='error');
    }
   }
  };

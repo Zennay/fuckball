@@ -455,7 +455,10 @@ else if(d.type==='error'&&link.quickMatchMode&&!link.room&&!link.reconnect){
  const reason=typeof d.message==='string'&&d.message.trim()?
   d.message.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,160):
   'The server rejected this human search.';
- window.onQuickMatchEvent?.({type:'queueStatus',status:'error',reason});
+ window.onQuickMatchEvent?.({type:'queueStatus',status:'error',reason,
+  // Only the native server's explicit authentication rejection can route
+  // the next deliberate action to the account form. No automatic rejoin.
+  requiresSignIn:reason==='Log in to search for real human players.'});
  if(serverLink===link){link.failed=true;disconnect();}
 }
 else if(d.type==='error'&&postgameRequestPending?.link===link){

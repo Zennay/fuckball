@@ -247,6 +247,20 @@ const {createServer}=require('../headless/server.cjs');
     'native queue rejection explains the actual server-authenticated reason');
    assert.equal(await rejectPage.locator('#networkDialog').evaluate(e=>e.open),false,
     'human queue rejection does not leave a generic network dialog blocking Retry');
+   const rejectedRetry=rejectPage.locator('.quick-queue-recovery button.primary');
+   assert.match(await rejectedRetry.innerText(),/sign in/i,
+    'server-auth rejection routes to account sign-in, not futile same-token retry');
+   await rejectPage.evaluate(()=>{
+    window.__unexpectedQueueReconnect=0;
+    connectServer=()=>{window.__unexpectedQueueReconnect++;return true;};
+   });
+   await rejectedRetry.click();
+   assert.equal(await rejectPage.locator('#joinScreen').evaluate(e=>e.hidden),false,
+    'explicit sign-in action opens native account flow');
+   assert.equal(await rejectPage.locator('#joinAuth').evaluate(e=>e.hidden),false,
+    'account form is actionable even with an expired local token');
+   assert.equal(await rejectPage.evaluate(()=>window.__unexpectedQueueReconnect),0,
+    'account sign-in action cannot resend the rejected token to human queue');
    assert.equal(await rejectPage.evaluate(()=>serverLink),null,
     'rejected real WebSocket queue transport is released');
    assert.equal(await rejectPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
