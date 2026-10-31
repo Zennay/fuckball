@@ -217,6 +217,25 @@ const {createServer}=require('../headless/server.cjs');
   await page.locator('.quick-ready-dock-actions .quick-dock-retry').click();
   assert.equal(await page.evaluate(()=>window.__transportRetry),2,
    'restored connectivity supports a new deliberate human search');
+  // A server match-found event ends Searching *before* the room receipt.
+  // If this device then goes offline, the unadmitted socket must still be
+  // released and the real player must receive an explicit recovery choice.
+  await page.evaluate(()=>{
+   window.__postFoundCloseCount=0;
+   serverLink={quickMatchMode:'2v2',room:null,reconnect:false,ws:{readyState:1,
+    send:()=>{},close(){window.__postFoundCloseCount++;this.readyState=3}},send:()=>{}};
+   window.onQuickMatchEvent({type:'quickMatchFound',mode:'2v2',players:4});
+   window.dispatchEvent(new Event('offline'));
+  });
+  assert.equal(await page.evaluate(()=>serverLink),null,
+   'offline after match-found but before room receipt releases orphan queue');
+  assert.equal(await page.evaluate(()=>window.__postFoundCloseCount),1,
+   'offline releases unadmitted post-match-found socket exactly once');
+  assert.equal(await page.locator('.quick-ready-dock').evaluate(e=>e.hidden),false,
+   'offline after match-found offers My Games human recovery');
+  assert.match(await page.locator('.quick-ready-dock-progress').innerText(),/offline|network/i);
+  assert.equal(await page.evaluate(()=>window.__transportRetry),2,
+   'offline never silently retries or reaccepts a matched human');
   // A joined room is still authoritative and must never be kicked by
   // an unrelated offline event on another browser window.
   const preserved=await page.evaluate(()=>{

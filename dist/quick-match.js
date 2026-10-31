@@ -672,13 +672,14 @@
  window.addEventListener('online',loadAvailability);
  window.addEventListener('offline',()=>{
   loadAvailability();
-  // A real device-offline signal terminates only an unadmitted human search.
-  // Do not silently requeue, renew consent, or disconnect a joined room.
-  if(!searching||serverLink?.room||peerConnected)return;
-  if(serverLink?.quickMatchMode&&!serverLink.room){
-   try{disconnect();}catch{}
-  }
-  done('Network went offline. Reconnect and choose Retry to search again.',true);
+  // Device-offline is terminal for an unadmitted human socket, including
+  // the short gap after quickMatchFound cleared Searching but before the
+  // server has assigned a real room. Never kick an already joined room or
+  // auto-requeue / renew a 15-second ready consent.
+  const unadmitted=!!serverLink?.quickMatchMode&&!serverLink.room&&!serverLink.reconnect;
+  if((!searching&&!unadmitted)||serverLink?.room||peerConnected)return;
+  if(unadmitted){try{disconnect();}catch{}}
+  done('Network went offline. Reconnect and choose Retry to search again.',true,unadmitted);
  });
  loadAvailability();
  acceptReady.onclick=()=>{
