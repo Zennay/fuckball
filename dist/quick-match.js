@@ -225,6 +225,21 @@
  };
  dismissRecovery.onclick=()=>{hideRecovery();refresh();};
  window.addEventListener('fuckball:account-changed',()=>{
+  const currentToken=settings.account?.token||null;
+  const unadmitted=!!serverLink?.quickMatchMode&&!serverLink.room&&!serverLink.reconnect;
+  // A local sign-out, revoked startup session or switched account invalidates
+  // the identity that sent this pending human queue request. Never preserve a
+  // ghost search / ready vote under another account or silently requeue.
+  if(!serverLink?.room&&!peerConnected&&(
+    (unadmitted&&serverLink.authToken!==currentToken)||
+    (!currentToken&&(searching||ready)))){
+   if(unadmitted){try{disconnect();}catch{}}
+   done(currentToken?
+    'Account changed. Choose Retry to search as the new account.':
+    'You signed out. Sign in again before searching for human players.',
+    true,true,!currentToken);
+   return;
+  }
   if(!recoveryNeedsSignIn||recovery.hidden||!lastAttempt)return;
   const newToken=settings.account?.token;
   if(!newToken||newToken===rejectedAccountToken)return;

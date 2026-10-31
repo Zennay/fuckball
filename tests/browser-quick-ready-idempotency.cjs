@@ -301,6 +301,88 @@ const {createServer}=require('../headless/server.cjs');
     'rejected queue never appears to be actively searching');
    assert.deepEqual(rejectErrors,[],'no runtime exception on real rejected WebSocket');
   }finally{await rejectPage.close();}
+  // Signing out in the browser must also terminate an unadmitted human queue.
+  // This uses a synthetic in-memory WebSocket, never real human accounts.
+  const logoutPage=await browser.newPage();
+  try{
+   const logoutErrors=[];
+   logoutPage.on('pageerror',e=>logoutErrors.push(e.message));
+   await logoutPage.goto('http://127.0.0.1:'+port+'/');
+   await logoutPage.evaluate(port=>{
+    settings.account={username:'Synthetic',token:'synthetic-logout-session'};
+    renderAccount();
+    document.getElementById('serverAddress').value='ws://127.0.0.1:'+port+'/ws';
+    window.__logoutSockets=0;window.__logoutCloses=0;
+    window.WebSocket=class{
+     constructor(){window.__logoutSockets++;this.readyState=1;queueMicrotask(()=>this.onopen?.());}
+     send(){}
+     close(){window.__logoutCloses++;this.readyState=3;}
+    };
+   },port);
+   await logoutPage.locator('.quick-queue-shortcut button.primary').click();
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutSockets),1);
+   assert.equal(await logoutPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),false);
+   await logoutPage.locator('#accountButton').evaluate(e=>e.click());
+   assert.equal(await logoutPage.evaluate(()=>settings.account),null,'local sign-out clears identity');
+   assert.equal(await logoutPage.evaluate(()=>serverLink),null,
+    'sign-out must release unadmitted queue socket');
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutCloses),1,
+    'sign-out closes the old authenticated socket once');
+   assert.equal(await logoutPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
+    'sign-out ends ghost searching');
+   assert.match(await logoutPage.locator('.quick-queue-recovery button.primary').innerText(),/sign in/i,
+    'old account cannot silently requeue after sign-out');
+   await logoutPage.locator('.quick-queue-recovery button.primary').click();
+   assert.equal(await logoutPage.locator('#joinAuth').evaluate(e=>e.hidden),false,
+    'sign-in action is explicitly reachable');
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutSockets),1,
+    'sign-in navigation does not start another queue');
+   // New server-issued credentials restore manual Retry; a second account
+   // switch during that queue cancels the old socket without auto-requeue.
+   await logoutPage.evaluate(()=>{
+    settings.account={username:'Synthetic2',token:'synthetic-rotated-logout-session'};
+    window.dispatchEvent(new Event('fuckball:account-changed'));
+    document.getElementById('joinScreen').hidden=true;
+   });
+   assert.match(await logoutPage.locator('.quick-queue-recovery button.primary').innerText(),/retry/i);
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutSockets),1);
+   await logoutPage.locator('.quick-queue-recovery button.primary').click();
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutSockets),2);
+   await logoutPage.evaluate(()=>{
+    settings.account={username:'Synthetic3',token:'synthetic-third-session'};
+    window.dispatchEvent(new Event('fuckball:account-changed'));
+   });
+   assert.equal(await logoutPage.evaluate(()=>serverLink),null,
+    'switching accounts releases stale human admission');
+   assert.equal(await logoutPage.evaluate(()=>window.__logoutSockets),2,
+    'account change never silently starts new human queue');
+   assert.match(await logoutPage.locator('.quick-queue-recovery button.primary').innerText(),/retry/i,
+    'new signed-in account requires explicit Retry');
+   assert.deepEqual(logoutErrors,[]);
+  }finally{await logoutPage.close();}
+  // Simulate a delayed /api/me rejection for a previous saved token after
+  // the player has already signed in with a new account in this tab.
+  const stalePage=await browser.newPage();
+  try{
+   await stalePage.addInitScript(()=>{
+    localStorage.setItem('fuckball.settings',JSON.stringify({
+     account:{username:'SyntheticOld',token:'synthetic-old-lookup'}}));
+    const realFetch=window.fetch.bind(window);
+    window.fetch=(url,...args)=>url==='/api/me'?new Promise(resolve=>{
+     window.__oldAccountReject=()=>resolve({status:401});
+    }):realFetch(url,...args);
+   });
+   await stalePage.goto('http://127.0.0.1:'+port+'/');
+   const result=await stalePage.evaluate(async()=>{
+    settings.account={username:'SyntheticFresh',token:'synthetic-new-lookup'};
+    window.dispatchEvent(new Event('fuckball:account-changed'));
+    window.__oldAccountReject();
+    await new Promise(resolve=>setTimeout(resolve,0));
+    return settings.account?.username;
+   });
+   assert.equal(result,'SyntheticFresh',
+    'late 401 for old startup token must not discard newer signed-in identity');
+  }finally{await stalePage.close();}
   // Native sessionRevoked receipts and WebSocket close code 4004 are
   // separate genuine client paths; synthetic server transport only.
   // Both must remove a ghost human queue and require new authentication.
