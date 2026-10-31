@@ -163,7 +163,7 @@
  preferredSelect.onchange=()=>setPreferred(preferredSelect.value);
  quickStart.onclick=()=>start(preferred);
  setPreferred(preferred,false);
- let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0;
+ let searching=false,matchMode=null,queuedAt=0,clock=null,waiting=0,needed=0,queuedServerAddress=null;
  let lastAttempt=null,recoveryNeedsSignIn=false,rejectedAccountToken=null;
  function hideRecovery(){recovery.hidden=true;recoveryNeedsSignIn=false;rejectedAccountToken=null;}
  function showRecovery(reason,requiresSignIn=false){
@@ -447,6 +447,9 @@
   }
   if(!party&&standardModes.includes(mode))setPreferred(mode);
   hideRecovery();lastAttempt={mode,party};
+  // Bind this human queue to the exact server the player selected at start.
+  // Editing the network settings later must never keep the old queue alive.
+  queuedServerAddress=address;
   clearReadyReceipt();
   searching=true;matchMode=mode;ready=null;readyAccepted=false;queuedAt=performance.now();waiting=1;needed=mode==='club4v4'?8:Number(mode[0])*2;
   refresh();stopClock();clock=setInterval(refresh,1000);
@@ -608,6 +611,16 @@
   clearPulse();++listingRequest;clearTimeout(addressTimer);genericLabels();
   manualRefresh.disabled=false;
   window.dispatchEvent(new Event('fuckball:queue-unavailable'));
+  // An in-flight queue is authenticated and located on the OLD server.
+  // Do not show Searching beside counts for a NEW selected server. A human
+  // must deliberately Retry there; a joined room is never disconnected.
+  const unadmitted=!!serverLink?.quickMatchMode&&!serverLink.room&&!serverLink.reconnect;
+  if(queuedServerAddress&&!serverLink?.room&&!peerConnected&&
+     (searching||ready||unadmitted)&&
+     selectedAddress?.value.trim()!==queuedServerAddress){
+   if(unadmitted){try{disconnect();}catch{}}
+   done('Game server changed. Previous human search ended. Choose Retry to search on the selected server.',true,true);
+  }
   availability.textContent='Checking whether live counts belong to your selected game server…';
   addressTimer=setTimeout(loadAvailability,450);
  }

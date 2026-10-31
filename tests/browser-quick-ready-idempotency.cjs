@@ -383,6 +383,52 @@ const {createServer}=require('../headless/server.cjs');
    assert.equal(result,'SyntheticFresh',
     'late 401 for old startup token must not discard newer signed-in identity');
   }finally{await stalePage.close();}
+  // Editing the target server during a human search must not leave the
+  // old server silently matchmaking while the interface shows a new server.
+  const switchPage=await browser.newPage();
+  try{
+   await switchPage.goto('http://127.0.0.1:'+port+'/');
+   await switchPage.evaluate(port=>{
+    settings.account={username:'Synthetic',token:'synthetic-server-selection-token'};
+    renderAccount();
+    document.getElementById('serverAddress').value='ws://127.0.0.1:'+port+'/ws';
+    window.__serverSwitchSockets=[];window.__serverSwitchCloses=0;
+    window.WebSocket=class{
+     constructor(url){this.url=url;window.__serverSwitchSockets.push(url);
+      this.readyState=1;queueMicrotask(()=>this.onopen?.());}
+     send(){}
+     close(){this.readyState=3;window.__serverSwitchCloses++;}
+    };
+   },port);
+   await switchPage.locator('.quick-queue-shortcut button.primary').click();
+   assert.equal(await switchPage.evaluate(()=>window.__serverSwitchSockets.length),1);
+   await switchPage.evaluate(port=>{
+    const el=document.getElementById('serverAddress');
+    el.value='ws://127.0.0.1:'+(port+1)+'/ws';el.dispatchEvent(new Event('change'));
+   },port);
+   assert.equal(await switchPage.evaluate(()=>serverLink),null,
+    'changing selected server stops the old unadmitted human queue');
+   assert.equal(await switchPage.evaluate(()=>window.__serverSwitchCloses),1,
+    'old server matchmaking socket closed exactly once');
+   assert.equal(await switchPage.locator('.quick-queue-actions button').evaluate(e=>e.hidden),true,
+    'server change does not display ghost Searching');
+   assert.match(await switchPage.locator('.quick-queue-recovery button.primary').innerText(),/retry/i);
+   assert.equal(await switchPage.evaluate(()=>window.__serverSwitchSockets.length),1,
+    'choosing another server never automatically starts another queue');
+   await switchPage.locator('.quick-queue-recovery button.primary').click();
+   assert.equal(await switchPage.evaluate(()=>window.__serverSwitchSockets.length),2,
+    'human explicit Retry starts one queue on selected new server');
+   assert.match((await switchPage.evaluate(()=>String(window.__serverSwitchSockets[1]))),
+    new RegExp(':'+String(port+1)+'/ws'),'new search uses new selected server');
+   // An already admitted room is not automatically disconnected by a
+   // subsequent address edit; only the user can choose to leave that game.
+   assert.equal(await switchPage.evaluate(()=>{
+    serverLink.room='SYNTHETIC_JOINED';const joined=serverLink;
+    const address=document.getElementById('serverAddress');
+    address.value='ws://127.0.0.1:1/ws';address.dispatchEvent(new Event('change'));
+    return serverLink===joined;
+   }),true,'address editing preserves already joined room');
+  }finally{await switchPage.close();}
   // Native sessionRevoked receipts and WebSocket close code 4004 are
   // separate genuine client paths; synthetic server transport only.
   // Both must remove a ghost human queue and require new authentication.
